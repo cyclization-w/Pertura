@@ -1,0 +1,12 @@
+include README.md
+include LICENSE
+include INSTALL.md
+include DEVELOPER_GUIDE.md
+include OPERATOR_GUIDE.md
+include CLAIMS.md
+include HARNESS_REVIEW_ISSUES.md
+recursive-include examples *.py
+recursive-include tests *.py *.md
+recursive-include pertura *.html
+global-exclude __pycache__/*
+global-exclude *.py[cod]

@@ -1,0 +1,551 @@
+"""Workbench: the main entry point for LLM-driven analysis with provenance memory.
+
+Tool-loop agent runtime: the LLM freely chooses bounded tools, while gated
+dispatch and GraphController preserve analysis constraints.
+Strict provenance recording: every action, observation, and artifact is event-logged.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+from uuid import uuid4
+
+from pertura.models import (
+    Attempt, Observation, Interrupt,
+    _now, _model_dump,
+)
+from pertura.core import Store, GraphController, ResponseCache, fork_store, diff_stores
+from pertura.memory.compiler import compile_context
+from pertura.domain import Domain
+from pertura.capabilities import build_capability_registry
+
+# Tool-loop prompt: agency protocol
+
+_TOOL_LOOP_PROMPT = """You are an analyst agent running in the Pertura runtime.
+You are NOT a chatbot or a notebook assistant. You call tools to act.
+
+ENVIRONMENT: workspace and artifacts_dir are already defined in the kernel.
+DO NOT redefine them. The workspace file listing is in the prompt. Trust it.
+DO NOT os.walk(), os.listdir(), or os.getcwd().
+Use the pre-loaded workspace variable: print(workspace), workspace.iterdir(), etc.
+Use context_envelope.runtime_symbols as the authoritative inventory of
+available kernel variables and artifacts. working_set.current_assets and
+runtime_state.symbol_refs are references into that same inventory. If a needed
+dataset or artifact appears there, inspect/reuse it before reloading or
+recomputing it.
+If you are unsure which self-audit/local-read tool to call, call
+get_audit_toolbox() first. It is a compact index of the audit/dashboard/evidence
+tools and keeps context bounded.
+Use context_envelope.provenance_index for the first-pass audit of observations
+and conclusions. Call review_evidence_chain(node_id=...) when you need to
+self-audit whether a conclusion, observation, or artifact is backed by
+successful, non-stale evidence. Call trace_upstream only when the compact
+review says the dependency path needs expansion.
+When a result is suspicious, empty/negative, stale, unsupported, or blocks
+progress, call plan_rethinking(node_id=..., issue=...) before rerunning. It
+combines evidence review, upstream trace, downstream impact, suspected root
+causes, and a compact repair/branch/intervention action menu.
+Read context_envelope.trace_driven_rethinking first when present. If its status
+is not not_needed, treat its recommended_actions as the preferred trace/repair
+menu for the next tool call unless a human interrupt or explicit user request
+has higher priority.
+Check context_envelope.runtime_state.active_attempt, recent_executions, jobs,
+and processes before starting new work. If something is already running or an
+attempt just produced usable output, inspect or continue it instead of rerunning.
+Use get_node_contract() when you need a compact dashboard for the active
+analysis node: gate status, missing inputs, ready capabilities, and next
+actions.
+Use get_context_review() when you need the full bounded dashboard: protected
+context, runtime symbols, working set, active contract, provenance index,
+audit_preview, risks/gates, affordances, and budget report. Treat it as the
+source of truth before deciding to rerun expensive analysis.
+If context_envelope.audit_preview has error/blocking issues or next_actions,
+follow those local-read repair actions first (plan_rethinking, trace_upstream,
+get_node_contract, get_capability_template, inspect_artifact_summary, audit_run) before committing
+new code, completing a node, or finishing.
+Use audit_run() before finish/report decisions to check graph validity, open
+gates, node coverage, conclusion support, stale evidence, artifact files, and
+blocking findings. Use audit_run.next_actions as your repair menu; do not
+ignore audit errors just because a conclusion sounds plausible.
+Before execute_code, read context_envelope.active_contract.selected_capability
+and audit_checklist. Pass capability_ids=[selected_capability.id] unless you
+deliberately choose another allowed capability. Use the selected capability's
+packages/functions/analysis_modes as implementation hints, not as mandatory
+imports. Register the expected observations/artifacts or explain limitations.
+For perturb-seq analysis code, prefer get_capability_template(capability_id)
+before writing long code from scratch. If the template readiness.ready is false,
+follow next_actions first instead of executing the skeleton.
+
+PROTOCOL:
+1. READ user_said FIRST. If it is a question (for example, "who are you?", "what is this?", or "why?"), answer directly.
+2. OBSERVE the current state using query_observations, read_file, compare_branches.
+3. ACT by calling tools:
+   - request_node_transition(target_node_id, reason): move between analysis nodes.
+   - execute_code(code, title, stage): run analysis. ONE step per call.
+   - retry(code): fix and re-run failed code.
+   - open_branch(question, reason, hypothesis): explore a hypothesis in parallel.
+   - switch_branch(branch_id): activate an existing branch.
+   - close_branch(branch_id, summary, conclusion, evidence_ids): conclude a branch.
+   - complete_node(summary): mark the current analysis node complete.
+   - skip_node(node_id, reason): explicitly skip a node when not applicable.
+   - ask_user(question): request human input when blocked.
+   - finish(summary): complete the analysis.
+4. Read tools (list_capabilities, get_harness_manifest, get_audit_toolbox, get_context_review, audit_run, get_node_contract, get_capability_template, query_observations, read_file,
+   view_plot, search_web, compare_branches, sweep_thresholds, compare_methods) can be called freely to gather context before acting.
+5. register_observation() for findings. register_artifact() for files.
+6. Data persists in the kernel across cells. DO NOT reload. Imports persist. DO NOT re-import.
+
+NODE NAVIGATION:
+- Treat analysis_node/current_node_progress as your current contract.
+- If you need another stage, call request_node_transition first; do not execute code for a different node.
+- Inside the active node, execute one meaningful code cell, inspect the outcome, then decide whether to retry, continue, branch, skip, complete_node, ask_user, or finish.
+- Before calling complete_node, check current_node_progress.completion and missing_completion.
+- If a condition is missing and computable, run code or validators. If it requires human authority, ask_user.
+- Use recommended_actions as suggestions, not a fixed script. Use allowed_capabilities as your action menu.
+"""
+
+
+class Workbench:
+    """LLM-driven analysis with provenance memory.
+
+    Usage:
+        wb = Workbench(domain=my_domain)
+        wb.run("./data", goal="Analyze this dataset", steps=5)
+        print(wb.status)
+        wb.serve()
+    """
+
+    def __init__(self, domain: Domain, *, provider: str = "openai",
+                 sandbox: str = "kernel", docker_image: str = ""):
+        self.domain = domain
+        self.provider = provider
+        self.sandbox = sandbox
+        self.docker_image = docker_image
+        self._store: Store | None = None
+        self._run_id: str = ""
+        self._kernel = None
+        self._controller: GraphController | None = None
+        self._cancel_event = None
+        self._replay_mode = "off"
+        self._response_cache: ResponseCache | None = None
+
+    # Public API
+
+    @property
+    def status(self) -> dict:
+        if not self._store: return {"state": "not_initialized"}
+        snap = self._store.read_snapshot()
+        if not snap: return {"state": "no_snapshot"}
+        return {
+            "run_id": snap.run_id, "phase": snap.phase,
+            "workspace": snap.workspace, "goal": snap.goal,
+            "attempts": len(snap.attempts),
+            "observations": len(snap.observations),
+            "conclusions": len(snap.conclusions),
+            "triggers_open": len([t for t in snap.triggers if t.status == "open"]),
+            "interrupts_open": len([i for i in snap.interrupts if i.status == "open"]),
+            "branches": len(snap.branches),
+        }
+
+    def runtime_status(self, *, recent: int = 20) -> dict:
+        """Return a compact frozen runtime snapshot for debugging/UI."""
+        if not self._store:
+            return {"state": "not_initialized"}
+        snap = self._store.read_snapshot()
+        if not snap:
+            return {"state": "no_snapshot"}
+        events = self._store.read_events()[-recent:]
+        return {
+            **self.status,
+            "active_node_id": snap.active_node_id,
+            "active_branch": snap.active_branch,
+            "active_attempt": snap.active_attempt,
+            "budget": _model_dump(snap.budget),
+            "open_interrupts": [_model_dump(item) for item in snap.interrupts if item.status == "open"],
+            "open_approvals": [_model_dump(item) for item in snap.approvals if item.status == "open"],
+            "open_triggers": [_model_dump(item) for item in snap.triggers if item.status == "open"],
+            "recent_findings": [_model_dump(item) for item in snap.findings[-recent:]],
+            "recent_behavior_runs": [_model_dump(item) for item in snap.behavior_runs[-recent:]],
+            "recent_events": [_model_dump(item) for item in events],
+        }
+
+    @property
+    def graph(self) -> dict | None:
+        return self._store.read_graph() if self._store else None
+
+    def close(self):
+        if self._kernel:
+            self._kernel.shutdown()
+            self._kernel = None
+
+    def run(self, workspace: str, *, goal: str = "", steps: int = 5) -> dict:
+        self._init(workspace, goal)
+        result = {"steps": 0, "stop_reason": None}
+        for _ in range(steps):
+            action = self._step()
+            result["steps"] += 1
+            if action in ("waiting_for_human", "complete", "blocked", "cancelled"):
+                result["stop_reason"] = action
+                break
+        if result["stop_reason"] is None:
+            result["stop_reason"] = "max_steps"
+        return result
+
+    def step(self, n: int = 1) -> list[str]:
+        actions = []
+        for _ in range(n):
+            a = self._step()
+            actions.append(a)
+            if a in ("waiting_for_human", "complete", "blocked", "cancelled"):
+                break
+        return actions
+
+    def set_cancel_event(self, cancel_event):
+        self._cancel_event = cancel_event
+
+    def run_with_cache(self, workspace: str, *, goal: str = "", steps: int = 5,
+                       replay_mode: str = "loose") -> dict:
+        """Run analysis with content-addressed caching enabled.
+
+        replay_mode:
+          - "loose": cache hits return stored responses; cache misses make fresh calls
+          - "strict": cache misses raise an error (deterministic replay verification)
+          - "off": no caching (default run() behavior)
+        """
+        self._replay_mode = replay_mode
+        return self.run(workspace, goal=goal, steps=steps)
+
+    def fork(self, run_id: str, at_event_id: str, *, goal: str = "",
+             workspace: str = "") -> "Workbench":
+        """Fork an existing run at a specific event. Returns a new Workbench.
+
+        All events up to at_event_id share the parent's response cache.
+        New events branch from there independently.
+        """
+        parent_dir = Path("runs") / run_id
+        if not (parent_dir / "events.db").exists():
+            raise ValueError(f"Run not found: {run_id}")
+
+        fork = fork_store(parent_dir, at_event_id)
+
+        wb = Workbench(domain=self.domain, provider=self.provider,
+                       sandbox=self.sandbox, docker_image=self.docker_image)
+        wb._store = fork.store
+        wb._run_id = fork.run_id
+        wb._controller = GraphController(fork.store, fork.run_id)
+        if goal:
+            wb._emit("goal_recorded", {"goal": {
+                "goal_id": f"goal_fork_{uuid4().hex[:6]}",
+                "text": goal or f"Fork of {run_id} at {at_event_id}",
+                "status": "active"}})
+        if workspace:
+            _scan_workspace(wb, workspace)
+        return wb
+
+    @staticmethod
+    def diff(run_a: str, run_b: str) -> dict:
+        """Diff graph, observation memory, and conclusions between two runs."""
+        return diff_stores(Path("runs") / run_a, Path("runs") / run_b)
+
+    def answer(self, interrupt_id: str, response: str):
+        snap = self._store.read_snapshot()
+        for intr in snap.interrupts:
+            if intr.interrupt_id == interrupt_id and intr.status == "open":
+                self._emit("interrupt_resolved",
+                          {"interrupt_id": interrupt_id, "answer": response})
+                from pertura.spec.design_answer import (
+                    compile_design_answer,
+                    expected_fields_from_interrupt,
+                )
+                design = compile_design_answer(
+                    response,
+                    expected_fields=expected_fields_from_interrupt(snap, intr),
+                    provider="deterministic",
+                )
+                if design:
+                    self._emit("design_updated", {
+                        "design": design,
+                        "reason": f"interrupt_answer:{interrupt_id}",
+                        "source": "pi_confirmed",
+                        "confidence": "high",
+                    })
+                if intr.trigger_id:
+                    self._emit("trigger_resolved",
+                              {"trigger_id": intr.trigger_id, "answer": response})
+                self._emit("run_resumed", {})
+                return
+        raise ValueError(f"No open interrupt found: {interrupt_id}")
+
+    def update_design(self, design: dict, *, reason: str = "user_update",
+                      source: str = "user_confirmed",
+                      confidence: str = "high"):
+        """Record structured PI/user design information as an event."""
+        if not self._store:
+            raise ValueError("Workbench is not initialized.")
+        self._emit("design_updated", {
+            "design": design,
+            "reason": reason,
+            "source": source,
+            "confidence": confidence,
+        })
+
+    def load_analysis_spec(self, analysis_spec: dict, *, reason: str = "user_spec"):
+        """Load or replace the editable analysis graph for the current run/domain."""
+        from pertura.spec.models import spec_from_dict, validate_analysis_graph
+        spec = spec_from_dict(analysis_spec)
+        if spec is None:
+            raise ValueError("analysis_spec is empty.")
+        spec, compile_report = _compile_analysis_spec(spec, self.domain)
+        validate_analysis_graph(spec)
+        self.domain.analysis_graph = spec.model_dump(mode="json")
+        self.domain.capabilities = build_capability_registry(self.domain).to_list()
+        if self._store:
+            self._emit("analysis_spec_compiled", {
+                "report": _compact_compile_report(compile_report),
+                "reason": reason,
+            })
+            self._emit("capabilities_loaded", {
+                "capabilities": self.domain.capabilities,
+                "reason": reason,
+            })
+            self._emit("analysis_spec_loaded", {"analysis_spec": self.domain.analysis_graph, "reason": reason})
+            snap = self._store.read_snapshot()
+            if snap and not snap.active_node_id:
+                self._emit("node_entered", {
+                    "node_id": spec.start_node_id,
+                    "branch_id": snap.active_branch,
+                    "reason": "analysis_spec_loaded",
+                })
+
+    def report(self) -> dict:
+        from pertura.reporting import generate_report, render_markdown, render_html
+        snap = self._store.read_snapshot()
+        ctx = compile_context(snap) if snap else None
+        if not snap or not ctx:
+            return {"error": "no_data"}
+        graph = self._store.read_graph() if self._store else {}
+        report = generate_report(
+            snap, ctx, provider=self.provider,
+            include_narrative=True,
+            graph=graph,
+            run_dir=self._store.run_dir if self._store else None,
+        )
+        if self._store:
+            report_dir = self._store.run_dir
+            md_path = report_dir / "report.md"
+            md_path.write_text(render_markdown(report,
+                graph_html_path="derivation_graph.html"), encoding="utf-8")
+            html_path = report_dir / "report.html"
+            html_path.write_text(render_html(report, graph), encoding="utf-8")
+            json_path = report_dir / "report.json"
+            json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2,
+                                            default=str), encoding="utf-8")
+            report["paths"] = {"markdown": str(md_path), "html": str(html_path),
+                              "json": str(json_path)}
+        return report
+
+    def report_preview(self) -> dict:
+        """Return a pure read-only report view for GUI/API polling."""
+        from pertura.reporting import generate_report
+        snap = self._store.read_snapshot() if self._store else None
+        ctx = compile_context(snap) if snap else None
+        if not snap or not ctx:
+            return {"error": "no_data"}
+        graph = self._store.read_graph() if self._store else {}
+        report = generate_report(
+            snap, ctx, provider=self.provider,
+            include_narrative=False,
+            graph=graph,
+            run_dir=self._store.run_dir if self._store else None,
+        )
+        report["status"] = self.status
+        return report
+
+    def serve(self, port: int = 8765):
+        from pertura._api import create_app
+        import uvicorn
+        app = create_app(self)
+        print(f"\n  Pertura GUI:    http://127.0.0.1:{port}")
+        print(f"  API docs:       http://127.0.0.1:{port}/docs\n")
+        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+
+    # Engine
+
+    def _init(self, workspace: str, goal: str):
+        run_id = f"run_{_now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
+        run_dir = (Path("runs") / run_id).resolve()
+        self._store = Store(run_dir)
+        self._run_id = run_id
+        self._controller = GraphController(self._store, self._run_id)
+        self._response_cache = (
+            ResponseCache(self._store.run_dir)
+            if getattr(self, "_replay_mode", "off") != "off"
+            else None
+        )
+        self.domain.capabilities = build_capability_registry(self.domain).to_list()
+        domain_context = self.domain.runtime_context()
+        self._emit("run_started", {"config": {
+            "run_id": run_id, "workspace": workspace, "goal": goal,
+            "domain": self.domain.name, "protocol": domain_context.get("protocol", ""),
+            "budget": {"max_attempts": 20, "max_branches": 3, "max_repairs": 3},
+            "capabilities": self.domain.capabilities,
+        }})
+        if self.domain.analysis_graph:
+            spec, compile_report = _compile_analysis_spec(self.domain.analysis_graph, self.domain)
+            self.domain.analysis_graph = spec.model_dump(mode="json")
+            self.domain.capabilities = build_capability_registry(self.domain).to_list()
+            self._emit("capabilities_loaded", {
+                "capabilities": self.domain.capabilities,
+                "reason": "run_init",
+            })
+            self._emit("analysis_spec_compiled", {
+                "report": _compact_compile_report(compile_report),
+                "reason": "run_init",
+            })
+            self._emit("analysis_spec_loaded", {
+                "analysis_spec": self.domain.analysis_graph,
+            })
+            start_node = self.domain.analysis_graph.get("start_node_id", "workspace_inspection")
+            self._emit("node_entered", {
+                "node_id": start_node,
+                "branch_id": "main",
+                "reason": "default_start_node",
+            })
+        _scan_workspace(self, workspace)
+        if goal:
+            self._emit("goal_recorded", {"goal": {
+                "goal_id": "goal_main", "text": goal, "status": "active"}})
+
+    def _step(self) -> str:
+        snap = self._store.read_snapshot()
+        if not snap: return "no_snapshot"
+
+        if any(i.status == "open" for i in snap.interrupts):
+            return "waiting_for_human"
+
+        active = next((a for a in snap.attempts
+                      if a.attempt_id == snap.active_attempt
+                      and a.status in ("planned", "running")), None)
+        if self._cancel_requested():
+            return self._pause_for_cancel(active.attempt_id if active else "")
+        if active:
+            from pertura.agent.execute import _execute_attempt
+            return _execute_attempt(self, active)
+
+        if not _has_key(self.provider):
+            self._emit("interrupt_opened", {"interrupt": _model_dump(Interrupt(
+                interrupt_id=f"irq_{uuid4().hex[:12]}",
+                source="missing_api_key",
+                question=f"No {self.provider} API key configured.",
+                default_action="configure_key",
+            ))})
+            return "waiting_for_human"
+
+        from pertura.agent.tool_loop import run_tool_loop
+        domain_context = self.domain.runtime_context()
+        try:
+            action, code, assessment, decision = run_tool_loop(
+                result=None, obs_count=0, snap=snap,
+                attempt=Attempt(attempt_id="first", stage="start",
+                               title="Start", objective="Begin analysis"),
+                provider=self.provider, emit=self._emit, is_first=True,
+                coding_guidelines=domain_context.get("coding_guidelines", ""),
+                protocol=domain_context.get("protocol", ""),
+                tools=domain_context.get("tools", ""),
+            )
+        except Exception:
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            action, code, assessment = "ask_user", "", {}
+            decision = {"reason": "Deliberation failed"}
+
+        self._emit("review_decision_recorded", {
+            "review_id": f"rev_first_{uuid4().hex[:8]}", "attempt_id": "",
+            "decision": action,
+            "assessment_status": assessment.get("status", ""),
+            "assessment_summary": assessment.get("summary", ""),
+            "reason": decision.get("reason", ""),
+        })
+
+        from pertura.agent.gated_dispatch import gated_dispatch
+        return gated_dispatch(self, action, code, assessment, decision, snap)
+
+    def _emit(self, event_type: str, payload: dict):
+        if self._controller is None:
+            self._controller = GraphController(self._store, self._run_id)
+        self._controller.append_event(event_type, payload)
+
+    def _cancel_requested(self) -> bool:
+        return bool(self._cancel_event and self._cancel_event.is_set())
+
+    def _pause_for_cancel(self, attempt_id: str = "") -> str:
+        if attempt_id:
+            self._emit("attempt_stopped", {
+                "attempt_id": attempt_id,
+                "reason": "job_cancel_requested",
+            })
+        self._emit("run_paused", {"reason": "job_cancel_requested"})
+        return "cancelled"
+
+
+# Helpers
+
+def _has_key(provider: str) -> bool:
+    from pertura.core.fixtures import fixture_mode
+    if fixture_mode() in {"replay", "strict"}:
+        return True
+    from pertura.planner import _api_key, _anthropic_key
+    if provider == "anthropic":
+        return bool(_anthropic_key())
+    return bool(_api_key())
+
+
+def _compile_analysis_spec(analysis_spec, domain: Domain):
+    """Compile user/domain authored node conditions before loading them."""
+    from pertura.spec.compiler import compile_conditions
+    from pertura.spec.models import spec_from_dict
+    from pertura.planner import _api_key
+
+    spec = spec_from_dict(analysis_spec)
+    provider = "openai" if (_api_key() and os.getenv("PETURA_COMPILE_LLM", "")) else "deterministic"
+    domain_context = "\n\n".join(
+        item for item in [
+            f"Domain: {domain.name}",
+            domain.runtime_context().get("condition_context", ""),
+        ]
+        if item
+    )
+    report = compile_conditions(spec, provider=provider, domain_context=domain_context)
+    return report.spec, report
+
+
+def _compact_compile_report(report) -> dict:
+    data = report.to_dict()
+    data.pop("spec", None)
+    return data
+
+
+def _scan_workspace(wb: Workbench, workspace: str):
+    p = Path(workspace)
+    if not p.exists():
+        return
+    for f in sorted(p.iterdir()):
+        if f.name.startswith("."):
+            continue
+        if f.is_dir():
+            wb._emit("observation_registered", {"observation": _model_dump(Observation(
+                observation_id=f"obs_ws_{uuid4().hex[:8]}",
+                type="workspace_file", target=f"{f.name}/", metric="directory",
+                value=f.name, method="auto_discover",
+                attempt_id="", branch_id="main",
+            ))})
+        else:
+            wb._emit("observation_registered", {"observation": _model_dump(Observation(
+                observation_id=f"obs_ws_{uuid4().hex[:8]}",
+                type="workspace_file", target=f.name, metric="file_size",
+                value=f.stat().st_size, method="auto_discover",
+                attempt_id="", branch_id="main",
+            ))})

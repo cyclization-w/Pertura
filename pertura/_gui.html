@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Pertura - {domain_name}</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.0/cytoscape.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#e2e8f0;height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#111827;border-bottom:1px solid #334155}
+h1{font-size:16px;margin:0}.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input{background:#020617;border:1px solid #475569;color:#e2e8f0;border-radius:6px;padding:7px 9px;font-size:13px}
+button{border:0;border-radius:6px;padding:7px 11px;font-size:13px;font-weight:600;cursor:pointer}
+.primary{background:#2563eb;color:white}.success{background:#16a34a;color:white}.ghost{background:#1e293b;color:#cbd5e1;border:1px solid #475569}
+main{flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0}
+#cy{min-width:0;min-height:0;background:#0f172a}
+aside{border-left:1px solid #334155;background:#111827;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:10px}
+.panel{border:1px solid #334155;background:#020617;border-radius:8px;padding:10px}.title{font-size:11px;text-transform:uppercase;color:#94a3b8;font-weight:700;margin-bottom:6px}
+.small{font-size:12px;color:#cbd5e1;line-height:1.45}.muted{color:#64748b}.badge{display:inline-block;border-radius:999px;padding:2px 7px;font-size:10px;font-weight:700;background:#334155;color:#e2e8f0}
+.item{border-left:3px solid #475569;padding:4px 6px;margin:4px 0;background:#0f172a;border-radius:4px}.conflict{border-color:#ef4444}.thin{border-color:#f59e0b}.confirmed,.agreement{border-color:#22c55e}
+</style>
+</head>
+<body>
+<header>
+  <h1>Pertura - {domain_name}</h1>
+  <div class="toolbar">
+    <input id="workspace" placeholder="Workspace path" style="width:220px">
+    <input id="goal" placeholder="Goal" style="width:240px">
+    <button class="primary" onclick="initRun()">Init</button>
+    <button class="ghost" onclick="step()">Step</button>
+    <button class="success" onclick="runSteps(5)">Run 5</button>
+    <button class="ghost" onclick="generateReport()">Generate report</button>
+    <span id="phase" class="small muted"></span>
+  </div>
+</header>
+<main>
+  <div id="cy"></div>
+  <aside>
+    <section class="panel"><div class="title">Status</div><div id="status" class="small">Not initialized</div></section>
+    <section class="panel"><div class="title">Analysis Node</div><div id="node" class="small muted">No active node</div></section>
+    <section class="panel"><div class="title">Interrupt</div><div id="interrupt" class="small muted">None</div><input id="answer" placeholder="Answer" style="width:100%;margin-top:6px"><button class="primary" style="width:100%;margin-top:6px" onclick="answerInterrupt()">Send answer</button></section>
+    <section class="panel"><div class="title">Memory</div><div id="memory" class="small muted">None</div></section>
+    <section class="panel"><div class="title">Coverage</div><div id="coverage" class="small muted">None</div></section>
+    <section class="panel"><div class="title">Trace / Impact</div><div id="trace" class="small muted">Select a node</div></section>
+    <section class="panel"><div class="title">Conclusions</div><div id="conclusions" class="small muted">None</div></section>
+  </aside>
+</main>
+<script>
+let cy = null;
+const COLORS = {workspace:"#64748b",analysis_node:"#8b5cf6",branch:"#2563eb",attempt:"#16a34a",artifact:"#f59e0b",observation:"#14b8a6",outcome:"#22c55e",trigger:"#ef4444",finding:"#f43f5e",conclusion:"#eab308",tool_call:"#94a3b8",review_decision:"#38bdf8",behavior_run:"#a855f7"};
+
+function initGraph(){
+  cy = cytoscape({
+    container: document.getElementById("cy"),
+    style: [
+      {selector:"node",style:{label:"data(label)",color:"#e2e8f0","font-size":"9px","text-valign":"bottom","text-halign":"center","text-margin-y":4,"background-color":"data(color)","border-width":2,"border-color":"#0f172a",width:28,height:28}},
+      {selector:"edge",style:{width:1,"line-color":"#475569","target-arrow-color":"#475569","target-arrow-shape":"triangle","curve-style":"bezier","arrow-scale":0.7,opacity:0.55}},
+      {selector:"node:selected",style:{"border-color":"#f8fafc","border-width":3}}
+    ],
+    layout:{name:"dagre",rankDir:"LR",spacingFactor:1.25}
+  });
+  cy.on("tap","node",event => showTrace(event.target.data("id")));
+}
+
+function esc(value){return String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+
+async function refresh(){
+  const [statusRes, graphRes, reportRes, interruptRes] = await Promise.allSettled([
+    fetch("/api/status").then(r=>r.json()),
+    fetch("/api/graph").then(r=>r.json()),
+    fetch("/api/report").then(r=>r.json()),
+    fetch("/api/interrupts").then(r=>r.json())
+  ]);
+  if(statusRes.status === "fulfilled"){
+    const s = statusRes.value;
+    document.getElementById("phase").textContent = s.phase || s.state || "";
+    document.getElementById("status").innerHTML = `<b>${esc(s.phase || s.state || "?")}</b><br>${s.attempts || 0} attempts / ${s.observations || 0} observations<br><span class="muted">${esc(s.run_id || "")}</span>`;
+  }
+  if(graphRes.status === "fulfilled") renderGraph(graphRes.value);
+  if(reportRes.status === "fulfilled") renderReport(reportRes.value);
+  if(interruptRes.status === "fulfilled") renderInterrupt(interruptRes.value);
+}
+
+function renderGraph(graph){
+  if(!cy) initGraph();
+  const elements = [];
+  for(const n of graph.nodes || []){
+    elements.push({group:"nodes",data:{id:n.node_id,label:(n.label||n.node_id||"").slice(0,32),node_type:n.node_type,status:n.status||"",summary:n.summary||"",color:COLORS[n.node_type]||"#64748b"}});
+  }
+  for(const e of graph.edges || []){
+    elements.push({group:"edges",data:{id:`${e.source_id}|${e.target_id}|${e.edge_type}`,source:e.source_id,target:e.target_id,label:e.edge_type}});
+  }
+  cy.elements().remove();
+  cy.add(elements);
+  cy.layout({name:"dagre",rankDir:"LR",spacingFactor:1.25}).run();
+}
+
+function renderReport(report){
+  const status = report.status || {};
+  document.getElementById("node").innerHTML = `${esc(status.phase || "")}<br><span class="muted">${esc(status.goal || "")}</span>`;
+  document.getElementById("memory").innerHTML = (report.memory_signals || []).slice(0,8).map(m => `<div class="item ${esc(m.signal)}"><b>${esc(m.subject)}</b> <span class="muted">${esc(m.signal)}</span><br>${esc(m.summary || "")}</div>`).join("") || "None";
+  document.getElementById("coverage").innerHTML = (report.coverage || []).slice(0,8).map(c => `<div class="item"><b>${esc(c.subject)}</b> <span class="badge">${esc(c.label)}</span><br>${c.methods || 0} method(s), ${c.observations || 0} obs, ${c.contradictions || 0} contradictions</div>`).join("") || "None";
+  document.getElementById("conclusions").innerHTML = ((report.summary || {}).conclusions || []).map(c => `<div class="item"><span class="badge">${esc(c.grade)}</span> ${esc(c.text)}</div>`).join("") || "None";
+}
+
+function renderInterrupt(data){
+  const open = data.interrupts || [];
+  document.getElementById("interrupt").innerHTML = open.length ? `<b>${esc(open[0].source || "interrupt")}</b><br>${esc(open[0].question || "")}` : "None";
+}
+
+async function showTrace(nodeId){
+  const box = document.getElementById("trace");
+  box.textContent = "Loading...";
+  try{
+    const [trace, impact, rethink] = await Promise.all([
+      fetch(`/api/trace/${encodeURIComponent(nodeId)}?depth=4`).then(r=>r.json()),
+      fetch(`/api/impact/${encodeURIComponent(nodeId)}?depth=4`).then(r=>r.json()),
+      fetch(`/api/rethink/${encodeURIComponent(nodeId)}?depth=4`).then(r=>r.json())
+    ]);
+    const up = (trace.nodes || []).filter(n=>n.node_id !== nodeId).slice(0,6).map(n=>`<div><span class="badge">${esc(n.node_type)}</span> ${esc(n.label || n.node_id)}</div>`).join("") || "None";
+    const down = (impact.nodes || []).filter(n=>n.node_id !== nodeId).slice(0,6).map(n=>`<div><span class="badge">${esc(n.node_type)}</span> ${esc(n.label || n.node_id)}</div>`).join("") || "None";
+    const actions = (rethink.recommended_actions || []).slice(0,5).map(a=>`<div><span class="badge">${esc(a.tool)}</span> ${esc(a.why || "")}</div>`).join("") || "None";
+    const roots = (rethink.suspected_roots || []).slice(0,4).map(r=>`<div><span class="badge">${esc(r.root_type)}</span> ${esc(r.root_id)}: ${esc(r.reason || "")}</div>`).join("") || "";
+    box.innerHTML = `<b>Upstream</b><br>${up}<br><br><b>Downstream impact</b><br>${down}<br><br><b>Rethinking</b><br><span class="badge">${esc(rethink.status || "unknown")}</span> ${esc(rethink.summary || "")}<br>${roots}<br>${actions}`;
+  }catch(e){ box.textContent = "No trace available"; }
+}
+
+async function initRun(){
+  await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:document.getElementById("workspace").value,goal:document.getElementById("goal").value,steps:0})});
+  refresh();
+}
+async function step(){ await fetch("/api/step",{method:"POST"}); refresh(); }
+async function runSteps(steps){
+  await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:document.getElementById("workspace").value || "data",goal:document.getElementById("goal").value,steps})});
+  refresh();
+}
+async function generateReport(){ await fetch("/api/report/generate",{method:"POST"}); refresh(); }
+async function answerInterrupt(){
+  const data = await fetch("/api/interrupts").then(r=>r.json());
+  const open = data.interrupts || [];
+  if(!open.length) return;
+  await fetch(`/api/answer/${encodeURIComponent(open[0].interrupt_id)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({answer:document.getElementById("answer").value})});
+  document.getElementById("answer").value = "";
+  refresh();
+}
+initGraph();
+refresh();
+setInterval(refresh, 4000);
+</script>
+</body>
+</html>

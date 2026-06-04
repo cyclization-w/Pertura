@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build and packaging artifacts
+build/
+dist/
+*.egg-info/
+
+# Local environments
+.venv/
+venv/
+.smoke_env/
+
+# Pertura runtime artifacts
+runs/
+.pertura/
+.blackboard/
+
+# Local secrets/config
+.env
+.env.*
+!.env.example

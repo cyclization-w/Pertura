@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pertura-agent"
+version = "0.2.0"
+description = "Scientific analysis harness for LLM-driven notebooks"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Pertura contributors" }]
+keywords = ["agent", "perturb-seq", "single-cell", "provenance", "scientific-workflows"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.0"]
+anthropic = ["anthropic>=0.30"]
+server = ["fastapi", "uvicorn"]
+notebook = ["nbformat"]
+kernel = ["jupyter_client", "ipykernel"]
+cli = ["rich"]
+review = ["rich", "jupyter_client", "ipykernel", "nbformat", "pytest"]
+perturbseq = ["anndata", "scanpy", "pandas", "scipy", "statsmodels", "matplotlib", "seaborn"]
+dev = ["pytest", "build"]
+all = [
+    "openai>=1.0",
+    "anthropic>=0.30",
+    "fastapi",
+    "uvicorn",
+    "nbformat",
+    "jupyter_client",
+    "ipykernel",
+    "rich",
+    "pytest",
+    "build",
+    "anndata",
+    "scanpy",
+    "pandas",
+    "scipy",
+    "statsmodels",
+    "matplotlib",
+    "seaborn",
+]
+
+[project.scripts]
+pertura = "pertura._cli:main"
+
+[project.urls]
+Homepage = "https://github.com/cyclization-w/Pertura"
+Repository = "https://github.com/cyclization-w/Pertura"
+Issues = "https://github.com/cyclization-w/Pertura/issues"
+
+[tool.setuptools.packages.find]
+include = ["pertura*"]
+
+[tool.setuptools.package-data]
+pertura = ["_gui.html"]
