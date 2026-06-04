@@ -85,7 +85,7 @@ graph = (
     .node("inspect")
     .title("Inspect workspace")
     .goal("Find matrix inputs and summarize schema.")
-    .use("inspect_workspace", "load_dataset")
+    .use(pt.caps.inspect_workspace, pt.caps.load_dataset)
     .done_when(c.workspace_files_available())
     .next("design", strict=True)
     .end()
@@ -96,7 +96,7 @@ graph.node("design").title("Resolve design").goal(
 ).enter_if(
     c.workspace_files_available()
 ).use(
-    "inspect_schema", "audit_controls"
+    pt.caps.inspect_schema, pt.caps.audit_controls
 ).done_when(
     c.design_confirmed("control_labels")
 ).next("effect")
@@ -106,7 +106,7 @@ graph.node("effect").title("Effect exploration").goal(
 ).enter_if(
     c.design_confirmed("control_labels")
 ).use(
-    "run_de"
+    pt.caps.run_de
 ).done_when(
     c.observation_metric("logFC")
 )
@@ -115,7 +115,7 @@ domain = (
     pt.Domain(name="my_singlecell")
     .with_graph(graph)
     .add_capability(
-        "run_de",
+        pt.caps.run_de,
         description="Run bounded differential expression.",
         expected_artifacts=["de_result"],
         expected_observations=["logFC", "p_value"],
@@ -128,16 +128,27 @@ assert domain.audit()["ok"]
 domain.to_json(".pertura/domain.json")
 ```
 
+`pt.caps.*` entries are typed public references for autocomplete and early
+auditing. Serialized domain files still store plain capability ids such as
+`"run_de"`, so domain packs remain portable and editable.
+
 For a complete authoring guide, see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md).
 
 ## Minimal Operator Commands
 
 ```bash
+pertura domain inspect --domain perturbseq
+pertura domain capabilities --domain perturbseq --node effect_exploration
+pertura domain tools
 pertura context runs/run_YYYYMMDD_HHMMSS_xxxxxx --json
 pertura audit runs/run_YYYYMMDD_HHMMSS_xxxxxx --json
 pertura rethink runs/run_YYYYMMDD_HHMMSS_xxxxxx con_123 --issue "stale support" --json
 pertura capsule runs/run_YYYYMMDD_HHMMSS_xxxxxx --verify --json
 ```
+
+`domain inspect` separates analysis nodes, domain capabilities, design fields,
+conditions, and core runtime tools. This is the easiest way to see what the LLM
+is allowed to do before starting a run.
 
 For replay, trace, evidence, capsule, and GUI/API details, see
 [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md).

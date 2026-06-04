@@ -12,6 +12,11 @@ Capability     action/output contract
 Domain         graph + capabilities + rubrics
 ```
 
+Core runtime tools such as `execute_code`, `get_context_review`, and
+`trace_upstream` exist below this API. They are implementation primitives. A
+domain author should normally expose a `Capability` such as `run_de`, not a raw
+tool name.
+
 Internal runtime objects such as `Store`, `GraphController`, events,
 snapshots, and ContextViews are implementation details unless you are changing
 the harness itself.
@@ -21,14 +26,14 @@ the harness itself.
 Write analysis nodes with the fluent API:
 
 ```python
-from pertura import AnalysisGraph, conditions as c
+from pertura import AnalysisGraph, caps, conditions as c
 
 graph = (
     AnalysisGraph("my_domain", start_node_id="inspect")
     .node("inspect")
     .title("Inspect workspace")
     .goal("Find input matrices and summarize schema.")
-    .use("inspect_workspace", "load_dataset")
+    .use(caps.inspect_workspace, caps.load_dataset)
     .done_when(c.workspace_files_available())
     .next("design", strict=True)
     .end()
@@ -38,7 +43,9 @@ graph = (
 Guidance:
 
 - `goal()` is the natural-language purpose shown to the LLM.
-- `use()` lists capability ids, not concrete package/tool names.
+- `use()` lists capabilities, not concrete package/tool names. Prefer
+  `pertura.caps.*` refs for built-ins; serialized specs still store stable ids
+  such as `"run_de"`.
 - `enter_if()` is for node entry prerequisites.
 - `confirm()` is for C-tier user/PI authority checks.
 - `done_when()` is for completion checks.
@@ -56,7 +63,7 @@ templates.
 
 ```python
 domain.add_capability(
-    "run_de",
+    caps.run_de,
     description="Run bounded differential expression.",
     expected_artifacts=["de_result"],
     expected_observations=["logFC", "p_value"],
@@ -75,6 +82,19 @@ Minimum useful fields:
 The harness blocks execution when a node allows capabilities but the LLM does
 not declare the selected capability.
 
+Browse capability contracts before running:
+
+```bash
+pertura domain capabilities --domain perturbseq
+pertura domain capabilities --domain perturbseq --node effect_exploration
+```
+
+Inspect core runtime tools separately:
+
+```bash
+pertura domain tools
+```
+
 ## Domain
 
 `Domain` is the public domain-pack object:
@@ -83,8 +103,8 @@ not declare the selected capability.
 domain = (
     Domain(name="my_domain")
     .with_graph(graph)
-    .add_capability("inspect_workspace", description="Inspect files.")
-    .add_capability("run_de", expected_observations=["logFC", "p_value"])
+    .add_capability(caps.inspect_workspace, description="Inspect files.")
+    .add_capability(caps.run_de, expected_observations=["logFC", "p_value"])
     .add_rubric("Do not report target-level effects before controls are resolved.")
 )
 
@@ -95,10 +115,12 @@ domain.to_json(".pertura/domain.json")
 Useful methods:
 
 - `with_graph(graph_or_spec)`
-- `add_capability(capability_id, **contract_fields)`
+- `add_capability(capability_ref_or_id, **contract_fields)`
 - `add_rubric(text, critic=False)`
 - `registry()`
 - `audit()`
+- `describe()` for CLI/GUI-ready node, capability, design, condition, and tool
+  browser payloads
 - `to_json(path)` / `from_json(path)`
 - `runtime_context()` for advanced runtime integration
 
@@ -111,6 +133,7 @@ rubrics, and condition context.
 Before sharing a domain pack:
 
 ```bash
+pertura domain inspect --domain perturbseq
 pertura spec audit .pertura/analysis_graph.json --domain .pertura/domain.json --json
 pertura spec contract .pertura/analysis_graph.json --domain .pertura/domain.json --node inspect --json
 python examples/analysis_node_quickstart.py

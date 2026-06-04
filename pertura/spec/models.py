@@ -86,6 +86,7 @@ class AnalysisGraphSpec(BaseModel):
 
 
 ConditionInput = str | ConditionSpec | dict[str, Any]
+CapabilityInput = Any
 
 
 def condition(
@@ -141,8 +142,10 @@ class AnalysisNodeBuilder:
         self._spec.purpose = text
         return self
 
-    def use(self, *capability_ids: str) -> "AnalysisNodeBuilder":
-        _extend_unique(self._spec.allowed_capabilities, list(capability_ids))
+    def use(self, *capability_ids: CapabilityInput) -> "AnalysisNodeBuilder":
+        from pertura.capabilities import to_capability_id
+
+        _extend_unique(self._spec.allowed_capabilities, [to_capability_id(item) for item in capability_ids])
         return self
 
     def enter_if(self, *conditions: ConditionInput) -> "AnalysisNodeBuilder":
@@ -232,7 +235,7 @@ class AnalysisGraph:
         *,
         title: str = "",
         purpose: str = "",
-        allowed_capabilities: list[str] | None = None,
+        allowed_capabilities: list[CapabilityInput] | None = None,
         requires: list[ConditionInput] | None = None,
         must_confirm: list[ConditionInput] | None = None,
         completion: list[ConditionInput] | None = None,
@@ -245,7 +248,7 @@ class AnalysisGraph:
             node_id=node_id,
             title=title,
             purpose=purpose,
-            allowed_capabilities=allowed_capabilities or [],
+            allowed_capabilities=_compile_capabilities(allowed_capabilities),
             requires=_compile_conditions(requires, context="requires"),
             must_confirm=_compile_conditions(must_confirm, context="must_confirm"),
             completion=_compile_conditions(completion, context="completion"),
@@ -280,6 +283,17 @@ class AnalysisGraph:
 
     def to_spec(self) -> AnalysisGraphSpec:
         return self.spec
+
+
+def _compile_capabilities(items: list[CapabilityInput] | None) -> list[str]:
+    from pertura.capabilities import to_capability_id
+
+    out: list[str] = []
+    for item in items or []:
+        cap_id = to_capability_id(item)
+        if cap_id and cap_id not in out:
+            out.append(cap_id)
+    return out
 
     def to_dict(self) -> dict:
         return self.spec.model_dump(mode="json")

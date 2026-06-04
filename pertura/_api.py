@@ -103,6 +103,10 @@ def harness_manifest_payload() -> dict:
     return build_harness_manifest()
 
 
+def domain_browser_payload(workbench, *, include_core_tools: bool = True) -> dict:
+    return workbench.domain.describe(include_core_tools=include_core_tools)
+
+
 def _open_store_for_run(run_id: str):
     from pertura.core import Store
     d = Path("runs") / run_id
@@ -239,6 +243,23 @@ def create_app(workbench):
     @app.get("/api/analysis-spec")
     def analysis_spec(run_id: str = ""):
         return _analysis_spec_for_run(run_id)
+
+    @app.get("/api/domain")
+    def domain_browser(include_core_tools: bool = True):
+        return domain_browser_payload(workbench, include_core_tools=include_core_tools)
+
+    @app.get("/api/domain/capabilities")
+    def domain_capabilities(node_id: str = ""):
+        payload = domain_browser_payload(workbench, include_core_tools=False)
+        caps = payload.get("capabilities", [])
+        if node_id:
+            allowed = set(payload.get("capabilities_by_node", {}).get(node_id, []))
+            caps = [item for item in caps if item.get("id") in allowed]
+        return {
+            "domain": payload.get("domain", {}),
+            "node_id": node_id,
+            "capabilities": caps,
+        }
 
     @app.get("/api/analysis-spec/audit")
     def analysis_spec_audit(run_id: str = "", strict: bool = False):

@@ -53,17 +53,19 @@ class Domain(BaseModel):
         self.analysis_graph = spec.model_dump(mode="json")
         return self
 
-    def add_capability(self, capability_id: str, **contract_fields) -> "Domain":
+    def add_capability(self, capability_id, **contract_fields) -> "Domain":
         """Register one capability contract and return this domain."""
         from pertura.capabilities import Capability, capability
 
-        cap = (
-            contract_fields
-            if isinstance(contract_fields, dict) and contract_fields.get("capability_id")
-            else capability(capability_id, **contract_fields).model_dump(mode="json")
-        )
-        if isinstance(cap, Capability):
-            cap = cap.model_dump(mode="json")
+        if isinstance(capability_id, Capability):
+            if contract_fields:
+                data = capability_id.model_dump(mode="json")
+                data.update(contract_fields)
+                cap = Capability(**data).model_dump(mode="json")
+            else:
+                cap = capability_id.model_dump(mode="json")
+        else:
+            cap = capability(capability_id, **contract_fields).model_dump(mode="json")
         self.capabilities.append(cap)
         return self
 
@@ -94,6 +96,12 @@ class Domain(BaseModel):
                 "warnings": [],
             }
         return audit_analysis_graph(spec, capabilities=self.registry())
+
+    def describe(self, *, include_core_tools: bool = True) -> dict:
+        """Return a compact browser payload for docs, CLI, GUI, and LLM context."""
+        from pertura.domain.catalog import describe_domain
+
+        return describe_domain(self, include_core_tools=include_core_tools)
 
     def runtime_context(self) -> dict[str, str]:
         """Return the stable prompt/runtime context consumed by the workbench.

@@ -64,6 +64,20 @@ def main():
     spec_contract.add_argument("--node", default="", help="Optional analysis node id.")
     spec_contract.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
+    dom = sub.add_parser("domain", help="Browse domain nodes, capabilities, design fields, and core tools.")
+    dom_sub = dom.add_subparsers(dest="domain_cmd")
+    dom_inspect = dom_sub.add_parser("inspect", help="Show a developer-facing domain browser.")
+    dom_inspect.add_argument("--domain", default="perturbseq")
+    dom_inspect.add_argument("--no-core-tools", action="store_true", help="Hide core runtime tool catalog.")
+    dom_inspect.add_argument("--json", action="store_true")
+    dom_caps = dom_sub.add_parser("capabilities", help="List domain capabilities, optionally scoped to a node.")
+    dom_caps.add_argument("--domain", default="perturbseq")
+    dom_caps.add_argument("--node", default="", help="Optional analysis node id.")
+    dom_caps.add_argument("--json", action="store_true")
+    dom_tools = dom_sub.add_parser("tools", help="List core runtime tools and permission tiers.")
+    dom_tools.add_argument("--readonly", action="store_true", help="Only show local-read tools.")
+    dom_tools.add_argument("--json", action="store_true")
+
     i = sub.add_parser("init", help="Initialize .pertura/ in a project directory.")
     i.add_argument("path", nargs="?", default=".", help="Project path (default: current directory).")
 
@@ -163,6 +177,8 @@ def main():
         return 0
     if args.cmd == "spec":
         return _spec_cmd(args)
+    if args.cmd == "domain":
+        return _domain_cmd(args)
     if args.cmd == "init":
         from pertura.skills import init_pertura_dir
         p = Path(args.path).resolve()
@@ -1802,6 +1818,46 @@ def _spec_contract_payload(*, path: str = "", domain_name: str = "perturbseq", n
     return graph_contract(graph, capabilities=registry)
 
 
+def _domain_cmd(args) -> int:
+    if args.domain_cmd == "inspect":
+        domain = _load_domain(args.domain)
+        payload = domain.describe(include_core_tools=not bool(getattr(args, "no_core_tools", False)))
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            _print_domain_browser(payload)
+        return 0
+    if args.domain_cmd == "capabilities":
+        domain = _load_domain(args.domain)
+        payload = domain.describe(include_core_tools=False)
+        caps = payload.get("capabilities", [])
+        node_id = getattr(args, "node", "")
+        if node_id:
+            allowed = set(payload.get("capabilities_by_node", {}).get(node_id, []))
+            caps = [item for item in caps if item.get("id") in allowed]
+        out = {
+            "domain": payload.get("domain", {}),
+            "node_id": node_id,
+            "capabilities": caps,
+        }
+        if args.json:
+            print(json.dumps(out, ensure_ascii=False, indent=2))
+        else:
+            _print_capability_browser(out)
+        return 0
+    if args.domain_cmd == "tools":
+        from pertura.tools import tool_catalog
+
+        payload = {"tools": tool_catalog(readonly=bool(getattr(args, "readonly", False)))}
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            _print_tool_browser(payload)
+        return 0
+    print("Use: pertura domain inspect|capabilities|tools", file=sys.stderr)
+    return 2
+
+
 def _print_audit(payload: dict) -> None:
     summary = payload.get("summary", {})
     status = "OK" if payload.get("ok") else "NEEDS WORK"
@@ -1824,6 +1880,53 @@ def _print_audit(payload: dict) -> None:
         _print("[bold]Advice:[/]")
         for item in payload["advice"]:
             _print(f"  - {item['message']}")
+
+
+def _print_domain_browser(payload: dict) -> None:
+    domain = payload.get("domain", {})
+    summary = payload.get("summary", {})
+    _print(f"[bold]Domain:[/] {domain.get('name', '?')}  graph={domain.get('graph_id', '')}")
+    _print(
+        f"  nodes: {summary.get('nodes', 0)}  "
+        f"capabilities: {summary.get('capabilities', 0)}  "
+        f"design fields: {summary.get('design_fields', 0)}  "
+        f"hard conditions: {summary.get('hard_conditions', 0)}  "
+        f"rubric-only: {summary.get('rubric_only_conditions', 0)}"
+    )
+    _print("[bold]Nodes:[/]")
+    for node in payload.get("nodes", []):
+        _print(
+            f"  {node.get('node_id')}: {node.get('title') or ''}  "
+            f"caps={len(node.get('allowed_capabilities', []))}  "
+            f"next={', '.join(node.get('next_nodes', [])) or 'any'}"
+        )
+    fields = payload.get("design", {}).get("fields", [])
+    if fields:
+        _print("[bold]Design fields:[/] " + ", ".join(fields))
+    _print("Use `pertura domain capabilities --node NODE` to inspect action contracts.")
+
+
+def _print_capability_browser(payload: dict) -> None:
+    domain = payload.get("domain", {})
+    node_id = payload.get("node_id", "")
+    label = f"{domain.get('name', '?')}" + (f" / {node_id}" if node_id else "")
+    _print(f"[bold]Capabilities:[/] {label}")
+    for cap in payload.get("capabilities", []):
+        tools = ", ".join(item.get("tool_id", "") for item in cap.get("implementation_tools", [])) or "none"
+        outputs = ", ".join([*cap.get("expected_observations", []), *cap.get("expected_artifacts", [])]) or "none"
+        inputs = ", ".join(cap.get("required_inputs", [])) or "none"
+        _print(f"  {cap.get('id')}: {cap.get('title') or ''}")
+        _print(f"    inputs: {inputs}")
+        _print(f"    outputs: {outputs}")
+        _print(f"    tools: {tools}")
+
+
+def _print_tool_browser(payload: dict) -> None:
+    _print("[bold]Core runtime tools:[/]")
+    for tool in payload.get("tools", []):
+        _print(f"  {tool.get('tool_id')}: {tool.get('permission')}")
+        if tool.get("description"):
+            _print(f"    {tool.get('description')}")
 
 
 def _print_contract(payload: dict) -> None:

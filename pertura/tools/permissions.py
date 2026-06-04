@@ -72,6 +72,35 @@ _TOOL_TIERS: dict[str, ToolPermission] = {
 }
 
 
+def tool_permission(tool_name: str) -> ToolPermission:
+    """Return the permission tier for a core runtime tool."""
+    return _TOOL_TIERS.get(tool_name, ToolPermission.local_read)
+
+
+def tool_catalog(*, readonly: bool = False) -> list[dict]:
+    """Return a developer-facing catalog of core runtime tools.
+
+    This catalog intentionally describes tools, not capabilities. Capabilities
+    are domain actions such as `run_de`; tools are runtime primitives such as
+    `execute_code` or `get_context_review`.
+    """
+    from pertura.tools.registry import TOOLS
+
+    items = []
+    for name in sorted(TOOLS):
+        tier = tool_permission(name)
+        if readonly and tier != ToolPermission.local_read:
+            continue
+        spec = TOOLS[name]
+        items.append({
+            "tool_id": name,
+            "permission": tier.value,
+            "description": spec.get("description", ""),
+            "required": list((spec.get("parameters", {}) or {}).get("required", []) or []),
+        })
+    return items
+
+
 def check_permission(tool_name: str, target_tier: ToolPermission) -> bool:
     """Check whether a tool is allowed at the given permission tier.
 

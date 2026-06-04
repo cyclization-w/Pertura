@@ -12,11 +12,51 @@ from typing import Any, Iterable, Literal
 
 from pydantic import BaseModel, Field
 
-from pertura.spec.models import AnalysisGraphSpec, spec_from_dict
-
-
 CapabilityKind = Literal["read", "execute", "review", "report", "external"]
 CapabilityRisk = Literal["low", "medium", "high"]
+
+
+class CapabilityRef(BaseModel):
+    """Typed public reference to a capability id.
+
+    Runtime specs still serialize capabilities as strings. This small wrapper is
+    for developer ergonomics: users can write ``pt.caps.run_de`` instead of the
+    bare string ``"run_de"`` and still get a stable JSON capability id.
+    """
+
+    capability_id: str
+    title: str = ""
+    description: str = ""
+    stage: str = ""
+    kind: CapabilityKind = "execute"
+    aliases: list[str] = Field(default_factory=list)
+
+    @property
+    def id(self) -> str:
+        return self.capability_id
+
+    def __str__(self) -> str:
+        return self.capability_id
+
+    def compact(self) -> dict[str, Any]:
+        return {
+            "id": self.capability_id,
+            "title": self.title or self.capability_id.replace("_", " "),
+            "description": self.description,
+            "stage": self.stage,
+            "kind": self.kind,
+        }
+
+    def to_capability(self, **overrides: Any) -> "Capability":
+        fields = {
+            "title": self.title,
+            "description": self.description,
+            "stage": self.stage,
+            "kind": self.kind,
+            "aliases": self.aliases,
+        }
+        fields.update({key: value for key, value in overrides.items() if value is not None})
+        return capability(self.capability_id, **fields)
 
 
 class Capability(BaseModel):
@@ -75,11 +115,12 @@ class CapabilityRegistry:
             self._aliases[alias] = cap.capability_id
         return cap
 
-    def get(self, capability_id: str) -> Capability | None:
-        resolved = self._aliases.get(capability_id, capability_id)
+    def get(self, capability_id: str | Capability | CapabilityRef) -> Capability | None:
+        cap_id = to_capability_id(capability_id)
+        resolved = self._aliases.get(cap_id, cap_id)
         return self._items.get(resolved)
 
-    def has(self, capability_id: str) -> bool:
+    def has(self, capability_id: str | Capability | CapabilityRef) -> bool:
         return self.get(capability_id) is not None
 
     def ids(self) -> list[str]:
@@ -101,7 +142,9 @@ class CapabilityRegistry:
                 break
         return out
 
-    def missing_from_spec(self, spec: AnalysisGraphSpec | dict | None) -> list[str]:
+    def missing_from_spec(self, spec: Any | None) -> list[str]:
+        from pertura.spec.models import spec_from_dict
+
         graph = spec_from_dict(spec)
         if graph is None:
             return []
@@ -114,6 +157,8 @@ class CapabilityRegistry:
 
     @classmethod
     def from_domain(cls, domain) -> "CapabilityRegistry":
+        from pertura.spec.models import spec_from_dict
+
         graph = spec_from_dict(getattr(domain, "analysis_graph", None))
         registry = cls(getattr(domain, "capabilities", []) or [])
         if graph is not None:
@@ -124,8 +169,38 @@ class CapabilityRegistry:
         return registry
 
 
-def capability(
+def to_capability_id(value: str | Capability | CapabilityRef) -> str:
+    """Return the stable string id for a capability-like object."""
+    if isinstance(value, Capability):
+        return value.capability_id
+    if isinstance(value, CapabilityRef):
+        return value.capability_id
+    if hasattr(value, "capability_id"):
+        return str(getattr(value, "capability_id"))
+    return str(value)
+
+
+def capability_ref(
     capability_id: str,
+    *,
+    title: str = "",
+    description: str = "",
+    stage: str = "",
+    kind: CapabilityKind = "execute",
+    aliases: list[str] | None = None,
+) -> CapabilityRef:
+    return CapabilityRef(
+        capability_id=capability_id,
+        title=title,
+        description=description,
+        stage=stage,
+        kind=kind,
+        aliases=aliases or [],
+    )
+
+
+def capability(
+    capability_id: str | CapabilityRef,
     *,
     title: str = "",
     description: str = "",
@@ -144,6 +219,13 @@ def capability(
     contract: dict[str, Any] | None = None,
     aliases: list[str] | None = None,
 ) -> Capability:
+    if isinstance(capability_id, CapabilityRef):
+        title = title or capability_id.title
+        description = description or capability_id.description
+        stage = stage or capability_id.stage
+        kind = capability_id.kind if kind == "execute" else kind
+        aliases = aliases or capability_id.aliases
+    capability_id = to_capability_id(capability_id)
     defaults = _default_capability_defaults(capability_id, stage=stage, kind=kind)
     return Capability(
         capability_id=capability_id,
@@ -429,9 +511,12 @@ def _default_capability_defaults(capability_id: str, *, stage: str = "", kind: C
 
 __all__ = [
     "Capability",
+    "CapabilityRef",
     "CapabilityRegistry",
     "CapabilityKind",
     "CapabilityRisk",
     "capability",
+    "capability_ref",
+    "to_capability_id",
     "build_capability_registry",
 ]

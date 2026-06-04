@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pertura import (  # noqa: E402
     AnalysisGraph,
     Domain,
+    caps,
     conditions as c,
     graph_contract,
     node_contract,
@@ -32,7 +33,7 @@ def build_domain() -> Domain:
         graph.node("inspect")
         .title("Inspect workspace")
         .goal("Find candidate matrices and summarize schema.")
-        .use("inspect_workspace", "load_dataset")
+        .use(caps.inspect_workspace, caps.load_dataset)
         .done_when(c.workspace_files_available())
         .next("design", strict=True)
     )
@@ -41,7 +42,7 @@ def build_domain() -> Domain:
         .title("Resolve design")
         .goal("Confirm controls and perturbation columns before interpretation.")
         .enter_if(c.workspace_files_available())
-        .use("inspect_schema", "audit_controls")
+        .use(caps.inspect_schema, caps.audit_controls)
         .done_when(c.design_confirmed("control_labels"))
         .next("effect")
     )
@@ -50,16 +51,16 @@ def build_domain() -> Domain:
         .title("Effect exploration")
         .goal("Run bounded differential expression and register evidence.")
         .enter_if(c.design_confirmed("control_labels"))
-        .use("run_de")
+        .use(caps.run_de)
         .done_when(c.observation_metric("logFC"))
     )
     return (
         Domain(name="quickstart")
         .with_graph(graph)
-        .add_capability("inspect_workspace", description="Inspect workspace files.")
-        .add_capability("load_dataset", description="Load matrix-level dataset.")
+        .add_capability(caps.inspect_workspace, description="Inspect workspace files.")
+        .add_capability(caps.load_dataset, description="Load matrix-level dataset.")
         .add_capability(
-            "run_de",
+            caps.run_de,
             description="Run bounded differential expression.",
             expected_artifacts=["de_result"],
             expected_observations=["logFC", "p_value"],

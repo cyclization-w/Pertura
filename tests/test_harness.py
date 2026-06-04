@@ -36,7 +36,7 @@ from pertura.jobs import JobRunner
 from pertura.models import _model_dump, PatchProposal
 from pertura import (
     AnalysisGraph, CapabilityRegistry, capability, condition, conditions as c,
-    compile_conditions, load_analysis_graph, save_analysis_graph,
+    caps, compile_conditions, load_analysis_graph, save_analysis_graph,
     validate_analysis_graph,
     node_contract, graph_contract, audit_analysis_graph,
 )
@@ -1977,7 +1977,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         .start()
         .title("Inspect workspace")
         .goal("Find matrix-level inputs and summarize schema.")
-        .use("inspect_workspace", "load_dataset")
+        .use(caps.inspect_workspace, caps.load_dataset)
         .done_when(c.workspace_files_available())
         .recommend("list files", "summarize candidate matrix files")
         .expect("workspace file observations")
@@ -1989,7 +1989,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         .title("Resolve design")
         .goal("Resolve controls and guide design before interpretation.")
         .enter_if(c.workspace_files_available())
-        .use("inspect_schema", "audit_controls")
+        .use(caps.inspect_schema, caps.audit_controls)
         .done_when(
             c.design_confirmed("control_labels"),
             c.design_any_confirmed(["perturbation_modality", "moi", "loading_strategy"], condition_id="perturbation_design_known"),
@@ -2002,7 +2002,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         .title("Effect exploration")
         .goal("Run bounded effect exploration.")
         .enter_if(c.design_confirmed("control_labels"))
-        .use("run_de")
+        .use(caps.run_de)
         .done_when(c.observation_metric("logFC"))
     )
     public_spec = public_graph.to_spec()
@@ -2011,7 +2011,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     public_domain = (
         Domain(name="public")
         .with_graph(public_graph)
-        .add_capability("run_de", description="Run DE")
+        .add_capability(caps.run_de, description="Run DE")
         .add_rubric("Do not interpret target effects before controls are confirmed.")
     )
     public_registry = public_domain.registry()
@@ -2023,11 +2023,18 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     design_node = public_spec.node("design")
     check("public fluent API builds nodes", len(public_spec.nodes) == 3 and public_spec.start_node_id == "inspect")
     check("public fluent API records capabilities", "run_de" in public_spec.node("effect").allowed_capabilities)
+    check("public capability refs remain serializable ids", public_spec.node("inspect").allowed_capabilities == ["inspect_workspace", "load_dataset"])
     check("public fluent API uses executable condition helpers", all(cond.evaluator_id != "rubric_only" for cond in design_node.completion))
     check("public condition compile report executable", len(public_compile.executable) >= 3)
     check("public registry auto-fills spec capabilities", public_registry.has("inspect_workspace") and public_registry.has("run_de"))
     check("public domain fluent API audits", public_domain.audit()["ok"] is True)
     check("public domain runtime context includes rubric", "Do not interpret" in public_domain.runtime_context().get("coding_guidelines", ""))
+    public_browser = public_domain.describe()
+    check("public domain browser summarizes nodes", public_browser["summary"]["nodes"] == 3)
+    check("public domain browser separates core tools", any(tool["tool_id"] == "execute_code" for tool in public_browser["core_tools"]))
+    run_de_browser = next(item for item in public_browser["capabilities"] if item["id"] == "run_de")
+    check("public domain browser shows capability node usage", "effect" in run_de_browser["used_by_nodes"])
+    check("public domain browser exposes design fields", "control_labels" in public_browser["design"]["fields"])
     check("legacy domain registry still works", legacy_registry.has("inspect_workspace") and legacy_registry.has("run_de"))
     effect_contract = node_contract(public_spec, "effect", capabilities=public_registry)
     check("public node contract names node", effect_contract["node"]["id"] == "effect")

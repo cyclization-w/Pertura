@@ -9,11 +9,19 @@ LLMs can explore through tools, but graph-affecting actions are recorded and
 checked before they become durable scientific state.
 """
 
-from . import conditions
+from . import caps, conditions
 from pertura.agent.loop import Workbench
 from pertura.domain import Domain
 from pertura.models import Observation
-from pertura.capabilities import Capability, CapabilityRegistry, capability, build_capability_registry
+from pertura.capabilities import (
+    Capability,
+    CapabilityRef,
+    CapabilityRegistry,
+    capability,
+    capability_ref,
+    build_capability_registry,
+    to_capability_id,
+)
 from pertura.spec.builder import (
     AnalysisGraph,
     AnalysisGraphSpec,
@@ -35,9 +43,13 @@ __all__ = [
     "Domain",
     "Observation",
     "Capability",
+    "CapabilityRef",
     "CapabilityRegistry",
+    "caps",
     "capability",
+    "capability_ref",
     "build_capability_registry",
+    "to_capability_id",
     "AnalysisGraph",
     "AnalysisGraphSpec",
     "AnalysisNodeSpec",
