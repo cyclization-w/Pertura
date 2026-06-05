@@ -1,46 +1,32 @@
-# Pertura v2
+# Pertura
 
-Pertura is a scientific analysis harness for LLM-driven notebooks.
+Pertura is an event-sourced scientific harness for LLM-driven notebook
+analysis.
 
-> Status: alpha research artifact. The core harness and reviewer checks run
-> locally; real Perturb-seq deployments should validate server dependencies,
+It is designed for autonomous scientific analysis agents that need to explore
+data, run code, keep track of attempts, review weak or suspicious results, and
+trace conclusions back to the code, parameters, artifacts, and observations
+that produced them.
+
+> Status: alpha research software. The core harness and reviewer checks run
+> locally. Real Perturb-seq deployments should validate server dependencies,
 > API keys, Docker policy, and small real-data smoke tests first.
 
-It lets an LLM reason freely, but keeps durable scientific state behind a
-small set of explicit contracts:
+## What It Provides
 
-```text
-AnalysisGraph  -> what stages exist and what must be true
-Capability     -> what actions the LLM may take and what outputs they owe
-Domain         -> a reusable pack of graph + capabilities + rubrics
-```
-
-The runtime records attempts, artifacts, observations, branches, findings, and
-human interventions in an event-sourced graph. Compact ContextViews, evidence
-audit, observation memory, and trace-driven rethinking keep the LLM oriented
-without loading the full run history into the prompt.
-
-## Why Pertura
-
-- User-editable analysis graph instead of a hard-coded pipeline.
-- Capability contracts instead of exposing raw tools as the scientific API.
+- Editable analysis graphs instead of a hard-coded pipeline.
+- Typed capability contracts instead of exposing raw tools as the scientific
+  API.
+- Event-sourced run state for replay, fork, diff, and audit.
 - Observation memory for variable-level scientific provenance.
-- Evidence-chain audit and trace-driven rethinking for failed, stale, weak, or
-  suspicious results.
-- Perturb-seq reference domain pack, with the core harness kept reusable for
-  other single-cell domains.
+- Trace-driven rethinking for failed, stale, weak, negative, or suspicious
+  results.
+- A Perturb-seq reference domain pack that starts from matrix-level data.
 
-## Repository Layout
-
-```text
-pertura/              runtime, public APIs, domain packs, tools
-examples/             minimal public API examples
-tests/                script harness, pytest wrapper, claim tests
-DEVELOPER_GUIDE.md    domain/capability authoring
-OPERATOR_GUIDE.md     audit, replay, trace, capsule commands
-INSTALL.md            clean install and server smoke
-CLAIMS.md             paper-claim verification
-```
+Pertura is not an agent framework or a workflow engine. It sits below an LLM
+agent and gives it a durable scientific workbench: what stage it is in, what it
+is allowed to do, what evidence it has produced, what remains unresolved, and
+where to trace when something looks wrong.
 
 ## Install
 
@@ -49,7 +35,7 @@ pip install -e ".[review]"
 pertura doctor
 ```
 
-Useful extras:
+Optional extras:
 
 ```bash
 pip install -e ".[server]"      # FastAPI GUI/API
@@ -59,20 +45,57 @@ pip install -e ".[all]"         # all optional integrations
 
 For clean wheel/server smoke tests, see [INSTALL.md](INSTALL.md).
 
-## Perturb-seq Quickstart
+## Quickstart: Perturb-seq
+
+Initialize a project:
 
 ```bash
 pertura init .
+```
+
+Inspect the built-in Perturb-seq domain:
+
+```bash
+pertura domain inspect --domain perturbseq
+pertura domain capabilities --domain perturbseq --node effect_exploration
 pertura spec audit --domain perturbseq --json
-pertura spec contract --domain perturbseq --node effect_exploration --json
+```
+
+Run an analysis:
+
+```bash
 pertura run ./data --goal "Analyze this perturb-seq dataset"
+```
+
+Start the local workbench:
+
+```bash
 pertura serve
 ```
 
-The built-in Perturb-seq pack starts from matrix-level data and includes nodes
-for workspace inspection, experimental design, scRNA-seq QC, guide assignment,
-perturbation validation, target QC, state reference, effect exploration, target
-discovery, biology story, and reporting.
+The built-in Perturb-seq pack includes nodes for workspace inspection,
+experimental design, scRNA-seq QC, guide assignment, perturbation validation,
+target QC, state reference, effect exploration, target discovery, biology
+story, and reporting.
+
+## Core Concepts
+
+| Concept | Meaning |
+| --- | --- |
+| `AnalysisGraph` | User-editable analysis nodes, transitions, and gates. |
+| `Capability` | Domain action contract exposed to the LLM, such as `run_de`. |
+| `Tool` | Runtime primitive below capabilities, such as `execute_code`. |
+| `Design` | Run-level experimental facts with source/provenance. |
+| `Condition` | Executable or rubric-only check over state, design, artifacts, or observations. |
+| `Observation` | Variable-level scientific memory, such as a target logFC under a contrast. |
+
+The public authoring API is intentionally small:
+
+```text
+AnalysisGraph  -> what stages exist and what must be true
+Capability     -> what actions the LLM may take and what outputs they owe
+Domain         -> reusable pack of graph + capabilities + rubrics
+```
 
 ## Author A Domain
 
@@ -134,26 +157,32 @@ auditing. Serialized domain files still store plain capability ids such as
 
 For a complete authoring guide, see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md).
 
-## Minimal Operator Commands
+## Inspect A Run
 
 ```bash
-pertura domain inspect --domain perturbseq
-pertura domain capabilities --domain perturbseq --node effect_exploration
-pertura domain tools
 pertura context runs/run_YYYYMMDD_HHMMSS_xxxxxx --json
 pertura audit runs/run_YYYYMMDD_HHMMSS_xxxxxx --json
+pertura trace runs/run_YYYYMMDD_HHMMSS_xxxxxx obs_123 --json
 pertura rethink runs/run_YYYYMMDD_HHMMSS_xxxxxx con_123 --issue "stale support" --json
 pertura capsule runs/run_YYYYMMDD_HHMMSS_xxxxxx --verify --json
 ```
 
-`domain inspect` separates analysis nodes, domain capabilities, design fields,
-conditions, and core runtime tools. This is the easiest way to see what the LLM
-is allowed to do before starting a run.
-
 For replay, trace, evidence, capsule, and GUI/API details, see
 [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md).
 
-## Reviewer Checks
+## Repository Layout
+
+```text
+pertura/              runtime, public APIs, domain packs, tools
+examples/             minimal public API examples
+tests/                script harness, pytest wrapper, claim tests
+DEVELOPER_GUIDE.md    domain/capability authoring
+OPERATOR_GUIDE.md     audit, replay, trace, capsule commands
+INSTALL.md            clean install and server smoke
+CLAIMS.md             paper-claim verification
+```
+
+## Verification
 
 ```bash
 python -m pytest
@@ -162,7 +191,21 @@ pertura claims --json
 python -m pertura.claim_tests --json
 ```
 
-For paper-claim verification and capsule checks, see [CLAIMS.md](CLAIMS.md).
+The current harness-level test suite covers event replay, graph derivation,
+context views, analysis-node gates, capability contracts, observation memory,
+audit/rethinking tools, capsule integrity, CLI helpers, and public API examples.
+
+## Current Limitations
+
+- Alpha software; APIs may still change.
+- Docker sandbox policy is available as an option, but the final bio image is
+  not pinned.
+- Large real-data Perturb-seq performance depends on the server environment and
+  installed scientific stack.
+- The Perturb-seq pack is a reference domain, not a complete replacement for
+  expert review.
+- Web research and external-read tools should be enabled through explicit run
+  policy.
 
 ## License
 
