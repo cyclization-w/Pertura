@@ -6,6 +6,7 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import pertura as pt
 from pertura.models import (
     Event, Snapshot, Attempt, Outcome, Observation, Branch,
     ReviewDecision, ToolCall, Budget,
@@ -36,7 +37,7 @@ from pertura.jobs import JobRunner
 from pertura.models import _model_dump, PatchProposal
 from pertura import (
     AnalysisGraph, CapabilityRegistry, capability, condition, conditions as c,
-    caps, compile_conditions, load_analysis_graph, save_analysis_graph,
+    compile_conditions, load_analysis_graph, save_analysis_graph,
     validate_analysis_graph,
     node_contract, graph_contract, audit_analysis_graph,
 )
@@ -377,11 +378,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     cap_domain = Domain(
         name="capability_contract",
         capabilities=[
-            capability(
-                "run_de",
-                expected_observations=["logFC", "p_value"],
-                expected_artifacts=["de_result"],
-            ).model_dump(mode="json")
+            next(item for item in PERTURBSEQ_DOMAIN.capabilities if item.get("capability_id") == "run_de")
         ],
     )
     cap_summary = CapabilityRegistry(cap_domain.capabilities).summarize(["run_de"])[0]
@@ -1596,7 +1593,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         Event(event_id="sp_1", event_type="run_started", run_id="spec",
               payload={"config": {"run_id": "spec", "workspace": td, "goal": "spec",
                                   "domain": "test", "budget": {"max_attempts": 5},
-                                  "capabilities": [{"id": "run_de"}],
+                                  "capabilities": PERTURBSEQ_DOMAIN.capabilities,
                                   "analysis_spec": graph_spec.model_dump(mode="json")}}),
         Event(event_id="sp_2", event_type="node_entered", run_id="spec",
               payload={"node_id": "workspace_inspection", "branch_id": "main", "reason": "start"}),
@@ -1617,7 +1614,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         "goal": "petura smoke",
         "domain": "test",
         "budget": {"max_attempts": 5, "max_branches": 2, "max_repairs": 1},
-        "capabilities": [{"id": "run_de"}],
+        "capabilities": PERTURBSEQ_DOMAIN.capabilities,
         "analysis_spec": graph_spec.model_dump(mode="json"),
     }})
     controller.append_event("node_entered", {
@@ -1969,6 +1966,8 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     check("perturbseq registry covers default spec", pack_registry.missing_from_spec(pack_spec) == [])
     check("perturbseq default domain audits cleanly", pack_domain.audit()["ok"] is True)
     check("perturbseq domain exposes runtime context", bool(pack_domain.runtime_context().get("condition_context")))
+    check("core caps exclude perturbseq DE", not hasattr(pt.caps, "run_de"))
+    check("perturbseq caps expose perturbseq DE", perturbseq.caps.run_de.id == "run_de")
 
     public_graph = AnalysisGraph("public_api")
     (
@@ -1977,7 +1976,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         .start()
         .title("Inspect workspace")
         .goal("Find matrix-level inputs and summarize schema.")
-        .use(caps.inspect_workspace, caps.load_dataset)
+        .use(perturbseq.caps.inspect_workspace, perturbseq.caps.load_dataset)
         .done_when(c.workspace_files_available())
         .recommend("list files", "summarize candidate matrix files")
         .expect("workspace file observations")
@@ -1989,7 +1988,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         .title("Resolve design")
         .goal("Resolve controls and guide design before interpretation.")
         .enter_if(c.workspace_files_available())
-        .use(caps.inspect_schema, caps.audit_controls)
+        .use(perturbseq.caps.inspect_schema, perturbseq.caps.audit_controls)
         .done_when(
             c.design_confirmed("control_labels"),
             c.design_any_confirmed(["perturbation_modality", "moi", "loading_strategy"], condition_id="perturbation_design_known"),
@@ -2002,7 +2001,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         .title("Effect exploration")
         .goal("Run bounded effect exploration.")
         .enter_if(c.design_confirmed("control_labels"))
-        .use(caps.run_de)
+        .use(perturbseq.caps.run_de)
         .done_when(c.observation_metric("logFC"))
     )
     public_spec = public_graph.to_spec()
@@ -2011,7 +2010,13 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     public_domain = (
         Domain(name="public")
         .with_graph(public_graph)
-        .add_capability(caps.run_de, description="Run DE")
+        .add_capability(
+            perturbseq.caps.run_de,
+            description="Run DE",
+            required_inputs=["adata", "control_labels", "target_column"],
+            expected_observations=["logFC", "p_value"],
+            expected_artifacts=["de_result"],
+        )
         .add_rubric("Do not interpret target effects before controls are confirmed.")
     )
     public_registry = public_domain.registry()
@@ -2225,6 +2230,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         api_contract = client.get("/api/analysis-spec/contract", params={"node_id": "target_interpretation"}).json()
         api_runtime_contract = client.get("/api/node-contract").json()
         api_context = client.get("/api/context-review", params={"purpose": "audit", "max_items": 4}).json()
+        api_workbench_view = client.get("/api/workbench-view", params={"max_items": 4}).json()
         api_run_audit = client.get("/api/run-audit").json()
         api_rethink = client.get("/api/rethink", params={"issue": "review endpoint"}).json()
         api_harness = client.get("/api/harness-manifest").json()
@@ -2232,6 +2238,11 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         check("api exposes analysis node contract", api_contract["node"]["id"] == "target_interpretation")
         check("api exposes runtime node dashboard", api_runtime_contract["runtime"]["target_node_id"] == "workspace_inspection")
         check("api exposes context review", api_context["view_type"] == "context_envelope")
+        check("api exposes workbench view", api_workbench_view["view_type"] == "workbench_view")
+        check("api workbench view contains active node contract", "active_node_contract" in api_workbench_view["analysis"])
+        check("api workbench view contains analysis nodes", len(api_workbench_view["analysis"]["nodes"]) >= 1)
+        check("api workbench view contains agent context", api_workbench_view["agent_context"].get("view_type") == "context_envelope")
+        check("api workbench view exposes review summary", "run_audit_summary" in api_workbench_view["review"])
         check("api exposes harness manifest", api_harness["thesis"]["core_principle"] == "free_reasoning_gated_commit")
         check("api exposes run audit", api_run_audit["audit_type"] == "run_audit")
         check("api exposes rethinking endpoint", api_rethink["view_type"] == "rethinking_plan")

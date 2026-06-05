@@ -1,9 +1,9 @@
 """Capability registry for public analysis graph authoring.
 
 Capabilities are the stable action vocabulary exposed to users and LLMs.
-They sit above concrete tools/templates: a node can allow ``run_de`` without
-requiring the user to know whether the implementation is scanpy, pertpy, or a
-workspace script.
+This module defines the generic capability data model only. Domain-specific
+capability catalogs and scientific defaults live in domain packs such as
+``pertura.domain.perturbseq``.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ class CapabilityRef(BaseModel):
     """Typed public reference to a capability id.
 
     Runtime specs still serialize capabilities as strings. This small wrapper is
-    for developer ergonomics: users can write ``pt.caps.run_de`` instead of the
-    bare string ``"run_de"`` and still get a stable JSON capability id.
+    for developer ergonomics: users can write ``ps.caps.run_de`` instead of
+    the bare string ``"run_de"`` and still get a stable JSON capability id.
     """
 
     capability_id: str
@@ -267,18 +267,16 @@ def _capability_from_dict(data: dict[str, Any]) -> Capability:
 def _default_capability(capability_id: str, *, stage: str = "") -> Capability:
     title = capability_id.replace("_", " ")
     kind: CapabilityKind = "execute"
-    tool_names = ["execute_code"]
+    tool_names: list[str] = []
     backend = "kernel"
     risk: CapabilityRisk = "low"
-    if capability_id.startswith(("inspect", "query", "trace", "compare")) or capability_id in {
-        "load_dataset", "search_web",
-    }:
-        kind = "read" if capability_id != "search_web" else "external"
-        tool_names = [capability_id] if capability_id in {
-            "load_dataset", "trace_upstream", "compare_branches", "search_web",
-        } else []
-    if capability_id in {"search_web"}:
-        risk = "high"
+    if capability_id.startswith(("inspect", "query", "trace", "compare")):
+        kind = "read"
+    if capability_id in {"query_observation_memory", "trace_upstream", "compare_branches"}:
+        tool_names = [capability_id]
+    if capability_id == "generate_report":
+        kind = "report"
+        tool_names = ["finish"]
     return capability(
         capability_id,
         title=title,
@@ -292,169 +290,15 @@ def _default_capability(capability_id: str, *, stage: str = "") -> Capability:
 
 
 def _default_capability_defaults(capability_id: str, *, stage: str = "", kind: CapabilityKind = "execute") -> dict[str, list[str]]:
-    stage_map: dict[str, dict[str, list[str]]] = {
-        "workspace_inspection": {
-            "packages": ["pathlib", "pandas", "scanpy"],
-            "functions": ["Path.iterdir", "scanpy.read_h5ad", "pandas.read_csv"],
-            "analysis_modes": ["workspace_inventory", "data_loading"],
-            "expected_observations": ["workspace_file", "schema"],
-            "expected_artifacts": [],
-            "required_inputs": [],
-        },
-        "experimental_design": {
-            "packages": ["pandas", "numpy"],
-            "functions": ["DataFrame.value_counts", "DataFrame.unique"],
-            "analysis_modes": ["design_audit", "control_validation"],
-            "expected_observations": ["design", "control_audit"],
-            "expected_artifacts": ["control_audit"],
-            "required_inputs": ["adata.obs"],
-        },
-        "scrna_qc": {
-            "packages": ["scanpy", "pandas", "numpy"],
-            "functions": ["scanpy.pp.calculate_qc_metrics", "scanpy.pp.filter_cells"],
-            "analysis_modes": ["qc_metrics", "filtering_review"],
-            "expected_observations": ["qc_metric", "filtering_decision"],
-            "expected_artifacts": ["qc_table", "figure"],
-            "required_inputs": ["adata"],
-        },
-        "guide_assignment": {
-            "packages": ["pandas", "numpy"],
-            "functions": ["DataFrame.value_counts", "Series.map"],
-            "analysis_modes": ["guide_assignment", "mapping_audit"],
-            "expected_observations": ["guide_assignment", "guide_count"],
-            "expected_artifacts": ["guide_assignment_table", "mapping_table"],
-            "required_inputs": ["guide_column"],
-        },
-        "perturbation_validation": {
-            "packages": ["scanpy", "scipy", "statsmodels"],
-            "functions": ["scanpy.tl.rank_genes_groups", "scipy.stats.mannwhitneyu"],
-            "analysis_modes": ["validation", "contrast_analysis"],
-            "expected_observations": ["perturbation_validation", "logFC"],
-            "expected_artifacts": ["validation_table"],
-            "required_inputs": ["adata", "control_labels"],
-        },
-        "target_qc": {
-            "packages": ["pandas", "numpy"],
-            "functions": ["DataFrame.groupby", "DataFrame.value_counts"],
-            "analysis_modes": ["target_qc", "coverage_review"],
-            "expected_observations": ["target_coverage", "guide_concordance"],
-            "expected_artifacts": ["coverage_table"],
-            "required_inputs": ["target_column", "guide_column"],
-        },
-        "state_reference": {
-            "packages": ["scanpy", "matplotlib", "seaborn"],
-            "functions": ["scanpy.pp.pca", "scanpy.pp.neighbors", "scanpy.tl.umap", "scanpy.tl.leiden"],
-            "analysis_modes": ["state_reference", "embedding", "clustering"],
-            "expected_observations": ["embedding_summary", "cluster_summary"],
-            "expected_artifacts": ["embedding", "cluster_table"],
-            "required_inputs": ["adata"],
-        },
-        "effect_exploration": {
-            "packages": ["scanpy", "scipy", "statsmodels"],
-            "functions": ["scanpy.tl.rank_genes_groups", "scipy.stats.mannwhitneyu", "statsmodels.stats.multitest.multipletests"],
-            "analysis_modes": ["effect_exploration", "differential_expression", "composition_shift"],
-            "expected_observations": ["logFC", "p_value"],
-            "expected_artifacts": ["de_result", "effect_figure"],
-            "required_inputs": ["adata", "control_labels"],
-        },
-        "target_discovery": {
-            "packages": ["pandas", "sklearn", "networkx"],
-            "functions": ["sklearn.cluster.KMeans", "sklearn.metrics.pairwise.cosine_similarity", "networkx.from_pandas_edgelist"],
-            "analysis_modes": ["target_discovery", "ranking", "network_inference"],
-            "expected_observations": ["target_rank", "driver_score"],
-            "expected_artifacts": ["target_ranking", "network_table"],
-            "required_inputs": ["effect_table"],
-        },
-        "biology_story": {
-            "packages": ["pertura.core.observation_memory", "pertura.core.graph", "openai"],
-            "functions": ["query_observation_memory", "trace_upstream", "search_web"],
-            "analysis_modes": ["story_synthesis", "provenance_audit", "literature_context"],
-            "expected_observations": ["story_conclusion"],
-            "expected_artifacts": [],
-            "required_inputs": ["supported_observations"],
-        },
-        "report": {
-            "packages": ["networkx", "pandas", "matplotlib"],
-            "functions": ["trace_upstream", "compare_branches"],
-            "analysis_modes": ["reporting", "evidence_compilation"],
-            "expected_observations": [],
-            "expected_artifacts": ["report"],
-            "required_inputs": ["conclusions", "artifacts"],
-        },
-    }
-    defaults = stage_map.get(stage, {
+    defaults = {
         "packages": [],
         "functions": [],
-        "analysis_modes": [],
+        "analysis_modes": [stage or kind] if stage or kind else [],
         "expected_observations": [],
         "expected_artifacts": [],
         "required_inputs": [],
-    }).copy()
+    }
     capability_overrides: dict[str, dict[str, list[str]]] = {
-        "load_dataset": {
-            "packages": ["scanpy", "anndata", "pandas"],
-            "functions": ["scanpy.read_h5ad", "scanpy.read_10x_h5", "pandas.read_csv"],
-            "analysis_modes": ["data_loading", "schema_recovery"],
-            "expected_observations": ["schema"],
-            "expected_artifacts": [],
-            "required_inputs": ["workspace_files"],
-        },
-        "inspect_schema": {
-            "packages": ["anndata", "pandas"],
-            "functions": ["AnnData.obs", "AnnData.var", "DataFrame.dtypes"],
-            "analysis_modes": ["schema_audit"],
-            "expected_observations": ["schema", "design"],
-            "expected_artifacts": [],
-            "required_inputs": ["adata"],
-        },
-        "run_de": {
-            "packages": ["scanpy", "scipy", "statsmodels"],
-            "functions": ["scanpy.tl.rank_genes_groups", "scipy.stats.mannwhitneyu", "statsmodels.stats.multitest.multipletests"],
-            "analysis_modes": ["differential_expression", "effect_validation"],
-            "expected_observations": ["logFC", "p_value"],
-            "expected_artifacts": ["de_result"],
-            "required_inputs": ["adata", "control_labels"],
-        },
-        "compare_methods": {
-            "packages": ["pandas", "scipy", "statsmodels"],
-            "functions": ["statsmodels.stats.multitest.multipletests", "scipy.stats.mannwhitneyu"],
-            "analysis_modes": ["method_sensitivity"],
-            "expected_observations": ["method_sensitivity"],
-            "expected_artifacts": ["method_comparison"],
-            "required_inputs": ["effect_result"],
-        },
-        "composition_test": {
-            "packages": ["scanpy", "pandas"],
-            "functions": ["DataFrame.groupby", "Series.value_counts"],
-            "analysis_modes": ["composition_shift"],
-            "expected_observations": ["composition_shift"],
-            "expected_artifacts": ["composition_table"],
-            "required_inputs": ["state_labels", "target_column"],
-        },
-        "trajectory_analysis": {
-            "packages": ["scanpy", "pandas"],
-            "functions": ["scanpy.tl.dpt", "scanpy.tl.diffmap"],
-            "analysis_modes": ["trajectory_bias"],
-            "expected_observations": ["trajectory_effect"],
-            "expected_artifacts": ["trajectory_table"],
-            "required_inputs": ["state_reference"],
-        },
-        "co_regulated_modules": {
-            "packages": ["scanpy", "pandas"],
-            "functions": ["scanpy.tl.rank_genes_groups", "DataFrame.corr"],
-            "analysis_modes": ["module_discovery"],
-            "expected_observations": ["co_regulated_module"],
-            "expected_artifacts": ["module_table"],
-            "required_inputs": ["effect_result"],
-        },
-        "rank_targets": {
-            "packages": ["pandas", "sklearn"],
-            "functions": ["DataFrame.sort_values", "sklearn.metrics.pairwise.cosine_similarity"],
-            "analysis_modes": ["target_ranking"],
-            "expected_observations": ["target_rank"],
-            "expected_artifacts": ["target_ranking"],
-            "required_inputs": ["effect_table"],
-        },
         "query_observation_memory": {
             "packages": ["pertura.core.observation_memory"],
             "functions": ["build_observation_memory_view"],
@@ -479,17 +323,9 @@ def _default_capability_defaults(capability_id: str, *, stage: str = "", kind: C
             "expected_artifacts": [],
             "required_inputs": ["branches"],
         },
-        "search_web": {
-            "packages": ["openai"],
-            "functions": ["responses.create"],
-            "analysis_modes": ["literature_context"],
-            "expected_observations": [],
-            "expected_artifacts": [],
-            "required_inputs": ["query"],
-        },
         "generate_report": {
-            "packages": ["networkx", "pandas", "matplotlib"],
-            "functions": ["trace_upstream", "compare_branches"],
+            "packages": ["pertura.reporting"],
+            "functions": ["render_report"],
             "analysis_modes": ["reporting"],
             "expected_observations": [],
             "expected_artifacts": ["report"],
@@ -504,8 +340,10 @@ def _default_capability_defaults(capability_id: str, *, stage: str = "", kind: C
     tool_names: list[str] = []
     if kind in {"execute", "review"}:
         tool_names = ["execute_code"]
-    elif capability_id in {"load_dataset", "trace_upstream", "compare_branches", "search_web"}:
+    elif capability_id in {"query_observation_memory", "trace_upstream", "compare_branches"}:
         tool_names = [capability_id]
+    elif capability_id == "generate_report":
+        tool_names = ["finish"]
     return {**defaults, "tool_names": tool_names}
 
 

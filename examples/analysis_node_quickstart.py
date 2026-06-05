@@ -20,11 +20,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pertura import (  # noqa: E402
     AnalysisGraph,
     Domain,
-    caps,
     conditions as c,
     graph_contract,
     node_contract,
 )
+from pertura.domain import perturbseq as ps  # noqa: E402
 
 
 def build_domain() -> Domain:
@@ -33,7 +33,7 @@ def build_domain() -> Domain:
         graph.node("inspect")
         .title("Inspect workspace")
         .goal("Find candidate matrices and summarize schema.")
-        .use(caps.inspect_workspace, caps.load_dataset)
+        .use(ps.caps.inspect_workspace, ps.caps.load_dataset)
         .done_when(c.workspace_files_available())
         .next("design", strict=True)
     )
@@ -42,7 +42,7 @@ def build_domain() -> Domain:
         .title("Resolve design")
         .goal("Confirm controls and perturbation columns before interpretation.")
         .enter_if(c.workspace_files_available())
-        .use(caps.inspect_schema, caps.audit_controls)
+        .use(ps.caps.inspect_schema, ps.caps.audit_controls)
         .done_when(c.design_confirmed("control_labels"))
         .next("effect")
     )
@@ -51,20 +51,20 @@ def build_domain() -> Domain:
         .title("Effect exploration")
         .goal("Run bounded differential expression and register evidence.")
         .enter_if(c.design_confirmed("control_labels"))
-        .use(caps.run_de)
+        .use(ps.caps.run_de)
         .done_when(c.observation_metric("logFC"))
     )
     return (
         Domain(name="quickstart")
         .with_graph(graph)
-        .add_capability(caps.inspect_workspace, description="Inspect workspace files.")
-        .add_capability(caps.load_dataset, description="Load matrix-level dataset.")
+        .add_capability(ps.caps.inspect_workspace, description="Inspect workspace files.")
+        .add_capability(ps.caps.load_dataset, description="Load matrix-level dataset.")
         .add_capability(
-            caps.run_de,
+            ps.caps.run_de,
             description="Run bounded differential expression.",
             expected_artifacts=["de_result"],
             expected_observations=["logFC", "p_value"],
-            required_inputs=["control_labels"],
+            required_inputs=["adata", "control_labels", "target_column"],
         )
         .add_rubric("Do not interpret target effects before controls are confirmed.")
     )

@@ -17,6 +17,36 @@ Core runtime tools such as `execute_code`, `get_context_review`, and
 domain author should normally expose a `Capability` such as `run_de`, not a raw
 tool name.
 
+## Fixed Kernel vs Domain Surface
+
+Pertura has two authoring layers:
+
+```text
+Core runtime
+  fixed by Pertura
+  tools, event store, graph projection, context views, audit/replay/rethink
+
+Domain surface
+  written by a domain author or user
+  analysis graph, capabilities, rubrics, condition placement, design vocabulary
+```
+
+Use this rule of thumb:
+
+| Object | Can domain authors write it? | Where it belongs |
+| --- | --- | --- |
+| `Tool` | Usually no | Pertura core runtime. |
+| `Capability` | Yes | Domain pack. |
+| `AnalysisNode` | Yes | `AnalysisGraph`. |
+| `Condition` placement | Yes | Node `enter_if`, `confirm`, or `done_when`. |
+| `Condition` evaluator implementation | Sometimes | Core or domain extension code. |
+| `Design` field vocabulary | Yes | Domain pack and run schema. |
+| `Design` field value | During a run | PI/user/API/data/LLM-sourced run state. |
+
+For example, `execute_code` is a core tool. `run_de` is a capability. A
+Perturb-seq node can allow `run_de`; the runtime may implement that capability
+through `execute_code`, templates, validators, and audit hooks.
+
 Internal runtime objects such as `Store`, `GraphController`, events,
 snapshots, and ContextViews are implementation details unless you are changing
 the harness itself.
@@ -26,14 +56,15 @@ the harness itself.
 Write analysis nodes with the fluent API:
 
 ```python
-from pertura import AnalysisGraph, caps, conditions as c
+from pertura import AnalysisGraph, conditions as c
+from pertura.domain import perturbseq as ps
 
 graph = (
     AnalysisGraph("my_domain", start_node_id="inspect")
     .node("inspect")
     .title("Inspect workspace")
     .goal("Find input matrices and summarize schema.")
-    .use(caps.inspect_workspace, caps.load_dataset)
+    .use(ps.caps.inspect_workspace, ps.caps.load_dataset)
     .done_when(c.workspace_files_available())
     .next("design", strict=True)
     .end()
@@ -44,8 +75,8 @@ Guidance:
 
 - `goal()` is the natural-language purpose shown to the LLM.
 - `use()` lists capabilities, not concrete package/tool names. Prefer
-  `pertura.caps.*` refs for built-ins; serialized specs still store stable ids
-  such as `"run_de"`.
+  domain refs such as `pertura.domain.perturbseq.caps.run_de`; serialized specs
+  still store stable ids such as `"run_de"`.
 - `enter_if()` is for node entry prerequisites.
 - `confirm()` is for C-tier user/PI authority checks.
 - `done_when()` is for completion checks.
@@ -63,11 +94,11 @@ templates.
 
 ```python
 domain.add_capability(
-    caps.run_de,
+    ps.caps.run_de,
     description="Run bounded differential expression.",
     expected_artifacts=["de_result"],
     expected_observations=["logFC", "p_value"],
-    required_inputs=["dataset", "control_labels"],
+    required_inputs=["adata", "control_labels", "target_column"],
 )
 ```
 
@@ -103,8 +134,8 @@ pertura domain tools
 domain = (
     Domain(name="my_domain")
     .with_graph(graph)
-    .add_capability(caps.inspect_workspace, description="Inspect files.")
-    .add_capability(caps.run_de, expected_observations=["logFC", "p_value"])
+    .add_capability(ps.caps.inspect_workspace, description="Inspect files.")
+    .add_capability(ps.caps.run_de, expected_observations=["logFC", "p_value"])
     .add_rubric("Do not report target-level effects before controls are resolved.")
 )
 

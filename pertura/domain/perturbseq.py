@@ -3,6 +3,7 @@
 from pertura.domain.base import Domain
 from pertura.capabilities import capability
 from pertura.spec.models import AnalysisGraph, condition
+from . import perturbseq_caps as caps
 
 
 def _design_required(condition_id: str, field: str, message: str):
@@ -313,6 +314,9 @@ def _cap(capability_id: str, stage: str, description: str, *,
          artifacts: list[str] | None = None,
          observations: list[str] | None = None,
          required: list[str] | None = None,
+         packages: list[str] | None = None,
+         functions: list[str] | None = None,
+         modes: list[str] | None = None,
          risk: str = "low", backend: str = "kernel") -> dict:
     return capability(
         capability_id,
@@ -320,6 +324,9 @@ def _cap(capability_id: str, stage: str, description: str, *,
         description=description,
         kind=kind,
         tool_names=tools or (["execute_code"] if kind in {"execute", "review"} else []),
+        packages=packages or [],
+        functions=functions or [],
+        analysis_modes=modes or [],
         expected_artifacts=artifacts or [],
         expected_observations=observations or [],
         required_inputs=required or [],
@@ -347,7 +354,17 @@ PERTURBSEQ_CAPABILITIES = [
     _cap("compare_thresholds", "guide_assignment", "Compare guide assignment thresholds or methods.", observations=["threshold_sensitivity"], artifacts=["threshold_table"]),
     _cap("audit_guide_mapping", "guide_assignment", "Audit guide-to-target mapping availability and ambiguity.", observations=["guide_mapping"], artifacts=["mapping_table"]),
     _cap("validate_perturbation", "perturbation_validation", "Validate target expression or signature direction.", observations=["perturbation_validation"]),
-    _cap("run_de", "effect_exploration", "Run bounded differential expression or effect-size analysis.", observations=["logFC", "p_value"], artifacts=["de_result"], required=["control_labels"]),
+    _cap(
+        "run_de",
+        "effect_exploration",
+        "Run bounded differential expression or effect-size analysis.",
+        observations=["logFC", "p_value"],
+        artifacts=["de_result"],
+        required=["adata", "control_labels", "target_column"],
+        packages=["scanpy"],
+        functions=["scanpy.tl.rank_genes_groups", "scanpy.get.rank_genes_groups_df"],
+        modes=["differential_expression", "effect_size"],
+    ),
     _cap("score_signature", "perturbation_validation", "Score gene signatures or modules.", observations=["signature_score"], artifacts=["signature_table"]),
     _cap("check_target_coverage", "target_qc", "Check cells, guides, batches, and samples per target.", observations=["target_coverage"], artifacts=["coverage_table"]),
     _cap("check_guide_concordance", "target_qc", "Check direction consistency across guides for a target.", observations=["guide_concordance"], artifacts=["concordance_table"]),
@@ -376,6 +393,21 @@ PERTURBSEQ_CAPABILITIES = [
 
 DOMAIN = Domain(
     name="perturbseq",
+    metadata={
+        "design_fields": [
+            "control_labels",
+            "control_column",
+            "guide_column",
+            "target_column",
+            "perturbation_column",
+            "perturbation_modality",
+            "batch_column",
+            "sample_column",
+            "state_column",
+            "moi",
+            "loading_strategy",
+        ],
+    },
     agenda=[
         "experimental_design", "scrna_qc", "guide_assignment",
         "perturbation_validation", "target_qc", "state_reference",
@@ -629,6 +661,7 @@ Every conclusion must cite observation, artifact, validator, and branch IDs.""",
 __all__ = [
     "DOMAIN",
     "PERTURBSEQ_CAPABILITIES",
+    "caps",
     "build_perturbseq_analysis_graph",
     "default_graph",
     "default_domain",

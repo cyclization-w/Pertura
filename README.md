@@ -73,6 +73,29 @@ Start the local workbench:
 pertura serve
 ```
 
+The GUI shell reads a compact UI contract from:
+
+```text
+GET /api/workbench-view
+```
+
+Use this as the stable first-screen payload for custom frontends. It combines
+run status, active analysis node, node contract, compact LLM context, review
+state, recent attempts, jobs, artifacts, and report summary without exposing
+the full event log or notebook history.
+
+The repository also includes an experimental React/Vite frontend in
+`frontend/`. Run it against the FastAPI backend:
+
+```bash
+pertura serve
+cd frontend
+npm install
+npm run dev
+```
+
+Vite proxies `/api/*` to `http://127.0.0.1:8765`.
+
 The built-in Perturb-seq pack includes nodes for workspace inspection,
 experimental design, scRNA-seq QC, guide assignment, perturbation validation,
 target QC, state reference, effect exploration, target discovery, biology
@@ -89,6 +112,23 @@ story, and reporting.
 | `Condition` | Executable or rubric-only check over state, design, artifacts, or observations. |
 | `Observation` | Variable-level scientific memory, such as a target logFC under a contrast. |
 
+## What Is Fixed vs User-Authored
+
+Pertura separates the runtime kernel from the domain surface:
+
+| Layer | Who defines it? | Examples | Notes |
+| --- | --- | --- | --- |
+| Core tools | Pertura core | `execute_code`, `get_context_review`, `trace_upstream`, `audit_run` | Runtime primitives. Domain authors usually do not create these. |
+| Capabilities | Domain pack / user | `run_de`, `audit_controls`, `assign_guides` | The action menu shown to the LLM. A capability can use one or more core tools. |
+| Conditions | Core + domain/user | `control_labels_defined`, `workspace_files_available` | Evaluators are provided by core/domain code; users attach them to nodes. Natural-language conditions can remain rubric-only or be compiled. |
+| Design fields | Domain/user + run state | `control_labels`, `guide_column`, `perturbation_modality` | Experimental facts for one run. They should carry a source such as `pi_confirmed`, `api_confirmed`, `data_observed`, or `llm_inferred`. |
+| Analysis nodes | Domain pack / user | `experimental_design`, `guide_assignment`, `effect_exploration` | Stages that constrain which capabilities are currently allowed and what must be true before moving on. |
+
+In short: users write `AnalysisGraph`, `Domain`, and `Capability` contracts.
+Pertura supplies the core runtime tools and event-sourced state machinery.
+`Design` is not a static schema alone; it is the confirmed or inferred
+experimental context accumulated during a run.
+
 The public authoring API is intentionally small:
 
 ```text
@@ -102,13 +142,14 @@ Domain         -> reusable pack of graph + capabilities + rubrics
 ```python
 import pertura as pt
 from pertura import conditions as c
+from pertura.domain import perturbseq as ps
 
 graph = (
     pt.AnalysisGraph("my_singlecell", start_node_id="inspect")
     .node("inspect")
     .title("Inspect workspace")
     .goal("Find matrix inputs and summarize schema.")
-    .use(pt.caps.inspect_workspace, pt.caps.load_dataset)
+    .use(ps.caps.inspect_workspace, ps.caps.load_dataset)
     .done_when(c.workspace_files_available())
     .next("design", strict=True)
     .end()
@@ -119,7 +160,7 @@ graph.node("design").title("Resolve design").goal(
 ).enter_if(
     c.workspace_files_available()
 ).use(
-    pt.caps.inspect_schema, pt.caps.audit_controls
+    ps.caps.inspect_schema, ps.caps.audit_controls
 ).done_when(
     c.design_confirmed("control_labels")
 ).next("effect")
@@ -129,7 +170,7 @@ graph.node("effect").title("Effect exploration").goal(
 ).enter_if(
     c.design_confirmed("control_labels")
 ).use(
-    pt.caps.run_de
+    ps.caps.run_de
 ).done_when(
     c.observation_metric("logFC")
 )
@@ -138,11 +179,11 @@ domain = (
     pt.Domain(name="my_singlecell")
     .with_graph(graph)
     .add_capability(
-        pt.caps.run_de,
+        ps.caps.run_de,
         description="Run bounded differential expression.",
         expected_artifacts=["de_result"],
         expected_observations=["logFC", "p_value"],
-        required_inputs=["dataset", "control_labels"],
+        required_inputs=["adata", "control_labels", "target_column"],
     )
     .add_rubric("Do not interpret target effects before controls are confirmed.")
 )
@@ -151,9 +192,11 @@ assert domain.audit()["ok"]
 domain.to_json(".pertura/domain.json")
 ```
 
-`pt.caps.*` entries are typed public references for autocomplete and early
-auditing. Serialized domain files still store plain capability ids such as
-`"run_de"`, so domain packs remain portable and editable.
+`ps.caps.*` entries are typed Perturb-seq references for autocomplete and early
+auditing. Pertura core also exposes a small `pt.caps` module for generic
+harness actions, but scientific actions such as `run_de` live in domain packs.
+Serialized domain files still store plain capability ids such as `"run_de"`,
+so domain packs remain portable and editable.
 
 For a complete authoring guide, see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md).
 

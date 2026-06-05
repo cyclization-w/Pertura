@@ -7,25 +7,11 @@ from typing import Any
 from pertura.spec.models import ConditionSpec, spec_from_dict
 
 
-DESIGN_FIELD_NAMES = {
-    "control_labels",
-    "control_column",
-    "guide_column",
-    "target_column",
-    "perturbation_column",
-    "perturbation_modality",
-    "batch_column",
-    "sample_column",
-    "state_column",
-    "moi",
-    "loading_strategy",
-}
-
-
 def describe_domain(domain, *, include_core_tools: bool = True) -> dict[str, Any]:
     """Return a compact, GUI/CLI-friendly description of a domain pack."""
     graph = spec_from_dict(getattr(domain, "analysis_graph", None))
     registry = domain.registry()
+    known_design_fields = _domain_design_fields(domain)
     explicit_capability_ids = {
         item.get("capability_id") or item.get("id")
         for item in (getattr(domain, "capabilities", []) or [])
@@ -50,9 +36,9 @@ def describe_domain(domain, *, include_core_tools: bool = True) -> dict[str, Any
     if graph is not None:
         for node in graph.nodes:
             condition_groups = {
-                "requires": [_condition_card(item) for item in node.requires],
-                "must_confirm": [_condition_card(item) for item in node.must_confirm],
-                "completion": [_condition_card(item) for item in node.completion],
+                "requires": [_condition_card(item, known_design_fields=known_design_fields) for item in node.requires],
+                "must_confirm": [_condition_card(item, known_design_fields=known_design_fields) for item in node.must_confirm],
+                "completion": [_condition_card(item, known_design_fields=known_design_fields) for item in node.completion],
             }
             for group, cards in condition_groups.items():
                 for card in cards:
@@ -73,7 +59,8 @@ def describe_domain(domain, *, include_core_tools: bool = True) -> dict[str, Any
                 "strict_edges": node.strict_edges,
             })
 
-    design_fields.update(_design_fields_from_capabilities(capability_cards))
+    design_fields.update(known_design_fields)
+    design_fields.update(_design_fields_from_capabilities(capability_cards, known_design_fields=known_design_fields))
     payload = {
         "catalog_type": "domain_browser",
         "domain": {
@@ -86,7 +73,7 @@ def describe_domain(domain, *, include_core_tools: bool = True) -> dict[str, Any
             "analysis_node": "A user/domain-authored stage contract that guides navigation and gates.",
             "capability": "A domain action contract exposed to the LLM and users, such as run_de.",
             "tool": "A core runtime primitive, such as execute_code or get_context_review.",
-            "design": "Run-level experimental facts with provenance, such as control_labels.",
+            "design": "Run-level domain facts with provenance, such as user-confirmed controls or sample metadata.",
             "condition": "An executable or rubric-only gate over design, observations, artifacts, and runtime state.",
         },
         "summary": {
@@ -145,15 +132,15 @@ def _core_tools() -> list[dict[str, Any]]:
     return tool_catalog()
 
 
-def _condition_card(condition: ConditionSpec) -> dict[str, Any]:
+def _condition_card(condition: ConditionSpec, *, known_design_fields: set[str]) -> dict[str, Any]:
     design_fields = []
     field = condition.inputs.get("field")
     if field:
         design_fields.append(str(field))
     for value in condition.inputs.values():
         if isinstance(value, list):
-            design_fields.extend(str(item) for item in value if str(item) in DESIGN_FIELD_NAMES)
-        elif str(value) in DESIGN_FIELD_NAMES:
+            design_fields.extend(str(item) for item in value if _looks_like_design_field(str(item), known_design_fields))
+        elif _looks_like_design_field(str(value), known_design_fields):
             design_fields.append(str(value))
     return {
         "condition_id": condition.condition_id,
@@ -168,10 +155,24 @@ def _condition_card(condition: ConditionSpec) -> dict[str, Any]:
     }
 
 
-def _design_fields_from_capabilities(cards: list[dict[str, Any]]) -> set[str]:
+def _design_fields_from_capabilities(cards: list[dict[str, Any]], *, known_design_fields: set[str]) -> set[str]:
     fields = set()
     for card in cards:
         for item in card.get("required_inputs", []) or []:
-            if item in DESIGN_FIELD_NAMES:
+            if _looks_like_design_field(str(item), known_design_fields):
                 fields.add(item)
     return fields
+
+
+def _domain_design_fields(domain) -> set[str]:
+    metadata = getattr(domain, "metadata", {}) or {}
+    fields = metadata.get("design_fields", [])
+    if isinstance(fields, dict):
+        fields = fields.keys()
+    return {str(item) for item in fields if str(item)}
+
+
+def _looks_like_design_field(value: str, known_design_fields: set[str]) -> bool:
+    if value in known_design_fields:
+        return True
+    return value.endswith("_column") or value.endswith("_labels")
