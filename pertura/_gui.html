@@ -45,7 +45,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:180px}
 .graph-wrap{height:100%;min-height:340px;background:#fbfcfd}
 #graphSvg{width:100%;height:100%;display:block}
-.graph-node{cursor:pointer}.graph-node rect{fill:#fff;stroke:#c7ced8;stroke-width:1.2}.graph-node.active rect{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2}.graph-node text{font-size:11px;fill:#111827}.graph-edge{stroke:#9aa4b2;stroke-width:1.2;fill:none;marker-end:url(#arrow)}
+.graph-node{cursor:pointer}.graph-node rect{fill:#fff;stroke:#c7ced8;stroke-width:1.2}.graph-node.active rect{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2}.graph-node.dim rect{fill:#f7f8fa;stroke:#e0e5ec}.graph-node text{font-size:11px;fill:#111827}.graph-node .type-label{font-size:9px;fill:#667085;text-transform:uppercase}.graph-edge{stroke:#9aa4b2;stroke-width:1.2;fill:none;marker-end:url(#arrow)}.graph-edge.highlight{stroke:var(--accent);stroke-width:2}.graph-edge.suspicious{stroke:var(--warn);stroke-dasharray:5 4;stroke-width:2}.lane-label{font-size:11px;font-weight:760;fill:#475467;text-transform:uppercase;letter-spacing:.04em}.lane-bg{fill:#f6f8fa;stroke:#e1e6ed;stroke-width:1}
 .trace-box{min-height:120px;max-height:260px;overflow:auto}
 .context-json{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.45;background:#101828;color:#f8fafc;border-radius:6px;padding:9px;max-height:220px;overflow:auto}
 .answer-row{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:8px}
@@ -93,7 +93,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
       <div id="nodeContract" class="panel-body small"></div>
     </div>
     <div class="panel grow">
-      <div class="panel-head"><div class="panel-title">Attempt Graph</div><span id="graphCount" class="chip">0 / 0</span></div>
+      <div class="panel-head"><div class="panel-title">Derivation Lanes</div><span id="graphCount" class="chip">0 / 0</span></div>
       <div class="graph-wrap"><svg id="graphSvg" role="img" aria-label="Attempt graph"></svg></div>
     </div>
     <div class="split">
@@ -217,23 +217,65 @@ function renderContract(view){
   `;
 }
 
+function laneForType(type){
+  const t=String(type||"").toLowerCase();
+  if(["workspace","dataset","metadata","description","parameter_set","analysis_node","branch"].includes(t))return"Inputs";
+  if(["attempt","tool_call","code_cell","intervention","diagnosis","backward_trace"].includes(t))return"Attempts";
+  if(["artifact","outcome"].includes(t))return"Artifacts";
+  if(["observation","trigger","finding","review_decision","critic_review","critic_finding"].includes(t))return"Observations";
+  if(["conclusion","report"].includes(t))return"Conclusions";
+  return"Observations";
+}
+
+function buildLaneFocus(nodes, edges, focusId){
+  if(!focusId)return new Set();
+  const selected=new Set([focusId]);
+  for(let depth=0;depth<3;depth++){
+    const frontier=[...selected];
+    for(const e of edges){
+      if(frontier.includes(e.target_id))selected.add(e.source_id);
+      if(frontier.includes(e.source_id))selected.add(e.target_id);
+    }
+  }
+  return selected;
+}
+
+function pickFocusNode(nodes, view){
+  if(SELECTED_NODE)return SELECTED_NODE;
+  const conclusion=nodes.find(n=>laneForType(n.node_type)==="Conclusions");
+  if(conclusion)return conclusion.node_id;
+  const obs=[...nodes].reverse().find(n=>laneForType(n.node_type)==="Observations");
+  if(obs)return obs.node_id;
+  return (view.active||{}).node_id||"";
+}
+
 function renderGraph(graph, view){
   const svg=document.getElementById("graphSvg");
-  const nodes=(graph.nodes||[]).slice(0,80);
-  const edges=(graph.edges||[]).filter(e=>nodes.some(n=>n.node_id===e.source_id)&&nodes.some(n=>n.node_id===e.target_id)).slice(0,140);
+  const allNodes=(graph.nodes||[]);
+  const allEdges=(graph.edges||[]);
+  const focusId=pickFocusNode(allNodes,view);
+  const focusSet=buildLaneFocus(allNodes,allEdges,focusId);
+  let nodes=focusSet.size?allNodes.filter(n=>focusSet.has(n.node_id)):allNodes;
+  if(nodes.length<8)nodes=allNodes;
+  nodes=nodes.slice(0,55);
+  const nodeIds=new Set(nodes.map(n=>n.node_id));
+  const edges=allEdges.filter(e=>nodeIds.has(e.source_id)&&nodeIds.has(e.target_id)).slice(0,90);
   document.getElementById("graphCount").textContent=`${graph.nodes?.length||0} / ${graph.edges?.length||0}`;
-  const width=Math.max(svg.clientWidth||700,700), height=Math.max(svg.clientHeight||360,360);
-  const byType={};
-  for(const n of nodes){const t=n.node_type||"other";(byType[t]||(byType[t]=[])).push(n);}
-  const types=Object.keys(byType);
+  const width=Math.max(svg.clientWidth||920,920), height=Math.max(svg.clientHeight||390,390);
+  const lanes=["Inputs","Attempts","Artifacts","Observations","Conclusions"];
+  const laneWidth=(width-52)/lanes.length;
+  const byLane={Inputs:[],Attempts:[],Artifacts:[],Observations:[],Conclusions:[]};
+  for(const n of nodes){byLane[laneForType(n.node_type)].push(n);}
   const positions={};
-  types.forEach((type,ti)=>{
-    const list=byType[type], x=70+ti*Math.max(150,(width-140)/Math.max(types.length-1,1));
-    list.forEach((n,i)=>{positions[n.node_id]={x,y:44+i*58,type};});
+  lanes.forEach((lane,li)=>{
+    const list=byLane[lane].slice(0,9);
+    const x=28+li*laneWidth+laneWidth/2;
+    list.forEach((n,i)=>{positions[n.node_id]={x,y:74+i*64,lane};});
   });
   let body=`<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#9aa4b2"/></marker></defs>`;
-  for(const e of edges){const a=positions[e.source_id],b=positions[e.target_id];if(!a||!b)continue;body+=`<path class="graph-edge" d="M${a.x+44},${a.y} C${(a.x+b.x)/2},${a.y} ${(a.x+b.x)/2},${b.y} ${b.x-44},${b.y}"/>`;}
-  for(const n of nodes){const p=positions[n.node_id];if(!p)continue;const label=(n.label||n.node_id||"").slice(0,22);const color=TYPE_COLORS[n.node_type]||"#667085";const active=n.node_id===SELECTED_NODE||n.node_id===(view.active||{}).node_id?"active":"";body+=`<g class="graph-node ${active}" onclick="showTrace('${esc(n.node_id)}')"><rect x="${p.x-52}" y="${p.y-18}" rx="6" width="104" height="36"></rect><circle cx="${p.x-39}" cy="${p.y}" r="5" fill="${color}"></circle><text x="${p.x-29}" y="${p.y+4}">${esc(label)}</text></g>`;}
+  lanes.forEach((lane,li)=>{const x=28+li*laneWidth;body+=`<rect class="lane-bg" x="${x}" y="16" width="${laneWidth-10}" height="${height-32}" rx="8"></rect><text class="lane-label" x="${x+12}" y="40">${lane}</text>`;});
+  for(const e of edges){const a=positions[e.source_id],b=positions[e.target_id];if(!a||!b)continue;const hi=(e.source_id===focusId||e.target_id===focusId||focusSet.has(e.source_id)&&focusSet.has(e.target_id))?"highlight":"";const suspicious=String(e.edge_type||"").match(/limit|contradict|trigger|finding|block|stale/i)?"suspicious":"";body+=`<path class="graph-edge ${hi} ${suspicious}" d="M${a.x+68},${a.y} C${(a.x+b.x)/2},${a.y} ${(a.x+b.x)/2},${b.y} ${b.x-68},${b.y}"/>`;}
+  for(const n of nodes){const p=positions[n.node_id];if(!p)continue;const label=(n.label||n.node_id||"").slice(0,24);const type=(n.node_type||"node").slice(0,13);const color=TYPE_COLORS[n.node_type]||"#667085";const active=n.node_id===focusId||n.node_id===SELECTED_NODE||n.node_id===(view.active||{}).node_id?"active":"";const dim=focusSet.size&&!focusSet.has(n.node_id)?"dim":"";body+=`<g class="graph-node ${active} ${dim}" onclick="showTrace('${esc(n.node_id)}')"><rect x="${p.x-76}" y="${p.y-24}" rx="7" width="152" height="48"></rect><circle cx="${p.x-61}" cy="${p.y-7}" r="5" fill="${color}"></circle><text class="type-label" x="${p.x-50}" y="${p.y-4}">${esc(type)}</text><text x="${p.x-61}" y="${p.y+13}">${esc(label)}</text></g>`;}
   svg.setAttribute("viewBox",`0 0 ${width} ${height}`);
   svg.innerHTML=body;
 }

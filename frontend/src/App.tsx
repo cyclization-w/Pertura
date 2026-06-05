@@ -38,6 +38,39 @@ function truncate(value: string, n = 64) {
   return value.length > n ? `${value.slice(0, n - 1)}...` : value;
 }
 
+function laneForType(type?: string) {
+  const text = String(type ?? "").toLowerCase();
+  if (["workspace", "dataset", "metadata", "description", "parameter_set", "analysis_node", "branch"].includes(text)) return "Inputs";
+  if (["attempt", "tool_call", "code_cell", "intervention", "diagnosis", "backward_trace"].includes(text)) return "Attempts";
+  if (["artifact", "outcome"].includes(text)) return "Artifacts";
+  if (["observation", "trigger", "finding", "review_decision", "critic_review", "critic_finding"].includes(text)) return "Observations";
+  if (["conclusion", "report"].includes(text)) return "Conclusions";
+  return "Observations";
+}
+
+function buildFocusSet(edges: AttemptGraph["edges"], focusId: string) {
+  const selected = new Set<string>();
+  if (!focusId) return selected;
+  selected.add(focusId);
+  for (let depth = 0; depth < 3; depth += 1) {
+    const frontier = new Set(selected);
+    for (const edge of edges) {
+      if (frontier.has(edge.target_id)) selected.add(edge.source_id);
+      if (frontier.has(edge.source_id)) selected.add(edge.target_id);
+    }
+  }
+  return selected;
+}
+
+function pickFocusNode(nodes: GraphNode[], selectedNode: string, activeNodeId: string) {
+  if (selectedNode) return selectedNode;
+  const conclusion = nodes.find((node) => laneForType(node.node_type) === "Conclusions");
+  if (conclusion) return conclusion.node_id;
+  const observation = [...nodes].reverse().find((node) => laneForType(node.node_type) === "Observations");
+  if (observation) return observation.node_id;
+  return activeNodeId;
+}
+
 export default function App() {
   const [view, setView] = useState<WorkbenchView | null>(null);
   const [graph, setGraph] = useState<AttemptGraph>({ nodes: [], edges: [] });
@@ -125,7 +158,7 @@ export default function App() {
           <Panel title="Active Node Contract" badge={view?.active.node_id || "none"}>
             <ActiveContract view={view} />
           </Panel>
-          <Panel title="Attempt Graph" fill badge={`${graph.nodes.length} / ${graph.edges.length}`}>
+          <Panel title="Derivation Lanes" fill badge={`${graph.nodes.length} / ${graph.edges.length}`}>
             <AttemptGraphSvg graph={graph} activeNodeId={view?.active.node_id ?? ""} selectedNode={selectedNode} onSelect={setSelectedNode} />
           </Panel>
           <div className="split">
@@ -225,23 +258,32 @@ function AttemptGraphSvg(props: {
   selectedNode: string;
   onSelect: (id: string) => void;
 }) {
-  const nodes = props.graph.nodes.slice(0, 90);
+  const allNodes = props.graph.nodes;
+  const allEdges = props.graph.edges;
+  const focusId = pickFocusNode(allNodes, props.selectedNode, props.activeNodeId);
+  const focusSet = buildFocusSet(allEdges, focusId);
+  let nodes = focusSet.size ? allNodes.filter((node) => focusSet.has(node.node_id)) : allNodes;
+  if (nodes.length < 8) nodes = allNodes;
+  nodes = nodes.slice(0, 55);
   const nodeIds = new Set(nodes.map((node) => node.node_id));
-  const edges = props.graph.edges.filter((edge) => nodeIds.has(edge.source_id) && nodeIds.has(edge.target_id)).slice(0, 160);
+  const edges = allEdges.filter((edge) => nodeIds.has(edge.source_id) && nodeIds.has(edge.target_id)).slice(0, 90);
   const layout = useMemo(() => {
-    const byType = new Map<string, GraphNode[]>();
+    const lanes = ["Inputs", "Attempts", "Artifacts", "Observations", "Conclusions"];
+    const byLane = new Map<string, GraphNode[]>();
     for (const node of nodes) {
-      const type = node.node_type || "other";
-      byType.set(type, [...(byType.get(type) ?? []), node]);
+      const lane = laneForType(node.node_type);
+      byLane.set(lane, [...(byLane.get(lane) ?? []), node]);
     }
-    const types = [...byType.keys()];
     const positions = new Map<string, { x: number; y: number }>();
-    types.forEach((type, typeIndex) => {
-      const list = byType.get(type) ?? [];
-      const x = 72 + typeIndex * Math.max(142, 860 / Math.max(types.length, 1));
-      list.forEach((node, itemIndex) => positions.set(node.node_id, { x, y: 42 + itemIndex * 56 }));
+    const width = 980;
+    const laneWidth = width / lanes.length;
+    lanes.forEach((lane, laneIndex) => {
+      const list = (byLane.get(lane) ?? []).slice(0, 9);
+      const x = laneWidth * laneIndex + laneWidth / 2;
+      list.forEach((node, itemIndex) => positions.set(node.node_id, { x, y: 76 + itemIndex * 64 }));
     });
-    return { positions, width: Math.max(980, 150 * Math.max(types.length, 1)), height: Math.max(360, 70 * Math.max(...types.map((type) => byType.get(type)?.length ?? 0), 4)) };
+    const maxLane = Math.max(...lanes.map((lane) => byLane.get(lane)?.length ?? 0), 4);
+    return { lanes, laneWidth, positions, width, height: Math.max(390, 92 + 64 * Math.min(maxLane, 9)) };
   }, [nodes]);
 
   return (
@@ -251,21 +293,31 @@ function AttemptGraphSvg(props: {
           <path d="M0,0 L0,6 L7,3 z" fill="#9aa4b2" />
         </marker>
       </defs>
+      {layout.lanes.map((lane, index) => (
+        <g key={lane}>
+          <rect className="lane-bg" x={index * layout.laneWidth + 8} y={16} width={layout.laneWidth - 16} height={layout.height - 32} rx={8} />
+          <text className="lane-label" x={index * layout.laneWidth + 22} y={40}>{lane}</text>
+        </g>
+      ))}
       {edges.map((edge) => {
         const a = layout.positions.get(edge.source_id);
         const b = layout.positions.get(edge.target_id);
         if (!a || !b) return null;
-        return <path key={`${edge.source_id}-${edge.target_id}-${edge.edge_type}`} className="graph-edge" d={`M${a.x + 44},${a.y} C${(a.x + b.x) / 2},${a.y} ${(a.x + b.x) / 2},${b.y} ${b.x - 44},${b.y}`} />;
+        const highlighted = edge.source_id === focusId || edge.target_id === focusId || (focusSet.has(edge.source_id) && focusSet.has(edge.target_id));
+        const suspicious = /limit|contradict|trigger|finding|block|stale/i.test(edge.edge_type ?? "");
+        return <path key={`${edge.source_id}-${edge.target_id}-${edge.edge_type}`} className={`graph-edge ${highlighted ? "highlight" : ""} ${suspicious ? "suspicious" : ""}`} d={`M${a.x + 68},${a.y} C${(a.x + b.x) / 2},${a.y} ${(a.x + b.x) / 2},${b.y} ${b.x - 68},${b.y}`} />;
       })}
       {nodes.map((node) => {
         const p = layout.positions.get(node.node_id);
         if (!p) return null;
-        const active = node.node_id === props.activeNodeId || node.node_id === props.selectedNode;
+        const active = node.node_id === props.activeNodeId || node.node_id === props.selectedNode || node.node_id === focusId;
+        const dim = focusSet.size > 0 && !focusSet.has(node.node_id);
         return (
-          <g key={node.node_id} className={`graph-node ${active ? "active" : ""}`} onClick={() => props.onSelect(node.node_id)}>
-            <rect x={p.x - 52} y={p.y - 18} rx={6} width={104} height={36} />
-            <circle cx={p.x - 39} cy={p.y} r={5} fill={typeColors[node.node_type] ?? "#667085"} />
-            <text x={p.x - 29} y={p.y + 4}>{truncate(node.label ?? node.node_id, 18)}</text>
+          <g key={node.node_id} className={`graph-node ${active ? "active" : ""} ${dim ? "dim" : ""}`} onClick={() => props.onSelect(node.node_id)}>
+            <rect x={p.x - 76} y={p.y - 24} rx={7} width={152} height={48} />
+            <circle cx={p.x - 61} cy={p.y - 7} r={5} fill={typeColors[node.node_type] ?? "#667085"} />
+            <text className="type-label" x={p.x - 50} y={p.y - 4}>{truncate(node.node_type || "node", 13)}</text>
+            <text x={p.x - 61} y={p.y + 13}>{truncate(node.label ?? node.node_id, 24)}</text>
           </g>
         );
       })}

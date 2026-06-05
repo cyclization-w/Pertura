@@ -256,6 +256,118 @@ def _panel(content, title="", style="", **kw):
     return str(content)
 
 
+def _workbench_view_for_cli(wb, *, max_items: int = 5) -> dict:
+    """Use the same bounded projection as the GUI for terminal dashboards."""
+    try:
+        from pertura._api import workbench_view_payload
+        return workbench_view_payload(wb, max_items=max_items, token_budget=4500)
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def _lane_counts_for_cli(wb) -> dict[str, int]:
+    try:
+        graph = wb._store.read_graph() if getattr(wb, "_store", None) else {}
+    except Exception:
+        graph = {}
+    lanes = {"Inputs": 0, "Attempts": 0, "Artifacts": 0, "Observations": 0, "Conclusions": 0}
+    for node in (graph or {}).get("nodes", []):
+        lane = _lane_for_cli(node.get("node_type", ""))
+        lanes[lane] = lanes.get(lane, 0) + 1
+    return lanes
+
+
+def _lane_for_cli(node_type: str) -> str:
+    text = str(node_type or "").lower()
+    if text in {"workspace", "dataset", "metadata", "description", "parameter_set", "analysis_node", "branch"}:
+        return "Inputs"
+    if text in {"attempt", "tool_call", "code_cell", "intervention", "diagnosis", "backward_trace"}:
+        return "Attempts"
+    if text in {"artifact", "outcome"}:
+        return "Artifacts"
+    if text in {"conclusion", "report"}:
+        return "Conclusions"
+    return "Observations"
+
+
+def _print_workbench_dashboard(wb, *, title: str = "Workbench") -> None:
+    view = _workbench_view_for_cli(wb)
+    if view.get("error"):
+        _print(_panel(f"[red]{view['error']}[/]", title=title, style="red"))
+        return
+
+    status = view.get("status", {}) or {}
+    active = view.get("active", {}) or {}
+    review = view.get("review", {}) or {}
+    analysis = view.get("analysis", {}) or {}
+    contract = analysis.get("active_node_contract", {}) or {}
+    runtime = contract.get("runtime", {}) or {}
+    caps = contract.get("capabilities", []) or []
+    recent = (view.get("activity", {}) or {}).get("recent_attempts", []) or []
+    open_items = [
+        *review.get("open_interrupts", []),
+        *review.get("open_triggers", []),
+        *review.get("open_findings", []),
+    ]
+    lanes = _lane_counts_for_cli(wb)
+
+    if not RICH:
+        _print(f"{title}: phase={status.get('phase') or status.get('state')} node={active.get('node_id') or '-'}")
+        _print(
+            "  "
+            f"attempts={status.get('attempts', 0)} obs={status.get('observations', 0)} "
+            f"artifacts={status.get('artifacts', 0)} issues={len(open_items)}"
+        )
+        _print("  lanes: " + " -> ".join(f"{k}:{v}" for k, v in lanes.items()))
+        if caps:
+            _print("  capabilities: " + ", ".join((c.get("id") or c.get("capability_id") or "") for c in caps[:6]))
+        if open_items:
+            _print("  review: " + "; ".join(str(i.get("summary") or i.get("question") or "")[:90] for i in open_items[:3]))
+        return
+
+    lane_text = "  ".join(f"[dim]{name}[/] [bold]{count}[/]" for name, count in lanes.items())
+    ready = set(runtime.get("ready_capabilities", []) or [])
+    cap_rows = []
+    for cap in caps[:7]:
+        cid = cap.get("id") or cap.get("capability_id") or ""
+        tag = "[green]ready[/]" if cid in ready else "[dim]contract[/]"
+        cap_rows.append(f"{cid} {tag}")
+    cap_text = "\n".join(cap_rows) if cap_rows else "[dim]No active capability contract.[/]"
+
+    review_lines = []
+    for item in open_items[:4]:
+        summary = item.get("summary") or item.get("question") or item.get("source") or ""
+        severity = item.get("severity") or ("interrupt" if item.get("interrupt_id") else "review")
+        review_lines.append(f"[yellow]{severity}[/] {str(summary)[:110]}")
+    review_text = "\n".join(review_lines) if review_lines else "[green]No open findings or interrupts.[/]"
+
+    recent_lines = []
+    for item in recent[:4]:
+        recent_lines.append(
+            f"{str(item.get('title') or item.get('attempt_id') or '')[:42]}  "
+            f"[dim]{item.get('analysis_node_id') or '-'}[/]  "
+            f"{item.get('outcome_status') or item.get('status') or '-'}  "
+            f"{item.get('observations', 0)}/{item.get('artifacts', 0)} obs/art"
+        )
+    recent_text = "\n".join(recent_lines) if recent_lines else "[dim]No attempts yet.[/]"
+
+    body = (
+        f"[bold]phase[/] {status.get('phase') or status.get('state') or '-'}   "
+        f"[bold]node[/] {active.get('node_id') or '-'}   "
+        f"[bold]branch[/] {active.get('branch_id') or '-'}\n"
+        f"[bold]attempts[/] {status.get('attempts', 0)}   "
+        f"[bold]obs[/] {status.get('observations', 0)}   "
+        f"[bold]artifacts[/] {status.get('artifacts', 0)}   "
+        f"[bold]open review[/] {len(open_items)}   "
+        f"[bold]budget[/] {view.get('budget', {}).get('max_attempts', '-')}\n\n"
+        f"[bold]Derivation lanes[/]\n{lane_text}\n\n"
+        f"[bold]Active capabilities[/]\n{cap_text}\n\n"
+        f"[bold]Recent attempts[/]\n{recent_text}\n\n"
+        f"[bold]Review[/]\n{review_text}"
+    )
+    _print(Panel(body, title=title, border_style="bright_blue", padding=(0, 1)))
+
+
 # Chat
 
 def _chat(args) -> int:
@@ -286,6 +398,7 @@ def _chat(args) -> int:
 
     snap = wb._store.read_snapshot()
     _print("  [green]Ready.[/] " + _status_line(snap))
+    _print_workbench_dashboard(wb, title="Workbench State")
 
     # Loop
 
@@ -325,6 +438,7 @@ def _chat(args) -> int:
             action = _run_with_progress(wb)
             if action != "error":
                 _print(*_step_result(action, wb))
+                _print_workbench_dashboard(wb, title="Workbench State")
             continue
 
         # Normal instruction
@@ -333,6 +447,7 @@ def _chat(args) -> int:
 
         action = _run_with_progress(wb)
         _print(*_step_result(action, wb))
+        _print_workbench_dashboard(wb, title="Workbench State")
 
     # Cleanup
     wb.report()
@@ -520,6 +635,7 @@ def _print_run_summary(wb):
     s = wb.status
     rpt = wb.report()
     _print(f"\n[bold]Done.[/] {s.get('attempts', 0)} attempts, {s.get('observations', 0)} observations")
+    _print_workbench_dashboard(wb, title="Run Dashboard")
     cons = rpt.get("conclusions", []) or rpt.get("summary", {}).get("conclusions", [])
     mem = rpt.get("memory_signals", []) or rpt.get("memory", [])
     cov = rpt.get("coverage", [])

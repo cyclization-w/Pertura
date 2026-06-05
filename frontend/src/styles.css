@@ -173,11 +173,28 @@ button.success { border-color: var(--good); background: var(--good); color: #fff
   display: block;
   background: #fbfcfd;
 }
+.lane-bg { fill: #f6f8fa; stroke: #e1e6ed; stroke-width: 1; }
+.lane-label {
+  font-size: 11px;
+  font-weight: 760;
+  fill: #475467;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
 .graph-edge { stroke: #9aa4b2; stroke-width: 1.2; fill: none; marker-end: url(#arrow); }
+.graph-edge.highlight { stroke: var(--accent); stroke-width: 2; }
+.graph-edge.suspicious { stroke: var(--warn); stroke-dasharray: 5 4; stroke-width: 2; }
 .graph-node { cursor: pointer; }
 .graph-node rect { fill: #fff; stroke: #c7ced8; stroke-width: 1.2; }
 .graph-node.active rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.graph-node.dim rect { fill: #f7f8fa; stroke: #e0e5ec; }
 .graph-node text { font-size: 11px; fill: var(--ink); }
+.graph-node .type-label {
+  font-size: 9px;
+  fill: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
 
 @media (max-width: 1120px) {
   .layout { grid-template-columns: 260px 1fr; }
