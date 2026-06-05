@@ -3,151 +3,313 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Pertura - {domain_name}</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.0/cytoscape.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+<title>Pertura Workbench - {domain_name}</title>
 <style>
-*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#e2e8f0;height:100vh;display:flex;flex-direction:column}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#111827;border-bottom:1px solid #334155}
-h1{font-size:16px;margin:0}.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-input{background:#020617;border:1px solid #475569;color:#e2e8f0;border-radius:6px;padding:7px 9px;font-size:13px}
-button{border:0;border-radius:6px;padding:7px 11px;font-size:13px;font-weight:600;cursor:pointer}
-.primary{background:#2563eb;color:white}.success{background:#16a34a;color:white}.ghost{background:#1e293b;color:#cbd5e1;border:1px solid #475569}
-main{flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0}
-#cy{min-width:0;min-height:0;background:#0f172a}
-aside{border-left:1px solid #334155;background:#111827;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:10px}
-.panel{border:1px solid #334155;background:#020617;border-radius:8px;padding:10px}.title{font-size:11px;text-transform:uppercase;color:#94a3b8;font-weight:700;margin-bottom:6px}
-.small{font-size:12px;color:#cbd5e1;line-height:1.45}.muted{color:#64748b}.badge{display:inline-block;border-radius:999px;padding:2px 7px;font-size:10px;font-weight:700;background:#334155;color:#e2e8f0}
-.item{border-left:3px solid #475569;padding:4px 6px;margin:4px 0;background:#0f172a;border-radius:4px}.conflict{border-color:#ef4444}.thin{border-color:#f59e0b}.confirmed,.agreement{border-color:#22c55e}
+:root{
+  --bg:#f6f7f9;--panel:#ffffff;--panel-soft:#f9fafb;--ink:#111827;--muted:#667085;
+  --line:#d7dce2;--line-strong:#b9c0cb;--accent:#0f766e;--accent-soft:#e6f4f1;
+  --warn:#b45309;--warn-soft:#fff7ed;--bad:#b42318;--bad-soft:#fff1f0;
+  --good:#15803d;--good-soft:#ecfdf3;--violet:#6d28d9;--blue:#2563eb;
+}
+*{box-sizing:border-box}
+body{margin:0;height:100vh;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;flex-direction:column}
+header{height:58px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+h1{font-size:16px;margin:0;font-weight:700;white-space:nowrap}
+button,input{font:inherit}
+input{height:34px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;color:var(--ink);padding:0 9px;font-size:13px}
+button{height:34px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;color:var(--ink);padding:0 11px;font-size:13px;font-weight:650;cursor:pointer}
+button.primary{border-color:var(--accent);background:var(--accent);color:white}
+button.success{border-color:var(--good);background:var(--good);color:white}
+button:disabled{opacity:.55;cursor:not-allowed}
+.toolbar{display:flex;gap:8px;align-items:center;min-width:0;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:999px;background:#eef0f3;color:#344054;font-size:12px;font-weight:650}
+.chip.good{background:var(--good-soft);color:var(--good)}.chip.warn{background:var(--warn-soft);color:var(--warn)}.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.shell{flex:1;min-height:0;display:grid;grid-template-columns:292px minmax(420px,1fr) 386px;gap:10px;padding:10px}
+.column{min-height:0;display:flex;flex-direction:column;gap:10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:0;overflow:hidden}
+.panel-head{height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;border-bottom:1px solid var(--line);background:var(--panel-soft)}
+.panel-title{font-size:12px;font-weight:760;text-transform:uppercase;letter-spacing:.02em;color:#475467}
+.panel-body{padding:10px;overflow:auto}
+.grow{flex:1}.small{font-size:12px;line-height:1.45;color:#344054}.muted{color:var(--muted)}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.metric{border:1px solid var(--line);border-radius:6px;background:#fff;padding:8px}
+.metric b{display:block;font-size:18px}.metric span{font-size:11px;color:var(--muted)}
+.node-list{display:flex;flex-direction:column;gap:6px}
+.node-card{border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:7px;background:#fff;padding:8px;cursor:pointer}
+.node-card.active{border-left-color:var(--accent);background:var(--accent-soft)}
+.node-card .name{font-size:13px;font-weight:720}.node-card .desc{font-size:11px;color:var(--muted);margin-top:3px}
+.badge{display:inline-flex;align-items:center;border-radius:999px;background:#eef0f3;color:#344054;font-size:10px;font-weight:720;padding:2px 7px;margin:2px 4px 2px 0}
+.badge.good{background:var(--good-soft);color:var(--good)}.badge.warn{background:var(--warn-soft);color:var(--warn)}.badge.bad{background:var(--bad-soft);color:var(--bad)}.badge.violet{background:#f3e8ff;color:var(--violet)}
+.item{border:1px solid var(--line);border-radius:6px;background:#fff;padding:8px;margin-bottom:6px}
+.item-title{font-size:12px;font-weight:720}.item-sub{font-size:11px;color:var(--muted);margin-top:3px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:180px}
+.graph-wrap{height:100%;min-height:340px;background:#fbfcfd}
+#graphSvg{width:100%;height:100%;display:block}
+.graph-node{cursor:pointer}.graph-node rect{fill:#fff;stroke:#c7ced8;stroke-width:1.2}.graph-node.active rect{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2}.graph-node text{font-size:11px;fill:#111827}.graph-edge{stroke:#9aa4b2;stroke-width:1.2;fill:none;marker-end:url(#arrow)}
+.trace-box{min-height:120px;max-height:260px;overflow:auto}
+.context-json{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.45;background:#101828;color:#f8fafc;border-radius:6px;padding:9px;max-height:220px;overflow:auto}
+.answer-row{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:8px}
+@media(max-width:1120px){.shell{grid-template-columns:260px 1fr}.right{grid-column:1 / span 2;display:grid;grid-template-columns:1fr 1fr}.right .grow{min-height:280px}}
+@media(max-width:760px){header{height:auto;align-items:flex-start;flex-direction:column}.shell{grid-template-columns:1fr}.right{grid-column:auto;display:flex}.metric-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
 <header>
-  <h1>Pertura - {domain_name}</h1>
+  <h1>Pertura Workbench - {domain_name}</h1>
   <div class="toolbar">
-    <input id="workspace" placeholder="Workspace path" style="width:220px">
-    <input id="goal" placeholder="Goal" style="width:240px">
+    <input id="workspaceInput" placeholder="Workspace path" style="width:220px">
+    <input id="goalInput" placeholder="Goal" style="width:260px">
     <button class="primary" onclick="initRun()">Init</button>
-    <button class="ghost" onclick="step()">Step</button>
+    <button onclick="stepRun()">Step</button>
     <button class="success" onclick="runSteps(5)">Run 5</button>
-    <button class="ghost" onclick="generateReport()">Generate report</button>
-    <span id="phase" class="small muted"></span>
+    <button onclick="generateReport()">Report</button>
+    <span id="phaseChip" class="chip">not initialized</span>
   </div>
 </header>
-<main>
-  <div id="cy"></div>
-  <aside>
-    <section class="panel"><div class="title">Status</div><div id="status" class="small">Not initialized</div></section>
-    <section class="panel"><div class="title">Analysis Node</div><div id="node" class="small muted">No active node</div></section>
-    <section class="panel"><div class="title">Interrupt</div><div id="interrupt" class="small muted">None</div><input id="answer" placeholder="Answer" style="width:100%;margin-top:6px"><button class="primary" style="width:100%;margin-top:6px" onclick="answerInterrupt()">Send answer</button></section>
-    <section class="panel"><div class="title">Memory</div><div id="memory" class="small muted">None</div></section>
-    <section class="panel"><div class="title">Coverage</div><div id="coverage" class="small muted">None</div></section>
-    <section class="panel"><div class="title">Trace / Impact</div><div id="trace" class="small muted">Select a node</div></section>
-    <section class="panel"><div class="title">Conclusions</div><div id="conclusions" class="small muted">None</div></section>
-  </aside>
+
+<main class="shell">
+  <section class="column">
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Run</div><span id="runChip" class="chip">idle</span></div>
+      <div class="panel-body">
+        <div class="metric-grid">
+          <div class="metric"><b id="attemptCount">0</b><span>attempts</span></div>
+          <div class="metric"><b id="obsCount">0</b><span>observations</span></div>
+          <div class="metric"><b id="artifactCount">0</b><span>artifacts</span></div>
+          <div class="metric"><b id="issueCount">0</b><span>open issues</span></div>
+        </div>
+        <div id="runMeta" class="small muted" style="margin-top:8px">No run loaded.</div>
+      </div>
+    </div>
+    <div class="panel grow">
+      <div class="panel-head"><div class="panel-title">Analysis Graph</div><span id="nodeCount" class="chip">0 nodes</span></div>
+      <div id="nodeList" class="panel-body node-list"></div>
+    </div>
+  </section>
+
+  <section class="column">
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Active Node Contract</div><span id="activeNodeChip" class="chip">none</span></div>
+      <div id="nodeContract" class="panel-body small"></div>
+    </div>
+    <div class="panel grow">
+      <div class="panel-head"><div class="panel-title">Attempt Graph</div><span id="graphCount" class="chip">0 / 0</span></div>
+      <div class="graph-wrap"><svg id="graphSvg" role="img" aria-label="Attempt graph"></svg></div>
+    </div>
+    <div class="split">
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Recent Attempts</div></div>
+        <div id="attemptsList" class="panel-body"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Artifacts</div></div>
+        <div id="artifactList" class="panel-body"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="column right">
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Review And Interrupts</div><span id="reviewChip" class="chip">clear</span></div>
+      <div class="panel-body">
+        <div id="interruptBox" class="small"></div>
+        <div class="answer-row">
+          <input id="answerInput" placeholder="Answer active interrupt">
+          <button class="primary" onclick="answerInterrupt()">Send</button>
+        </div>
+        <div id="reviewList" style="margin-top:8px"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Trace / Rethinking</div></div>
+      <div id="traceBox" class="panel-body small trace-box">Select a graph node.</div>
+    </div>
+    <div class="panel grow">
+      <div class="panel-head"><div class="panel-title">LLM Context Surface</div><span id="budgetChip" class="chip">budget</span></div>
+      <div class="panel-body">
+        <div id="contextSummary" class="small"></div>
+        <pre id="contextJson" class="context-json"></pre>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Report</div></div>
+      <div id="reportBox" class="panel-body small"></div>
+    </div>
+  </section>
 </main>
+
 <script>
-let cy = null;
-const COLORS = {workspace:"#64748b",analysis_node:"#8b5cf6",branch:"#2563eb",attempt:"#16a34a",artifact:"#f59e0b",observation:"#14b8a6",outcome:"#22c55e",trigger:"#ef4444",finding:"#f43f5e",conclusion:"#eab308",tool_call:"#94a3b8",review_decision:"#38bdf8",behavior_run:"#a855f7"};
+let CURRENT_VIEW = null;
+let CURRENT_GRAPH = {nodes:[], edges:[]};
+let SELECTED_NODE = "";
+const TYPE_COLORS = {workspace:"#667085",analysis_node:"#6d28d9",branch:"#2563eb",attempt:"#15803d",artifact:"#b45309",observation:"#0f766e",outcome:"#15803d",trigger:"#b42318",finding:"#b42318",conclusion:"#ca8a04",tool_call:"#667085",review_decision:"#0f766e",behavior_run:"#6d28d9"};
 
-function initGraph(){
-  cy = cytoscape({
-    container: document.getElementById("cy"),
-    style: [
-      {selector:"node",style:{label:"data(label)",color:"#e2e8f0","font-size":"9px","text-valign":"bottom","text-halign":"center","text-margin-y":4,"background-color":"data(color)","border-width":2,"border-color":"#0f172a",width:28,height:28}},
-      {selector:"edge",style:{width:1,"line-color":"#475569","target-arrow-color":"#475569","target-arrow-shape":"triangle","curve-style":"bezier","arrow-scale":0.7,opacity:0.55}},
-      {selector:"node:selected",style:{"border-color":"#f8fafc","border-width":3}}
-    ],
-    layout:{name:"dagre",rankDir:"LR",spacingFactor:1.25}
-  });
-  cy.on("tap","node",event => showTrace(event.target.data("id")));
-}
-
-function esc(value){return String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+function esc(value){return String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+function chipClass(value){const v=String(value||"").toLowerCase();if(v.includes("block")||v.includes("fail")||v.includes("interrupt"))return"bad";if(v.includes("warn")||v.includes("wait")||v.includes("stale"))return"warn";if(v.includes("success")||v.includes("complete")||v.includes("ready"))return"good";return"";}
+async function getJson(url, fallback){try{const r=await fetch(url);return await r.json();}catch{return fallback;}}
 
 async function refresh(){
-  const [statusRes, graphRes, reportRes, interruptRes] = await Promise.allSettled([
-    fetch("/api/status").then(r=>r.json()),
-    fetch("/api/graph").then(r=>r.json()),
-    fetch("/api/report").then(r=>r.json()),
-    fetch("/api/interrupts").then(r=>r.json())
+  const [view, graph] = await Promise.all([
+    getJson("/api/workbench-view?max_items=8", null),
+    getJson("/api/graph", {nodes:[],edges:[]})
   ]);
-  if(statusRes.status === "fulfilled"){
-    const s = statusRes.value;
-    document.getElementById("phase").textContent = s.phase || s.state || "";
-    document.getElementById("status").innerHTML = `<b>${esc(s.phase || s.state || "?")}</b><br>${s.attempts || 0} attempts / ${s.observations || 0} observations<br><span class="muted">${esc(s.run_id || "")}</span>`;
-  }
-  if(graphRes.status === "fulfilled") renderGraph(graphRes.value);
-  if(reportRes.status === "fulfilled") renderReport(reportRes.value);
-  if(interruptRes.status === "fulfilled") renderInterrupt(interruptRes.value);
+  if(view) CURRENT_VIEW = view;
+  CURRENT_GRAPH = graph || {nodes:[],edges:[]};
+  renderAll();
 }
 
-function renderGraph(graph){
-  if(!cy) initGraph();
-  const elements = [];
-  for(const n of graph.nodes || []){
-    elements.push({group:"nodes",data:{id:n.node_id,label:(n.label||n.node_id||"").slice(0,32),node_type:n.node_type,status:n.status||"",summary:n.summary||"",color:COLORS[n.node_type]||"#64748b"}});
-  }
-  for(const e of graph.edges || []){
-    elements.push({group:"edges",data:{id:`${e.source_id}|${e.target_id}|${e.edge_type}`,source:e.source_id,target:e.target_id,label:e.edge_type}});
-  }
-  cy.elements().remove();
-  cy.add(elements);
-  cy.layout({name:"dagre",rankDir:"LR",spacingFactor:1.25}).run();
+function renderAll(){
+  if(!CURRENT_VIEW)return;
+  renderStatus(CURRENT_VIEW);
+  renderNodes(CURRENT_VIEW);
+  renderContract(CURRENT_VIEW);
+  renderGraph(CURRENT_GRAPH, CURRENT_VIEW);
+  renderActivity(CURRENT_VIEW);
+  renderReview(CURRENT_VIEW);
+  renderContext(CURRENT_VIEW);
+  renderReport(CURRENT_VIEW);
 }
 
-function renderReport(report){
-  const status = report.status || {};
-  document.getElementById("node").innerHTML = `${esc(status.phase || "")}<br><span class="muted">${esc(status.goal || "")}</span>`;
-  document.getElementById("memory").innerHTML = (report.memory_signals || []).slice(0,8).map(m => `<div class="item ${esc(m.signal)}"><b>${esc(m.subject)}</b> <span class="muted">${esc(m.signal)}</span><br>${esc(m.summary || "")}</div>`).join("") || "None";
-  document.getElementById("coverage").innerHTML = (report.coverage || []).slice(0,8).map(c => `<div class="item"><b>${esc(c.subject)}</b> <span class="badge">${esc(c.label)}</span><br>${c.methods || 0} method(s), ${c.observations || 0} obs, ${c.contradictions || 0} contradictions</div>`).join("") || "None";
-  document.getElementById("conclusions").innerHTML = ((report.summary || {}).conclusions || []).map(c => `<div class="item"><span class="badge">${esc(c.grade)}</span> ${esc(c.text)}</div>`).join("") || "None";
+function renderStatus(view){
+  const s=view.status||{};
+  const open=(s.triggers_open||0)+(s.interrupts_open||0);
+  document.getElementById("phaseChip").textContent=s.phase||s.state||"unknown";
+  document.getElementById("phaseChip").className=`chip ${chipClass(s.phase||s.state)}`;
+  document.getElementById("runChip").textContent=s.run_id||"no run";
+  document.getElementById("attemptCount").textContent=s.attempts||0;
+  document.getElementById("obsCount").textContent=s.observations||0;
+  document.getElementById("artifactCount").textContent=s.artifacts||0;
+  document.getElementById("issueCount").textContent=open;
+  document.getElementById("runMeta").innerHTML=`<b>${esc(s.goal||"No goal")}</b><br><span class="mono">${esc(s.workspace||"")}</span>`;
 }
 
-function renderInterrupt(data){
-  const open = data.interrupts || [];
-  document.getElementById("interrupt").innerHTML = open.length ? `<b>${esc(open[0].source || "interrupt")}</b><br>${esc(open[0].question || "")}` : "None";
+function renderNodes(view){
+  const nodes=(view.analysis||{}).nodes||[];
+  const active=(view.active||{}).node_id||"";
+  document.getElementById("nodeCount").textContent=`${nodes.length} nodes`;
+  document.getElementById("nodeList").innerHTML=nodes.map(n=>{
+    const activeCls=n.node_id===active?"active":"";
+    const caps=(n.allowed_capabilities||[]).slice(0,4).map(c=>`<span class="badge">${esc(c)}</span>`).join("");
+    return `<div class="node-card ${activeCls}" onclick="showTrace('${esc(n.node_id)}')">
+      <div class="name">${esc(n.title||n.node_id)}</div>
+      <div class="desc">${esc(n.purpose||"")}</div>
+      <div style="margin-top:5px">${caps}</div>
+      <div class="desc">${n.hard_conditions||0} hard checks / ${n.rubric_only_conditions||0} rubric</div>
+    </div>`;
+  }).join("")||"<div class='small muted'>No analysis graph loaded.</div>";
+}
+
+function renderContract(view){
+  const contract=(view.analysis||{}).active_node_contract||{};
+  const node=contract.node||{};
+  const runtime=contract.runtime||{};
+  const caps=contract.capabilities||[];
+  const inputs=(contract.inputs||{}).required||runtime.missing_inputs||[];
+  document.getElementById("activeNodeChip").textContent=node.id||view.active?.node_id||"none";
+  document.getElementById("nodeContract").innerHTML=`
+    <div class="item">
+      <div class="item-title">${esc(node.title||node.id||"No active node")}</div>
+      <div class="item-sub">${esc(node.purpose||"")}</div>
+    </div>
+    <div>${caps.slice(0,8).map(c=>`<span class="badge violet">${esc(c.id||c.capability_id)}</span>`).join("")||"<span class='muted'>No capabilities</span>"}</div>
+    <div style="margin-top:8px"><b>Inputs:</b> ${inputs.length?inputs.map(i=>`<span class="badge">${esc(i)}</span>`).join(""):"<span class='muted'>none</span>"}</div>
+    <div style="margin-top:8px"><b>Ready:</b> ${((runtime.ready_capabilities||[]).map(c=>`<span class="badge good">${esc(c)}</span>`).join(""))||"<span class='muted'>no ready capability reported</span>"}</div>
+  `;
+}
+
+function renderGraph(graph, view){
+  const svg=document.getElementById("graphSvg");
+  const nodes=(graph.nodes||[]).slice(0,80);
+  const edges=(graph.edges||[]).filter(e=>nodes.some(n=>n.node_id===e.source_id)&&nodes.some(n=>n.node_id===e.target_id)).slice(0,140);
+  document.getElementById("graphCount").textContent=`${graph.nodes?.length||0} / ${graph.edges?.length||0}`;
+  const width=Math.max(svg.clientWidth||700,700), height=Math.max(svg.clientHeight||360,360);
+  const byType={};
+  for(const n of nodes){const t=n.node_type||"other";(byType[t]||(byType[t]=[])).push(n);}
+  const types=Object.keys(byType);
+  const positions={};
+  types.forEach((type,ti)=>{
+    const list=byType[type], x=70+ti*Math.max(150,(width-140)/Math.max(types.length-1,1));
+    list.forEach((n,i)=>{positions[n.node_id]={x,y:44+i*58,type};});
+  });
+  let body=`<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#9aa4b2"/></marker></defs>`;
+  for(const e of edges){const a=positions[e.source_id],b=positions[e.target_id];if(!a||!b)continue;body+=`<path class="graph-edge" d="M${a.x+44},${a.y} C${(a.x+b.x)/2},${a.y} ${(a.x+b.x)/2},${b.y} ${b.x-44},${b.y}"/>`;}
+  for(const n of nodes){const p=positions[n.node_id];if(!p)continue;const label=(n.label||n.node_id||"").slice(0,22);const color=TYPE_COLORS[n.node_type]||"#667085";const active=n.node_id===SELECTED_NODE||n.node_id===(view.active||{}).node_id?"active":"";body+=`<g class="graph-node ${active}" onclick="showTrace('${esc(n.node_id)}')"><rect x="${p.x-52}" y="${p.y-18}" rx="6" width="104" height="36"></rect><circle cx="${p.x-39}" cy="${p.y}" r="5" fill="${color}"></circle><text x="${p.x-29}" y="${p.y+4}">${esc(label)}</text></g>`;}
+  svg.setAttribute("viewBox",`0 0 ${width} ${height}`);
+  svg.innerHTML=body;
+}
+
+function renderActivity(view){
+  const attempts=(view.activity||{}).recent_attempts||[];
+  document.getElementById("attemptsList").innerHTML=attempts.map(a=>`<div class="item">
+    <div class="item-title">${esc(a.title||a.attempt_id)} <span class="badge ${chipClass(a.outcome_status||a.status)}">${esc(a.outcome_status||a.status)}</span></div>
+    <div class="item-sub">${esc(a.analysis_node_id)} / ${esc((a.capability_ids||[]).join(", "))}</div>
+    <div class="item-sub">${a.observations||0} obs / ${a.artifacts||0} artifacts</div>
+  </div>`).join("")||"<div class='small muted'>No attempts yet.</div>";
+  const artifacts=(view.artifacts||{}).recent||[];
+  document.getElementById("artifactList").innerHTML=artifacts.map(a=>`<div class="item">
+    <div class="item-title">${esc(a.kind||"artifact")} <span class="badge">${esc(a.artifact_id)}</span></div>
+    <div class="item-sub">${esc(a.summary||a.path||"")}</div>
+  </div>`).join("")||"<div class='small muted'>No artifacts yet.</div>";
+}
+
+function renderReview(view){
+  const review=view.review||{};
+  const interrupts=review.open_interrupts||[];
+  const issues=(review.open_triggers||[]).length+(review.open_findings||[]).length+interrupts.length;
+  document.getElementById("reviewChip").textContent=issues?`${issues} open`:"clear";
+  document.getElementById("reviewChip").className=`chip ${issues?"warn":"good"}`;
+  document.getElementById("interruptBox").innerHTML=interrupts.length?`<div class="item"><div class="item-title">${esc(interrupts[0].source||"interrupt")}</div><div class="item-sub">${esc(interrupts[0].question||"")}</div></div>`:"<span class='muted'>No open interrupt.</span>";
+  const rows=[
+    ...(review.open_triggers||[]).map(x=>({kind:"trigger",severity:x.severity,summary:x.summary})),
+    ...(review.open_findings||[]).map(x=>({kind:"finding",severity:x.severity,summary:x.summary}))
+  ];
+  const audit=review.run_audit_summary||{};
+  document.getElementById("reviewList").innerHTML=`
+    <div class="item"><div class="item-title">Audit <span class="badge ${audit.ok?"good":"bad"}">${audit.ok?"ok":"needs review"}</span></div><div class="item-sub">${audit.errors||0} errors / ${audit.warnings||0} warnings</div></div>
+    ${rows.slice(0,8).map(r=>`<div class="item"><div class="item-title">${esc(r.kind)} <span class="badge ${chipClass(r.severity)}">${esc(r.severity)}</span></div><div class="item-sub">${esc(r.summary)}</div></div>`).join("")}
+  `;
+}
+
+function renderContext(view){
+  const ctx=view.agent_context||{};
+  const active=view.active||{};
+  document.getElementById("budgetChip").textContent=`attempts ${(view.budget||{}).max_attempts||"-"}`;
+  document.getElementById("contextSummary").innerHTML=`<b>Active:</b> ${esc(active.node_id||"none")} / ${esc(active.branch_id||"main")}<br><b>Context:</b> ${esc(ctx.purpose||ctx.view_type||"context")}`;
+  const compact={view_type:ctx.view_type,purpose:ctx.purpose,audit_preview:ctx.audit_preview,trace_driven_rethinking:ctx.trace_driven_rethinking,affordances:(ctx.affordances||[]).slice(0,6)};
+  document.getElementById("contextJson").textContent=JSON.stringify(compact,null,2);
+}
+
+function renderReport(view){
+  const report=view.report||{};
+  document.getElementById("reportBox").innerHTML=`
+    <div><b>${report.observation_count||0}</b> observations / <b>${report.artifact_count||0}</b> artifacts</div>
+    ${(report.conclusions||[]).map(c=>`<div class="item"><div class="item-title"><span class="badge">${esc(c.grade)}</span> ${esc(c.conclusion_id)}</div><div class="item-sub">${esc(c.text)}</div></div>`).join("")||"<div class='muted' style='margin-top:6px'>No conclusions yet.</div>"}
+  `;
 }
 
 async function showTrace(nodeId){
-  const box = document.getElementById("trace");
-  box.textContent = "Loading...";
+  SELECTED_NODE=nodeId;
+  renderGraph(CURRENT_GRAPH,CURRENT_VIEW||{});
+  const box=document.getElementById("traceBox");
+  box.textContent="Loading...";
   try{
-    const [trace, impact, rethink] = await Promise.all([
-      fetch(`/api/trace/${encodeURIComponent(nodeId)}?depth=4`).then(r=>r.json()),
-      fetch(`/api/impact/${encodeURIComponent(nodeId)}?depth=4`).then(r=>r.json()),
-      fetch(`/api/rethink/${encodeURIComponent(nodeId)}?depth=4`).then(r=>r.json())
+    const [trace,impact,rethink]=await Promise.all([
+      getJson(`/api/trace/${encodeURIComponent(nodeId)}?depth=4`,{}),
+      getJson(`/api/impact/${encodeURIComponent(nodeId)}?depth=4`,{}),
+      getJson(`/api/rethink/${encodeURIComponent(nodeId)}?depth=4`,{})
     ]);
-    const up = (trace.nodes || []).filter(n=>n.node_id !== nodeId).slice(0,6).map(n=>`<div><span class="badge">${esc(n.node_type)}</span> ${esc(n.label || n.node_id)}</div>`).join("") || "None";
-    const down = (impact.nodes || []).filter(n=>n.node_id !== nodeId).slice(0,6).map(n=>`<div><span class="badge">${esc(n.node_type)}</span> ${esc(n.label || n.node_id)}</div>`).join("") || "None";
-    const actions = (rethink.recommended_actions || []).slice(0,5).map(a=>`<div><span class="badge">${esc(a.tool)}</span> ${esc(a.why || "")}</div>`).join("") || "None";
-    const roots = (rethink.suspected_roots || []).slice(0,4).map(r=>`<div><span class="badge">${esc(r.root_type)}</span> ${esc(r.root_id)}: ${esc(r.reason || "")}</div>`).join("") || "";
-    box.innerHTML = `<b>Upstream</b><br>${up}<br><br><b>Downstream impact</b><br>${down}<br><br><b>Rethinking</b><br><span class="badge">${esc(rethink.status || "unknown")}</span> ${esc(rethink.summary || "")}<br>${roots}<br>${actions}`;
-  }catch(e){ box.textContent = "No trace available"; }
+    const list=(items)=>items.slice(0,5).map(n=>`<div><span class="badge">${esc(n.node_type||n.root_type||"node")}</span> ${esc(n.label||n.node_id||n.root_id||"")}</div>`).join("")||"<span class='muted'>none</span>";
+    box.innerHTML=`<b>${esc(nodeId)}</b><br><br><b>Upstream</b><br>${list(trace.nodes||[])}<br><br><b>Downstream impact</b><br>${list(impact.nodes||[])}<br><br><b>Rethinking</b><br>${esc(rethink.summary||"No plan.")}<br>${(rethink.recommended_actions||[]).slice(0,5).map(a=>`<div><span class="badge">${esc(a.tool)}</span> ${esc(a.why||"")}</div>`).join("")}`;
+  }catch(e){box.textContent="No trace available.";}
 }
 
-async function initRun(){
-  await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:document.getElementById("workspace").value,goal:document.getElementById("goal").value,steps:0})});
-  refresh();
-}
-async function step(){ await fetch("/api/step",{method:"POST"}); refresh(); }
-async function runSteps(steps){
-  await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:document.getElementById("workspace").value || "data",goal:document.getElementById("goal").value,steps})});
-  refresh();
-}
-async function generateReport(){ await fetch("/api/report/generate",{method:"POST"}); refresh(); }
-async function answerInterrupt(){
-  const data = await fetch("/api/interrupts").then(r=>r.json());
-  const open = data.interrupts || [];
-  if(!open.length) return;
-  await fetch(`/api/answer/${encodeURIComponent(open[0].interrupt_id)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({answer:document.getElementById("answer").value})});
-  document.getElementById("answer").value = "";
-  refresh();
-}
-initGraph();
+async function initRun(){await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:document.getElementById("workspaceInput").value,goal:document.getElementById("goalInput").value,steps:0})});refresh();}
+async function stepRun(){await fetch("/api/step",{method:"POST"});refresh();}
+async function runSteps(steps){await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:document.getElementById("workspaceInput").value||"data",goal:document.getElementById("goalInput").value,steps})});refresh();}
+async function generateReport(){await fetch("/api/report/generate",{method:"POST"});refresh();}
+async function answerInterrupt(){const interrupts=((CURRENT_VIEW||{}).review||{}).open_interrupts||[];if(!interrupts.length)return;await fetch(`/api/answer/${encodeURIComponent(interrupts[0].interrupt_id)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({answer:document.getElementById("answerInput").value})});document.getElementById("answerInput").value="";refresh();}
 refresh();
-setInterval(refresh, 4000);
+setInterval(refresh,4000);
 </script>
 </body>
 </html>

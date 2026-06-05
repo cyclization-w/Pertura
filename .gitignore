@@ -10,6 +10,8 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+node_modules/
+frontend/dist/
 
 # Local environments
 .venv/

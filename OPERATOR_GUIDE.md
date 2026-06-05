@@ -14,6 +14,30 @@ pertura audit runs/run_YYYYMMDD_HHMMSS_xxxxxx --json
 `pertura context` returns the compact LLM/operator dashboard. `pertura audit`
 returns the full deterministic run audit.
 
+## Workbench UI Contract
+
+`pertura serve` exposes one compact first-screen endpoint:
+
+```text
+GET /api/workbench-view
+```
+
+The payload includes:
+
+- run status, active node, active branch, active attempt, and budget
+- active node contract and current domain summary
+- compact `ContextView` shown to the LLM
+- open interrupts, triggers, findings, audit summary, and rethinking actions
+- recent attempts, jobs, artifacts, and report summary
+
+Use detail endpoints such as `/api/graph`, `/api/node-contract`,
+`/api/context-review`, `/api/artifacts/{artifact_id}/preview`, and
+`/api/rethink/{node_id}` only when the user expands a panel.
+
+The built-in `pertura serve` page is a dependency-free HTML workbench. The
+React/Vite frontend under `frontend/` consumes the same contract and is intended
+for the longer-lived product UI.
+
 ## Trace And Rethink
 
 ```bash

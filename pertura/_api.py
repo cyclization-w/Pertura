@@ -107,6 +107,149 @@ def domain_browser_payload(workbench, *, include_core_tools: bool = True) -> dic
     return workbench.domain.describe(include_core_tools=include_core_tools)
 
 
+def workbench_view_payload(
+    workbench,
+    *,
+    run_id: str = "",
+    max_items: int = 8,
+    token_budget: int = 6000,
+    jobs: list[dict] | None = None,
+) -> dict:
+    """Return the stable compact UI contract for the workbench shell.
+
+    This endpoint is intentionally a projection over existing runtime views. It
+    gives a GUI the current decision surface without exposing full event logs,
+    notebooks, or the complete graph by default.
+    """
+    from pertura.models import _model_dump
+
+    snap = _snapshot_for_workbench(workbench, run_id=run_id)
+    store = _store_for_workbench(workbench, run_id=run_id)
+    status = _status_for_snapshot(snap) if snap else dict(getattr(workbench, "status", {}) or {})
+    graph = store.read_graph() if store else (workbench.graph or {"nodes": [], "edges": []})
+
+    active_node_id = (snap.active_node_id if snap else "") or ""
+    node_contract = _safe_payload(
+        lambda: runtime_node_contract_payload(workbench, node_id=active_node_id, run_id=run_id),
+        default={},
+    )
+    context_review = _safe_payload(
+        lambda: context_review_payload(
+            workbench,
+            run_id=run_id,
+            purpose="ui",
+            max_items=max_items,
+            token_budget=token_budget,
+        ),
+        default={},
+    )
+    run_audit = _safe_payload(
+        lambda: run_audit_payload(workbench, run_id=run_id),
+        default={},
+    )
+    rethinking = _safe_payload(
+        lambda: rethinking_payload(
+            workbench,
+            run_id=run_id,
+            node_id=active_node_id,
+            issue="workbench_view",
+            depth=4,
+        ),
+        default={},
+    )
+
+    open_interrupts = [
+        _model_dump(item) for item in ((snap.interrupts if snap else []) or [])
+        if item.status == "open"
+    ][:max_items]
+    open_triggers = [
+        _model_dump(item) for item in ((snap.triggers if snap else []) or [])
+        if item.status == "open"
+    ][:max_items]
+    open_findings = [
+        _model_dump(item) for item in ((snap.findings if snap else []) or [])
+        if item.severity in {"warning", "blocking"}
+    ][-max_items:]
+    recent_attempts = [_attempt_card(item, snap=snap) for item in ((snap.attempts if snap else []) or [])[-max_items:]]
+    artifact_summary = [_artifact_card(item) for item in ((snap.artifacts if snap else []) or [])[-max_items:]]
+
+    domain_payload = domain_browser_payload(workbench, include_core_tools=False)
+    return {
+        "view_type": "workbench_view",
+        "schema_version": "v1",
+        "run_id": status.get("run_id", run_id),
+        "status": status,
+        "active": {
+            "node_id": active_node_id,
+            "branch_id": snap.active_branch if snap else "",
+            "attempt_id": snap.active_attempt if snap else "",
+        },
+        "budget": _model_dump(snap.budget) if snap else {},
+        "analysis": {
+            "graph_summary": {
+                "nodes": len((graph or {}).get("nodes", [])),
+                "edges": len((graph or {}).get("edges", [])),
+            },
+            "active_node_contract": node_contract,
+            "domain": domain_payload.get("domain", {}),
+            "nodes": [
+                {
+                    "node_id": item.get("node_id", ""),
+                    "title": item.get("title", ""),
+                    "purpose": item.get("purpose", ""),
+                    "allowed_capabilities": item.get("allowed_capabilities", []),
+                    "recommended_actions": item.get("recommended_actions", []),
+                    "expected_outputs": item.get("expected_outputs", []),
+                    "next_nodes": item.get("next_nodes", []),
+                    "strict_edges": item.get("strict_edges", False),
+                    "hard_conditions": sum(
+                        1
+                        for group in (item.get("conditions", {}) or {}).values()
+                        for condition in group
+                        if condition.get("hard")
+                    ),
+                    "rubric_only_conditions": sum(
+                        1
+                        for group in (item.get("conditions", {}) or {}).values()
+                        for condition in group
+                        if condition.get("evaluator_id") == "rubric_only"
+                    ),
+                }
+                for item in domain_payload.get("nodes", [])
+            ],
+            "capabilities_by_node": domain_payload.get("capabilities_by_node", {}),
+        },
+        "agent_context": context_review,
+        "review": {
+            "open_interrupts": open_interrupts,
+            "open_triggers": open_triggers,
+            "open_findings": open_findings,
+            "run_audit_summary": _audit_summary_card(run_audit),
+            "rethinking": _rethinking_card(rethinking),
+        },
+        "activity": {
+            "recent_attempts": recent_attempts,
+            "jobs": (jobs or [])[:max_items],
+        },
+        "artifacts": {
+            "recent": artifact_summary,
+            "total": len(snap.artifacts) if snap else 0,
+        },
+        "report": _report_summary_for_snapshot(snap),
+        "links": {
+            "graph": "/api/graph",
+            "domain": "/api/domain",
+            "node_contract": "/api/node-contract",
+            "context_review": "/api/context-review",
+            "run_audit": "/api/run-audit",
+            "rethink": "/api/rethink",
+            "artifacts": "/api/artifacts",
+            "jobs": "/api/jobs",
+            "interrupts": "/api/interrupts",
+        },
+    }
+
+
 def _open_store_for_run(run_id: str):
     from pertura.core import Store
     d = Path("runs") / run_id
@@ -138,6 +281,111 @@ def _capability_registry_for_workbench(workbench, *, run_id: str = ""):
     if snap and snap.capabilities:
         return CapabilityRegistry(snap.capabilities)
     return CapabilityRegistry(getattr(workbench.domain, "capabilities", []) or [])
+
+
+def _safe_payload(fn, *, default: dict) -> dict:
+    try:
+        payload = fn()
+        return payload if isinstance(payload, dict) else default
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def _status_for_snapshot(snap) -> dict:
+    if not snap:
+        return {"state": "no_snapshot"}
+    return {
+        "run_id": snap.run_id,
+        "phase": snap.phase,
+        "workspace": snap.workspace,
+        "goal": snap.goal,
+        "attempts": len(snap.attempts),
+        "observations": len(snap.observations),
+        "artifacts": len(snap.artifacts),
+        "conclusions": len(snap.conclusions),
+        "triggers_open": len([item for item in snap.triggers if item.status == "open"]),
+        "interrupts_open": len([item for item in snap.interrupts if item.status == "open"]),
+        "branches": len(snap.branches),
+    }
+
+
+def _attempt_card(attempt, *, snap) -> dict:
+    outcomes = [item for item in (snap.outcomes if snap else []) if item.attempt_id == attempt.attempt_id]
+    observations = [item for item in (snap.observations if snap else []) if item.attempt_id == attempt.attempt_id]
+    artifacts = [item for item in (snap.artifacts if snap else []) if item.attempt_id == attempt.attempt_id]
+    last_outcome = outcomes[-1] if outcomes else None
+    return {
+        "attempt_id": attempt.attempt_id,
+        "title": attempt.title,
+        "status": attempt.status,
+        "analysis_node_id": attempt.analysis_node_id,
+        "branch_id": attempt.branch_id,
+        "capability_ids": list(attempt.capability_ids),
+        "outcome_status": last_outcome.status if last_outcome else "",
+        "outcome_summary": last_outcome.summary if last_outcome else "",
+        "observations": len(observations),
+        "artifacts": len(artifacts),
+        "created_at": str(attempt.created_at),
+    }
+
+
+def _artifact_card(artifact) -> dict:
+    return {
+        "artifact_id": artifact.artifact_id,
+        "attempt_id": artifact.attempt_id,
+        "kind": artifact.kind,
+        "summary": artifact.summary,
+        "path": artifact.path,
+        "metadata": artifact.metadata,
+        "preview_url": f"/api/artifacts/{artifact.artifact_id}/preview",
+    }
+
+
+def _audit_summary_card(audit: dict) -> dict:
+    if not audit or "error" in audit:
+        return audit or {}
+    errors = audit.get("errors", []) or []
+    warnings = audit.get("warnings", []) or []
+    next_actions = audit.get("next_actions", []) or []
+    return {
+        "audit_type": audit.get("audit_type", "run_audit"),
+        "ok": not errors,
+        "errors": len(errors),
+        "warnings": len(warnings),
+        "next_actions": next_actions[:5],
+    }
+
+
+def _rethinking_card(payload: dict) -> dict:
+    if not payload or "error" in payload:
+        return payload or {}
+    return {
+        "view_type": payload.get("view_type", ""),
+        "status": payload.get("status", ""),
+        "summary": payload.get("summary", ""),
+        "suspected_roots": (payload.get("suspected_roots", []) or [])[:5],
+        "recommended_actions": (payload.get("recommended_actions", []) or [])[:5],
+    }
+
+
+def _report_summary_for_snapshot(snap) -> dict:
+    if not snap:
+        return {"available": False}
+    return {
+        "available": bool(snap.conclusions or snap.observations),
+        "conclusions": [
+            {
+                "conclusion_id": item.conclusion_id,
+                "text": item.text,
+                "grade": item.grade,
+                "support_count": len(item.support_ids),
+                "limitation_count": len(item.limitation_ids),
+            }
+            for item in snap.conclusions[-8:]
+        ],
+        "observation_count": len(snap.observations),
+        "artifact_count": len(snap.artifacts),
+    }
 
 
 def create_app(workbench):
@@ -235,6 +483,16 @@ def create_app(workbench):
         payload = workbench.runtime_status(recent=recent)
         payload["jobs"] = runner.list_jobs()[:recent]
         return payload
+
+    @app.get("/api/workbench-view")
+    def workbench_view(run_id: str = "", max_items: int = 8, token_budget: int = 6000):
+        return workbench_view_payload(
+            workbench,
+            run_id=run_id,
+            max_items=max_items,
+            token_budget=token_budget,
+            jobs=runner.list_jobs()[:max_items],
+        )
 
     @app.get("/api/graph")
     def graph(run_id: str = ""):
