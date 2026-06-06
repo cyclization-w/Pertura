@@ -13,6 +13,7 @@ from pertura.core import build_view
 _STATE_CHANGE_TOOLS = {
     "request_node_transition",
     "execute_code",
+    "submit_job",
     "retry",
     "open_branch",
     "switch_branch",
@@ -262,7 +263,7 @@ def _run_openai_tool_loop(
             args = json.loads(tc.function.arguments)
             tool_name = tc.function.name
             if tool_name in _STATE_CHANGE_TOOLS:
-                code = args.pop("code", "")
+                code = args.pop("script", "") if tool_name == "submit_job" else args.pop("code", "")
                 assessment = {"status": tool_name, "summary": (msg.content or "")[:200]}
                 _put_cached_response(request_hash, emit, {
                     "action": tool_name,
@@ -340,7 +341,7 @@ def _run_anthropic_tool_loop(
             if not isinstance(args, dict):
                 args = {}
             if tool_name in _STATE_CHANGE_TOOLS:
-                code = args.pop("code", "")
+                code = args.pop("script", "") if tool_name == "submit_job" else args.pop("code", "")
                 assessment = {"status": tool_name, "summary": text[:200]}
                 _put_cached_response(request_hash, emit, {
                     "action": tool_name,

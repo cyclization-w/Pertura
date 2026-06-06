@@ -47,11 +47,21 @@ def _dispatch_decision(wb, action: str, code: str, assessment: dict,
         }})
         return "responded"
 
-    if action in ("execute_code", "retry") and code:
+    if action in ("execute_code", "retry", "submit_job") and code:
         parent_ids = [parent_attempt.attempt_id] if (
             parent_attempt and action == "retry") else []
         repair_count = (parent_attempt.repair_count + 1) if (
             parent_attempt and action == "retry") else 0
+        parameters = _attempt_parameters(d)
+        if action == "submit_job":
+            parameters.update({
+                "execution_kind": "job",
+                "job_backend": d.get("backend", "subprocess"),
+                "resources": d.get("resources", {}) or {},
+                "expected_outputs": d.get("expected_outputs", []) or [],
+                "expected_observations": d.get("expected_observations", []) or [],
+                "manifest_path": d.get("manifest_path", ""),
+            })
         a = Attempt(
             attempt_id=f"att_{uuid4().hex[:12]}", branch_id=snap.active_branch,
             analysis_node_id=snap.active_node_id,
@@ -60,7 +70,8 @@ def _dispatch_decision(wb, action: str, code: str, assessment: dict,
             stage=d.get("stage") or snap.active_node_id or assessment.get("status", "inspect"),
             notebook_cells=[{"source": code, "role": "execute", "title": "Step"}],
             capability_ids=d.get("capability_ids", []),
-            parameters=_attempt_parameters(d),
+            parameters=parameters,
+            expected_artifacts=d.get("expected_outputs", []) or [],
             design_fields_used=d.get("design_fields_used", _infer_design_fields_from_code(code)),
             parent_ids=parent_ids,
             parent_intervention="retry" if action == "retry" else "",

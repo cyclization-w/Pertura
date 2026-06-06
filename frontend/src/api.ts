@@ -1,4 +1,4 @@
-import type { AttemptGraph, WorkbenchView } from "./types";
+import type { AttemptGraph, CapabilitiesView, DerivationView, WorkbenchView } from "./types";
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -17,6 +17,22 @@ export function getWorkbenchView(): Promise<WorkbenchView> {
 
 export function getAttemptGraph(): Promise<AttemptGraph> {
   return json<AttemptGraph>("/api/graph");
+}
+
+export function getDerivationView(focusNode = ""): Promise<DerivationView> {
+  const suffix = focusNode ? `?focus_node=${encodeURIComponent(focusNode)}` : "";
+  return json<DerivationView>(`/api/derivation-view${suffix}`);
+}
+
+export function getCapabilitiesView(): Promise<CapabilitiesView> {
+  return json<CapabilitiesView>("/api/capabilities/view");
+}
+
+export function toggleCapability(capabilityId: string, enabled: boolean) {
+  return json<CapabilitiesView>(`/api/capabilities/${encodeURIComponent(capabilityId)}/toggle`, {
+    method: "POST",
+    body: JSON.stringify({ enabled })
+  });
 }
 
 export function runWorkbench(workspace: string, goal: string, steps: number) {

@@ -1238,6 +1238,35 @@ def _execute_code_stub(
     }
 
 
+def _submit_job_stub(
+    script: str,
+    title: str = "",
+    stage: str = "",
+    capability_ids: list | None = None,
+    backend: str = "subprocess",
+    resources: dict | None = None,
+    parameters: dict | None = None,
+    design_fields_used: list | None = None,
+    expected_outputs: list | None = None,
+    expected_observations: list | None = None,
+    manifest_path: str = "",
+) -> dict:
+    return {
+        "status": "submit_job",
+        "script": script,
+        "title": title,
+        "stage": stage,
+        "capability_ids": capability_ids or [],
+        "backend": backend,
+        "resources": resources or {},
+        "parameters": parameters or {},
+        "design_fields_used": design_fields_used or [],
+        "expected_outputs": expected_outputs or [],
+        "expected_observations": expected_observations or [],
+        "manifest_path": manifest_path,
+    }
+
+
 def _retry_stub(
     code: str,
     capability_ids: list | None = None,
@@ -1615,6 +1644,53 @@ TOOLS = {
                 },
             },
             "required": ["code"],
+        },
+    },
+    "submit_job": {
+        "fn": _submit_job_stub,
+        "description": "Submit a long-running Python analysis job as a run-directory script. Use for heavy DE, UMAP, Harmony, or batch computations; keep execute_code for short notebook exploration.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "script": {"type": "string", "description": "Python script body to run as a durable job"},
+                "title": {"type": "string", "description": "Short job title"},
+                "stage": {"type": "string", "description": "Analysis stage or active node"},
+                "capability_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Capability contract(s) this job commits under.",
+                },
+                "backend": {
+                    "type": "string",
+                    "enum": ["subprocess", "docker"],
+                    "description": "Job backend. Docker is the production isolation path.",
+                },
+                "resources": {
+                    "type": "object",
+                    "description": "Requested resources such as cpus, memory_gb, timeout_minutes, docker_image.",
+                },
+                "parameters": {"type": "object", "description": "Structured analysis parameters used by this job"},
+                "design_fields_used": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Design fields this job depends on.",
+                },
+                "expected_outputs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Expected output artifact kinds or relative paths.",
+                },
+                "expected_observations": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Expected observation metrics/types that the manifest should register.",
+                },
+                "manifest_path": {
+                    "type": "string",
+                    "description": "Optional manifest path under the run artifacts directory. Defaults to attempt manifest.",
+                },
+            },
+            "required": ["script"],
         },
     },
     "retry": {

@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from pertura.models import (
     Attempt, Outcome, Artifact, Observation, Interrupt, Finding,
-    _model_dump,
+    RuntimeJob, _model_dump,
 )
 
 def _execute_attempt(wb, attempt: Attempt) -> str:
@@ -47,7 +47,10 @@ def _execute_attempt(wb, attempt: Attempt) -> str:
             wb._emit(evt_type, payload)
 
     # Execute
-    result = _run_attempt_code(wb, attempt, execution_code, workspace, str(artifacts_dir))
+    if attempt.parameters.get("execution_kind") == "job":
+        result = _run_attempt_job(wb, attempt, code, workspace, str(artifacts_dir))
+    else:
+        result = _run_attempt_code(wb, attempt, execution_code, workspace, str(artifacts_dir))
 
     # Parse manifest
     manifest_path = artifacts_dir / f"{attempt.attempt_id}_manifest.json"
@@ -256,6 +259,88 @@ def _run_attempt_code(wb, attempt: Attempt, code: str, workspace: str, artifacts
         hard_timeout=hard_timeout,
         heartbeat_timeout=heartbeat_timeout,
     )
+
+
+def _run_attempt_job(wb, attempt: Attempt, code: str, workspace: str, artifacts_dir: str) -> dict:
+    from datetime import datetime, timezone
+    from pertura.kernel.sandbox import run_code as _run_sandbox
+
+    params = attempt.parameters or {}
+    resources = dict(params.get("resources", {}) or {})
+    backend = str(params.get("job_backend") or resources.get("backend") or "subprocess")
+    if backend not in {"subprocess", "docker"}:
+        backend = "subprocess"
+
+    run_dir = wb._store.run_dir
+    scripts_dir = run_dir / "scripts"
+    jobs_dir = run_dir / "jobs"
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+
+    job_id = f"job_{uuid4().hex[:12]}"
+    script_path = scripts_dir / f"{attempt.attempt_id}_{job_id}.py"
+    log_path = jobs_dir / f"{job_id}.log"
+    manifest_path = Path(artifacts_dir) / f"{attempt.attempt_id}_manifest.json"
+    script_path.write_text(code, encoding="utf-8")
+    started_at = datetime.now(timezone.utc).isoformat()
+
+    wb._emit("job_submitted", {"job": _model_dump(RuntimeJob(
+        job_id=job_id,
+        attempt_id=attempt.attempt_id,
+        capability_id=(attempt.capability_ids[0] if attempt.capability_ids else ""),
+        backend=backend,
+        resources=resources,
+        status="running",
+        script_path=str(script_path),
+        log_path=str(log_path),
+        manifest_path=str(manifest_path),
+        started_at=started_at,
+    ))})
+
+    timeout_minutes = resources.get("timeout_minutes")
+    hard_timeout = float(timeout_minutes) * 60 if timeout_minutes else float(
+        os.getenv("PETURA_JOB_HARD_TIMEOUT_SECONDS", "3600")
+    )
+    soft_timeout = float(resources.get("soft_timeout_seconds") or os.getenv(
+        "PETURA_JOB_SOFT_TIMEOUT_SECONDS", str(min(hard_timeout, 600))
+    ))
+    heartbeat_timeout = float(resources.get("heartbeat_timeout_seconds") or os.getenv(
+        "PETURA_JOB_HEARTBEAT_TIMEOUT_SECONDS", "600"
+    ))
+    docker_image = str(resources.get("docker_image") or wb.docker_image or "")
+
+    result = _run_sandbox(
+        code,
+        workspace,
+        artifacts_dir,
+        backend=backend,
+        docker_image=docker_image,
+        soft_timeout=soft_timeout,
+        hard_timeout=hard_timeout,
+        heartbeat_timeout=heartbeat_timeout,
+        docker_options=resources,
+    )
+    log_path.write_text(
+        "STDOUT\n" + (result.get("partial_stdout") or result.get("stdout") or "") +
+        "\n\nSTDERR\n" + (result.get("partial_stderr") or result.get("stderr") or ""),
+        encoding="utf-8",
+    )
+    finished_at = datetime.now(timezone.utc).isoformat()
+    status = "succeeded" if result.get("returncode") == 0 else "failed"
+    wb._emit("job_completed", {
+        "job_id": job_id,
+        "status": status,
+        "finished_at": finished_at,
+        "log_path": str(log_path),
+        "manifest_path": str(manifest_path),
+        "result": {
+            "returncode": result.get("returncode"),
+            "timed_out": result.get("timed_out", False),
+            "timed_out_at": result.get("timed_out_at", ""),
+            "execution_time": result.get("execution_time"),
+        },
+    })
+    return result
 
 
 # ── Notebook execution helpers ─────────────────────────────────────────

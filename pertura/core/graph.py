@@ -19,6 +19,7 @@ _ALLOWED_EDGES = {
     "limits": {("finding", "conclusion"), ("trigger", "conclusion")},
     "observes": {("artifact", "observation")},
     "uses_tool": {("attempt", "tool_call")},
+    "runs_job": {("attempt", "job")},
     "decides": {("attempt", "review_decision")},
 }
 
@@ -137,6 +138,15 @@ def build_graph(snap: Snapshot) -> dict:
         n(tc.tool_call_id, "tool_call", tc.tool_name, summary=tc.result_summary)
         if tc.attempt_id:
             e(tc.attempt_id, tc.tool_call_id, "uses_tool")
+    for job in snap.jobs:
+        n(job.job_id, "job", job.capability_id or job.backend,
+          summary=job.log_path or job.manifest_path,
+          status=job.status,
+          meta={"backend": job.backend, "resources": job.resources,
+                "script_path": job.script_path, "log_path": job.log_path,
+                "manifest_path": job.manifest_path})
+        if job.attempt_id:
+            e(job.attempt_id, job.job_id, "runs_job")
     for rd in snap.review_decisions:
         n(rd.review_id, "review_decision", rd.action,
           summary=rd.assessment_summary, status=rd.assessment_status)

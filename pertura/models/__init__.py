@@ -3,7 +3,7 @@
 from .entities import (
     Event, Budget, Attempt, Outcome, Artifact, Observation,
     ReviewTrigger, Finding, Branch, Goal, Conclusion, Intervention,
-    ToolCall, Interrupt, ApprovalRequest, BehaviorRun, NodeVisit, GateEvaluation,
+    ToolCall, RuntimeJob, Interrupt, ApprovalRequest, BehaviorRun, NodeVisit, GateEvaluation,
     GraphNode, GraphEdge, AttemptGraph,
     AssistantResponse, ReviewDecision, Snapshot,
     _now, _model_dump,
@@ -14,7 +14,7 @@ from .proposals import NotebookCell, AttemptProposal, InterventionProposal, Patc
 __all__ = [
     "Event", "Budget", "Attempt", "Outcome", "Artifact", "Observation",
     "ReviewTrigger", "Finding", "Branch", "Goal", "Conclusion", "Intervention",
-    "ToolCall", "Interrupt", "ApprovalRequest", "BehaviorRun", "NodeVisit", "GateEvaluation",
+    "ToolCall", "RuntimeJob", "Interrupt", "ApprovalRequest", "BehaviorRun", "NodeVisit", "GateEvaluation",
     "GraphNode", "GraphEdge", "AttemptGraph",
     "AssistantResponse", "ReviewDecision", "Snapshot",
     "MemoryEntry", "CoverageEntry", "IntentEntry", "Context",

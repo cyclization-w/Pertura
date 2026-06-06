@@ -229,7 +229,9 @@ def build_perturbseq_analysis_graph():
         title="Perturbation effect exploration",
         purpose="Explore global effects, state composition shifts, module changes, and trajectory/fate biases.",
         allowed_capabilities=[
-            "run_de", "compare_methods", "composition_test", "score_modules",
+            "run_de", "contrast_audit", "batch_condition_audit",
+            "compare_methods", "composition_test", "composition_shift",
+            "score_modules", "module_scoring",
             "trajectory_analysis", "co_regulated_modules", "trace_upstream",
         ],
         requires=[
@@ -251,7 +253,7 @@ def build_perturbseq_analysis_graph():
         purpose="Identify co-functional targets, drivers, and candidate regulatory relationships.",
         allowed_capabilities=[
             "rank_targets", "perturbation_profile_similarity",
-            "cluster_effect_profiles", "score_driver_targets",
+            "target_similarity", "cluster_effect_profiles", "score_driver_targets",
             "infer_network", "compare_branches",
         ],
         requires=[
@@ -282,7 +284,7 @@ def build_perturbseq_analysis_graph():
         "report",
         title="Report",
         purpose="Assemble key findings, limitations, paths, branches, artifacts, and next steps.",
-        allowed_capabilities=["generate_report", "trace_upstream", "compare_branches"],
+        allowed_capabilities=["generate_report", "report_assembly", "trace_upstream", "compare_branches"],
         requires=["Dataset is loaded."],
         completion=[
             condition(
@@ -317,6 +319,7 @@ def _cap(capability_id: str, stage: str, description: str, *,
          packages: list[str] | None = None,
          functions: list[str] | None = None,
          modes: list[str] | None = None,
+         contract: dict | None = None,
          risk: str = "low", backend: str = "kernel") -> dict:
     return capability(
         capability_id,
@@ -332,7 +335,36 @@ def _cap(capability_id: str, stage: str, description: str, *,
         required_inputs=required or [],
         risk=risk,
         backend=backend,
+        contract=contract or {},
     ).model_dump(mode="json")
+
+
+DE_OBSERVATION_CONTRACT = {
+    "observation_schema": {
+        "type": "de_result",
+        "required_fields": [
+            "target", "metric", "value", "contrast", "method",
+            "n_perturbed", "n_control", "p_value", "effect_direction",
+        ],
+        "recommended_fields": [
+            "adjusted_p_value", "n_guides", "n_batches", "cell_state",
+            "replicate_column", "batch_column", "limitations",
+        ],
+    },
+    "validators": ["contrast_audit", "batch_condition_audit", "target_coverage_check"],
+}
+
+
+PERTURBSEQ_OBSERVATION_SCHEMAS = {
+    "design_field": ["field", "value", "source", "confidence"],
+    "qc_metric": ["metric", "value", "n_cells", "n_genes"],
+    "guide_assignment": ["method", "threshold", "n_no_guide", "n_one_guide", "n_multi_guide"],
+    "target_coverage": ["target", "n_cells", "n_guides", "n_control", "n_batches"],
+    "guide_concordance": ["target", "n_guides", "direction_consistency", "single_guide_driven"],
+    "de_result": DE_OBSERVATION_CONTRACT["observation_schema"]["required_fields"],
+    "module_score": ["module", "target", "effect_size", "method", "n_cells"],
+    "composition_effect": ["state", "target", "effect_direction", "method", "p_value"],
+}
 
 
 PERTURBSEQ_CAPABILITIES = [
@@ -354,16 +386,20 @@ PERTURBSEQ_CAPABILITIES = [
     _cap("compare_thresholds", "guide_assignment", "Compare guide assignment thresholds or methods.", observations=["threshold_sensitivity"], artifacts=["threshold_table"]),
     _cap("audit_guide_mapping", "guide_assignment", "Audit guide-to-target mapping availability and ambiguity.", observations=["guide_mapping"], artifacts=["mapping_table"]),
     _cap("validate_perturbation", "perturbation_validation", "Validate target expression or signature direction.", observations=["perturbation_validation"]),
+    _cap("batch_condition_audit", "effect_exploration", "Audit target/control/batch/sample confounding before strong effect interpretation.", kind="review", observations=["batch_condition_crosstab"], artifacts=["batch_crosstab"]),
+    _cap("contrast_audit", "effect_exploration", "Check that contrast definition matches the active design and biological question.", kind="review", observations=["contrast_definition"]),
     _cap(
         "run_de",
         "effect_exploration",
         "Run bounded differential expression or effect-size analysis.",
-        observations=["logFC", "p_value"],
+        observations=["de_result", "logFC", "p_value"],
         artifacts=["de_result"],
         required=["adata", "control_labels", "target_column"],
         packages=["scanpy"],
         functions=["scanpy.tl.rank_genes_groups", "scanpy.get.rank_genes_groups_df"],
         modes=["differential_expression", "effect_size"],
+        contract=DE_OBSERVATION_CONTRACT,
+        backend="subprocess",
     ),
     _cap("score_signature", "perturbation_validation", "Score gene signatures or modules.", observations=["signature_score"], artifacts=["signature_table"]),
     _cap("check_target_coverage", "target_qc", "Check cells, guides, batches, and samples per target.", observations=["target_coverage"], artifacts=["coverage_table"]),
@@ -375,12 +411,15 @@ PERTURBSEQ_CAPABILITIES = [
     _cap("score_modules", "state_reference", "Compute module or program scores.", observations=["module_score"], artifacts=["module_score_table"]),
     _cap("learn_gene_modules", "state_reference", "Learn gene modules from the dataset when external modules are unavailable.", observations=["gene_module"], artifacts=["module_table"]),
     _cap("compare_methods", "effect_exploration", "Compare methods for a target/effect result.", tools=["compare_methods", "execute_code"], observations=["method_sensitivity"]),
+    _cap("module_scoring", "effect_exploration", "Score gene modules or programs across perturbations and states.", observations=["module_score"], artifacts=["module_score_table"]),
     _cap("composition_test", "effect_exploration", "Test perturbation effects on state composition.", observations=["composition_shift"], artifacts=["composition_table"]),
+    _cap("composition_shift", "effect_exploration", "Estimate perturbation-driven cell-state composition shifts.", observations=["composition_effect"], artifacts=["composition_table"]),
     _cap("trajectory_analysis", "effect_exploration", "Explore pseudotime, fate bias, or trajectory shifts when state structure supports it.", observations=["trajectory_effect"], artifacts=["trajectory_table"]),
     _cap("co_regulated_modules", "effect_exploration", "Identify co-regulated gene modules affected by perturbations.", observations=["co_regulated_module"], artifacts=["module_table"]),
     _cap("trace_upstream", "effect_exploration", "Trace upstream dependencies for an observation or conclusion.", kind="read", tools=["trace_upstream"]),
     _cap("rank_targets", "target_discovery", "Rank targets by effect strength, coverage, and limitations.", observations=["target_rank"], artifacts=["target_ranking"]),
     _cap("perturbation_profile_similarity", "target_discovery", "Compare perturbation-level response profiles to find co-functional targets.", observations=["profile_similarity"], artifacts=["similarity_table"]),
+    _cap("target_similarity", "target_discovery", "Compare target-level perturbation profiles to identify co-functional targets.", observations=["profile_similarity"], artifacts=["similarity_table"]),
     _cap("cluster_effect_profiles", "target_discovery", "Cluster perturbation effect profiles.", observations=["effect_profile_cluster"], artifacts=["cluster_table"]),
     _cap("score_driver_targets", "target_discovery", "Score candidate driver targets by effect size, coverage, and program impact.", observations=["driver_score"], artifacts=["target_ranking"]),
     _cap("infer_network", "target_discovery", "Draft regulatory relationships from observed effects.", observations=["network_edge"], artifacts=["network_table"]),
@@ -389,6 +428,7 @@ PERTURBSEQ_CAPABILITIES = [
     _cap("search_web", "biology_story", "Use web context for biological story support only.", kind="external", tools=["search_web"], risk="high"),
     _cap("query_observation_memory", "biology_story", "Retrieve variable-level observation memory.", kind="read", tools=["query_observation_memory"]),
     _cap("generate_report", "report", "Generate report with conclusions, limitations, and paths.", kind="report", tools=["finish"], artifacts=["report"]),
+    _cap("report_assembly", "report", "Assemble report body and derivation-path appendix.", kind="report", tools=["finish"], artifacts=["report"]),
 ]
 
 DOMAIN = Domain(
@@ -406,6 +446,17 @@ DOMAIN = Domain(
             "state_column",
             "moi",
             "loading_strategy",
+        ],
+        "observation_schemas": PERTURBSEQ_OBSERVATION_SCHEMAS,
+        "validators": [
+            "control_label_audit",
+            "guide_target_mapping_audit",
+            "guide_count_distribution",
+            "target_coverage_check",
+            "guide_concordance_check",
+            "contrast_audit",
+            "batch_condition_crosstab",
+            "plot_artifact_check",
         ],
     },
     agenda=[

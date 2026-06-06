@@ -172,8 +172,12 @@ def workbench_view_payload(
     ][-max_items:]
     recent_attempts = [_attempt_card(item, snap=snap) for item in ((snap.attempts if snap else []) or [])[-max_items:]]
     artifact_summary = [_artifact_card(item) for item in ((snap.artifacts if snap else []) or [])[-max_items:]]
+    runtime_events = _runtime_event_cards(store.read_events()[-max_items * 4:] if store else [], max_items=max_items)
+    capability_view = capabilities_view_payload(workbench, run_id=run_id, node_id=active_node_id, max_items=100)
 
     domain_payload = domain_browser_payload(workbench, include_core_tools=False)
+    runtime_jobs = [_model_dump(item) for item in ((snap.jobs if snap else []) or [])]
+    queue_jobs = jobs or []
     return {
         "view_type": "workbench_view",
         "schema_version": "v1",
@@ -218,6 +222,7 @@ def workbench_view_payload(
                 for item in domain_payload.get("nodes", [])
             ],
             "capabilities_by_node": domain_payload.get("capabilities_by_node", {}),
+            "capabilities_view": capability_view,
         },
         "agent_context": context_review,
         "review": {
@@ -229,7 +234,8 @@ def workbench_view_payload(
         },
         "activity": {
             "recent_attempts": recent_attempts,
-            "jobs": (jobs or [])[:max_items],
+            "jobs": (runtime_jobs + queue_jobs)[:max_items],
+            "runtime_events": runtime_events,
         },
         "artifacts": {
             "recent": artifact_summary,
@@ -245,7 +251,130 @@ def workbench_view_payload(
             "rethink": "/api/rethink",
             "artifacts": "/api/artifacts",
             "jobs": "/api/jobs",
+            "capabilities_view": "/api/capabilities/view",
+            "derivation_view": "/api/derivation-view",
             "interrupts": "/api/interrupts",
+        },
+    }
+
+
+def capabilities_view_payload(workbench, *, run_id: str = "", node_id: str = "", max_items: int = 100) -> dict:
+    from pertura.capabilities import CapabilityRegistry
+    from pertura.spec.gating import GateEvaluator
+    from pertura.tools.permissions import tool_permission
+
+    snap = _snapshot_for_workbench(workbench, run_id=run_id)
+    registry = _capability_registry_for_workbench(workbench, run_id=run_id)
+    active_node_id = node_id or (snap.active_node_id if snap else "")
+    disabled = set((snap.disabled_capabilities if snap else []) or [])
+    allowed = set()
+    if snap and snap.analysis_spec and active_node_id:
+        allowed = set(GateEvaluator(snap.analysis_spec).allowed_capabilities(active_node_id))
+    readiness = _capability_readiness_by_id(workbench, run_id=run_id, node_id=active_node_id)
+
+    capabilities = []
+    for cap in registry.summarize(limit=max_items):
+        cap_id = cap.get("id") or cap.get("capability_id") or ""
+        tool_names = cap.get("tools", []) or []
+        ready = readiness.get(cap_id, {})
+        enabled = cap_id not in disabled
+        allowed_here = bool(cap_id and (not allowed or cap_id in allowed))
+        missing_inputs = ready.get("missing_inputs", []) or []
+        why = []
+        if not enabled:
+            why.append("disabled_for_run")
+        if allowed and not allowed_here:
+            why.append("not_allowed_in_active_node")
+        if missing_inputs:
+            why.append("missing_inputs")
+        permission = _highest_permission(tool_names, tool_permission)
+        capabilities.append({
+            "capability_id": cap_id,
+            "title": cap.get("title", cap_id.replace("_", " ")),
+            "description": cap.get("description", ""),
+            "stage": cap.get("stage", ""),
+            "kind": cap.get("kind", ""),
+            "tool_names": tool_names,
+            "allowed_in_active_node": allowed_here,
+            "required_inputs": cap.get("required_inputs", []) or [],
+            "missing_inputs": missing_inputs,
+            "expected_artifacts": cap.get("expected_artifacts", []) or [],
+            "expected_observations": cap.get("expected_observations", []) or [],
+            "permission_tier": permission,
+            "backend_hint": cap.get("backend", ""),
+            "enabled": enabled,
+            "ready": bool(ready.get("ready")) and enabled and allowed_here,
+            "why_unavailable": why,
+        })
+    return {
+        "view_type": "capabilities_view",
+        "schema_version": "v1",
+        "run_id": snap.run_id if snap else run_id,
+        "active_node_id": active_node_id,
+        "disabled_capabilities": sorted(disabled),
+        "capabilities": capabilities,
+    }
+
+
+def derivation_view_payload(workbench, *, run_id: str = "", focus_node: str = "", depth: int = 4) -> dict:
+    graph = (_store_for_workbench(workbench, run_id=run_id).read_graph()
+             if _store_for_workbench(workbench, run_id=run_id)
+             else (workbench.graph or {"nodes": [], "edges": []}))
+    nodes = graph.get("nodes", []) or []
+    edges = graph.get("edges", []) or []
+    if not focus_node:
+        focus_node = _default_derivation_focus(nodes, getattr(workbench, "status", {}) or {})
+    selected_ids = {focus_node} if focus_node else set()
+    if focus_node:
+        from pertura.core import build_impact_view, build_trace_view
+        trace = build_trace_view(graph, focus_node, depth=depth)
+        impact = build_impact_view(graph, focus_node, depth=depth)
+        selected_ids.update(node.get("node_id", "") for node in trace.get("nodes", []))
+        selected_ids.update(node.get("node_id", "") for node in impact.get("nodes", []))
+    if not selected_ids:
+        selected_ids = {node.get("node_id", "") for node in nodes[:50]}
+    lane_order = ["Inputs", "Attempts", "Artifacts", "Observations", "Conclusions"]
+    included_nodes = [node for node in nodes if node.get("node_id") in selected_ids]
+    if len(included_nodes) < 8:
+        included_nodes = nodes[:50]
+        selected_ids = {node.get("node_id", "") for node in included_nodes}
+    included_edges = [
+        edge for edge in edges
+        if edge.get("source_id") in selected_ids and edge.get("target_id") in selected_ids
+    ]
+    lanes = {lane: [] for lane in lane_order}
+    all_counts = {lane: 0 for lane in lane_order}
+    for node in nodes:
+        lane = _derivation_lane(node.get("node_type", ""))
+        all_counts[lane] = all_counts.get(lane, 0) + 1
+    for node in included_nodes:
+        lanes[_derivation_lane(node.get("node_type", ""))].append(node)
+    issue_edges = [
+        edge for edge in included_edges
+        if _is_issue_edge(edge, {node.get("node_id"): node for node in included_nodes})
+    ]
+    focus_path = _focus_path_ids(included_nodes, included_edges, focus_node)
+    return {
+        "view_type": "derivation_view",
+        "schema_version": "v1",
+        "run_id": graph.get("run_id", run_id),
+        "focus_node": focus_node,
+        "lane_order": lane_order,
+        "lanes": [{"lane": lane, "nodes": lanes.get(lane, [])} for lane in lane_order],
+        "nodes": included_nodes,
+        "edges": included_edges,
+        "focus_path": focus_path,
+        "issue_edges": issue_edges,
+        "folded_counts": {
+            lane: max(0, all_counts.get(lane, 0) - len(lanes.get(lane, [])))
+            for lane in lane_order
+        },
+        "summary": {
+            "all_nodes": len(nodes),
+            "all_edges": len(edges),
+            "visible_nodes": len(included_nodes),
+            "visible_edges": len(included_edges),
+            "issues": len(issue_edges),
         },
     }
 
@@ -388,9 +517,143 @@ def _report_summary_for_snapshot(snap) -> dict:
     }
 
 
-def create_app(workbench):
+def _capability_readiness_by_id(workbench, *, run_id: str = "", node_id: str = "") -> dict:
+    payload = _safe_payload(
+        lambda: runtime_node_contract_payload(workbench, run_id=run_id, node_id=node_id),
+        default={},
+    )
+    runtime = payload.get("runtime", {}) if isinstance(payload, dict) else {}
+    cards = runtime.get("capability_readiness", []) or []
+    return {card.get("id", ""): card for card in cards if card.get("id")}
+
+
+def _highest_permission(tool_names: list[str], tool_permission) -> str:
+    order = ["local_read", "external_read", "execute", "state_change", "privileged"]
+    highest = "local_read"
+    for tool_name in tool_names or []:
+        value = tool_permission(tool_name).value
+        if order.index(value) > order.index(highest):
+            highest = value
+    return highest
+
+
+def _runtime_event_cards(events: list, *, max_items: int) -> list[dict]:
+    interesting = {
+        "node_transition_requested": "node_transition",
+        "node_transition_blocked": "gate_blocked",
+        "gate_evaluated": "gate_evaluated",
+        "attempt_planned": "attempt_started",
+        "artifact_registered": "artifact_registered",
+        "observation_registered": "observation_registered",
+        "finding_recorded": "critic_finding",
+        "interrupt_opened": "human_interrupt",
+        "job_submitted": "job_submitted",
+        "job_completed": "job_completed",
+    }
+    cards = []
+    for event in reversed(events or []):
+        kind = interesting.get(event.event_type)
+        if not kind:
+            continue
+        payload = event.payload or {}
+        cards.append({
+            "event_id": event.event_id,
+            "event_type": event.event_type,
+            "card_type": kind,
+            "timestamp": str(event.timestamp),
+            "title": _event_card_title(event.event_type, payload),
+            "summary": _event_card_summary(event.event_type, payload),
+        })
+        if len(cards) >= max_items:
+            break
+    return list(reversed(cards))
+
+
+def _event_card_title(event_type: str, payload: dict) -> str:
+    if event_type == "attempt_planned":
+        return (payload.get("attempt") or {}).get("title", "Attempt planned")
+    if event_type == "artifact_registered":
+        return (payload.get("artifact") or {}).get("kind", "Artifact")
+    if event_type == "observation_registered":
+        obs = payload.get("observation") or {}
+        return f"{obs.get('type', 'observation')}:{obs.get('target', '')}"
+    if event_type == "finding_recorded":
+        return (payload.get("finding") or {}).get("finding_type", "Finding")
+    if event_type == "interrupt_opened":
+        return "Human interrupt"
+    if event_type in {"job_submitted", "job_completed"}:
+        return payload.get("job_id") or (payload.get("job") or {}).get("job_id", "Job")
+    return event_type.replace("_", " ")
+
+
+def _event_card_summary(event_type: str, payload: dict) -> str:
+    for key in ("reason", "summary", "question"):
+        if payload.get(key):
+            return str(payload.get(key))
+    for entity_key in ("finding", "interrupt", "artifact", "observation", "attempt", "job"):
+        entity = payload.get(entity_key)
+        if isinstance(entity, dict):
+            return str(entity.get("summary") or entity.get("question") or entity.get("status") or "")
+    return ""
+
+
+def _derivation_lane(node_type: str) -> str:
+    text = str(node_type or "").lower()
+    if text in {"workspace", "dataset", "metadata", "description", "parameter_set", "analysis_node", "branch"}:
+        return "Inputs"
+    if text in {"attempt", "tool_call", "code_cell", "intervention", "diagnosis", "backward_trace", "job"}:
+        return "Attempts"
+    if text in {"artifact", "outcome"}:
+        return "Artifacts"
+    if text in {"conclusion", "report"}:
+        return "Conclusions"
+    return "Observations"
+
+
+def _default_derivation_focus(nodes: list[dict], status: dict) -> str:
+    for wanted in ("conclusion", "observation", "finding", "attempt"):
+        for node in reversed(nodes):
+            if node.get("node_type") == wanted:
+                return node.get("node_id", "")
+    return status.get("active_node_id", "")
+
+
+def _is_issue_edge(edge: dict, nodes_by_id: dict[str, dict]) -> bool:
+    if edge.get("edge_type") in {"limits", "contradicts", "triggers", "informs"}:
+        return True
+    src_type = (nodes_by_id.get(edge.get("source_id", "")) or {}).get("node_type")
+    tgt_type = (nodes_by_id.get(edge.get("target_id", "")) or {}).get("node_type")
+    return src_type in {"finding", "trigger"} or tgt_type in {"finding", "trigger"}
+
+
+def _focus_path_ids(nodes: list[dict], edges: list[dict], focus_node: str) -> list[str]:
+    if not focus_node:
+        return []
+    ids = {focus_node}
+    for edge in edges:
+        if edge.get("source_id") in ids or edge.get("target_id") in ids:
+            ids.add(edge.get("source_id", ""))
+            ids.add(edge.get("target_id", ""))
+    lane_rank = {"Inputs": 0, "Attempts": 1, "Artifacts": 2, "Observations": 3, "Conclusions": 4}
+    ordered = sorted(
+        [node for node in nodes if node.get("node_id") in ids],
+        key=lambda node: (lane_rank.get(_derivation_lane(node.get("node_type", "")), 99), node.get("node_id", "")),
+    )
+    return [node.get("node_id", "") for node in ordered]
+
+
+def _react_dist_dir() -> Path:
+    package_dist = Path(__file__).parent / "frontend_dist"
+    if (package_dist / "index.html").exists():
+        return package_dist
+    repo_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+    return repo_dist
+
+
+def create_app(workbench, *, ui: str = "auto"):
     from fastapi import FastAPI, HTTPException
-    from fastapi.responses import HTMLResponse
+    from fastapi.responses import FileResponse, HTMLResponse
+    from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
 
     from pertura.core import Store, build_impact_view, build_trace_view
@@ -400,6 +663,11 @@ def create_app(workbench):
 
     app = FastAPI(title="Pertura Workbench", version="1.0.0")
     runner = JobRunner()
+    ui_mode = ui if ui in {"auto", "builtin", "react"} else "auto"
+    react_dist = _react_dist_dir()
+    use_react = ui_mode in {"auto", "react"} and (react_dist / "index.html").exists()
+    if use_react and (react_dist / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=str(react_dist / "assets")), name="assets")
 
     class RunRequest(BaseModel):
         workspace: str
@@ -425,6 +693,10 @@ def create_app(workbench):
         reason: str = "api_update"
         source: str = "api_confirmed"
         confidence: str = "high"
+
+    class CapabilityToggleRequest(BaseModel):
+        enabled: bool = True
+        reason: str = "api_toggle"
 
     def _store_for_run(run_id: str = ""):
         return _store_for_workbench(workbench, run_id=run_id)
@@ -471,6 +743,8 @@ def create_app(workbench):
 
     @app.get("/", response_class=HTMLResponse)
     def gui():
+        if use_react:
+            return FileResponse(str(react_dist / "index.html"))
         tpl = Path(__file__).parent / "_gui.html"
         return tpl.read_text(encoding="utf-8").replace("{domain_name}", workbench.domain.name)
 
@@ -493,6 +767,22 @@ def create_app(workbench):
             token_budget=token_budget,
             jobs=runner.list_jobs()[:max_items],
         )
+
+    @app.get("/api/capabilities/view")
+    def capabilities_view(run_id: str = "", node_id: str = "", max_items: int = 100):
+        return capabilities_view_payload(workbench, run_id=run_id, node_id=node_id, max_items=max_items)
+
+    @app.post("/api/capabilities/{capability_id}/toggle")
+    def toggle_capability(capability_id: str, req: CapabilityToggleRequest):
+        try:
+            workbench.set_capability_enabled(capability_id, req.enabled, reason=req.reason)
+            return capabilities_view_payload(workbench, node_id="", max_items=100)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.get("/api/derivation-view")
+    def derivation_view(focus_node: str = "", run_id: str = "", depth: int = 4):
+        return derivation_view_payload(workbench, run_id=run_id, focus_node=focus_node, depth=depth)
 
     @app.get("/api/graph")
     def graph(run_id: str = ""):

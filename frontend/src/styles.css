@@ -149,6 +149,16 @@ button.success { border-color: var(--good); background: var(--good); color: #fff
 .item { border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 8px; margin-bottom: 6px; }
 .item-title { font-size: 12px; font-weight: 720; }
 .item-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.capability-browser { display: grid; gap: 6px; max-height: 180px; overflow: auto; }
+.capability-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, .42fr);
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px;
+}
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 188px; }
 .answer-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; margin-top: 8px; }
 .answer-row input { width: 100%; }

@@ -38,7 +38,10 @@ def main():
 
     s = sub.add_parser("serve", help="Start GUI.")
     s.add_argument("--domain", default=None)
+    s.add_argument("--host", default="127.0.0.1", help="Bind host. Use 0.0.0.0 on a server.")
     s.add_argument("--port", type=int, default=8765)
+    s.add_argument("--ui", choices=["auto", "builtin", "react"], default="auto",
+                   help="Serve built React UI when available, or the built-in HTML fallback.")
     s.add_argument("--analysis-graph", default=None, help="Path to AnalysisGraphSpec JSON.")
 
     spec = sub.add_parser("spec", help="Inspect or export analysis graph specs.")
@@ -173,7 +176,7 @@ def main():
     if args.cmd == "serve":
         cfg = _resolve_cli_config(args)
         wb = Workbench(domain=_load_domain(cfg["domain"], analysis_graph_path=cfg["analysis_graph"]))
-        wb.serve(args.port)
+        wb.serve(args.port, host=args.host, ui=args.ui)
         return 0
     if args.cmd == "spec":
         return _spec_cmd(args)
@@ -281,7 +284,7 @@ def _lane_for_cli(node_type: str) -> str:
     text = str(node_type or "").lower()
     if text in {"workspace", "dataset", "metadata", "description", "parameter_set", "analysis_node", "branch"}:
         return "Inputs"
-    if text in {"attempt", "tool_call", "code_cell", "intervention", "diagnosis", "backward_trace"}:
+    if text in {"attempt", "tool_call", "code_cell", "intervention", "diagnosis", "backward_trace", "job"}:
         return "Attempts"
     if text in {"artifact", "outcome"}:
         return "Artifacts"
@@ -304,6 +307,8 @@ def _print_workbench_dashboard(wb, *, title: str = "Workbench") -> None:
     runtime = contract.get("runtime", {}) or {}
     caps = contract.get("capabilities", []) or []
     recent = (view.get("activity", {}) or {}).get("recent_attempts", []) or []
+    jobs = (view.get("activity", {}) or {}).get("jobs", []) or []
+    runtime_events = (view.get("activity", {}) or {}).get("runtime_events", []) or []
     open_items = [
         *review.get("open_interrupts", []),
         *review.get("open_triggers", []),
@@ -323,6 +328,8 @@ def _print_workbench_dashboard(wb, *, title: str = "Workbench") -> None:
             _print("  capabilities: " + ", ".join((c.get("id") or c.get("capability_id") or "") for c in caps[:6]))
         if open_items:
             _print("  review: " + "; ".join(str(i.get("summary") or i.get("question") or "")[:90] for i in open_items[:3]))
+        if jobs:
+            _print("  jobs: " + ", ".join(str(j.get("job_id", "")) + ":" + str(j.get("status", "")) for j in jobs[:3]))
         return
 
     lane_text = "  ".join(f"[dim]{name}[/] [bold]{count}[/]" for name, count in lanes.items())
@@ -351,6 +358,21 @@ def _print_workbench_dashboard(wb, *, title: str = "Workbench") -> None:
         )
     recent_text = "\n".join(recent_lines) if recent_lines else "[dim]No attempts yet.[/]"
 
+    job_lines = []
+    for item in jobs[:4]:
+        job_lines.append(
+            f"{item.get('job_id', '-')}: {item.get('status', '-')}  "
+            f"[dim]{item.get('capability_id') or item.get('job_type') or item.get('backend') or ''}[/]"
+        )
+    events_lines = []
+    for item in runtime_events[-4:]:
+        events_lines.append(
+            f"{item.get('card_type', item.get('event_type', 'event'))}: "
+            f"{str(item.get('title') or item.get('summary') or '')[:74]}"
+        )
+    job_text = "\n".join(job_lines) if job_lines else "[dim]No active or recent jobs.[/]"
+    event_text = "\n".join(events_lines) if events_lines else "[dim]No runtime events yet.[/]"
+
     body = (
         f"[bold]phase[/] {status.get('phase') or status.get('state') or '-'}   "
         f"[bold]node[/] {active.get('node_id') or '-'}   "
@@ -363,6 +385,8 @@ def _print_workbench_dashboard(wb, *, title: str = "Workbench") -> None:
         f"[bold]Derivation lanes[/]\n{lane_text}\n\n"
         f"[bold]Active capabilities[/]\n{cap_text}\n\n"
         f"[bold]Recent attempts[/]\n{recent_text}\n\n"
+        f"[bold]Jobs[/]\n{job_text}\n\n"
+        f"[bold]Runtime events[/]\n{event_text}\n\n"
         f"[bold]Review[/]\n{review_text}"
     )
     _print(Panel(body, title=title, border_style="bright_blue", padding=(0, 1)))

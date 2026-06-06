@@ -24,6 +24,7 @@ from pertura.models import (
     Outcome,
     PatchProposal,
     ReviewTrigger,
+    RuntimeJob,
 )
 
 
@@ -51,6 +52,7 @@ _ENTITY_PAYLOADS = {
     "gate_evaluated": ("gate_evaluation", GateEvaluation),
     "assistant_response_recorded": ("response", AssistantResponse),
     "patch_proposed": ("patch", PatchProposal),
+    "job_submitted": ("job", RuntimeJob),
 }
 
 
@@ -68,6 +70,7 @@ _REQUIRED_KEYS = {
     "behavior_failed": {"behavior_run_id": str, "error": str},
     "analysis_spec_loaded": {"analysis_spec": dict},
     "capabilities_loaded": {"capabilities": list},
+    "capability_toggled": {"capability_id": str, "enabled": bool},
     "node_entered": {"node_id": str},
     "node_transition_blocked": {"target_node_id": str},
     "node_skipped": {"node_id": str},
@@ -80,6 +83,7 @@ _REQUIRED_KEYS = {
     "analysis_spec_compiled": {"report": dict},
     "safety_violation_recorded": {"violations": list, "severity": str},
     "attempt_soft_timeout": {"attempt_id": str},
+    "job_completed": {"job_id": str, "status": str},
 }
 
 

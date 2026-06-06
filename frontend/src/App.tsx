@@ -4,6 +4,7 @@ import {
   answerInterrupt,
   generateReport,
   getAttemptGraph,
+  getDerivationView,
   getWorkbenchView,
   runWorkbench,
   stepWorkbench
@@ -15,6 +16,7 @@ const typeColors: Record<string, string> = {
   analysis_node: "#6d28d9",
   branch: "#2563eb",
   attempt: "#15803d",
+  job: "#0369a1",
   artifact: "#b45309",
   observation: "#0f766e",
   outcome: "#15803d",
@@ -41,7 +43,7 @@ function truncate(value: string, n = 64) {
 function laneForType(type?: string) {
   const text = String(type ?? "").toLowerCase();
   if (["workspace", "dataset", "metadata", "description", "parameter_set", "analysis_node", "branch"].includes(text)) return "Inputs";
-  if (["attempt", "tool_call", "code_cell", "intervention", "diagnosis", "backward_trace"].includes(text)) return "Attempts";
+  if (["attempt", "tool_call", "code_cell", "intervention", "diagnosis", "backward_trace", "job"].includes(text)) return "Attempts";
   if (["artifact", "outcome"].includes(text)) return "Artifacts";
   if (["observation", "trigger", "finding", "review_decision", "critic_review", "critic_finding"].includes(text)) return "Observations";
   if (["conclusion", "report"].includes(text)) return "Conclusions";
@@ -82,7 +84,14 @@ export default function App() {
 
   async function refresh() {
     try {
-      const [nextView, nextGraph] = await Promise.all([getWorkbenchView(), getAttemptGraph()]);
+      const nextView = await getWorkbenchView();
+      let nextGraph: AttemptGraph;
+      try {
+        const nextDerivation = await getDerivationView(selectedNode);
+        nextGraph = { nodes: nextDerivation.nodes ?? [], edges: nextDerivation.edges ?? [] };
+      } catch {
+        nextGraph = await getAttemptGraph();
+      }
       setView(nextView);
       setGraph(nextGraph);
       setError("");
@@ -157,6 +166,9 @@ export default function App() {
         <section className="column center">
           <Panel title="Active Node Contract" badge={view?.active.node_id || "none"}>
             <ActiveContract view={view} />
+          </Panel>
+          <Panel title="Capability Browser" badge={`${view?.analysis.capabilities_view?.capabilities.length ?? 0} caps`}>
+            <CapabilityBrowser view={view} />
           </Panel>
           <Panel title="Derivation Lanes" fill badge={`${graph.nodes.length} / ${graph.edges.length}`}>
             <AttemptGraphSvg graph={graph} activeNodeId={view?.active.node_id ?? ""} selectedNode={selectedNode} onSelect={setSelectedNode} />
@@ -248,6 +260,35 @@ function ActiveContract(props: { view: WorkbenchView | null }) {
       </div>
       <p className="small"><b>Inputs:</b> {required.length ? required.join(", ") : "none"}</p>
       <p className="small"><b>Ready:</b> {ready.length ? ready.join(", ") : "no ready capability reported"}</p>
+    </div>
+  );
+}
+
+function CapabilityBrowser(props: { view: WorkbenchView | null }) {
+  const caps = props.view?.analysis.capabilities_view?.capabilities ?? [];
+  if (!caps.length) return <p className="small muted">No capabilities loaded.</p>;
+  return (
+    <div className="capability-browser">
+      {caps.slice(0, 12).map((cap) => {
+        const id = cap.capability_id ?? cap.id ?? "";
+        const status = !cap.enabled ? "disabled" : cap.ready ? "ready" : cap.allowed_in_active_node ? "available" : "other node";
+        return (
+          <div className="capability-row" key={id}>
+            <div>
+              <div className="item-title">{cap.title || id}</div>
+              <div className="item-sub">{cap.description || id}</div>
+              <div className="badge-row">
+                <span className={`badge ${badgeClass(status)}`}>{status}</span>
+                <span className="badge">{cap.permission_tier || "local_read"}</span>
+                {cap.backend_hint && <span className="badge">{cap.backend_hint}</span>}
+              </div>
+            </div>
+            <div className="item-sub">
+              {(cap.missing_inputs ?? []).length ? `missing: ${(cap.missing_inputs ?? []).join(", ")}` : (cap.expected_observations ?? []).slice(0, 3).join(", ")}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

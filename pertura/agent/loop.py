@@ -70,11 +70,14 @@ Use audit_run() before finish/report decisions to check graph validity, open
 gates, node coverage, conclusion support, stale evidence, artifact files, and
 blocking findings. Use audit_run.next_actions as your repair menu; do not
 ignore audit errors just because a conclusion sounds plausible.
-Before execute_code, read context_envelope.active_contract.selected_capability
+Before execute_code or submit_job, read context_envelope.active_contract.selected_capability
 and audit_checklist. Pass capability_ids=[selected_capability.id] unless you
 deliberately choose another allowed capability. Use the selected capability's
 packages/functions/analysis_modes as implementation hints, not as mandatory
 imports. Register the expected observations/artifacts or explain limitations.
+Use submit_job for long-running or high-memory analysis such as full DE,
+UMAP, Harmony, or target-wide sweeps. Use execute_code for short notebook
+inspection and lightweight checks.
 For perturb-seq analysis code, prefer get_capability_template(capability_id)
 before writing long code from scratch. If the template readiness.ready is false,
 follow next_actions first instead of executing the skeleton.
@@ -85,6 +88,7 @@ PROTOCOL:
 3. ACT by calling tools:
    - request_node_transition(target_node_id, reason): move between analysis nodes.
    - execute_code(code, title, stage): run analysis. ONE step per call.
+   - submit_job(script, title, stage, backend, resources): run long analysis as a durable script job.
    - retry(code): fix and re-run failed code.
    - open_branch(question, reason, hypothesis): explore a hypothesis in parallel.
    - switch_branch(branch_id): activate an existing branch.
@@ -164,6 +168,8 @@ class Workbench:
             "active_branch": snap.active_branch,
             "active_attempt": snap.active_attempt,
             "budget": _model_dump(snap.budget),
+            "disabled_capabilities": list(getattr(snap, "disabled_capabilities", []) or []),
+            "recent_jobs": [_model_dump(item) for item in getattr(snap, "jobs", [])[-recent:]],
             "open_interrupts": [_model_dump(item) for item in snap.interrupts if item.status == "open"],
             "open_approvals": [_model_dump(item) for item in snap.approvals if item.status == "open"],
             "open_triggers": [_model_dump(item) for item in snap.triggers if item.status == "open"],
@@ -292,6 +298,17 @@ class Workbench:
             "confidence": confidence,
         })
 
+    def set_capability_enabled(self, capability_id: str, enabled: bool, *,
+                               reason: str = "user_toggle"):
+        """Enable or disable a capability for the current run only."""
+        if not self._store:
+            raise ValueError("Workbench is not initialized.")
+        self._emit("capability_toggled", {
+            "capability_id": capability_id,
+            "enabled": bool(enabled),
+            "reason": reason,
+        })
+
     def load_analysis_spec(self, analysis_spec: dict, *, reason: str = "user_spec"):
         """Load or replace the editable analysis graph for the current run/domain."""
         from pertura.spec.models import spec_from_dict, validate_analysis_graph
@@ -364,13 +381,13 @@ class Workbench:
         report["status"] = self.status
         return report
 
-    def serve(self, port: int = 8765):
+    def serve(self, port: int = 8765, *, host: str = "127.0.0.1", ui: str = "auto"):
         from pertura._api import create_app
         import uvicorn
-        app = create_app(self)
-        print(f"\n  Pertura GUI:    http://127.0.0.1:{port}")
-        print(f"  API docs:       http://127.0.0.1:{port}/docs\n")
-        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+        app = create_app(self, ui=ui)
+        print(f"\n  Pertura GUI:    http://{host}:{port}")
+        print(f"  API docs:       http://{host}:{port}/docs\n")
+        uvicorn.run(app, host=host, port=port, log_level="warning")
 
     # Engine
 

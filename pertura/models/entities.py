@@ -179,6 +179,21 @@ class ToolCall(BaseModel):
     branch_id: str = ""
 
 
+class RuntimeJob(BaseModel):
+    job_id: str
+    attempt_id: str = ""
+    capability_id: str = ""
+    backend: str = "subprocess"
+    resources: dict[str, Any] = Field(default_factory=dict)
+    status: str = "queued"
+    script_path: str = ""
+    log_path: str = ""
+    manifest_path: str = ""
+    started_at: str = ""
+    finished_at: str = ""
+    result: dict[str, Any] = Field(default_factory=dict)
+
+
 class Interrupt(BaseModel):
     interrupt_id: str
     source: str = ""
@@ -291,6 +306,7 @@ class Snapshot(BaseModel):
     assistant_responses: list[AssistantResponse] = Field(default_factory=list)
     review_decisions: list[ReviewDecision] = Field(default_factory=list)
     tool_calls: list[ToolCall] = Field(default_factory=list)
+    jobs: list[RuntimeJob] = Field(default_factory=list)
     interrupts: list[Interrupt] = Field(default_factory=list)
     approvals: list[ApprovalRequest] = Field(default_factory=list)
     behavior_runs: list[BehaviorRun] = Field(default_factory=list)
@@ -301,6 +317,7 @@ class Snapshot(BaseModel):
     conclusions: list[Conclusion] = Field(default_factory=list)
     patch_proposals: list[Any] = Field(default_factory=list)
     capabilities: list[dict] = Field(default_factory=list)
+    disabled_capabilities: list[str] = Field(default_factory=list)
     analysis_spec: dict[str, Any] = Field(default_factory=dict)
     active_node_id: str = ""
     design: dict[str, Any] = Field(default_factory=dict)

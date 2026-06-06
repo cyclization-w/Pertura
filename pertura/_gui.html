@@ -92,6 +92,10 @@ button:disabled{opacity:.55;cursor:not-allowed}
       <div class="panel-head"><div class="panel-title">Active Node Contract</div><span id="activeNodeChip" class="chip">none</span></div>
       <div id="nodeContract" class="panel-body small"></div>
     </div>
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Capability Browser</div><span id="capabilityCount" class="chip">0 caps</span></div>
+      <div id="capabilityBrowser" class="panel-body small"></div>
+    </div>
     <div class="panel grow">
       <div class="panel-head"><div class="panel-title">Derivation Lanes</div><span id="graphCount" class="chip">0 / 0</span></div>
       <div class="graph-wrap"><svg id="graphSvg" role="img" aria-label="Attempt graph"></svg></div>
@@ -142,19 +146,19 @@ button:disabled{opacity:.55;cursor:not-allowed}
 let CURRENT_VIEW = null;
 let CURRENT_GRAPH = {nodes:[], edges:[]};
 let SELECTED_NODE = "";
-const TYPE_COLORS = {workspace:"#667085",analysis_node:"#6d28d9",branch:"#2563eb",attempt:"#15803d",artifact:"#b45309",observation:"#0f766e",outcome:"#15803d",trigger:"#b42318",finding:"#b42318",conclusion:"#ca8a04",tool_call:"#667085",review_decision:"#0f766e",behavior_run:"#6d28d9"};
+const TYPE_COLORS = {workspace:"#667085",analysis_node:"#6d28d9",branch:"#2563eb",attempt:"#15803d",job:"#0369a1",artifact:"#b45309",observation:"#0f766e",outcome:"#15803d",trigger:"#b42318",finding:"#b42318",conclusion:"#ca8a04",tool_call:"#667085",review_decision:"#0f766e",behavior_run:"#6d28d9"};
 
 function esc(value){return String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
 function chipClass(value){const v=String(value||"").toLowerCase();if(v.includes("block")||v.includes("fail")||v.includes("interrupt"))return"bad";if(v.includes("warn")||v.includes("wait")||v.includes("stale"))return"warn";if(v.includes("success")||v.includes("complete")||v.includes("ready"))return"good";return"";}
 async function getJson(url, fallback){try{const r=await fetch(url);return await r.json();}catch{return fallback;}}
 
 async function refresh(){
-  const [view, graph] = await Promise.all([
+  const [view, derivation] = await Promise.all([
     getJson("/api/workbench-view?max_items=8", null),
-    getJson("/api/graph", {nodes:[],edges:[]})
+    getJson(`/api/derivation-view${SELECTED_NODE ? "?focus_node=" + encodeURIComponent(SELECTED_NODE) : ""}`, {nodes:[],edges:[]})
   ]);
   if(view) CURRENT_VIEW = view;
-  CURRENT_GRAPH = graph || {nodes:[],edges:[]};
+  CURRENT_GRAPH = derivation || {nodes:[],edges:[]};
   renderAll();
 }
 
@@ -163,6 +167,7 @@ function renderAll(){
   renderStatus(CURRENT_VIEW);
   renderNodes(CURRENT_VIEW);
   renderContract(CURRENT_VIEW);
+  renderCapabilities(CURRENT_VIEW);
   renderGraph(CURRENT_GRAPH, CURRENT_VIEW);
   renderActivity(CURRENT_VIEW);
   renderReview(CURRENT_VIEW);
@@ -217,10 +222,26 @@ function renderContract(view){
   `;
 }
 
+function renderCapabilities(view){
+  const caps=(((view.analysis||{}).capabilities_view||{}).capabilities)||[];
+  document.getElementById("capabilityCount").textContent=`${caps.length} caps`;
+  document.getElementById("capabilityBrowser").innerHTML=caps.slice(0,12).map(c=>{
+    const id=c.capability_id||c.id||"";
+    const status=!c.enabled?"disabled":c.ready?"ready":c.allowed_in_active_node?"available":"other node";
+    const missing=(c.missing_inputs||[]).length?`missing: ${(c.missing_inputs||[]).join(", ")}`:(c.expected_observations||[]).slice(0,3).join(", ");
+    return `<div class="item">
+      <div class="item-title">${esc(c.title||id)} <span class="badge ${chipClass(status)}">${esc(status)}</span></div>
+      <div class="item-sub">${esc(c.description||id)}</div>
+      <div style="margin-top:5px"><span class="badge">${esc(c.permission_tier||"local_read")}</span> ${c.backend_hint?`<span class="badge">${esc(c.backend_hint)}</span>`:""}</div>
+      <div class="item-sub">${esc(missing||"")}</div>
+    </div>`;
+  }).join("")||"<div class='muted'>No capabilities loaded.</div>";
+}
+
 function laneForType(type){
   const t=String(type||"").toLowerCase();
   if(["workspace","dataset","metadata","description","parameter_set","analysis_node","branch"].includes(t))return"Inputs";
-  if(["attempt","tool_call","code_cell","intervention","diagnosis","backward_trace"].includes(t))return"Attempts";
+  if(["attempt","tool_call","code_cell","intervention","diagnosis","backward_trace","job"].includes(t))return"Attempts";
   if(["artifact","outcome"].includes(t))return"Artifacts";
   if(["observation","trigger","finding","review_decision","critic_review","critic_finding"].includes(t))return"Observations";
   if(["conclusion","report"].includes(t))return"Conclusions";

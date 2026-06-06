@@ -55,6 +55,7 @@ _TOOL_TIERS: dict[str, ToolPermission] = {
 
     # Execute tools: run code or kernel operations
     "execute_code": ToolPermission.execute,
+    "submit_job": ToolPermission.execute,
     "retry": ToolPermission.execute,
     "sweep_thresholds": ToolPermission.local_read,
     "compare_methods": ToolPermission.local_read,

@@ -67,4 +67,4 @@ Issues = "https://github.com/cyclization-w/Pertura/issues"
 include = ["pertura*"]
 
 [tool.setuptools.package-data]
-pertura = ["_gui.html"]
+pertura = ["_gui.html", "frontend_dist/*", "frontend_dist/assets/*"]

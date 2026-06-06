@@ -29,12 +29,22 @@ export type WorkbenchNode = {
 export type CapabilityCard = {
   id?: string;
   capability_id?: string;
+  title?: string;
   description?: string;
+  stage?: string;
   kind?: string;
   tools?: string[];
+  tool_names?: string[];
   required_inputs?: string[];
+  missing_inputs?: string[];
   expected_observations?: string[];
   expected_artifacts?: string[];
+  permission_tier?: string;
+  backend_hint?: string;
+  allowed_in_active_node?: boolean;
+  enabled?: boolean;
+  ready?: boolean;
+  why_unavailable?: string[];
 };
 
 export type NodeContract = {
@@ -92,6 +102,7 @@ export type WorkbenchView = {
     domain: { name?: string; graph_id?: string; start_node_id?: string };
     nodes: WorkbenchNode[];
     capabilities_by_node: Record<string, string[]>;
+    capabilities_view?: CapabilitiesView;
   };
   agent_context: Record<string, unknown>;
   review: {
@@ -109,6 +120,7 @@ export type WorkbenchView = {
   activity: {
     recent_attempts: AttemptCard[];
     jobs: Array<Record<string, unknown>>;
+    runtime_events?: Array<Record<string, unknown>>;
   };
   artifacts: {
     recent: ArtifactCard[];
@@ -146,4 +158,33 @@ export type GraphEdge = {
 export type AttemptGraph = {
   nodes: GraphNode[];
   edges: GraphEdge[];
+};
+
+export type CapabilitiesView = {
+  view_type: "capabilities_view";
+  schema_version: string;
+  run_id?: string;
+  active_node_id?: string;
+  disabled_capabilities?: string[];
+  capabilities: CapabilityCard[];
+};
+
+export type DerivationLane = {
+  lane: string;
+  nodes: GraphNode[];
+};
+
+export type DerivationView = {
+  view_type: "derivation_view";
+  schema_version: string;
+  run_id?: string;
+  focus_node?: string;
+  lane_order: string[];
+  lanes: DerivationLane[];
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  focus_path: string[];
+  issue_edges: GraphEdge[];
+  folded_counts: Record<string, number>;
+  summary: Record<string, number>;
 };

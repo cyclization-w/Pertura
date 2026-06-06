@@ -18,7 +18,7 @@ def gated_dispatch(wb, action: str, code: str, assessment: dict, decision: dict,
     if action == "skip_node":
         return _dispatch_skip_node(wb, assessment, decision, snap)
 
-    if action in {"execute_code", "retry"}:
+    if action in {"execute_code", "retry", "submit_job"}:
         blocked = _check_execute_allowed(wb, decision, snap)
         if blocked:
             return blocked
@@ -116,6 +116,18 @@ def _check_execute_allowed(wb, decision: dict, snap) -> str:
             severity="blocking",
             suggested_action="list_capabilities",
             summary=f"Unknown capabilities: {', '.join(missing)}",
+            affected_ids=[snap.active_node_id] if snap.active_node_id else [],
+        ))})
+        return "blocked"
+    disabled = set(getattr(snap, "disabled_capabilities", []) or [])
+    blocked_caps = [cap for cap in capability_ids if cap in disabled]
+    if blocked_caps:
+        wb._emit("finding_recorded", {"finding": _model_dump(Finding(
+            finding_id=f"fnd_{uuid4().hex[:12]}",
+            finding_type="capability_disabled",
+            severity="blocking",
+            suggested_action="list_capabilities",
+            summary=f"Capabilities disabled for this run: {', '.join(blocked_caps)}",
             affected_ids=[snap.active_node_id] if snap.active_node_id else [],
         ))})
         return "blocked"

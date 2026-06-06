@@ -6,7 +6,7 @@ from pertura.models import (
     Event, Snapshot, Budget, Branch, Attempt, Outcome, Artifact, Observation,
     ReviewTrigger, Finding, Goal, Conclusion, AssistantResponse, Intervention,
     Interrupt, ApprovalRequest, BehaviorRun, NodeVisit, GateEvaluation,
-    ReviewDecision, ToolCall,
+    ReviewDecision, ToolCall, RuntimeJob,
 )
 from pertura.models.proposals import PatchProposal
 
@@ -157,6 +157,16 @@ def _apply(snap: Snapshot, e: Event):
         snap.analysis_spec = p.get("analysis_spec", {})
     elif e.event_type == "capabilities_loaded":
         snap.capabilities = p.get("capabilities", snap.capabilities)
+    elif e.event_type == "capability_toggled":
+        cap_id = p.get("capability_id", "")
+        enabled = bool(p.get("enabled", True))
+        disabled = set(snap.disabled_capabilities)
+        if cap_id:
+            if enabled:
+                disabled.discard(cap_id)
+            else:
+                disabled.add(cap_id)
+        snap.disabled_capabilities = sorted(disabled)
     elif e.event_type == "gate_evaluated":
         _upsert(snap.gate_evaluations, "evaluation_id", GateEvaluation(
             **_with_event_timestamp(p["gate_evaluation"], e)
@@ -229,6 +239,19 @@ def _apply(snap: Snapshot, e: Event):
             "attempt_id": p.get("attempt_id", ""),
             "branch_id": p.get("branch_id", snap.active_branch),
         }))
+    elif e.event_type == "job_submitted":
+        _upsert(snap.jobs, "job_id", RuntimeJob(**p["job"]))
+    elif e.event_type == "job_completed":
+        for job in snap.jobs:
+            if job.job_id == p.get("job_id"):
+                job.status = p.get("status", job.status)
+                job.finished_at = p.get("finished_at", job.finished_at)
+                job.result = p.get("result", job.result)
+                if p.get("log_path"):
+                    job.log_path = p.get("log_path", job.log_path)
+                if p.get("manifest_path"):
+                    job.manifest_path = p.get("manifest_path", job.manifest_path)
+                break
     elif e.event_type == "patch_proposed":
         _upsert(snap.patch_proposals, "patch_id", PatchProposal(**p["patch"]))
     elif e.event_type == "patch_applied":

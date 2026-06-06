@@ -85,6 +85,10 @@ RELATION_EFFECTS: dict[str, RelationEffect] = {
         "uses_tool", "execution", "check_tool_assumption", True,
         "Attempt used a tool call; tool behavior can affect outputs.",
     ),
+    "runs_job": RelationEffect(
+        "runs_job", "execution", "inspect_job_log", True,
+        "Attempt submitted a durable job; job logs and manifest affect downstream outputs.",
+    ),
     "decides": RelationEffect(
         "decides", "decision", "review_decision", True,
         "Attempt produced a review/planning decision.",

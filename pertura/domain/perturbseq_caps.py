@@ -46,6 +46,8 @@ run_de = capability_ref(
     description="Run bounded differential expression or effect-size analysis.",
     stage="effect_exploration",
 )
+batch_condition_audit = capability_ref("batch_condition_audit", stage="effect_exploration", kind="review")
+contrast_audit = capability_ref("contrast_audit", stage="effect_exploration", kind="review")
 score_signature = capability_ref("score_signature", stage="perturbation_validation")
 
 check_target_coverage = capability_ref("check_target_coverage", stage="target_qc", kind="review")
@@ -63,15 +65,19 @@ composition_test = capability_ref("composition_test", stage="effect_exploration"
 trajectory_analysis = capability_ref("trajectory_analysis", stage="effect_exploration")
 co_regulated_modules = capability_ref("co_regulated_modules", stage="effect_exploration")
 compare_methods = capability_ref("compare_methods", stage="effect_exploration")
+module_scoring = capability_ref("module_scoring", stage="effect_exploration")
+composition_shift = capability_ref("composition_shift", stage="effect_exploration")
 
 rank_targets = capability_ref("rank_targets", stage="target_discovery")
 perturbation_profile_similarity = capability_ref("perturbation_profile_similarity", stage="target_discovery")
+target_similarity = capability_ref("target_similarity", stage="target_discovery")
 cluster_effect_profiles = capability_ref("cluster_effect_profiles", stage="target_discovery")
 infer_network = capability_ref("infer_network", stage="target_discovery")
 score_driver_targets = capability_ref("score_driver_targets", stage="target_discovery")
 
 synthesize_story = capability_ref("synthesize_story", stage="biology_story", kind="report")
 search_web = capability_ref("search_web", stage="biology_story", kind="external")
+report_assembly = capability_ref("report_assembly", stage="report", kind="report")
 
 
 ALL: tuple[CapabilityRef, ...] = (
@@ -94,6 +100,8 @@ ALL: tuple[CapabilityRef, ...] = (
     audit_guide_mapping,
     validate_perturbation,
     run_de,
+    batch_condition_audit,
+    contrast_audit,
     score_signature,
     check_target_coverage,
     check_guide_concordance,
@@ -108,14 +116,18 @@ ALL: tuple[CapabilityRef, ...] = (
     trajectory_analysis,
     co_regulated_modules,
     compare_methods,
+    module_scoring,
+    composition_shift,
     rank_targets,
     perturbation_profile_similarity,
+    target_similarity,
     cluster_effect_profiles,
     score_driver_targets,
     infer_network,
     compare_branches,
     synthesize_story,
     search_web,
+    report_assembly,
     query_observation_memory,
     generate_report,
     trace_upstream,

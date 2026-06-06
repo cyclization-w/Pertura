@@ -20,6 +20,7 @@ def run_code(
     soft_timeout: float | None = None,
     hard_timeout: float | None = None,
     heartbeat_timeout: float | None = None,
+    docker_options: dict | None = None,
 ) -> dict:
     """Execute Python code in the selected sandbox."""
     if backend == "docker":
@@ -31,6 +32,7 @@ def run_code(
             soft_timeout=soft_timeout,
             hard_timeout=hard_timeout,
             heartbeat_timeout=heartbeat_timeout,
+            docker_options=docker_options or {},
         )
     return _run_subprocess(
         code,
@@ -127,6 +129,7 @@ def _run_docker(
     soft_timeout: float | None = None,
     hard_timeout: float | None = None,
     heartbeat_timeout: float | None = None,
+    docker_options: dict | None = None,
 ) -> dict:
     soft, hard, heartbeat = _timeout_values(
         soft_timeout=soft_timeout,
@@ -135,6 +138,13 @@ def _run_docker(
     )
     del heartbeat
     image = image or os.getenv("PETURA_DOCKER_IMAGE") or os.getenv("BLACKBOARD_DOCKER_IMAGE", "python:3.11-slim")
+    options = dict(docker_options or {})
+    memory = str(options.get("memory") or (
+        f"{options.get('memory_gb')}g" if options.get("memory_gb") else os.getenv("PETURA_DOCKER_MEMORY", "2g")
+    ))
+    cpus = str(options.get("cpus") or os.getenv("PETURA_DOCKER_CPUS", "2"))
+    pids_limit = str(options.get("pids_limit") or os.getenv("PETURA_DOCKER_PIDS_LIMIT", "256"))
+    network = str(options.get("network") or os.getenv("PETURA_DOCKER_NETWORK", "none"))
     sandbox_dir = Path(artifacts_dir) / ".sandbox"
     sandbox_dir.mkdir(parents=True, exist_ok=True)
 
@@ -144,10 +154,10 @@ def _run_docker(
 
     cmd = [
         "docker", "run", "--rm",
-        "--network", "none",
-        "--memory", "2g",
-        "--cpus", "2",
-        "--pids-limit", "256",
+        "--network", network,
+        "--memory", memory,
+        "--cpus", cpus,
+        "--pids-limit", pids_limit,
         "--security-opt", "no-new-privileges",
         "-v", f"{workspace}:/workspace:ro",
         "-v", f"{artifacts_dir}:/artifacts",
