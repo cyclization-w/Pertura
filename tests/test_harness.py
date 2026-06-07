@@ -1,6 +1,6 @@
 """Smoke tests for the Pertura harness; mostly pure functions, no live LLM needed."""
 
-import argparse, json, os, sys, tempfile, time, threading, types
+import argparse, json, os, subprocess, sys, tempfile, time, threading, types
 from pathlib import Path
 from uuid import uuid4
 
@@ -2140,6 +2140,14 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     gui_html = (Path(__file__).resolve().parent.parent / "pertura" / "_gui.html").read_text(encoding="utf-8")
     check("GUI graph panel fetches rethinking endpoint", "/api/rethink/" in gui_html and "Rethinking" in gui_html)
     check("GUI capability browser names LLM tool surface", "LLM visible tools this turn" in gui_html and "toggleCapability" in gui_html)
+    cli_help = subprocess.run(
+        [sys.executable, "-m", "pertura._cli", "--help"],
+        text=True,
+        capture_output=True,
+        cwd=str(Path(__file__).resolve().parent.parent),
+        timeout=15,
+    )
+    check("top-level GUI shortcut is documented", cli_help.returncode == 0 and "--GUI" in cli_help.stdout and "--domain GUI_DOMAIN" in cli_help.stdout)
     from pertura.skills import init_pertura_dir
     starter_dir = init_pertura_dir(Path(td) / "starter_project")
     starter_graph = load_analysis_graph(starter_dir / "analysis_graph.json")

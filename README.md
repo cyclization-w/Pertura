@@ -70,7 +70,7 @@ pertura run ./data --goal "Analyze this perturb-seq dataset"
 Start the local workbench:
 
 ```bash
-pertura serve
+pertura --GUI --domain perturbseq
 ```
 
 The GUI shell reads a compact UI contract from:
@@ -88,7 +88,10 @@ The repository also includes an experimental React/Vite frontend in
 `frontend/`. Run it against the FastAPI backend:
 
 ```bash
-pertura serve
+# terminal A
+pertura --GUI --domain perturbseq --ui auto
+
+# terminal B
 cd frontend
 npm install
 npm run dev

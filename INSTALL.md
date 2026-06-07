@@ -54,7 +54,7 @@ Expected:
 Expected:
 
 - `server` reports OK.
-- `pertura serve` can start a FastAPI/GUI process for a prepared run.
+- `pertura --GUI --domain perturbseq` can start a FastAPI/GUI process for a prepared run.
 
 ## Perturb-seq Install
 

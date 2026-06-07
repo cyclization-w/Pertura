@@ -6,7 +6,7 @@ This guide is for running, auditing, replaying, and sharing Pertura runs.
 
 ```bash
 pertura run ./data --goal "Analyze this perturb-seq dataset"
-pertura serve
+pertura --GUI --domain perturbseq
 pertura context runs/run_YYYYMMDD_HHMMSS_xxxxxx --json
 pertura audit runs/run_YYYYMMDD_HHMMSS_xxxxxx --json
 ```
@@ -34,7 +34,7 @@ Use detail endpoints such as `/api/graph`, `/api/node-contract`,
 `/api/context-review`, `/api/artifacts/{artifact_id}/preview`, and
 `/api/rethink/{node_id}` only when the user expands a panel.
 
-The built-in `pertura serve` page is a dependency-free HTML workbench. The
+The built-in `pertura --GUI` page is a dependency-free HTML workbench. The
 React/Vite frontend under `frontend/` consumes the same contract and is intended
 for the longer-lived product UI.
 

@@ -15,6 +15,18 @@ from pertura.agent.loop import Workbench
 
 def main():
     p = argparse.ArgumentParser(prog="pertura", description="LLM-driven analysis with provenance memory.")
+    p.add_argument("--GUI", "--gui", action="store_true", dest="gui",
+                   help="Start the workbench GUI directly.")
+    p.add_argument("--domain", dest="gui_domain", default=None,
+                   help="Domain name or domain.json path for --GUI. Default: perturbseq.")
+    p.add_argument("--host", dest="gui_host", default="127.0.0.1",
+                   help="Bind host for --GUI. Use 0.0.0.0 on a trusted server.")
+    p.add_argument("--port", dest="gui_port", type=int, default=8765,
+                   help="Bind port for --GUI.")
+    p.add_argument("--ui", dest="gui_ui", choices=["auto", "builtin", "react"], default="builtin",
+                   help="GUI implementation for --GUI. Default: builtin.")
+    p.add_argument("--analysis-graph", dest="gui_analysis_graph", default=None,
+                   help="AnalysisGraphSpec JSON path for --GUI.")
     sub = p.add_subparsers(dest="cmd")
 
     r = sub.add_parser("run", help="Run analysis (non-interactive).")
@@ -158,6 +170,14 @@ def main():
     fk.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     args = p.parse_args()
+
+    if args.gui:
+        wb = Workbench(domain=_load_domain(
+            args.gui_domain or "perturbseq",
+            analysis_graph_path=args.gui_analysis_graph or "",
+        ))
+        wb.serve(args.gui_port, host=args.gui_host, ui=args.gui_ui)
+        return 0
 
     if args.cmd == "chat":
         return _chat(args)
