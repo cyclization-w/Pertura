@@ -12,10 +12,12 @@ from typing import Any
 
 from pertura.models import Snapshot, _model_dump
 
+from .execution_state import compile_runtime_issues
+
 
 def build_active_work_order(
     snap: Snapshot,
-    context_view,
+    context_view=None,
     context_envelope: dict[str, Any] | None = None,
     *,
     outcome_text: str = "",
@@ -24,17 +26,37 @@ def build_active_work_order(
     tool_names: list[str] | None = None,
 ) -> dict[str, Any]:
     """Return a compact next-action work order for the current run state."""
-    analysis_node = dict(getattr(context_view, "analysis_node", {}) or {})
-    progress = dict(getattr(context_view, "current_node_progress", {}) or {})
-    capabilities = _active_capabilities(context_view, analysis_node)
-    open_interrupts = list(getattr(context_view, "open_interrupts", []) or [])
-    open_triggers = list(getattr(context_view, "open_triggers", []) or [])
-    recent_findings = [
-        item for item in (getattr(context_view, "recent_findings", []) or [])
-        if item.get("severity") in {"warning", "blocking"}
-    ][-5:]
+    if context_view is None:
+        source = _snapshot_work_order_source(snap)
+        analysis_node = source["analysis_node"]
+        progress = source["progress"]
+        capabilities = source["capabilities"]
+        open_interrupts = source["open_interrupts"]
+        open_triggers = source["open_triggers"]
+        recent_findings = source["recent_findings"]
+        workspace_files = source["workspace_files"]
+        active_node_id = source["active_node_id"]
+        active_branch = source["active_branch"]
+        observation_memory = source["observation_memory"]
+    else:
+        analysis_node = dict(getattr(context_view, "analysis_node", {}) or {})
+        progress = dict(getattr(context_view, "current_node_progress", {}) or {})
+        capabilities = _active_capabilities(context_view, analysis_node)
+        open_interrupts = list(getattr(context_view, "open_interrupts", []) or [])
+        open_triggers = list(getattr(context_view, "open_triggers", []) or [])
+        recent_findings = [
+            item for item in (getattr(context_view, "recent_findings", []) or [])
+            if item.get("severity") in {"warning", "blocking"}
+        ][-5:]
+        workspace_files = _workspace_files(context_view)
+        active_node_id = getattr(context_view, "active_node_id", "") or analysis_node.get("node_id", "")
+        active_branch = getattr(context_view, "active_branch", "main")
+        observation_memory = _compact_observation_memory(snap)
     audit_preview = (context_envelope or {}).get("audit_preview", {}) or {}
+    if not audit_preview:
+        audit_preview = _snapshot_issue_preview(snap)
     rethink = trace_driven_rethinking or (context_envelope or {}).get("trace_driven_rethinking", {}) or {}
+    runtime_issues = compile_runtime_issues(snap)
     mode = _work_order_mode(open_interrupts, open_triggers, recent_findings, audit_preview, rethink)
     missing = _missing_items(progress, audit_preview)
     recommended = _recommended_actions(
@@ -50,11 +72,11 @@ def build_active_work_order(
         "mode": mode,
         "run_goal": _latest_goal(snap),
         "active_node": {
-            "id": getattr(context_view, "active_node_id", "") or analysis_node.get("node_id", ""),
+            "id": active_node_id,
             "title": analysis_node.get("title") or analysis_node.get("node_id", ""),
             "purpose": analysis_node.get("purpose", ""),
         },
-        "branch_id": getattr(context_view, "active_branch", "main"),
+        "branch_id": active_branch,
         "node_progress": {
             "attempts": progress.get("attempts", 0),
             "observations": progress.get("observations", 0),
@@ -64,11 +86,14 @@ def build_active_work_order(
         },
         "workspace": {
             "path": snap.workspace,
-            "files": _workspace_files(context_view),
+            "files": workspace_files,
         },
         "available_capabilities": capabilities[:8],
+        "selected_capability": _selected_capability(capabilities),
+        "observation_memory": observation_memory,
         "open_interrupts": open_interrupts[:3],
         "open_issues": {
+            "runtime_issues": runtime_issues[:8],
             "triggers": open_triggers[-5:],
             "findings": recent_findings,
             "audit_next_actions": (audit_preview.get("next_actions") or [])[:5],
@@ -135,6 +160,39 @@ def render_active_work_order(work_order: dict[str, Any]) -> str:
         lines.append(f"- {cap.get('id') or cap.get('capability_id')}: {_line(cap.get('description') or '')}{detail}")
     if not caps:
         lines.append("- none; request a node transition or ask the user if blocked")
+    selected = work_order.get("selected_capability") or {}
+    if selected:
+        lines.extend(["", "## Selected Capability Card"])
+        lines.append(f"- id: {selected.get('id') or selected.get('capability_id')}")
+        if selected.get("missing_inputs"):
+            lines.append(f"- missing inputs: {', '.join(str(item) for item in selected.get('missing_inputs', [])[:6])}")
+        else:
+            lines.append("- missing inputs: none")
+        expected_obs = selected.get("expected_observations") or []
+        expected_art = selected.get("expected_artifacts") or []
+        if expected_obs:
+            lines.append(f"- expected observations: {', '.join(str(item) for item in expected_obs[:6])}")
+        if expected_art:
+            lines.append(f"- expected artifacts: {', '.join(str(item) for item in expected_art[:6])}")
+        if selected.get("packages_hint"):
+            lines.append(f"- packages/functions: {_line(selected.get('packages_hint'))}")
+        if selected.get("next_repair"):
+            lines.append(f"- next repair: {_line(selected.get('next_repair'))}")
+        for item in (selected.get("common_errors") or [])[:3]:
+            lines.append(f"- common error: {_line(item)}")
+    memory = work_order.get("observation_memory") or {}
+    summary = memory.get("summary") or {}
+    if summary:
+        lines.extend(["", "## Observation Memory"])
+        lines.append(f"- variables: {summary.get('variables', summary.get('variable_count', 0))}")
+        lines.append(f"- strict conflicts: {summary.get('strict_conflicts', summary.get('conflicts', 0))}")
+        lines.append(f"- cross-context divergences: {summary.get('cross_context_divergences', 0)}")
+        labels = summary.get("coverage_labels") or {}
+        if labels:
+            label_text = ", ".join(f"{key}={value}" for key, value in list(labels.items())[:6])
+            lines.append(f"- coverage: {label_text}")
+        for item in (memory.get("needs_review") or [])[:3]:
+            lines.append(f"- review: {_line(item.get('variable_key') or item.get('subject_metric') or item)}")
     load_plan = work_order.get("dataset_load_plan") or {}
     if load_plan.get("path"):
         lines.extend([
@@ -184,6 +242,12 @@ def _active_capabilities(context_view, analysis_node: dict[str, Any]) -> list[di
             "missing_inputs": item.get("missing_inputs", []),
             "expected_artifacts": item.get("expected_artifacts", []),
             "expected_observations": item.get("expected_observations", []),
+            "required_inputs": item.get("required_inputs", []),
+            "packages": item.get("packages", []),
+            "functions": item.get("functions", []),
+            "packages_hint": _packages_hint(item),
+            "next_repair": _next_repair(item.get("missing_inputs", []), capability_id=cid),
+            "common_errors": _common_errors(item),
         })
     if rows:
         return rows
@@ -223,7 +287,11 @@ def _work_order_mode(open_interrupts, open_triggers, recent_findings, audit_prev
         return "human_interrupt"
     if rethink and rethink.get("status") not in {"", "not_needed", None}:
         return "rethink"
-    if (audit_preview.get("errors") or audit_preview.get("blocking_findings")):
+    if (
+        audit_preview.get("errors")
+        or audit_preview.get("blocking_findings")
+        or audit_preview.get("severity") in {"error", "blocking"}
+    ):
         return "audit_repair"
     if open_triggers or any(item.get("severity") == "blocking" for item in recent_findings):
         return "issue_repair"
@@ -310,3 +378,326 @@ def _prioritize_load_dataset_action(actions: list[str], path: str) -> list[str]:
 
 def _line(value: Any) -> str:
     return " ".join(str(value or "").split())
+
+
+def _snapshot_work_order_source(snap: Snapshot) -> dict[str, Any]:
+    analysis_node = _analysis_node_from_snapshot(snap)
+    progress = _node_progress_from_snapshot(snap, analysis_node)
+    capabilities = _active_capabilities_from_snapshot(snap, analysis_node)
+    recent_findings = [
+        {
+            "finding_id": item.finding_id,
+            "type": item.finding_type,
+            "severity": item.severity,
+            "summary": item.summary,
+            "action": item.suggested_action,
+            "affected_ids": list(item.affected_ids or []),
+        }
+        for item in getattr(snap, "findings", [])[-12:]
+        if item.severity in {"warning", "blocking", "high", "error"}
+    ][-5:]
+    return {
+        "analysis_node": analysis_node,
+        "progress": progress,
+        "capabilities": capabilities,
+        "open_interrupts": [
+            {
+                "interrupt_id": item.interrupt_id,
+                "source": item.source,
+                "question": item.question,
+                "options": list(item.options or []),
+            }
+            for item in getattr(snap, "interrupts", []) or []
+            if item.status == "open"
+        ][-5:],
+        "open_triggers": [
+            {
+                "trigger_id": item.trigger_id,
+                "type": item.trigger_type,
+                "severity": item.severity,
+                "summary": item.summary,
+            }
+            for item in getattr(snap, "triggers", []) or []
+            if item.status == "open"
+        ][-5:],
+        "recent_findings": recent_findings,
+        "workspace_files": _workspace_files_from_snapshot(snap),
+        "active_node_id": getattr(snap, "active_node_id", "") or analysis_node.get("node_id", ""),
+        "active_branch": getattr(snap, "active_branch", "main") or "main",
+        "observation_memory": _compact_observation_memory(snap),
+    }
+
+
+def _analysis_node_from_snapshot(snap: Snapshot) -> dict[str, Any]:
+    from pertura.spec.gating import GateEvaluator
+
+    evaluator = GateEvaluator(getattr(snap, "analysis_spec", {}) or {})
+    spec = evaluator.spec
+    if spec is None:
+        return {}
+    current = spec.node(snap.active_node_id) if snap.active_node_id else spec.node(spec.start_node_id)
+    if current is None:
+        return {}
+    return {
+        "node_id": current.node_id,
+        "title": current.title,
+        "purpose": current.purpose,
+        "allowed_capabilities": list(current.allowed_capabilities or []),
+        "recommended_actions": list(current.recommended_actions or []),
+        "expected_outputs": list(current.expected_outputs or []),
+    }
+
+
+def _node_progress_from_snapshot(snap: Snapshot, analysis_node: dict[str, Any]) -> dict[str, Any]:
+    node_id = analysis_node.get("node_id", "")
+    if not node_id:
+        return {}
+    from pertura.spec.gating import GateEvaluator
+
+    evaluator = GateEvaluator(getattr(snap, "analysis_spec", {}) or {})
+    spec = evaluator.spec
+    current = spec.node(node_id) if spec else None
+    requires = [_condition_status(cond, snap) for cond in (current.requires if current else [])]
+    must_confirm = [_condition_status(cond, snap) for cond in (current.must_confirm if current else [])]
+    completion = [_condition_status(cond, snap) for cond in (current.completion if current else [])]
+    node_attempts = [
+        attempt for attempt in getattr(snap, "attempts", []) or []
+        if attempt.analysis_node_id == node_id and attempt.branch_id == snap.active_branch
+    ]
+    attempt_ids = {attempt.attempt_id for attempt in node_attempts}
+    node_observations = [obs for obs in getattr(snap, "observations", []) or [] if obs.attempt_id in attempt_ids]
+    node_artifacts = [art for art in getattr(snap, "artifacts", []) or [] if art.attempt_id in attempt_ids]
+    missing_completion = [item for item in completion if not item["passed"] and item.get("hard", True)]
+    visit = next(
+        (
+            item for item in reversed(getattr(snap, "node_visits", []) or [])
+            if item.node_id == node_id and item.branch_id == snap.active_branch
+        ),
+        None,
+    )
+    return {
+        "node_id": node_id,
+        "attempts": len(node_attempts),
+        "completed_attempts": len([item for item in node_attempts if item.status in {"succeeded", "failed", "stopped"}]),
+        "observations": len(node_observations),
+        "artifacts": len(node_artifacts),
+        "completed": bool(visit and visit.status == "completed"),
+        "requires": requires,
+        "must_confirm": must_confirm,
+        "completion": completion,
+        "completion_passed": len([item for item in completion if item["passed"]]),
+        "completion_total": len(completion),
+        "missing_completion": missing_completion,
+        "recommended_actions": analysis_node.get("recommended_actions", []),
+        "expected_outputs": analysis_node.get("expected_outputs", []),
+    }
+
+
+def _condition_status(cond, snap: Snapshot) -> dict[str, Any]:
+    from pertura.spec.conditions import evaluate_condition
+
+    result = evaluate_condition(cond, snap)
+    return {
+        "condition_id": result.condition_id,
+        "passed": result.passed,
+        "tier": result.tier,
+        "failure_mode": result.failure_mode,
+        "description": getattr(cond, "description", ""),
+        "message": result.message,
+        "hard": result.hard,
+        "details": result.details or {},
+    }
+
+
+def _active_capabilities_from_snapshot(snap: Snapshot, analysis_node: dict[str, Any]) -> list[dict[str, Any]]:
+    from pertura.capabilities import CapabilityRegistry
+
+    allowed = list(analysis_node.get("allowed_capabilities") or [])
+    registry = CapabilityRegistry(getattr(snap, "capabilities", []) or [])
+    ids = allowed or registry.ids()
+    rows = []
+    for cap_id in ids:
+        cap = registry.get(cap_id)
+        if cap is None:
+            rows.append({"id": cap_id, "title": cap_id, "description": "", "missing": True})
+            continue
+        raw = cap.model_dump(mode="json")
+        missing = [
+            item for item in list(raw.get("required_inputs", []) or [])
+            if not _input_available(snap, str(item))
+        ]
+        rows.append({
+            "id": raw.get("capability_id", cap_id),
+            "title": raw.get("title") or cap_id,
+            "description": raw.get("description", ""),
+            "ready": not missing,
+            "missing_inputs": missing,
+            "required_inputs": list(raw.get("required_inputs", []) or []),
+            "expected_artifacts": list(raw.get("expected_artifacts", []) or []),
+            "expected_observations": list(raw.get("expected_observations", []) or []),
+            "packages": list(raw.get("packages", []) or []),
+            "functions": list(raw.get("functions", []) or []),
+            "analysis_modes": list(raw.get("analysis_modes", []) or []),
+            "packages_hint": _packages_hint(raw),
+            "next_repair": _next_repair(missing, capability_id=cap_id),
+            "common_errors": _common_errors(raw),
+        })
+    return rows
+
+
+def _workspace_files_from_snapshot(snap: Snapshot, *, limit: int = 8) -> list[dict[str, Any]]:
+    rows = []
+    for obs in getattr(snap, "observations", []) or []:
+        if obs.type not in {"workspace_file", "workspace_probe"}:
+            continue
+        summary = ""
+        if isinstance(obs.parameters, dict):
+            summary = str(obs.parameters.get("summary", ""))
+        rows.append({
+            "target": obs.target,
+            "metric": obs.metric,
+            "summary": summary or str(obs.value if obs.value is not None else obs.metric),
+            "type": obs.type,
+            "value": obs.value,
+        })
+    return rows[-limit:]
+
+
+def _compact_observation_memory(snap: Snapshot) -> dict[str, Any]:
+    try:
+        from pertura.core.observation_memory import build_observation_memory_view
+
+        view = build_observation_memory_view(snap, limit=6)
+    except Exception:
+        return {}
+    return {
+        "summary": view.get("summary", {}),
+        "needs_review": (view.get("needs_review") or [])[:4],
+        "coverage": (view.get("coverage") or [])[:6],
+        "truncated": view.get("truncated", False),
+    }
+
+
+def _snapshot_issue_preview(snap: Snapshot) -> dict[str, Any]:
+    issues = compile_runtime_issues(snap, limit=8)
+    blocking = [
+        item for item in issues
+        if item.get("severity") in {"blocking", "error", "high"}
+    ]
+    return {
+        "ok": not blocking,
+        "severity": "error" if blocking else "ok",
+        "summary": {"issues": len(issues), "blocking": len(blocking)},
+        "top_issue_codes": [item.get("source", "") for item in issues[:5] if item.get("source")],
+        "top_issues": issues[:5],
+        "next_actions": [
+            {
+                "tool": item.get("suggested_action", "repair"),
+                "why": item.get("summary", ""),
+                "target_id": (item.get("affected_ids") or [""])[0],
+            }
+            for item in issues[:5]
+        ],
+    }
+
+
+def _selected_capability(capabilities: list[dict[str, Any]]) -> dict[str, Any]:
+    if not capabilities:
+        return {}
+    for cap in capabilities:
+        if cap.get("ready") and not cap.get("missing"):
+            return cap
+    return capabilities[0]
+
+
+def _input_available(snap: Snapshot, item: str) -> bool:
+    value = _input_value(snap, item)
+    return value not in (None, "", [], {})
+
+
+def _input_value(snap: Snapshot, item: str):
+    design = getattr(snap, "design", {}) or {}
+    aliases = {
+        "control_labels": ["control_labels", "controls"],
+        "guide_column": ["guide_column", "guide", "grna_column", "sgrna_column"],
+        "target_column": ["target_column", "target", "perturbation_column"],
+        "state_labels": ["state_labels", "state_column"],
+    }
+    for key in aliases.get(item, [item]):
+        if design.get(key) not in (None, "", [], {}):
+            return design.get(key)
+    if item == "adata":
+        return "adata" if "adata" in _runtime_symbol_names(snap) else None
+    if item in {"workspace_files", "workspace"}:
+        return _workspace_files_from_snapshot(snap, limit=1)
+    if item in {"supported_observations", "observation_memory"}:
+        return getattr(snap, "observations", []) or None
+    if item == "conclusions":
+        return getattr(snap, "conclusions", []) or None
+    if item == "artifacts":
+        return getattr(snap, "artifacts", []) or None
+    if item == "branches":
+        return getattr(snap, "branches", []) or None
+    if item in {"effect_result", "effect_table"}:
+        return [
+            art for art in getattr(snap, "artifacts", []) or []
+            if art.kind in {"table", "csv", "tsv", "parquet", "de_result"} or "de" in str(art.summary).lower()
+        ] or None
+    if item == "state_reference":
+        return [
+            art for art in getattr(snap, "artifacts", []) or []
+            if art.kind in {"embedding", "cluster_table", "annotation_table", "module_table", "checkpoint"}
+        ] or None
+    if item == "node_id":
+        return getattr(snap, "active_node_id", "")
+    return design.get(item)
+
+
+def _runtime_symbol_names(snap: Snapshot) -> set[str]:
+    names: set[str] = set()
+    for outcome in getattr(snap, "outcomes", []) or []:
+        metrics = getattr(outcome, "metrics", {}) or {}
+        if not isinstance(metrics, dict):
+            continue
+        for key in ("kernel_state", "runtime_state"):
+            state = metrics.get(key, {})
+            if not isinstance(state, dict):
+                continue
+            variables = state.get("variables", {})
+            if isinstance(variables, dict):
+                names.update(str(name) for name in variables)
+    return names
+
+
+def _next_repair(missing_inputs: list[Any], *, capability_id: str = "") -> str:
+    missing = [str(item) for item in missing_inputs if item]
+    if not missing:
+        return ""
+    design_fields = [
+        item for item in missing
+        if item in {"control_labels", "guide_column", "target_column", "state_labels", "perturbation_modality", "moi"}
+    ]
+    if design_fields:
+        return "confirm design: " + ", ".join(design_fields)
+    if "adata" in missing or "workspace_files" in missing:
+        return "load or restore dataset before executing " + capability_id
+    if "state_reference" in missing:
+        return "build state reference before executing " + capability_id
+    if "effect_result" in missing or "effect_table" in missing:
+        return "run or locate differential-effect results before executing " + capability_id
+    return "resolve missing inputs: " + ", ".join(missing[:6])
+
+
+def _packages_hint(capability: dict[str, Any]) -> str:
+    values = []
+    values.extend(str(item) for item in capability.get("packages", []) or [])
+    values.extend(str(item) for item in capability.get("functions", []) or [])
+    return ", ".join(_dedupe(values)[:8])
+
+
+def _common_errors(capability: dict[str, Any]) -> list[str]:
+    contract = capability.get("contract", {}) or {}
+    errors = contract.get("common_errors") or contract.get("common_failures") or []
+    if isinstance(errors, str):
+        return [errors]
+    return [str(item) for item in list(errors)[:5]]

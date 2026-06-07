@@ -50,15 +50,26 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:180px}
 .compact-panel{flex:0 1 260px}.compact-panel .panel-body{max-height:220px}
 .work-order-panel{flex:0 0 auto}.work-order-panel .panel-body{max-height:270px}
+.thinking-panel{border-color:#b9d7d2;box-shadow:0 10px 28px rgba(15,118,110,.08)}.thinking-panel .panel-body{overflow:visible}
+.thought-flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.thought-stage{position:relative;min-width:0;min-height:138px;display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:7px;background:#fff;padding:9px}
+.thought-stage:nth-child(2){border-top-color:var(--blue)}.thought-stage:nth-child(3){border-top-color:var(--violet)}.thought-stage:nth-child(4){border-top-color:var(--warn)}.thought-stage:nth-child(5){border-top-color:var(--good)}
+.thought-stage:not(:last-child)::after{content:"";position:absolute;top:24px;right:-8px;width:8px;height:1px;background:var(--line-strong)}
+.thought-index{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:760}
+.thought-content{min-width:0;display:flex;flex-direction:column}.thought-label{font-size:10px;font-weight:780;color:var(--muted);text-transform:uppercase;letter-spacing:.02em}.thought-title{margin-top:3px;font-size:13px;line-height:1.3;font-weight:760;overflow-wrap:anywhere}.thought-body{margin-top:5px;font-size:11px;line-height:1.4;color:var(--muted);overflow-wrap:anywhere}
+.thought-footer{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;min-height:26px}.thought-next{display:inline-flex;align-items:center;max-width:100%;min-height:24px;border:1px solid #c9ddd9;border-radius:999px;background:var(--accent-soft);color:#0f5f59;padding:3px 9px;font-size:11px;font-weight:700;overflow-wrap:anywhere}
 .advanced-details{margin-top:8px}.advanced-details summary{cursor:pointer;font-weight:720;color:#475467}
+.dev-details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}.dev-details summary{cursor:pointer;font-size:12px;font-weight:720;color:#475467}.dev-controls{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.dev-controls button{height:30px;font-size:12px}
+.issue-item{border-left:4px solid var(--warn)}.issue-item.question{border-left-color:var(--bad)}
+.evidence-row{display:flex;gap:5px;flex-wrap:wrap;min-height:20px}
 .graph-wrap{height:100%;min-height:340px;background:#fbfcfd}
 #graphSvg{width:100%;height:100%;display:block}
 .graph-node{cursor:pointer}.graph-node rect{fill:#fff;stroke:#c7ced8;stroke-width:1.2}.graph-node.active rect{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2}.graph-node.dim rect{fill:#f7f8fa;stroke:#e0e5ec}.graph-node text{font-size:11px;fill:#111827}.graph-node .type-label{font-size:9px;fill:#667085;text-transform:uppercase}.graph-edge{stroke:#9aa4b2;stroke-width:1.2;fill:none;marker-end:url(#arrow)}.graph-edge.highlight{stroke:var(--accent);stroke-width:2}.graph-edge.suspicious{stroke:var(--warn);stroke-dasharray:5 4;stroke-width:2}.lane-label{font-size:11px;font-weight:760;fill:#475467;text-transform:uppercase;letter-spacing:.04em}.lane-bg{fill:#f6f8fa;stroke:#e1e6ed;stroke-width:1}
 .trace-box{min-height:120px;max-height:260px;overflow:auto}
 .context-json{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.45;background:#101828;color:#f8fafc;border-radius:6px;padding:9px;max-height:220px;overflow:auto}
 .answer-row{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:8px}
-@media(max-width:1120px){.shell{grid-template-columns:260px 1fr}.right{grid-column:1 / span 2;display:grid;grid-template-columns:1fr 1fr}.right .grow{min-height:280px}}
-@media(max-width:760px){header{height:auto;align-items:flex-start;flex-direction:column}.shell{grid-template-columns:1fr}.right{grid-column:auto;display:flex}.metric-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:1120px){.shell{grid-template-columns:260px 1fr}.right{grid-column:1 / span 2;display:grid;grid-template-columns:1fr 1fr}.right .grow{min-height:280px}.thought-flow{grid-template-columns:repeat(3,minmax(0,1fr))}.thought-stage:not(:last-child)::after{display:none}}
+@media(max-width:760px){header{height:auto;align-items:flex-start;flex-direction:column}.shell{grid-template-columns:1fr}.right{grid-column:auto;display:flex}.metric-grid{grid-template-columns:repeat(2,1fr)}.thought-flow{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -67,9 +78,9 @@ button:disabled{opacity:.55;cursor:not-allowed}
   <div class="toolbar">
     <input id="workspaceInput" placeholder="Workspace path" style="width:220px">
     <input id="goalInput" placeholder="Goal" style="width:260px">
-    <button class="primary" onclick="initRun()">Init</button>
-    <button onclick="stepRun()">Step</button>
-    <button class="success" onclick="runSteps(5)">Run 5</button>
+    <button class="primary" onclick="agentStart()">Start Analysis</button>
+    <button class="success" onclick="agentContinue()">Continue</button>
+    <button onclick="agentPause()">Pause</button>
     <button onclick="generateReport()">Report</button>
     <span id="phaseChip" class="chip">not initialized</span>
     <span id="actionStatus" class="chip" style="display:none"></span>
@@ -88,6 +99,14 @@ button:disabled{opacity:.55;cursor:not-allowed}
           <div class="metric"><b id="issueCount">0</b><span>open issues</span></div>
         </div>
         <div id="runMeta" class="small muted" style="margin-top:8px">No run loaded.</div>
+        <details class="dev-details">
+          <summary>Developer Inspector</summary>
+          <div class="dev-controls">
+            <button onclick="initRun()">Init</button>
+            <button onclick="stepRun()">Step</button>
+            <button onclick="runSteps(5)">Run 5</button>
+          </div>
+        </details>
       </div>
     </div>
     <div class="panel grow">
@@ -97,8 +116,12 @@ button:disabled{opacity:.55;cursor:not-allowed}
   </section>
 
   <section class="column">
+    <div class="panel thinking-panel">
+      <div class="panel-head"><div class="panel-title">LLM Thinking Path</div><span id="thinkingChip" class="chip">not initialized</span></div>
+      <div id="thinkingPath" class="panel-body small"></div>
+    </div>
     <div class="panel work-order-panel">
-      <div class="panel-head"><div class="panel-title">Active Work Order</div><span id="activeNodeChip" class="chip">none</span></div>
+      <div class="panel-head"><div class="panel-title">Execution State</div><span id="activeNodeChip" class="chip">none</span></div>
       <div id="nodeContract" class="panel-body small"></div>
     </div>
     <div class="panel compact-panel">
@@ -158,6 +181,15 @@ let SELECTED_NODE = "";
 const TYPE_COLORS = {workspace:"#667085",analysis_node:"#6d28d9",branch:"#2563eb",attempt:"#15803d",job:"#0369a1",artifact:"#b45309",observation:"#0f766e",outcome:"#15803d",trigger:"#b42318",finding:"#b42318",conclusion:"#ca8a04",tool_call:"#667085",review_decision:"#0f766e",behavior_run:"#6d28d9"};
 
 function esc(value){return String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+function brief(value){
+  if(value===null||value===undefined)return"";
+  if(["string","number","boolean"].includes(typeof value))return String(value);
+  if(Array.isArray(value))return value.map(brief).filter(Boolean).join(", ");
+  if(typeof value==="object")return brief(value.summary??value.why??value.question??value.message??value.condition_id??value.variable_key??value.subject_metric??value.type??value.tool??value.action??value.id);
+  return String(value);
+}
+function trunc(value,n=86){const text=brief(value);return text.length>n?`${text.slice(0,n-1)}...`:text;}
+function num(value){return typeof value==="number"&&Number.isFinite(value)?value:0;}
 function chipClass(value){const v=String(value||"").toLowerCase();if(v.includes("block")||v.includes("fail")||v.includes("interrupt"))return"bad";if(v.includes("warn")||v.includes("wait")||v.includes("stale"))return"warn";if(v.includes("success")||v.includes("complete")||v.includes("ready")||v.includes("actionable"))return"good";return"";}
 async function getJson(url, fallback){try{const r=await fetch(url);return await r.json();}catch{return fallback;}}
 function setBusy(busy){document.querySelectorAll("header button").forEach(b=>b.disabled=busy);}
@@ -205,6 +237,7 @@ function renderAll(){
   if(!CURRENT_VIEW)return;
   renderStatus(CURRENT_VIEW);
   renderNodes(CURRENT_VIEW);
+  renderThinkingPath(CURRENT_VIEW);
   renderContract(CURRENT_VIEW);
   renderCapabilities(CURRENT_VIEW);
   renderGraph(CURRENT_GRAPH, CURRENT_VIEW);
@@ -216,9 +249,11 @@ function renderAll(){
 
 function renderStatus(view){
   const s=view.status||{};
-  const open=(s.triggers_open||0)+(s.interrupts_open||0);
-  document.getElementById("phaseChip").textContent=s.phase||s.state||"unknown";
-  document.getElementById("phaseChip").className=`chip ${chipClass(s.phase||s.state)}`;
+  const exec=view.execution_state||{};
+  const open=(exec.issues||[]).length || (s.triggers_open||0)+(s.interrupts_open||0);
+  const mode=exec.mode||s.phase||s.state||"unknown";
+  document.getElementById("phaseChip").textContent=mode;
+  document.getElementById("phaseChip").className=`chip ${chipClass(mode)}`;
   document.getElementById("runChip").textContent=s.run_id||"no run";
   document.getElementById("attemptCount").textContent=s.attempts||0;
   document.getElementById("obsCount").textContent=s.observations||0;
@@ -243,9 +278,54 @@ function renderNodes(view){
   }).join("")||"<div class='small muted'>No analysis graph loaded.</div>";
 }
 
+function renderThinkingPath(view){
+  const workOrder=(view.analysis||{}).active_work_order||{};
+  const exec=view.execution_state||{};
+  const progress=workOrder.node_progress||{};
+  const selected=workOrder.selected_capability||{};
+  const missing=((selected.missing_inputs&&selected.missing_inputs.length)?selected.missing_inputs:(progress.missing_completion||[])).map(brief).filter(Boolean);
+  const memory=((workOrder.observation_memory||{}).summary)||{};
+  const coverage=(memory.coverage_labels&&typeof memory.coverage_labels==="object")?memory.coverage_labels:{};
+  const openIssues=workOrder.open_issues||{};
+  const issueRows=[...(openIssues.runtime_issues||[]),...(openIssues.triggers||[]),...(openIssues.findings||[]),...(openIssues.audit_next_actions||[])];
+  const issueText=issueRows.map(brief).find(Boolean)||"";
+  const rethink=workOrder.rethinking||{};
+  const activeNode=workOrder.active_node||exec.current_task||{};
+  const capTitle=selected.title||selected.id||selected.capability_id||"No selected capability";
+  const packageHint=selected.packages_hint||[...(selected.packages||[]),...(selected.functions||[])].slice(0,4).join(", ");
+  const nextAction=(workOrder.recommended_actions||[])[0]||(exec.recommended_actions||[])[0]||selected.next_repair||"inspect current node contract";
+  const stages=[
+    {label:"Goal",title:workOrder.run_goal||(view.status||{}).goal||"No goal recorded",body:(view.status||{}).workspace||(workOrder.workspace||{}).path||"",badges:[workOrder.branch_id||(view.active||{}).branch_id||"main"]},
+    {label:"Focus",title:activeNode.title||activeNode.id||activeNode.node_id||"Run",body:activeNode.purpose||(exec.current_task||{}).purpose||"",badges:[`${progress.attempts||0} attempts`,`${progress.observations||0} obs`,`${progress.artifacts||0} artifacts`,progress.completed?"complete":"open"]},
+    {label:"Capability",title:capTitle,body:selected.next_repair||selected.description||"",badges:[selected.ready?"ready":missing.length?"needs inputs":"available",...missing.slice(0,2).map(i=>`missing: ${i}`),packageHint].filter(Boolean)},
+    {label:"Evidence",title:rethink.summary||issueText||"Observation memory",body:Object.keys(coverage).length?Object.entries(coverage).slice(0,4).map(([k,v])=>`${k}: ${brief(v)}`).join(" / "):brief(((workOrder.observation_memory||{}).needs_review||[])[0]),badges:[`${num(memory.variables??memory.variable_count)} vars`,`${num(memory.strict_conflicts??memory.conflicts)} conflicts`,`${issueRows.length} issues`]},
+    {label:"Next",title:nextAction,body:(workOrder.allowed_tools||[]).slice(0,4).join(", "),badges:[workOrder.mode||exec.mode||"normal",`${(workOrder.allowed_tools||[]).length} tools`]}
+  ];
+  document.getElementById("thinkingChip").textContent=workOrder.mode||exec.mode||"ready";
+  document.getElementById("thinkingChip").className=`chip ${chipClass(workOrder.mode||exec.mode)}`;
+  document.getElementById("thinkingPath").innerHTML=`
+    <div class="thought-flow">
+      ${stages.map((stage,index)=>`<div class="thought-stage">
+        <div class="thought-index">${index+1}</div>
+        <div class="thought-content">
+          <div class="thought-label">${esc(stage.label)}</div>
+          <div class="thought-title">${esc(trunc(stage.title,86))}</div>
+          ${stage.body?`<div class="thought-body">${esc(trunc(stage.body,132))}</div>`:""}
+          <div class="badge-row">${stage.badges.slice(0,5).map(b=>`<span class="badge ${chipClass(b)}">${esc(trunc(b,38))}</span>`).join("")}</div>
+        </div>
+      </div>`).join("")}
+    </div>
+    <div class="thought-footer">${(workOrder.recommended_actions||[]).slice(0,3).map(a=>`<span class="thought-next">${esc(a)}</span>`).join("")}</div>
+  `;
+}
+
 function renderContract(view){
   const contract=(view.analysis||{}).active_node_contract||{};
   const workOrder=(view.analysis||{}).active_work_order||{};
+  const exec=view.execution_state||{};
+  const evidence=exec.evidence_summary||{};
+  const issueRows=(exec.issues||[]).filter(i=>i.kind!=="question").slice(0,4);
+  const question=(exec.issues||[]).find(i=>i.kind==="question")||{};
   const node=contract.node||{};
   const runtime=contract.runtime||{};
   const caps=contract.capabilities||[];
@@ -255,16 +335,27 @@ function renderContract(view){
   const missing=progress.missing_completion||[];
   const actions=workOrder.recommended_actions||[];
   const woCaps=workOrder.available_capabilities||[];
-  document.getElementById("activeNodeChip").textContent=activeNode.id||node.id||view.active?.node_id||"none";
+  document.getElementById("activeNodeChip").textContent=exec.mode||workOrder.mode||"ready";
   document.getElementById("nodeContract").innerHTML=`
     <div class="item">
-      <div class="item-title">${esc(activeNode.title||node.title||activeNode.id||node.id||"No active node")} <span class="badge ${chipClass(workOrder.mode)}">${esc(workOrder.mode||"normal")}</span></div>
-      <div class="item-sub">${esc(activeNode.purpose||node.purpose||"")}</div>
-      <div class="item-sub" style="margin-top:5px"><b>Goal:</b> ${esc(workOrder.run_goal||((view.status||{}).goal)||"No goal recorded")}</div>
+      <div class="item-title">${esc((exec.current_task||{}).title||activeNode.title||node.title||activeNode.id||node.id||"Run")} <span class="badge ${chipClass(exec.mode)}">${esc(exec.mode||"ready")}</span></div>
+      <div class="item-sub">${esc((exec.current_task||{}).goal||(exec.current_task||{}).purpose||activeNode.purpose||node.purpose||"")}</div>
     </div>
-    <div><b>Missing:</b> ${missing.length?missing.slice(0,6).map(i=>`<span class="badge warn">${esc(i)}</span>`).join(""):"<span class='muted'>none reported</span>"}</div>
-    <div style="margin-top:7px"><b>Recommended:</b> ${actions.length?actions.slice(0,4).map(i=>`<div class="item-sub">- ${esc(i)}</div>`).join(""):"<span class='muted'>choose one allowed action</span>"}</div>
-    <div style="margin-top:7px"><b>Available here:</b> ${woCaps.length?woCaps.slice(0,6).map(c=>`<span class="badge violet">${esc(c.id||c.capability_id)}</span>`).join(""):caps.slice(0,6).map(c=>`<span class="badge violet">${esc(c.id||c.capability_id)}</span>`).join("")||"<span class='muted'>No capabilities</span>"}</div>
+    <div class="metric-grid" style="margin-bottom:8px">
+      <div class="metric"><b>${evidence.attempts||0}</b><span>attempts</span></div>
+      <div class="metric"><b>${evidence.observations||0}</b><span>observations</span></div>
+      <div class="metric"><b>${evidence.artifacts||0}</b><span>artifacts</span></div>
+      <div class="metric"><b>${(exec.issues||[]).length||0}</b><span>issues</span></div>
+    </div>
+    ${question.issue_id?`<div class="item issue-item question"><div class="item-title">Question <span class="badge bad">${esc(question.source||"human")}</span></div><div class="item-sub">${esc(question.question||question.summary||"")}</div></div>`:""}
+    ${issueRows.map(i=>`<div class="item issue-item"><div class="item-title">${esc(i.kind||"issue")} <span class="badge ${chipClass(i.severity)}">${esc(i.severity||"open")}</span></div><div class="item-sub">${esc(i.summary||"")}</div></div>`).join("")}
+    <div class="evidence-row">${(evidence.recent_attempts||[]).slice(0,3).map(a=>`<span class="badge">${esc(a.title||a.attempt_id)}</span>`).join("")}${(evidence.recent_artifacts||[]).slice(0,3).map(a=>`<span class="badge good">${esc(a.kind||a.artifact_id)}</span>`).join("")}</div>
+    <details class="advanced-details"><summary>Active Work Order</summary>
+      <div style="margin-top:8px"><b>Mode:</b> <span class="badge ${chipClass(workOrder.mode)}">${esc(workOrder.mode||"normal")}</span></div>
+      <div style="margin-top:8px"><b>Missing:</b> ${missing.length?missing.slice(0,6).map(i=>`<span class="badge warn">${esc(i)}</span>`).join(""):"<span class='muted'>none reported</span>"}</div>
+      <div style="margin-top:7px"><b>Recommended:</b> ${actions.length?actions.slice(0,4).map(i=>`<div class="item-sub">- ${esc(i)}</div>`).join(""):"<span class='muted'>choose one allowed action</span>"}</div>
+      <div style="margin-top:7px"><b>Available here:</b> ${woCaps.length?woCaps.slice(0,6).map(c=>`<span class="badge violet">${esc(c.id||c.capability_id)}</span>`).join(""):caps.slice(0,6).map(c=>`<span class="badge violet">${esc(c.id||c.capability_id)}</span>`).join("")||"<span class='muted'>No capabilities</span>"}</div>
+    </details>
     <details class="advanced-details"><summary>Node contract details</summary>
       <div style="margin-top:8px"><b>Inputs:</b> ${inputs.length?inputs.map(i=>`<span class="badge">${esc(i)}</span>`).join(""):"<span class='muted'>none</span>"}</div>
       <div style="margin-top:8px"><b>Ready:</b> ${((runtime.ready_capabilities||[]).map(c=>`<span class="badge good">${esc(c)}</span>`).join(""))||"<span class='muted'>no ready capability reported</span>"}</div>
@@ -393,19 +484,17 @@ function renderActivity(view){
 
 function renderReview(view){
   const review=view.review||{};
-  const interrupts=review.open_interrupts||[];
-  const issues=(review.open_triggers||[]).length+(review.open_findings||[]).length+interrupts.length;
+  const runtimeIssues=((view.execution_state||{}).issues)||[];
+  const question=runtimeIssues.find(i=>i.kind==="question")||{};
+  const rows=runtimeIssues.filter(i=>i.kind!=="question");
+  const issues=runtimeIssues.length;
   document.getElementById("reviewChip").textContent=issues?`${issues} open`:"clear";
   document.getElementById("reviewChip").className=`chip ${issues?"warn":"good"}`;
-  document.getElementById("interruptBox").innerHTML=interrupts.length?`<div class="item"><div class="item-title">${esc(interrupts[0].source||"interrupt")}</div><div class="item-sub">${esc(interrupts[0].question||"")}</div></div>`:"<span class='muted'>No open interrupt.</span>";
-  const rows=[
-    ...(review.open_triggers||[]).map(x=>({kind:"trigger",severity:x.severity,summary:x.summary})),
-    ...(review.open_findings||[]).map(x=>({kind:"finding",severity:x.severity,summary:x.summary}))
-  ];
+  document.getElementById("interruptBox").innerHTML=question.issue_id?`<div class="item"><div class="item-title">${esc(question.source||"question")}</div><div class="item-sub">${esc(question.question||question.summary||"")}</div></div>`:"<span class='muted'>No question.</span>";
   const audit=review.run_audit_summary||{};
   document.getElementById("reviewList").innerHTML=`
     <div class="item"><div class="item-title">Audit <span class="badge ${audit.ok?"good":"bad"}">${audit.ok?"ok":"needs review"}</span></div><div class="item-sub">${audit.errors||0} errors / ${audit.warnings||0} warnings</div></div>
-    ${rows.slice(0,8).map(r=>`<div class="item"><div class="item-title">${esc(r.kind)} <span class="badge ${chipClass(r.severity)}">${esc(r.severity)}</span></div><div class="item-sub">${esc(r.summary)}</div></div>`).join("")}
+    ${rows.slice(0,8).map(r=>`<div class="item"><div class="item-title">${esc(r.kind)} <span class="badge ${chipClass(r.severity)}">${esc(r.severity||"open")}</span></div><div class="item-sub">${esc(r.summary)}</div></div>`).join("")}
   `;
 }
 
@@ -453,8 +542,25 @@ async function runSteps(steps){
   const workspace=document.getElementById("workspaceInput").value.trim()||"data";
   await postJson("/api/run",{workspace,goal:document.getElementById("goalInput").value,steps},"Run completed");
 }
+async function agentStart(){
+  const workspace=document.getElementById("workspaceInput").value.trim()||"data";
+  await postJson("/api/agent/start",{workspace,goal:document.getElementById("goalInput").value,max_turns:20},"Analysis started");
+}
+async function agentContinue(){
+  await postJson("/api/agent/continue",{max_turns:20},"Analysis resumed");
+}
+async function agentPause(){
+  await postJson("/api/agent/pause",{},"Pause requested");
+}
 async function generateReport(){await postJson("/api/report/generate",{},"Report generated");}
-async function answerInterrupt(){const interrupts=((CURRENT_VIEW||{}).review||{}).open_interrupts||[];if(!interrupts.length)return;await postJson(`/api/answer/${encodeURIComponent(interrupts[0].interrupt_id)}`,{answer:document.getElementById("answerInput").value},"Answer recorded");document.getElementById("answerInput").value="";}
+async function answerInterrupt(){
+  const question=((((CURRENT_VIEW||{}).execution_state||{}).issues)||[]).find(i=>i.kind==="question");
+  const fallback=(((CURRENT_VIEW||{}).review||{}).open_interrupts||[])[0];
+  const interruptId=(question&&question.issue_id)||(fallback&&fallback.interrupt_id);
+  if(!interruptId)return;
+  await postJson(`/api/answer/${encodeURIComponent(interruptId)}`,{answer:document.getElementById("answerInput").value},"Answer recorded");
+  document.getElementById("answerInput").value="";
+}
 async function toggleCapability(capabilityId, enabled){await postJson(`/api/capabilities/${encodeURIComponent(capabilityId)}/toggle`,{enabled},enabled?"Capability enabled":"Capability disabled");}
 refresh();
 setInterval(refresh,4000);

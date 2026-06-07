@@ -2,19 +2,24 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   answerInterrupt,
+  continueAgent,
   generateReport,
   getAttemptGraph,
   getDerivationView,
   getWorkbenchView,
+  pauseAgent,
   runWorkbench,
+  startAgent,
   stepWorkbench,
   toggleCapability
 } from "./api";
 import type {
   AttemptGraph,
   CapabilityCard,
+  ExecutionState,
   GraphNode,
   LlmToolSurface,
+  RuntimeIssue,
   ToolVisibilityCard,
   WorkbenchNode,
   WorkbenchView
@@ -47,6 +52,24 @@ function badgeClass(value?: string) {
 
 function truncate(value: string, n = 64) {
   return value.length > n ? `${value.slice(0, n - 1)}...` : value;
+}
+
+function briefValue(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map(briefValue).filter(Boolean).join(", ");
+  if (typeof value === "object") {
+    const row = value as Record<string, unknown>;
+    return briefValue(
+      row.summary ?? row.why ?? row.question ?? row.message ?? row.condition_id ?? row.variable_key ??
+      row.subject_metric ?? row.type ?? row.tool ?? row.action ?? row.id
+    );
+  }
+  return String(value);
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function laneForType(type?: string) {
@@ -120,16 +143,35 @@ export default function App() {
     await refresh();
   }
 
+  async function startAnalysis() {
+    await startAgent(workspace || "data", goal);
+    await refresh();
+  }
+
+  async function continueAnalysis() {
+    await continueAgent();
+    await refresh();
+  }
+
+  async function pauseAnalysis() {
+    await pauseAgent();
+    await refresh();
+  }
+
   async function sendAnswer() {
-    const interrupt = view?.review.open_interrupts[0];
-    if (!interrupt?.interrupt_id || !answer) return;
-    await answerInterrupt(interrupt.interrupt_id, answer);
+    const question = view?.execution_state?.question as RuntimeIssue | undefined;
+    const interruptId = question?.kind === "question" && question.issue_id
+      ? question.issue_id
+      : view?.review.open_interrupts[0]?.interrupt_id;
+    if (!interruptId || !answer) return;
+    await answerInterrupt(interruptId, answer);
     setAnswer("");
     await refresh();
   }
 
   const status = view?.status ?? {};
-  const openIssueCount = (status.triggers_open ?? 0) + (status.interrupts_open ?? 0);
+  const executionState = view?.execution_state;
+  const openIssueCount = executionState?.issues?.length ?? ((status.triggers_open ?? 0) + (status.interrupts_open ?? 0));
 
   return (
     <div className="app">
@@ -141,11 +183,11 @@ export default function App() {
         <div className="controls">
           <input value={workspace} onChange={(event) => setWorkspace(event.target.value)} placeholder="Workspace path" />
           <input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="Goal" />
-          <button className="primary" onClick={() => run(0)}>Init</button>
-          <button onClick={async () => { await stepWorkbench(); await refresh(); }}>Step</button>
-          <button className="success" onClick={() => run(5)}>Run 5</button>
+          <button className="primary" onClick={startAnalysis}>Start Analysis</button>
+          <button className="success" onClick={continueAnalysis}>Continue</button>
+          <button onClick={pauseAnalysis}>Pause</button>
           <button onClick={async () => { await generateReport(); await refresh(); }}>Report</button>
-          <span className={`chip ${badgeClass(status.phase ?? status.state)}`}>{status.phase ?? status.state ?? "idle"}</span>
+          <span className={`chip ${badgeClass(executionState?.mode ?? status.phase ?? status.state)}`}>{executionState?.mode ?? status.phase ?? status.state ?? "idle"}</span>
         </div>
       </header>
 
@@ -162,6 +204,13 @@ export default function App() {
             </div>
             <p className="small strong">{status.goal || "No goal"}</p>
             <p className="small mono">{status.workspace || ""}</p>
+            <DeveloperInspector
+              run={run}
+              step={async () => {
+                await stepWorkbench();
+                await refresh();
+              }}
+            />
           </Panel>
           <Panel title="Analysis Graph" fill badge={`${view?.analysis.nodes.length ?? 0} nodes`}>
             <AnalysisNodeList
@@ -173,6 +222,12 @@ export default function App() {
         </aside>
 
         <section className="column center">
+          <Panel title="LLM Thinking Path" badge={view?.analysis.active_work_order?.mode ?? executionState?.mode ?? "not initialized"} className="thinking-panel">
+            <ThinkingPath view={view} />
+          </Panel>
+          <Panel title="Execution State" badge={executionState?.mode ?? "not initialized"}>
+            <ExecutionStatePanel state={executionState} />
+          </Panel>
           <Panel title="Active Node Contract" badge={view?.active.node_id || "none"}>
             <ActiveContract view={view} />
           </Panel>
@@ -209,7 +264,7 @@ export default function App() {
           <Panel title="Trace / Rethinking">
             <Rethinking view={view} selectedNode={selectedNode} />
           </Panel>
-          <Panel title="LLM Context Surface" fill>
+          <Panel title="Debug Context Surface" fill>
             <ContextSurface view={view} />
           </Panel>
           <Panel title="Report">
@@ -221,9 +276,9 @@ export default function App() {
   );
 }
 
-function Panel(props: { title: string; badge?: string; fill?: boolean; children: ReactNode }) {
+function Panel(props: { title: string; badge?: string; fill?: boolean; className?: string; children: ReactNode }) {
   return (
-    <section className={`panel ${props.fill ? "fill" : ""}`}>
+    <section className={`panel ${props.fill ? "fill" : ""} ${props.className ?? ""}`.trim()}>
       <div className="panel-head">
         <div className="panel-title">{props.title}</div>
         {props.badge && <span className="chip">{props.badge}</span>}
@@ -233,8 +288,186 @@ function Panel(props: { title: string; badge?: string; fill?: boolean; children:
   );
 }
 
+function ThinkingPath(props: { view: WorkbenchView | null }) {
+  const view = props.view;
+  const workOrder = view?.analysis.active_work_order;
+  const executionState = view?.execution_state;
+  if (!workOrder && !executionState) return <p className="small muted">Not initialized.</p>;
+
+  const progress = workOrder?.node_progress ?? {};
+  const selectedCapability = workOrder?.selected_capability;
+  const missing = (selectedCapability?.missing_inputs?.length
+    ? selectedCapability.missing_inputs
+    : progress.missing_completion ?? []
+  ).map(briefValue).filter(Boolean);
+  const memorySummary = workOrder?.observation_memory?.summary ?? {};
+  const coverageLabels = typeof memorySummary.coverage_labels === "object" && memorySummary.coverage_labels
+    ? memorySummary.coverage_labels as Record<string, unknown>
+    : {};
+  const issueRows = [
+    ...(workOrder?.open_issues?.runtime_issues ?? []),
+    ...(workOrder?.open_issues?.triggers ?? []),
+    ...(workOrder?.open_issues?.findings ?? []),
+    ...(workOrder?.open_issues?.audit_next_actions ?? [])
+  ];
+  const issueText = issueRows.map(briefValue).find(Boolean);
+  const rethink = workOrder?.rethinking;
+  const nextAction = workOrder?.recommended_actions?.[0]
+    ?? executionState?.recommended_actions?.[0]
+    ?? selectedCapability?.next_repair
+    ?? "inspect current node contract";
+  const capabilityTitle = selectedCapability?.title
+    ?? selectedCapability?.id
+    ?? selectedCapability?.capability_id
+    ?? "No selected capability";
+  const packageHint = selectedCapability?.packages_hint
+    ?? [...(selectedCapability?.packages ?? []), ...(selectedCapability?.functions ?? [])].slice(0, 4).join(", ");
+  const activeNode = (workOrder?.active_node ?? executionState?.current_task ?? {}) as {
+    id?: string;
+    node_id?: string;
+    title?: string;
+    purpose?: string;
+  };
+
+  const stages = [
+    {
+      label: "Goal",
+      title: workOrder?.run_goal || view?.status.goal || "No goal recorded",
+      body: view?.status.workspace || workOrder?.workspace?.path || "",
+      badges: [workOrder?.branch_id || view?.active.branch_id || "main"].filter(Boolean)
+    },
+    {
+      label: "Focus",
+      title: activeNode.title || activeNode.id || activeNode.node_id || "Run",
+      body: activeNode.purpose || executionState?.current_task?.purpose || "",
+      badges: [
+        `${progress.attempts ?? 0} attempts`,
+        `${progress.observations ?? 0} obs`,
+        `${progress.artifacts ?? 0} artifacts`,
+        progress.completed ? "complete" : "open"
+      ]
+    },
+    {
+      label: "Capability",
+      title: capabilityTitle,
+      body: selectedCapability?.next_repair || selectedCapability?.description || "",
+      badges: [
+        selectedCapability?.ready ? "ready" : missing.length ? "needs inputs" : "available",
+        ...missing.slice(0, 2).map((item) => `missing: ${item}`),
+        packageHint
+      ].filter(Boolean)
+    },
+    {
+      label: "Evidence",
+      title: rethink?.summary || issueText || "Observation memory",
+      body: Object.keys(coverageLabels).length
+        ? Object.entries(coverageLabels).slice(0, 4).map(([key, value]) => `${key}: ${briefValue(value)}`).join(" / ")
+        : briefValue(workOrder?.observation_memory?.needs_review?.[0]) || "",
+      badges: [
+        `${numberValue(memorySummary.variables ?? memorySummary.variable_count)} vars`,
+        `${numberValue(memorySummary.strict_conflicts ?? memorySummary.conflicts)} conflicts`,
+        `${issueRows.length} issues`
+      ]
+    },
+    {
+      label: "Next",
+      title: nextAction,
+      body: (workOrder?.allowed_tools ?? []).slice(0, 4).join(", "),
+      badges: [
+        workOrder?.mode ?? executionState?.mode ?? "normal",
+        `${workOrder?.allowed_tools?.length ?? 0} tools`
+      ]
+    }
+  ];
+
+  return (
+    <div className="thinking-path">
+      <div className="thought-flow">
+        {stages.map((stage, index) => (
+          <div className="thought-stage" key={`${stage.label}-${index}`}>
+            <div className="thought-index">{index + 1}</div>
+            <div className="thought-content">
+              <div className="thought-label">{stage.label}</div>
+              <div className="thought-title">{truncate(String(stage.title || stage.label), 86)}</div>
+              {stage.body && <div className="thought-body">{truncate(String(stage.body), 132)}</div>}
+              <div className="badge-row">
+                {stage.badges.slice(0, 5).map((badge, badgeIndex) => (
+                  <span className={`badge ${badgeClass(String(badge))}`} key={`${stage.label}-${badgeIndex}`}>{truncate(String(badge), 38)}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="thought-footer">
+        {(workOrder?.recommended_actions ?? []).slice(0, 3).map((action, index) => (
+          <span className="thought-next" key={`${action}-${index}`}>{action}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Metric(props: { label: string; value: number }) {
   return <div className="metric"><b>{props.value}</b><span>{props.label}</span></div>;
+}
+
+function DeveloperInspector(props: { run: (steps: number) => Promise<void>; step: () => Promise<void> }) {
+  return (
+    <details className="dev-inspector">
+      <summary>Developer Inspector</summary>
+      <div className="dev-controls">
+        <button onClick={() => props.run(0)}>Init</button>
+        <button onClick={props.step}>Step</button>
+        <button onClick={() => props.run(5)}>Run 5</button>
+      </div>
+    </details>
+  );
+}
+
+function ExecutionStatePanel(props: { state?: ExecutionState }) {
+  const state = props.state;
+  if (!state) return <p className="small muted">Not initialized.</p>;
+  const task = state.current_task ?? {};
+  const issues = state.issues ?? [];
+  const question = state.question as RuntimeIssue | undefined;
+  const evidence = state.evidence_summary ?? {};
+  const recentAttempts = evidence.recent_attempts ?? [];
+  const recentArtifacts = evidence.recent_artifacts ?? [];
+  return (
+    <div className="execution-state">
+      <div className="item">
+        <div className="item-title">{task.title || task.node_id || "Run"} <span className={`badge ${badgeClass(state.mode)}`}>{state.mode}</span></div>
+        <div className="item-sub">{task.goal || task.purpose || ""}</div>
+      </div>
+      <div className="metrics compact">
+        <Metric label="attempts" value={evidence.attempts ?? 0} />
+        <Metric label="observations" value={evidence.observations ?? 0} />
+        <Metric label="artifacts" value={evidence.artifacts ?? 0} />
+        <Metric label="issues" value={issues.length} />
+      </div>
+      {question?.kind === "question" && (
+        <div className="item issue question">
+          <div className="item-title">Question <span className="badge bad">{question.source || "human"}</span></div>
+          <div className="item-sub">{question.question || question.summary}</div>
+        </div>
+      )}
+      {issues.filter((item) => item.kind !== "question").slice(0, 4).map((issue) => (
+        <div className="item issue" key={issue.issue_id}>
+          <div className="item-title">{issue.kind} <span className={`badge ${badgeClass(issue.severity)}`}>{issue.severity || "open"}</span></div>
+          <div className="item-sub">{issue.summary}</div>
+        </div>
+      ))}
+      <div className="recent-evidence">
+        {recentAttempts.slice(0, 3).map((attempt) => (
+          <span className="badge" key={attempt.attempt_id}>{attempt.title || attempt.attempt_id}</span>
+        ))}
+        {recentArtifacts.slice(0, 3).map((artifact) => (
+          <span className="badge good" key={artifact.artifact_id}>{artifact.kind || artifact.artifact_id}</span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function AnalysisNodeList(props: { nodes: WorkbenchNode[]; activeNodeId: string; onSelect: (id: string) => void }) {
@@ -493,23 +726,20 @@ function Artifacts(props: { view: WorkbenchView | null }) {
 }
 
 function Review(props: { view: WorkbenchView | null }) {
-  const review = props.view?.review;
-  const interrupt = review?.open_interrupts[0];
-  const rows = [
-    ...(review?.open_triggers ?? []).map((item) => ({ kind: "trigger", ...item })),
-    ...(review?.open_findings ?? []).map((item) => ({ kind: "finding", ...item }))
-  ];
+  const issues = props.view?.execution_state?.issues ?? [];
+  const question = issues.find((item) => item.kind === "question");
+  const rows = issues.filter((item) => item.kind !== "question");
   return (
     <>
-      {interrupt ? (
+      {question ? (
         <div className="item">
-          <div className="item-title">{interrupt.source || "interrupt"}</div>
-          <div className="item-sub">{interrupt.question}</div>
+          <div className="item-title">{question.source || "question"}</div>
+          <div className="item-sub">{question.question || question.summary}</div>
         </div>
-      ) : <p className="small muted">No open interrupt.</p>}
+      ) : <p className="small muted">No question.</p>}
       {rows.slice(0, 8).map((row, index) => (
-        <div className="item" key={`${row.kind}-${index}`}>
-          <div className="item-title">{row.kind} <span className={`badge ${badgeClass(row.severity)}`}>{row.severity}</span></div>
+        <div className="item" key={`${row.issue_id}-${index}`}>
+          <div className="item-title">{row.kind} <span className={`badge ${badgeClass(row.severity)}`}>{row.severity || "open"}</span></div>
           <div className="item-sub">{row.summary}</div>
         </div>
       ))}

@@ -128,6 +128,137 @@ button.success { border-color: var(--good); background: var(--good); color: #fff
 .metric { border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 8px; }
 .metric b { display: block; font-size: 18px; }
 .metric span { font-size: 11px; color: var(--muted); }
+.metrics.compact { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.metrics.compact .metric { padding: 6px; }
+.metrics.compact .metric b { font-size: 15px; }
+
+.dev-inspector {
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+.dev-inspector summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 720;
+  color: #475467;
+}
+.dev-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.dev-controls button { height: 30px; font-size: 12px; }
+
+.execution-state { display: grid; gap: 8px; }
+.execution-state .item { margin-bottom: 0; }
+.item.issue { border-left: 4px solid var(--warn); }
+.item.issue.question { border-left-color: var(--bad); }
+.recent-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-height: 20px;
+}
+
+.thinking-panel {
+  border-color: #b9d7d2;
+  box-shadow: 0 10px 28px rgba(15, 118, 110, .08);
+}
+.thinking-panel .panel-body {
+  height: auto;
+  overflow: visible;
+}
+.thought-flow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.thought-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 142px;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+  border-radius: 7px;
+  background: #fff;
+  padding: 9px;
+}
+.thought-stage:nth-child(2) { border-top-color: var(--blue, #2563eb); }
+.thought-stage:nth-child(3) { border-top-color: var(--violet); }
+.thought-stage:nth-child(4) { border-top-color: var(--warn); }
+.thought-stage:nth-child(5) { border-top-color: var(--good); }
+.thought-stage:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 24px;
+  right: -8px;
+  width: 8px;
+  height: 1px;
+  background: var(--line-strong);
+}
+.thought-index {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 760;
+}
+.thought-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.thought-label {
+  font-size: 10px;
+  font-weight: 780;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+.thought-title {
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+.thought-body {
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.thought-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  min-height: 26px;
+}
+.thought-next {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 24px;
+  border: 1px solid #c9ddd9;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: #0f5f59;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
 
 .node-list { display: flex; flex-direction: column; gap: 6px; }
 .node-card {
@@ -237,6 +368,8 @@ button.success { border-color: var(--good); background: var(--good); color: #fff
   .layout { grid-template-columns: 260px 1fr; }
   .right { grid-column: 1 / span 2; display: grid; grid-template-columns: 1fr 1fr; }
   .right .panel.fill { min-height: 300px; }
+  .thought-flow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .thought-stage:not(:last-child)::after { display: none; }
 }
 
 @media (max-width: 760px) {
@@ -244,6 +377,7 @@ button.success { border-color: var(--good); background: var(--good); color: #fff
   .layout { grid-template-columns: 1fr; }
   .right { grid-column: auto; display: flex; }
   .split { grid-template-columns: 1fr; }
+  .thought-flow { grid-template-columns: 1fr; }
   input { width: 100%; }
   .controls { width: 100%; }
 }

@@ -1,4 +1,4 @@
-import type { AttemptGraph, CapabilitiesView, DerivationView, WorkbenchView } from "./types";
+import type { AttemptGraph, CapabilitiesView, DerivationView, ExecutionState, WorkbenchView } from "./types";
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -13,6 +13,10 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getWorkbenchView(): Promise<WorkbenchView> {
   return json<WorkbenchView>("/api/workbench-view?max_items=8");
+}
+
+export function getExecutionState(): Promise<ExecutionState> {
+  return json<ExecutionState>("/api/execution-state");
 }
 
 export function getAttemptGraph(): Promise<AttemptGraph> {
@@ -40,6 +44,24 @@ export function runWorkbench(workspace: string, goal: string, steps: number) {
     method: "POST",
     body: JSON.stringify({ workspace, goal, steps })
   });
+}
+
+export function startAgent(workspace: string, goal: string, maxTurns = 20) {
+  return json<Record<string, unknown>>("/api/agent/start", {
+    method: "POST",
+    body: JSON.stringify({ workspace, goal, max_turns: maxTurns })
+  });
+}
+
+export function continueAgent(maxTurns = 20) {
+  return json<Record<string, unknown>>("/api/agent/continue", {
+    method: "POST",
+    body: JSON.stringify({ max_turns: maxTurns })
+  });
+}
+
+export function pauseAgent() {
+  return json<Record<string, unknown>>("/api/agent/pause", { method: "POST" });
 }
 
 export function stepWorkbench() {

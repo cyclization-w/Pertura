@@ -13,6 +13,14 @@ class RunRequest(BaseModel):
     steps: int = 5
 
 
+class AgentRunRequest(BaseModel):
+    workspace: str = ""
+    goal: str = ""
+    max_turns: int = 20
+    max_repairs: int = 5
+    no_progress_limit: int = 3
+
+
 class AnswerRequest(BaseModel):
     answer: str
 
@@ -231,10 +239,17 @@ def workbench_view_payload(
     domain_payload = domain_browser_payload(workbench, include_core_tools=False)
     runtime_jobs = [_model_dump(item) for item in ((snap.jobs if snap else []) or [])]
     queue_jobs = jobs or []
+    execution_state = execution_state_payload(
+        workbench,
+        run_id=run_id,
+        jobs=queue_jobs,
+        selected_node_id=active_node_id,
+    )
     return {
         "view_type": "workbench_view",
         "schema_version": "v1",
         "run_id": status.get("run_id", run_id),
+        "execution_state": execution_state,
         "status": status,
         "active": {
             "node_id": active_node_id,
@@ -310,6 +325,30 @@ def workbench_view_payload(
             "interrupts": "/api/interrupts",
         },
     }
+
+
+def execution_state_payload(
+    workbench,
+    *,
+    run_id: str = "",
+    jobs: list[dict] | None = None,
+    selected_node_id: str = "",
+) -> dict:
+    from pertura.core.execution_state import compile_execution_state
+    from pertura.models import _model_dump
+
+    snap = _snapshot_for_workbench(workbench, run_id=run_id)
+    store = _store_for_workbench(workbench, run_id=run_id)
+    graph = store.read_graph() if store else (workbench.graph or {"nodes": [], "edges": []})
+    runtime_jobs = jobs or []
+    if snap:
+        runtime_jobs = [_model_dump(item) for item in ((snap.jobs if snap else []) or [])] + runtime_jobs
+    return compile_execution_state(
+        snap,
+        graph=graph,
+        jobs=runtime_jobs,
+        selected_node_id=selected_node_id,
+    )
 
 
 def capabilities_view_payload(workbench, *, run_id: str = "", node_id: str = "", max_items: int = 100) -> dict:
@@ -819,7 +858,7 @@ def create_app(workbench, *, ui: str = "auto"):
     from pertura.tools.registry import inspect_artifact_summary
 
     app = FastAPI(title="Pertura Workbench", version="1.0.0")
-    runner = JobRunner()
+    runner = JobRunner(max_workers=1)
     ui_mode = ui if ui in {"auto", "builtin", "react"} else "auto"
     react_dist = _react_dist_dir()
     use_react = ui_mode in {"auto", "react"} and (react_dist / "index.html").exists()
@@ -866,8 +905,45 @@ def create_app(workbench, *, ui: str = "auto"):
         finally:
             workbench.set_cancel_event(previous)
 
+    def _agent_with_cancel(payload: dict, cancel_event):
+        previous = getattr(workbench, "_cancel_event", None)
+        workbench.set_cancel_event(cancel_event)
+        try:
+            return workbench.run_until_pause(
+                payload.get("workspace", ""),
+                goal=payload.get("goal", ""),
+                max_turns=int(payload.get("max_turns", 20)),
+                max_repairs=int(payload.get("max_repairs", 5)),
+                no_progress_limit=int(payload.get("no_progress_limit", 3)),
+            )
+        finally:
+            workbench.set_cancel_event(previous)
+
+    def _active_agent_job():
+        for item in runner.list_jobs():
+            if item.get("job_type") in {"agent_run", "agent_continue"} and item.get("status") in {"queued", "running"}:
+                return item
+        return None
+
+    def _submit_agent_job(job_type: str, req: AgentRunRequest):
+        active = _active_agent_job()
+        if active:
+            return {
+                "job_id": active.get("job_id", ""),
+                "status": active.get("status", "running"),
+                "already_running": True,
+            }
+        job = runner.submit(
+            job_type=job_type,
+            payload=_model_dump(req),
+            run_id=getattr(workbench, "_run_id", ""),
+        )
+        return {"job_id": job.job_id, "status": "queued", "already_running": False}
+
     runner.register_handler("run", _run_with_cancel)
     runner.register_handler("step", _step_with_cancel)
+    runner.register_handler("agent_run", _agent_with_cancel)
+    runner.register_handler("agent_continue", _agent_with_cancel)
 
     @app.get("/", response_class=HTMLResponse)
     def gui():
@@ -894,6 +970,15 @@ def create_app(workbench, *, ui: str = "auto"):
             max_items=max_items,
             token_budget=token_budget,
             jobs=runner.list_jobs()[:max_items],
+        )
+
+    @app.get("/api/execution-state")
+    def execution_state(run_id: str = "", selected_node_id: str = ""):
+        return execution_state_payload(
+            workbench,
+            run_id=run_id,
+            jobs=runner.list_jobs()[:8],
+            selected_node_id=selected_node_id,
         )
 
     @app.get("/api/capabilities/view")
@@ -1126,6 +1211,34 @@ def create_app(workbench, *, ui: str = "auto"):
             run_id=getattr(workbench, "_run_id", ""),
         )
         return {"job_id": job.job_id, "status": "queued"}
+
+    @app.post("/api/agent/start")
+    def agent_start(req: AgentRunRequest):
+        payload = _submit_agent_job("agent_run", req)
+        payload["execution_state"] = execution_state_payload(workbench, jobs=runner.list_jobs()[:8])
+        return payload
+
+    @app.post("/api/agent/continue")
+    def agent_continue(req: AgentRunRequest):
+        payload = _submit_agent_job("agent_continue", req)
+        payload["execution_state"] = execution_state_payload(workbench, jobs=runner.list_jobs()[:8])
+        return payload
+
+    @app.post("/api/agent/pause")
+    def agent_pause():
+        cancelled = 0
+        current_cancel = getattr(workbench, "_cancel_event", None)
+        if current_cancel is not None:
+            current_cancel.set()
+        for item in runner.list_jobs():
+            if item.get("job_type") in {"agent_run", "agent_continue"} and item.get("status") in {"queued", "running"}:
+                if runner.cancel(item.get("job_id", "")):
+                    cancelled += 1
+        return {
+            "cancelled": cancelled > 0,
+            "cancelled_jobs": cancelled,
+            "execution_state": execution_state_payload(workbench, jobs=runner.list_jobs()[:8]),
+        }
 
     @app.get("/api/jobs")
     def list_jobs():

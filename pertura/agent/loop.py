@@ -207,6 +207,66 @@ class Workbench:
             result["stop_reason"] = "max_steps"
         return result
 
+    def run_until_pause(
+        self,
+        workspace: str = "",
+        *,
+        goal: str = "",
+        max_turns: int = 20,
+        max_repairs: int = 5,
+        no_progress_limit: int = 3,
+    ) -> dict:
+        """Run autonomously until a product-level pause condition is reached."""
+        if self._store is None:
+            self._init(workspace, goal)
+
+        result = {
+            "turns": 0,
+            "actions": [],
+            "stop_reason": "",
+            "max_turns": max_turns,
+            "max_repairs": max_repairs,
+            "no_progress_limit": no_progress_limit,
+        }
+        no_progress = 0
+        repair_turns = 0
+        for _ in range(max(0, int(max_turns))):
+            if self._cancel_requested():
+                result["stop_reason"] = "cancelled"
+                return result
+            before = _progress_marker(self._store.read_snapshot() if self._store else None)
+            action = self._step()
+            result["turns"] += 1
+            result["actions"].append(action)
+            if self._cancel_requested() or action == "cancelled":
+                result["stop_reason"] = "cancelled"
+                return result
+
+            snap = self._store.read_snapshot() if self._store else None
+            interrupt_reason = _interrupt_stop_reason(snap)
+            if interrupt_reason:
+                result["stop_reason"] = interrupt_reason
+                return result
+            if action == "complete" or (snap is not None and snap.phase == "complete"):
+                result["stop_reason"] = "complete"
+                return result
+
+            after = _progress_marker(snap)
+            progressed = after != before
+            repair_like = action == "blocked" or (_is_repair_state(snap) and not progressed)
+            repair_turns = repair_turns + 1 if repair_like else 0
+            if repair_turns >= max(1, int(max_repairs)):
+                result["stop_reason"] = "max_repairs"
+                return result
+
+            no_progress = no_progress + 1 if after == before else 0
+            if no_progress >= max(1, int(no_progress_limit)):
+                result["stop_reason"] = "no_progress"
+                return result
+
+        result["stop_reason"] = "max_turns"
+        return result
+
     def step(self, n: int = 1) -> list[str]:
         actions = []
         for _ in range(n):
@@ -516,6 +576,38 @@ class Workbench:
 
 
 # Helpers
+
+def _progress_marker(snap) -> tuple[int, int, int, str]:
+    if snap is None:
+        return (0, 0, 0, "")
+    return (
+        len(getattr(snap, "attempts", []) or []),
+        len(getattr(snap, "observations", []) or []),
+        len(getattr(snap, "artifacts", []) or []),
+        getattr(snap, "active_node_id", "") or "",
+    )
+
+
+def _interrupt_stop_reason(snap) -> str:
+    if snap is None:
+        return ""
+    open_interrupts = [
+        item for item in (getattr(snap, "interrupts", []) or [])
+        if getattr(item, "status", "") == "open"
+    ]
+    if not open_interrupts:
+        return ""
+    if any(getattr(item, "source", "") == "missing_api_key" for item in open_interrupts):
+        return "missing_key"
+    return "human_interrupt"
+
+
+def _is_repair_state(snap) -> bool:
+    if snap is None:
+        return False
+    from pertura.core.execution_state import compile_execution_state
+    return compile_execution_state(snap).get("mode") == "repairing"
+
 
 def _has_key(provider: str) -> bool:
     from pertura.core.fixtures import fixture_mode

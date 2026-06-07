@@ -112,10 +112,111 @@ export type ReviewItem = {
   interrupt_id?: string;
 };
 
+export type RuntimeIssue = {
+  issue_id: string;
+  kind: "question" | "repair_issue" | "approval_issue" | "audit_issue" | string;
+  source_event_type?: string;
+  source?: string;
+  severity?: string;
+  status?: string;
+  summary?: string;
+  question?: string;
+  affected_ids?: string[];
+  suggested_action?: string;
+  answer_endpoint?: string;
+};
+
+export type ExecutionState = {
+  view_type: "execution_state";
+  schema_version: string;
+  mode: "not_initialized" | "ready" | "running" | "needs_user" | "repairing" | "complete" | "paused" | string;
+  run_id: string;
+  stop_reason?: string;
+  current_task: {
+    node_id?: string;
+    title?: string;
+    purpose?: string;
+    branch_id?: string;
+    goal?: string;
+  };
+  question?: RuntimeIssue | Record<string, never>;
+  issues: RuntimeIssue[];
+  recommended_actions?: string[];
+  visible_capabilities?: string[];
+  evidence_summary?: {
+    attempts?: number;
+    observations?: number;
+    artifacts?: number;
+    conclusions?: number;
+    recent_attempts?: AttemptCard[];
+    recent_artifacts?: ArtifactCard[];
+  };
+  activity?: {
+    phase?: string;
+    active_attempt?: string;
+    jobs?: Array<Record<string, unknown>>;
+    active_job?: Record<string, unknown>;
+  };
+  debug_refs?: Record<string, unknown>;
+};
+
+export type ActiveWorkOrder = {
+  view_type?: "active_work_order" | string;
+  mode?: string;
+  run_goal?: string;
+  active_node?: { id?: string; title?: string; purpose?: string };
+  branch_id?: string;
+  node_progress?: {
+    attempts?: number;
+    observations?: number;
+    artifacts?: number;
+    completed?: boolean;
+    missing_completion?: Array<string | Record<string, unknown>>;
+  };
+  workspace?: {
+    path?: string;
+    files?: Array<Record<string, unknown>>;
+  };
+  available_capabilities?: ActiveCapabilityCard[];
+  selected_capability?: ActiveCapabilityCard;
+  observation_memory?: {
+    summary?: Record<string, unknown>;
+    needs_review?: Array<Record<string, unknown>>;
+  };
+  open_interrupts?: Array<Record<string, unknown>>;
+  open_issues?: {
+    runtime_issues?: RuntimeIssue[];
+    triggers?: Array<Record<string, unknown>>;
+    findings?: Array<Record<string, unknown>>;
+    audit_next_actions?: Array<string | Record<string, unknown>>;
+  };
+  rethinking?: {
+    status?: string;
+    summary?: string;
+    suspected_roots?: Array<Record<string, unknown>>;
+    recommended_actions?: Array<Record<string, unknown>>;
+  };
+  last_attempt_delta?: Record<string, unknown>;
+  outcome?: string;
+  allowed_tools?: string[];
+  recommended_actions?: string[];
+  markdown?: string;
+};
+
+export type ActiveCapabilityCard = CapabilityCard & {
+  ready?: boolean;
+  packages?: string[];
+  functions?: string[];
+  packages_hint?: string;
+  next_repair?: string;
+  common_errors?: string[];
+};
+
 export type WorkbenchView = {
   view_type: "workbench_view";
   schema_version: string;
   run_id: string;
+  execution_state: ExecutionState;
   status: WorkbenchStatus;
   active: { node_id: string; branch_id: string; attempt_id: string };
   budget: Record<string, unknown>;
@@ -126,6 +227,7 @@ export type WorkbenchView = {
     nodes: WorkbenchNode[];
     capabilities_by_node: Record<string, string[]>;
     capabilities_view?: CapabilitiesView;
+    active_work_order?: ActiveWorkOrder;
   };
   agent_context: Record<string, unknown>;
   review: {

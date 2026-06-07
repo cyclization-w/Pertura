@@ -17,7 +17,7 @@ from pertura.core import (
     trace_upstream, impact_of_change,
     Behavior, BehaviorRegistry,
     build_context_view, build_view, build_observation_view, build_trace_view, build_impact_view,
-    build_active_work_order,
+    build_active_work_order, compile_execution_state,
     ResponseCache, hash_tool_call,
     ReplayError, replay_store, fork_store, diff_stores,
     run_integrity, stable_json_sha256,
@@ -922,7 +922,6 @@ trace_loop_hint = _trace_driven_rethinking(
     last_attempt,
     {"returncode": 0, "soft_timeout_hit": False},
     0,
-    context_envelope,
 )
 check("tool loop injects trace-driven rethinking", trace_loop_hint["status"] == "needs_trace_driven_repair")
 check("tool loop rethinking carries actions", any(action.get("tool") == "review_evidence_chain" for action in trace_loop_hint["recommended_actions"]))
@@ -936,6 +935,13 @@ active_work_order = build_active_work_order(
 check("active work order renders markdown", active_work_order["view_type"] == "active_work_order" and "# Active Work Order" in active_work_order["markdown"])
 check("active work order foregrounds rethink mode", active_work_order["mode"] == "rethink")
 check("active work order keeps compact contract", active_work_order["contract"]["state_changes_go_through"] == "gated_dispatch")
+snapshot_work_order = build_active_work_order(
+    trace_snap,
+    trace_driven_rethinking=trace_loop_hint,
+    tool_names=["get_context_review", "execute_code", "plan_rethinking"],
+)
+check("active work order compiles from snapshot", snapshot_work_order["active_node"]["id"] == trace_snap.active_node_id)
+check("active work order includes observation memory summary", "summary" in snapshot_work_order["observation_memory"])
 restored_context_envelope = build_view(
     trace_snap,
     trace_graph,
@@ -1041,6 +1047,74 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     check("workbench step reports cancelled", actions == ["cancelled"])
     check("cancel stops active attempt", next(a for a in cancel_snap.attempts if a.attempt_id == "att_cancel").status == "stopped")
     check("cancel pauses run", cancel_snap.phase == "paused")
+
+    def _stub_workbench(name: str) -> Workbench:
+        stub = Workbench(Domain(name="test"), provider="openai", sandbox="subprocess")
+        stub_ws = Path(td) / name
+        stub_ws.mkdir()
+        stub.run(str(stub_ws), goal=name, steps=0)
+        return stub
+
+    wb_human = _stub_workbench("loop_human")
+    def _human_step(self):
+        self._emit("interrupt_opened", {"interrupt": {
+            "interrupt_id": "irq_loop_human",
+            "source": "test",
+            "question": "Need input",
+            "status": "open",
+        }})
+        return "waiting_for_human"
+    wb_human._step = types.MethodType(_human_step, wb_human)
+    human_result = wb_human.run_until_pause(max_turns=5)
+    check("run_until_pause stops on human interrupt", human_result["stop_reason"] == "human_interrupt" and human_result["turns"] == 1)
+
+    wb_missing_key = _stub_workbench("loop_missing_key")
+    def _missing_key_step(self):
+        self._emit("interrupt_opened", {"interrupt": {
+            "interrupt_id": "irq_missing_key",
+            "source": "missing_api_key",
+            "question": "Configure an API key.",
+            "status": "open",
+        }})
+        return "waiting_for_human"
+    wb_missing_key._step = types.MethodType(_missing_key_step, wb_missing_key)
+    missing_key_result = wb_missing_key.run_until_pause(max_turns=5)
+    check("run_until_pause maps missing api key", missing_key_result["stop_reason"] == "missing_key")
+
+    wb_max = _stub_workbench("loop_max_turns")
+    progress_counter = {"value": 0}
+    def _progress_step(self):
+        progress_counter["value"] += 1
+        self._emit("attempt_planned", {"attempt": _model_dump(Attempt(
+            attempt_id=f"att_progress_{progress_counter['value']}",
+            branch_id="main",
+            title="progress",
+        ))})
+        return "planned"
+    wb_max._step = types.MethodType(_progress_step, wb_max)
+    max_result = wb_max.run_until_pause(max_turns=2, no_progress_limit=99)
+    check("run_until_pause stops on max_turns", max_result["stop_reason"] == "max_turns" and max_result["turns"] == 2)
+
+    wb_stalled = _stub_workbench("loop_no_progress")
+    wb_stalled._step = types.MethodType(lambda self: "noop", wb_stalled)
+    stalled_result = wb_stalled.run_until_pause(max_turns=5, no_progress_limit=2)
+    check("run_until_pause stops on no progress", stalled_result["stop_reason"] == "no_progress" and stalled_result["turns"] == 2)
+
+    wb_repair = _stub_workbench("loop_repair")
+    wb_repair._step = types.MethodType(lambda self: "blocked", wb_repair)
+    repair_result = wb_repair.run_until_pause(max_turns=5, max_repairs=2, no_progress_limit=99)
+    check("run_until_pause stops on max_repairs", repair_result["stop_reason"] == "max_repairs" and repair_result["turns"] == 2)
+
+    wb_cancel_loop = _stub_workbench("loop_cancel")
+    cancel_event = threading.Event()
+    cancel_event.set()
+    wb_cancel_loop.set_cancel_event(cancel_event)
+    cancel_loop_result = wb_cancel_loop.run_until_pause(max_turns=5)
+    check("run_until_pause honors cancel event", cancel_loop_result["stop_reason"] == "cancelled" and cancel_loop_result["turns"] == 0)
+    cancel_event.clear()
+    wb_cancel_loop._step = types.MethodType(_progress_step, wb_cancel_loop)
+    continue_loop_result = wb_cancel_loop.run_until_pause(max_turns=1, no_progress_limit=99)
+    check("run_until_pause can continue after cleared cancel", continue_loop_result["stop_reason"] == "max_turns" and continue_loop_result["turns"] == 1)
 
 
 # Test 12: Replay, fork, and scientific diff
@@ -1557,6 +1631,9 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     check("anthropic tool loop returns state-changing action", action == "finish" and decision.get("summary") == "done")
     check("anthropic tool loop passes native tools", bool(fake_calls and fake_calls[0]["tools"][0].get("input_schema")))
     check("anthropic tool loop excludes system from messages", all(msg.get("role") != "system" for msg in fake_calls[0]["messages"]))
+    anthropic_user_prompt = fake_calls[0]["messages"][0]["content"]
+    check("tool loop prompt includes active work order", "# Active Work Order" in anthropic_user_prompt)
+    check("tool loop prompt omits compact machine context", "Compact Machine-Readable Context" not in anthropic_user_prompt)
 
 
 # Test 13: Pertura v2 editable AnalysisSpecGraph and gated dispatch
@@ -1956,6 +2033,36 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     ])
     report_ready_template = execute_tool("get_capability_template", {"capability_id": "generate_report"}, snap=report_ready_snap)
     check("report template ready with evidence ids", report_ready_template["readiness"]["ready"] is True and "con_1" in report_ready_template["template"]["code"])
+    generic_template_snap = reduce([
+        Event(
+            event_id="generic_template_1",
+            event_type="run_started",
+            run_id="generic_template",
+            payload={"config": {
+                "run_id": "generic_template",
+                "workspace": td,
+                "goal": "generic template smoke",
+                "domain": "custom_domain",
+                "capabilities": [
+                    capability(
+                        "custom_step",
+                        title="Custom step",
+                        analysis_modes=["custom_mode"],
+                    ).model_dump(mode="json")
+                ],
+                "analysis_spec": {
+                    "graph_id": "custom_graph",
+                    "start_node_id": "inspect",
+                    "nodes": [{"node_id": "inspect", "allowed_capabilities": ["custom_step"]}],
+                },
+            }},
+        )
+    ])
+    generic_template = execute_tool("get_capability_template", {"capability_id": "custom_step"}, snap=generic_template_snap)
+    check(
+        "unknown domain template returns generic skeleton",
+        "Capability skeleton" in generic_template["template"]["code"] and "rank_genes_groups" not in generic_template["template"]["code"],
+    )
     check("planning template tools are local-read tier", check_permission("compare_methods", ToolPermission.local_read) and check_permission("sweep_thresholds", ToolPermission.local_read))
     check("node contract tool is local-read tier", check_permission("get_node_contract", ToolPermission.local_read))
     check("context review tool is local-read tier", check_permission("get_context_review", ToolPermission.local_read))
@@ -2006,6 +2113,61 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         )
     }
     check("issue scoped schema exposes rethinking tools", {"plan_rethinking", "review_evidence_chain", "audit_run"} <= scoped_issue_names)
+    issue_projection_snap = reduce([
+        Event(
+            event_id="issue_state_1",
+            event_type="run_started",
+            run_id="issue_state",
+            payload={"config": {
+                "run_id": "issue_state",
+                "workspace": td,
+                "goal": "issue projection smoke",
+                "domain": "test",
+                "analysis_spec": {"nodes": [{"node_id": "inspect", "title": "Inspect", "purpose": "Inspect inputs"}]},
+            }},
+        ),
+        Event(
+            event_id="issue_state_2",
+            event_type="interrupt_opened",
+            run_id="issue_state",
+            payload={"interrupt": {
+                "interrupt_id": "irq_projection",
+                "source": "node_gate",
+                "question": "Which control labels should be used?",
+                "status": "open",
+            }},
+        ),
+        Event(
+            event_id="issue_state_3",
+            event_type="trigger_opened",
+            run_id="issue_state",
+            payload={"trigger": {
+                "trigger_id": "trg_projection",
+                "attempt_id": "att_projection",
+                "trigger_type": "runtime_error",
+                "summary": "Step failed",
+                "severity": "blocking",
+                "status": "open",
+            }},
+        ),
+        Event(
+            event_id="issue_state_4",
+            event_type="finding_recorded",
+            run_id="issue_state",
+            payload={"finding": {
+                "finding_id": "find_projection",
+                "finding_type": "audit_gap",
+                "severity": "blocking",
+                "summary": "Audit needs repair",
+                "suggested_action": "audit_run",
+            }},
+        ),
+    ])
+    execution_state = compile_execution_state(issue_projection_snap)
+    issue_kinds = {item["issue_id"]: item["kind"] for item in execution_state["issues"]}
+    check("execution state maps interrupt to question", execution_state["mode"] == "needs_user" and issue_kinds.get("irq_projection") == "question")
+    check("execution state maps trigger to repair issue", issue_kinds.get("trg_projection") == "repair_issue")
+    check("execution state maps audit finding to audit issue", issue_kinds.get("find_projection") == "audit_issue")
 
     perturb_spec = PERTURBSEQ_DOMAIN.analysis_graph
     check("perturbseq default spec present", bool(perturb_spec and perturb_spec.get("nodes")))
@@ -2349,6 +2511,12 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         check("api exposes rethinking endpoint", api_rethink["view_type"] == "rethinking_plan")
         api_run_response = client.post("/api/run", json={"workspace": str(ws_spec), "goal": "api body parse", "steps": 0})
         check("api run accepts JSON body", api_run_response.status_code == 200)
+        api_execution_state = client.get("/api/execution-state").json()
+        check("api exposes execution state", api_execution_state["view_type"] == "execution_state")
+        api_agent_start = client.post("/api/agent/start", json={"workspace": str(ws_spec), "goal": "api agent body parse", "max_turns": 0})
+        check("api agent start accepts JSON body", api_agent_start.status_code == 200)
+        api_agent_pause = client.post("/api/agent/pause", json={})
+        check("api agent pause accepts JSON body", api_agent_pause.status_code == 200)
     except Exception as exc:
         check("api contract endpoints skipped without fastapi", True, str(exc))
 

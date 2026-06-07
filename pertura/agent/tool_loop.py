@@ -6,8 +6,7 @@ import json
 import os
 
 from pertura.tools import execute_tool, tool_schemas
-from pertura.memory.compiler import compile_context
-from pertura.core import build_active_work_order, build_view
+from pertura.core import build_active_work_order
 
 
 _STATE_CHANGE_TOOLS = {
@@ -103,20 +102,6 @@ def run_tool_loop(result: dict | None, obs_count: int, snap, attempt,
     from pertura.agent.loop import _TOOL_LOOP_PROMPT
     provider = (provider or "openai").lower()
 
-    view_purpose = "deliberation" if is_first or result is None else "critic"
-    runtime_state = (result or {}).get("kernel_state", {}) if result else {}
-    focus_ids = _focus_ids(snap, attempt)
-    context_envelope = build_view(
-        snap,
-        purpose=view_purpose,
-        focus_ids=focus_ids,
-        runtime_state=runtime_state,
-        token_budget=6000,
-    )
-    context_view = compile_context(snap, max_items=8)
-    system = _TOOL_LOOP_PROMPT
-    system += _scoped_domain_prompt(context_view, tools=tools, coding_guidelines=coding_guidelines, protocol=protocol)
-
     if is_first:
         outcome_text = "status: initial\nsummary: No previous attempt."
     else:
@@ -126,13 +111,12 @@ def run_tool_loop(result: dict | None, obs_count: int, snap, attempt,
         outcome_text = f"status: {status}\nstdout: {stdout}\nstderr: {stderr}\nobservations_count: {obs_count}"
 
     latest_goal = snap.goals[-1].text if snap.goals else (snap.goal or "")
-    last_delta = _last_attempt_delta(snap, attempt, result, context_envelope) if not is_first else {}
+    last_delta = _last_attempt_delta(snap, attempt, result) if not is_first else {}
     trace_driven_rethinking = _trace_driven_rethinking(
         snap,
         attempt,
         result,
         obs_count,
-        context_envelope,
     ) if not is_first else {}
     all_tools = tool_schemas(readonly=False, snap=snap, scoped=True)
     visible_tool_names = [
@@ -142,49 +126,30 @@ def run_tool_loop(result: dict | None, obs_count: int, snap, attempt,
     ]
     active_work_order = build_active_work_order(
         snap,
-        context_view,
-        context_envelope,
         outcome_text=outcome_text,
         last_attempt_delta=last_delta,
         trace_driven_rethinking=trace_driven_rethinking,
         tool_names=visible_tool_names,
     )
-
-    user_payload = {
-        "active_work_order": {
-            key: value for key, value in active_work_order.items()
-            if key != "markdown"
-        },
-        "compact_context": {
-            "active_node_id": context_view.active_node_id,
-            "analysis_node": context_view.analysis_node,
-            "current_node_progress": context_view.current_node_progress,
-            "reachable_nodes": context_view.reachable_nodes,
-            "open_interrupts": context_view.open_interrupts,
-            "open_triggers": context_view.open_triggers,
-            "recent_findings": context_view.recent_findings,
-            "observation_memory": context_view.observation_memory,
-            "audit_preview": context_envelope.get("audit_preview", {}),
-            "trace_driven_rethinking": context_envelope.get("trace_driven_rethinking", {}),
-            "runtime_state": context_envelope.get("runtime_state", {}),
-        },
-        "user_said": latest_goal,
-        "previous_code": (attempt.notebook_cells[0].get("source", "")[:1500]
-                         if (not is_first and attempt and attempt.notebook_cells)
-                         else ""),
-        "outcome": outcome_text,
-        "current_node": context_view.analysis_node,
-        "current_node_progress": context_view.current_node_progress,
-        "recommended_actions": context_view.analysis_node.get("recommended_actions", []),
-        "expected_outputs": context_view.analysis_node.get("expected_outputs", []),
-        "last_attempt_delta": last_delta,
-        "trace_driven_rethinking": trace_driven_rethinking,
-    }
-    user = (
-        active_work_order["markdown"]
-        + "\n\n# Compact Machine-Readable Context\n"
-        + _json_for_prompt(user_payload, max_chars=9000)
+    system = _TOOL_LOOP_PROMPT
+    system += _scoped_domain_prompt(
+        active_work_order,
+        tools=tools,
+        coding_guidelines=coding_guidelines,
+        protocol=protocol,
     )
+
+    previous_code = (
+        attempt.notebook_cells[0].get("source", "")[:1500]
+        if (not is_first and attempt and attempt.notebook_cells)
+        else ""
+    )
+    user = "\n\n".join([
+        active_work_order["markdown"],
+        "# User Request\n" + _truncate_string(latest_goal or "No user goal recorded.", 1200),
+        "# Previous Outcome\n" + _truncate_string(outcome_text, 2500),
+        "# Previous Code\n" + (_truncate_string(previous_code, 1800) if previous_code else "none"),
+    ])
 
     messages = [
         {"role": "system", "content": system},
@@ -613,7 +578,7 @@ def _last_attempt_delta(snap, attempt, result: dict | None, context_envelope: di
     }
 
 
-def _trace_driven_rethinking(snap, attempt, result: dict | None, obs_count: int, context_envelope: dict | None = None) -> dict:
+def _trace_driven_rethinking(snap, attempt, result: dict | None, obs_count: int) -> dict:
     """Return a compact rethinking plan when the last step should not simply continue."""
     if attempt is None:
         return {}
@@ -625,19 +590,21 @@ def _trace_driven_rethinking(snap, attempt, result: dict | None, obs_count: int,
         reasons.append(f"last attempt timeout state: {(result or {}).get('timed_out_at') or 'soft_timeout'}")
     if obs_count == 0:
         reasons.append("last attempt registered zero observations")
-    audit_preview = (context_envelope or {}).get("audit_preview", {}) or {}
-    issue_codes = set(audit_preview.get("top_issue_codes", []) or [])
-    if issue_codes & {
-        "stale_conclusion_evidence",
-        "unverified_conclusion_evidence",
-        "missing_conclusion_support",
-        "unsupported_conclusion",
-        "missing_capability_outputs",
-    }:
-        reasons.append("audit preview reports evidence/capability issues: " + ", ".join(sorted(issue_codes)))
+    for finding in getattr(snap, "findings", [])[-5:]:
+        if getattr(finding, "severity", "") in {"blocking", "error", "high"}:
+            reasons.append(f"recent finding requires repair: {getattr(finding, 'finding_type', '')}")
+            break
+    try:
+        from pertura.core.observation_memory import build_observation_memory_view
+        memory = build_observation_memory_view(snap, limit=3)
+        summary = memory.get("summary", {}) or {}
+        if summary.get("strict_conflicts") or summary.get("cross_context_divergences"):
+            reasons.append("observation memory reports conflict or divergence")
+    except Exception:
+        pass
     if not reasons:
         return {}
-    target_id = _best_rethinking_target(snap, attempt, context_envelope)
+    target_id = _best_rethinking_target(snap, attempt)
     try:
         from pertura.core.rethinking import plan_rethinking
         plan = plan_rethinking(
@@ -722,25 +689,31 @@ def _recent_affected_ids(snap) -> list[str]:
     return ids
 
 
-def _scoped_domain_prompt(context_view, *, tools: str = "", coding_guidelines: str = "", protocol: str = "") -> str:
+def _scoped_domain_prompt(work_order: dict, *, tools: str = "", coding_guidelines: str = "", protocol: str = "") -> str:
     """Return compact node-scoped domain guidance.
 
     Domain packs may contain long SOPs. The LLM turn should see the active node
     contract and only the generally relevant safety/registration rules, not the
     full domain document on every call.
     """
-    node = context_view.analysis_node or {}
-    progress = context_view.current_node_progress or {}
+    node = work_order.get("active_node") or {}
+    progress = work_order.get("node_progress") or {}
+    capabilities = work_order.get("available_capabilities") or []
+    selected = work_order.get("selected_capability") or {}
+    allowed_capability_ids = [
+        item.get("id") or item.get("capability_id") or ""
+        for item in capabilities
+        if isinstance(item, dict)
+    ]
     payload = {
         "active_node": {
-            "node_id": node.get("node_id", ""),
+            "node_id": node.get("id") or node.get("node_id", ""),
             "title": node.get("title", ""),
             "purpose": node.get("purpose", ""),
-            "allowed_capabilities": node.get("allowed_capabilities", []),
-            "recommended_actions": node.get("recommended_actions", []),
-            "expected_outputs": node.get("expected_outputs", []),
+            "allowed_capabilities": allowed_capability_ids,
         },
-        "capability_contracts": context_view.capabilities,
+        "selected_capability": selected,
+        "capability_contracts": capabilities[:4],
         "completion_status": {
             "passed": progress.get("completion_passed", 0),
             "total": progress.get("completion_total", 0),
@@ -761,7 +734,7 @@ def _scoped_domain_prompt(context_view, *, tools: str = "", coding_guidelines: s
             "Behavioral Rules",
             "Registration",
             "Data & Schema",
-            node.get("node_id", ""),
+            node.get("id", "") or node.get("node_id", ""),
             node.get("title", ""),
         ],
         fallback_chars=1200,
@@ -775,9 +748,9 @@ def _scoped_domain_prompt(context_view, *, tools: str = "", coding_guidelines: s
             "Data Loading",
             "Observation",
             "Plotting",
-            node.get("node_id", ""),
+            node.get("id", "") or node.get("node_id", ""),
             node.get("title", ""),
-            *node.get("allowed_capabilities", []),
+            *allowed_capability_ids,
         ],
         fallback_chars=1200,
     )
