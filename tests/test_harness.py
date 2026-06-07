@@ -2148,6 +2148,10 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         timeout=15,
     )
     check("top-level GUI shortcut is documented", cli_help.returncode == 0 and "--GUI" in cli_help.stdout and "--domain GUI_DOMAIN" in cli_help.stdout)
+    check("top-level GUI shortcut exposes provider endpoint flags",
+          "--provider {openai,anthropic}" in cli_help.stdout
+          and "--model GUI_MODEL" in cli_help.stdout
+          and "--base-url GUI_BASE_URL" in cli_help.stdout)
     from pertura.skills import init_pertura_dir
     starter_dir = init_pertura_dir(Path(td) / "starter_project")
     starter_graph = load_analysis_graph(starter_dir / "analysis_graph.json")
@@ -2159,7 +2163,34 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     check("init settings references local domain pack", starter_settings.get("domain") == ".pertura/domain.json")
     check("init settings references analysis graph", starter_settings.get("analysis_graph") == ".pertura/analysis_graph.json")
     check("init starter graph audits cleanly", starter_audit["ok"] is True)
-    from pertura._cli import _load_domain, _load_project_settings, _resolve_cli_config
+    from pertura._cli import _apply_llm_endpoint_env, _load_domain, _load_project_settings, _resolve_cli_config
+    saved_endpoint_env = {
+        "OPENAI_MODEL": os.environ.get("OPENAI_MODEL"),
+        "OPENAI_BASE_URL": os.environ.get("OPENAI_BASE_URL"),
+        "ANTHROPIC_MODEL": os.environ.get("ANTHROPIC_MODEL"),
+        "ANTHROPIC_BASE_URL": os.environ.get("ANTHROPIC_BASE_URL"),
+    }
+    try:
+        for key in saved_endpoint_env:
+            os.environ.pop(key, None)
+        _apply_llm_endpoint_env(
+            types.SimpleNamespace(gui_provider="openai", gui_model="deepseek-v4-flash", gui_base_url="https://api.deepseek.com"),
+            provider="openai", model_attr="gui_model", base_url_attr="gui_base_url",
+        )
+        check("GUI shortcut maps OpenAI-compatible model", os.environ.get("OPENAI_MODEL") == "deepseek-v4-flash")
+        check("GUI shortcut maps OpenAI-compatible base URL", os.environ.get("OPENAI_BASE_URL") == "https://api.deepseek.com")
+        _apply_llm_endpoint_env(
+            types.SimpleNamespace(model="claude-sonnet", base_url="https://anthropic.example"),
+            provider="anthropic",
+        )
+        check("CLI maps Anthropic-compatible model", os.environ.get("ANTHROPIC_MODEL") == "claude-sonnet")
+        check("CLI maps Anthropic-compatible base URL", os.environ.get("ANTHROPIC_BASE_URL") == "https://anthropic.example")
+    finally:
+        for key, value in saved_endpoint_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
     project_settings = _load_project_settings(starter_dir.parent)
     check("CLI finds project settings from root", Path(project_settings["path"]).name == "settings.json")
     nested_dir = starter_dir.parent / "data" / "nested"

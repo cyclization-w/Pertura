@@ -27,6 +27,12 @@ def main():
                    help="GUI implementation for --GUI. Default: builtin.")
     p.add_argument("--analysis-graph", dest="gui_analysis_graph", default=None,
                    help="AnalysisGraphSpec JSON path for --GUI.")
+    p.add_argument("--provider", dest="gui_provider", choices=["openai", "anthropic"], default="openai",
+                   help="LLM provider for --GUI. Use openai for OpenAI-compatible endpoints.")
+    p.add_argument("--model", dest="gui_model", default=None,
+                   help="Model id for --GUI, for example deepseek-v4-flash.")
+    p.add_argument("--base-url", dest="gui_base_url", default=None,
+                   help="Provider-compatible base URL for --GUI.")
     sub = p.add_subparsers(dest="cmd")
 
     r = sub.add_parser("run", help="Run analysis (non-interactive).")
@@ -55,6 +61,10 @@ def main():
     s.add_argument("--ui", choices=["auto", "builtin", "react"], default="auto",
                    help="Serve built React UI when available, or the built-in HTML fallback.")
     s.add_argument("--analysis-graph", default=None, help="Path to AnalysisGraphSpec JSON.")
+    s.add_argument("--provider", choices=["openai", "anthropic"], default=None,
+                   help="LLM provider. Use openai for OpenAI-compatible endpoints.")
+    s.add_argument("--model", default=None, help="Model id, for example deepseek-v4-flash.")
+    s.add_argument("--base-url", default=None, help="Provider-compatible base URL.")
 
     spec = sub.add_parser("spec", help="Inspect or export analysis graph specs.")
     spec_sub = spec.add_subparsers(dest="spec_cmd")
@@ -172,21 +182,20 @@ def main():
     args = p.parse_args()
 
     if args.gui:
+        _apply_llm_endpoint_env(args, provider=args.gui_provider,
+                                model_attr="gui_model", base_url_attr="gui_base_url")
         wb = Workbench(domain=_load_domain(
             args.gui_domain or "perturbseq",
             analysis_graph_path=args.gui_analysis_graph or "",
-        ))
+        ), provider=args.gui_provider)
         wb.serve(args.gui_port, host=args.gui_host, ui=args.gui_ui)
         return 0
 
     if args.cmd == "chat":
         return _chat(args)
     if args.cmd == "run":
-        if args.model:
-            os.environ["OPENAI_MODEL"] = args.model
-        if args.base_url:
-            os.environ["OPENAI_BASE_URL"] = args.base_url
         cfg = _resolve_cli_config(args, workspace=args.workspace)
+        _apply_llm_endpoint_env(args, provider=cfg["provider"])
         wb = Workbench(domain=_load_domain(cfg["domain"], analysis_graph_path=cfg["analysis_graph"]),
                        provider=cfg["provider"], sandbox=cfg["sandbox"])
         result = wb.run(args.workspace, goal=args.goal, steps=cfg["steps"])
@@ -195,7 +204,9 @@ def main():
         return 0
     if args.cmd == "serve":
         cfg = _resolve_cli_config(args)
-        wb = Workbench(domain=_load_domain(cfg["domain"], analysis_graph_path=cfg["analysis_graph"]))
+        _apply_llm_endpoint_env(args, provider=cfg["provider"])
+        wb = Workbench(domain=_load_domain(cfg["domain"], analysis_graph_path=cfg["analysis_graph"]),
+                       provider=cfg["provider"])
         wb.serve(args.port, host=args.host, ui=args.ui)
         return 0
     if args.cmd == "spec":
@@ -412,18 +423,38 @@ def _print_workbench_dashboard(wb, *, title: str = "Workbench") -> None:
     _print(Panel(body, title=title, border_style="bright_blue", padding=(0, 1)))
 
 
+def _apply_llm_endpoint_env(args, *, provider: str | None = None,
+                            model_attr: str = "model",
+                            base_url_attr: str = "base_url") -> None:
+    """Map CLI model/base-url flags to provider-specific environment variables.
+
+    API keys intentionally stay out of CLI flags. Use OPENAI_API_KEY for OpenAI
+    and OpenAI-compatible providers such as DeepSeek, or ANTHROPIC_API_KEY for
+    Anthropic-compatible providers.
+    """
+    provider_name = (provider or getattr(args, "provider", None) or "openai").lower()
+    model = getattr(args, model_attr, None)
+    base_url = getattr(args, base_url_attr, None)
+    if provider_name == "anthropic":
+        if model:
+            os.environ["ANTHROPIC_MODEL"] = model
+        if base_url:
+            os.environ["ANTHROPIC_BASE_URL"] = base_url
+        return
+    if model:
+        os.environ["OPENAI_MODEL"] = model
+    if base_url:
+        os.environ["OPENAI_BASE_URL"] = base_url
+
+
 # Chat
 
 def _chat(args) -> int:
     import readline  # noqa
 
-    if args.model:
-        os.environ["OPENAI_MODEL"] = args.model
-    if args.base_url:
-        os.environ["OPENAI_BASE_URL"] = args.base_url
-
     workspace = args.workspace or "/tmp/pertura_ws"
     cfg = _resolve_cli_config(args, workspace=args.workspace or "")
+    _apply_llm_endpoint_env(args, provider=cfg["provider"])
     wb = Workbench(domain=_load_domain(cfg["domain"], analysis_graph_path=cfg["analysis_graph"]), provider=cfg["provider"])
 
     # Startup banner

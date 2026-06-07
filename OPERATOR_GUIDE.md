@@ -14,6 +14,20 @@ pertura audit runs/run_YYYYMMDD_HHMMSS_xxxxxx --json
 `pertura context` returns the compact LLM/operator dashboard. `pertura audit`
 returns the full deterministic run audit.
 
+For DeepSeek or another OpenAI-compatible endpoint, keep the key in the
+environment and pass the endpoint/model explicitly:
+
+```bash
+export OPENAI_API_KEY="..."
+pertura --GUI --domain perturbseq \
+  --provider openai \
+  --base-url https://api.deepseek.com \
+  --model deepseek-v4-flash
+```
+
+On a trusted server, add `--host 0.0.0.0`. Do not expose the workbench publicly
+without an external auth/proxy layer.
+
 ## Workbench UI Contract
 
 `pertura serve` exposes one compact first-screen endpoint:

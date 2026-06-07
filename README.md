@@ -73,6 +73,21 @@ Start the local workbench:
 pertura --GUI --domain perturbseq
 ```
 
+Use an OpenAI-compatible endpoint such as DeepSeek by setting the API key in
+the environment and passing the endpoint/model on the GUI command:
+
+```bash
+export OPENAI_API_KEY="..."
+pertura --GUI --domain perturbseq \
+  --provider openai \
+  --base-url https://api.deepseek.com \
+  --model deepseek-v4-flash
+```
+
+In this CLI, `provider=openai` means “use the OpenAI-compatible API adapter.”
+It is the correct setting for DeepSeek-style compatible endpoints. Keep API
+keys in environment variables rather than command-line flags.
+
 The GUI shell reads a compact UI contract from:
 
 ```text
