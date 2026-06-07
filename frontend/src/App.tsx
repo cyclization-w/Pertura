@@ -7,9 +7,18 @@ import {
   getDerivationView,
   getWorkbenchView,
   runWorkbench,
-  stepWorkbench
+  stepWorkbench,
+  toggleCapability
 } from "./api";
-import type { AttemptGraph, GraphNode, WorkbenchNode, WorkbenchView } from "./types";
+import type {
+  AttemptGraph,
+  CapabilityCard,
+  GraphNode,
+  LlmToolSurface,
+  ToolVisibilityCard,
+  WorkbenchNode,
+  WorkbenchView
+} from "./types";
 
 const typeColors: Record<string, string> = {
   workspace: "#667085",
@@ -32,7 +41,7 @@ function badgeClass(value?: string) {
   const text = String(value ?? "").toLowerCase();
   if (text.includes("fail") || text.includes("block") || text.includes("interrupt")) return "bad";
   if (text.includes("warn") || text.includes("wait") || text.includes("stale")) return "warn";
-  if (text.includes("success") || text.includes("complete") || text.includes("ready")) return "good";
+  if (text.includes("success") || text.includes("complete") || text.includes("ready") || text.includes("actionable")) return "good";
   return "";
 }
 
@@ -168,7 +177,13 @@ export default function App() {
             <ActiveContract view={view} />
           </Panel>
           <Panel title="Capability Browser" badge={`${view?.analysis.capabilities_view?.capabilities.length ?? 0} caps`}>
-            <CapabilityBrowser view={view} />
+            <CapabilityBrowser
+              view={view}
+              onToggle={async (capabilityId, enabled) => {
+                await toggleCapability(capabilityId, enabled);
+                await refresh();
+              }}
+            />
           </Panel>
           <Panel title="Derivation Lanes" fill badge={`${graph.nodes.length} / ${graph.edges.length}`}>
             <AttemptGraphSvg graph={graph} activeNodeId={view?.active.node_id ?? ""} selectedNode={selectedNode} onSelect={setSelectedNode} />
@@ -264,32 +279,112 @@ function ActiveContract(props: { view: WorkbenchView | null }) {
   );
 }
 
-function CapabilityBrowser(props: { view: WorkbenchView | null }) {
-  const caps = props.view?.analysis.capabilities_view?.capabilities ?? [];
+function CapabilityBrowser(props: {
+  view: WorkbenchView | null;
+  onToggle: (capabilityId: string, enabled: boolean) => Promise<void>;
+}) {
+  const capabilityView = props.view?.analysis.capabilities_view;
+  const caps = capabilityView?.capabilities ?? [];
   if (!caps.length) return <p className="small muted">No capabilities loaded.</p>;
   return (
     <div className="capability-browser">
-      {caps.slice(0, 12).map((cap) => {
-        const id = cap.capability_id ?? cap.id ?? "";
-        const status = !cap.enabled ? "disabled" : cap.ready ? "ready" : cap.allowed_in_active_node ? "available" : "other node";
-        return (
-          <div className="capability-row" key={id}>
-            <div>
-              <div className="item-title">{cap.title || id}</div>
-              <div className="item-sub">{cap.description || id}</div>
-              <div className="badge-row">
-                <span className={`badge ${badgeClass(status)}`}>{status}</span>
-                <span className="badge">{cap.permission_tier || "local_read"}</span>
-                {cap.backend_hint && <span className="badge">{cap.backend_hint}</span>}
-              </div>
-            </div>
-            <div className="item-sub">
-              {(cap.missing_inputs ?? []).length ? `missing: ${(cap.missing_inputs ?? []).join(", ")}` : (cap.expected_observations ?? []).slice(0, 3).join(", ")}
-            </div>
-          </div>
-        );
-      })}
+      <ToolSurface surface={capabilityView?.llm_tool_surface} />
+      <div className="capability-list">
+        {caps.slice(0, 16).map((cap) => (
+          <CapabilityRow
+            cap={cap}
+            key={cap.capability_id ?? cap.id}
+            onToggle={props.onToggle}
+          />
+        ))}
+      </div>
     </div>
+  );
+}
+
+function ToolSurface(props: { surface?: LlmToolSurface }) {
+  const surface = props.surface;
+  const visible = surface?.visible_tools ?? [];
+  const hidden = surface?.hidden_tools ?? [];
+  const hiddenReasons = surface?.summary?.hidden_reasons ?? {};
+  return (
+    <div className="tool-surface">
+      <div className="tool-surface-head">
+        <div>
+          <div className="item-title">LLM visible tools this turn</div>
+          <div className="item-sub">{visible.length} visible / {hidden.length} hidden by current scope</div>
+        </div>
+        <span className="badge violet">{surface?.surface_type ?? "scoped_llm_tools"}</span>
+      </div>
+      <div className="tool-chip-row">
+        {visible.slice(0, 12).map((tool) => (
+          <span className="badge good" title={tool.description} key={tool.tool_id}>{tool.tool_id}</span>
+        ))}
+      </div>
+      {Object.keys(hiddenReasons).length > 0 && (
+        <div className="tool-reasons">
+          {Object.entries(hiddenReasons).slice(0, 5).map(([reason, count]) => (
+            <span className="badge warn" key={reason}>{reason}: {count}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CapabilityRow(props: {
+  cap: CapabilityCard;
+  onToggle: (capabilityId: string, enabled: boolean) => Promise<void>;
+}) {
+  const cap = props.cap;
+  const id = cap.capability_id ?? cap.id ?? "";
+  const status = !cap.enabled ? "disabled" : cap.llm_actionable ? "actionable" : cap.ready ? "ready" : cap.allowed_in_active_node ? "available" : "other node";
+  const missing = cap.missing_inputs ?? [];
+  const unavailable = cap.why_unavailable ?? [];
+  const visibleTools = (cap.tool_visibility ?? []).filter((tool) => tool.visible_to_llm);
+  const hiddenTools = (cap.tool_visibility ?? []).filter((tool) => !tool.visible_to_llm);
+  const detail = missing.length
+    ? `missing: ${missing.join(", ")}`
+    : unavailable.length
+      ? unavailable.join(", ")
+      : (cap.expected_observations ?? []).slice(0, 3).join(", ");
+  return (
+    <div className="capability-row">
+      <div className="cap-main">
+        <div className="item-title">{cap.title || id}</div>
+        <div className="item-sub">{cap.description || id}</div>
+        <div className="badge-row">
+          <span className={`badge ${badgeClass(status)}`}>{status}</span>
+          <span className="badge">{cap.permission_tier || "local_read"}</span>
+          {cap.backend_hint && <span className="badge">{cap.backend_hint}</span>}
+          {visibleTools.map((tool) => <ToolBadge key={tool.tool_id} tool={tool} />)}
+          {hiddenTools.map((tool) => <ToolBadge key={tool.tool_id} tool={tool} />)}
+        </div>
+      </div>
+      <div className="cap-side">
+        <div className="item-sub">{detail || "no contract detail"}</div>
+        {id && (
+          <button
+            className="small-button"
+            onClick={() => props.onToggle(id, !cap.enabled)}
+          >
+            {cap.enabled ? "Disable" : "Enable"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ToolBadge(props: { tool: ToolVisibilityCard }) {
+  const hidden = !props.tool.visible_to_llm;
+  const title = hidden
+    ? `${props.tool.tool_id}: ${(props.tool.why_hidden ?? []).join(", ")}`
+    : props.tool.description || props.tool.tool_id;
+  return (
+    <span className={`badge ${hidden ? "warn" : "good"}`} title={title}>
+      {hidden ? "hidden:" : "tool:"}{props.tool.tool_id}
+    </span>
   );
 }
 
@@ -444,6 +539,7 @@ function ContextSurface(props: { view: WorkbenchView | null }) {
   const compact = {
     view_type: context.view_type,
     purpose: context.purpose,
+    llm_tool_surface: props.view?.analysis.capabilities_view?.llm_tool_surface?.summary,
     audit_preview: context.audit_preview,
     trace_driven_rethinking: context.trace_driven_rethinking,
     affordances: Array.isArray(context.affordances) ? context.affordances.slice(0, 6) : []

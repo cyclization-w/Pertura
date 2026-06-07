@@ -42,6 +42,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .badge.good{background:var(--good-soft);color:var(--good)}.badge.warn{background:var(--warn-soft);color:var(--warn)}.badge.bad{background:var(--bad-soft);color:var(--bad)}.badge.violet{background:#f3e8ff;color:var(--violet)}
 .item{border:1px solid var(--line);border-radius:6px;background:#fff;padding:8px;margin-bottom:6px}
 .item-title{font-size:12px;font-weight:720}.item-sub{font-size:11px;color:var(--muted);margin-top:3px}
+.tool-surface{border:1px solid var(--line);border-radius:7px;background:#fbfcfd;padding:8px;margin-bottom:8px}
+.tool-surface-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.tool-chip-row,.tool-reasons{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
+.capability-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,.42fr);gap:8px}
+.small-button{height:26px;padding:0 8px;font-size:11px;font-weight:700}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:180px}
 .graph-wrap{height:100%;min-height:340px;background:#fbfcfd}
 #graphSvg{width:100%;height:100%;display:block}
@@ -149,7 +154,7 @@ let SELECTED_NODE = "";
 const TYPE_COLORS = {workspace:"#667085",analysis_node:"#6d28d9",branch:"#2563eb",attempt:"#15803d",job:"#0369a1",artifact:"#b45309",observation:"#0f766e",outcome:"#15803d",trigger:"#b42318",finding:"#b42318",conclusion:"#ca8a04",tool_call:"#667085",review_decision:"#0f766e",behavior_run:"#6d28d9"};
 
 function esc(value){return String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
-function chipClass(value){const v=String(value||"").toLowerCase();if(v.includes("block")||v.includes("fail")||v.includes("interrupt"))return"bad";if(v.includes("warn")||v.includes("wait")||v.includes("stale"))return"warn";if(v.includes("success")||v.includes("complete")||v.includes("ready"))return"good";return"";}
+function chipClass(value){const v=String(value||"").toLowerCase();if(v.includes("block")||v.includes("fail")||v.includes("interrupt"))return"bad";if(v.includes("warn")||v.includes("wait")||v.includes("stale"))return"warn";if(v.includes("success")||v.includes("complete")||v.includes("ready")||v.includes("actionable"))return"good";return"";}
 async function getJson(url, fallback){try{const r=await fetch(url);return await r.json();}catch{return fallback;}}
 
 async function refresh(){
@@ -223,19 +228,45 @@ function renderContract(view){
 }
 
 function renderCapabilities(view){
-  const caps=(((view.analysis||{}).capabilities_view||{}).capabilities)||[];
+  const capView=((view.analysis||{}).capabilities_view||{});
+  const caps=(capView.capabilities)||[];
+  const surface=capView.llm_tool_surface||{};
   document.getElementById("capabilityCount").textContent=`${caps.length} caps`;
-  document.getElementById("capabilityBrowser").innerHTML=caps.slice(0,12).map(c=>{
+  const visible=surface.visible_tools||[];
+  const hidden=surface.hidden_tools||[];
+  const reasons=((surface.summary||{}).hidden_reasons)||{};
+  const toolPanel=`<div class="tool-surface">
+    <div class="tool-surface-head">
+      <div><div class="item-title">LLM visible tools this turn</div><div class="item-sub">${visible.length} visible / ${hidden.length} hidden by current scope</div></div>
+      <span class="badge violet">${esc(surface.surface_type||"scoped_llm_tools")}</span>
+    </div>
+    <div class="tool-chip-row">${visible.slice(0,12).map(t=>`<span class="badge good" title="${esc(t.description||"")}">${esc(t.tool_id)}</span>`).join("")||"<span class='muted'>No tools exposed.</span>"}</div>
+    <div class="tool-reasons">${Object.entries(reasons).slice(0,5).map(([reason,count])=>`<span class="badge warn">${esc(reason)}: ${count}</span>`).join("")}</div>
+  </div>`;
+  const rows=caps.slice(0,16).map(c=>{
     const id=c.capability_id||c.id||"";
-    const status=!c.enabled?"disabled":c.ready?"ready":c.allowed_in_active_node?"available":"other node";
-    const missing=(c.missing_inputs||[]).length?`missing: ${(c.missing_inputs||[]).join(", ")}`:(c.expected_observations||[]).slice(0,3).join(", ");
-    return `<div class="item">
-      <div class="item-title">${esc(c.title||id)} <span class="badge ${chipClass(status)}">${esc(status)}</span></div>
-      <div class="item-sub">${esc(c.description||id)}</div>
-      <div style="margin-top:5px"><span class="badge">${esc(c.permission_tier||"local_read")}</span> ${c.backend_hint?`<span class="badge">${esc(c.backend_hint)}</span>`:""}</div>
-      <div class="item-sub">${esc(missing||"")}</div>
+    const status=!c.enabled?"disabled":c.llm_actionable?"actionable":c.ready?"ready":c.allowed_in_active_node?"available":"other node";
+    const missing=(c.missing_inputs||[]);
+    const unavailable=(c.why_unavailable||[]);
+    const detail=missing.length?`missing: ${missing.join(", ")}`:unavailable.length?unavailable.join(", "):(c.expected_observations||[]).slice(0,3).join(", ");
+    const tools=(c.tool_visibility||[]).map(t=>{
+      const hidden=!t.visible_to_llm;
+      const title=hidden?(t.why_hidden||[]).join(", "):(t.description||"");
+      return `<span class="badge ${hidden?"warn":"good"}" title="${esc(title)}">${hidden?"hidden:":"tool:"}${esc(t.tool_id)}</span>`;
+    }).join("");
+    return `<div class="item capability-row">
+      <div>
+        <div class="item-title">${esc(c.title||id)} <span class="badge ${chipClass(status)}">${esc(status)}</span></div>
+        <div class="item-sub">${esc(c.description||id)}</div>
+        <div style="margin-top:5px"><span class="badge">${esc(c.permission_tier||"local_read")}</span> ${c.backend_hint?`<span class="badge">${esc(c.backend_hint)}</span>`:""} ${tools}</div>
+      </div>
+      <div>
+        <div class="item-sub">${esc(detail||"no contract detail")}</div>
+        ${id?`<button class="small-button" onclick="toggleCapability('${esc(id)}', ${!c.enabled})">${c.enabled?"Disable":"Enable"}</button>`:""}
+      </div>
     </div>`;
   }).join("")||"<div class='muted'>No capabilities loaded.</div>";
+  document.getElementById("capabilityBrowser").innerHTML=toolPanel+rows;
 }
 
 function laneForType(type){
@@ -338,7 +369,7 @@ function renderContext(view){
   const active=view.active||{};
   document.getElementById("budgetChip").textContent=`attempts ${(view.budget||{}).max_attempts||"-"}`;
   document.getElementById("contextSummary").innerHTML=`<b>Active:</b> ${esc(active.node_id||"none")} / ${esc(active.branch_id||"main")}<br><b>Context:</b> ${esc(ctx.purpose||ctx.view_type||"context")}`;
-  const compact={view_type:ctx.view_type,purpose:ctx.purpose,audit_preview:ctx.audit_preview,trace_driven_rethinking:ctx.trace_driven_rethinking,affordances:(ctx.affordances||[]).slice(0,6)};
+  const compact={view_type:ctx.view_type,purpose:ctx.purpose,llm_tool_surface:(((view.analysis||{}).capabilities_view||{}).llm_tool_surface||{}).summary,audit_preview:ctx.audit_preview,trace_driven_rethinking:ctx.trace_driven_rethinking,affordances:(ctx.affordances||[]).slice(0,6)};
   document.getElementById("contextJson").textContent=JSON.stringify(compact,null,2);
 }
 
@@ -371,6 +402,7 @@ async function stepRun(){await fetch("/api/step",{method:"POST"});refresh();}
 async function runSteps(steps){await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:document.getElementById("workspaceInput").value||"data",goal:document.getElementById("goalInput").value,steps})});refresh();}
 async function generateReport(){await fetch("/api/report/generate",{method:"POST"});refresh();}
 async function answerInterrupt(){const interrupts=((CURRENT_VIEW||{}).review||{}).open_interrupts||[];if(!interrupts.length)return;await fetch(`/api/answer/${encodeURIComponent(interrupts[0].interrupt_id)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({answer:document.getElementById("answerInput").value})});document.getElementById("answerInput").value="";refresh();}
+async function toggleCapability(capabilityId, enabled){await fetch(`/api/capabilities/${encodeURIComponent(capabilityId)}/toggle`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled})});refresh();}
 refresh();
 setInterval(refresh,4000);
 </script>

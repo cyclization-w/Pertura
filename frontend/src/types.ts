@@ -44,7 +44,30 @@ export type CapabilityCard = {
   allowed_in_active_node?: boolean;
   enabled?: boolean;
   ready?: boolean;
+  llm_actionable?: boolean;
+  tool_visibility?: ToolVisibilityCard[];
   why_unavailable?: string[];
+};
+
+export type ToolVisibilityCard = {
+  tool_id: string;
+  permission_tier?: string;
+  description?: string;
+  visible_to_llm?: boolean;
+  why_hidden?: string[];
+};
+
+export type LlmToolSurface = {
+  surface_type?: string;
+  visible_count?: number;
+  hidden_count?: number;
+  visible_tools?: ToolVisibilityCard[];
+  hidden_tools?: ToolVisibilityCard[];
+  summary?: {
+    visible_by_permission?: Record<string, number>;
+    hidden_by_permission?: Record<string, number>;
+    hidden_reasons?: Record<string, number>;
+  };
 };
 
 export type NodeContract = {
@@ -166,6 +189,7 @@ export type CapabilitiesView = {
   run_id?: string;
   active_node_id?: string;
   disabled_capabilities?: string[];
+  llm_tool_surface?: LlmToolSurface;
   capabilities: CapabilityCard[];
 };
 

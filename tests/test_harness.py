@@ -1953,6 +1953,27 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     check("readonly schema excludes execute_code", "execute_code" not in readonly_tool_names)
     check("readonly schema excludes web/VLM tools", not {"search_web", "view_plot"} & readonly_tool_names)
     check("readonly schema includes rethinking plan", "plan_rethinking" in readonly_tool_names)
+    unscoped_tool_names = {
+        item["function"]["name"]
+        for item in tool_schemas(readonly=False)
+    }
+    check("unscoped schema preserves full action surface", {"execute_code", "search_web"} <= unscoped_tool_names)
+    scoped_unstarted_names = {
+        item["function"]["name"]
+        for item in tool_schemas(
+            snap=Snapshot(analysis_spec={"nodes": [{"node_id": "inspect"}]}),
+            scoped=True,
+        )
+    }
+    check("scoped schema nudges node transition first", "execute_code" not in scoped_unstarted_names and "request_node_transition" in scoped_unstarted_names)
+    scoped_active_names = {
+        item["function"]["name"]
+        for item in tool_schemas(
+            snap=Snapshot(analysis_spec={"nodes": [{"node_id": "inspect"}]}, active_node_id="inspect"),
+            scoped=True,
+        )
+    }
+    check("scoped schema exposes execute only inside active node", "execute_code" in scoped_active_names and "search_web" not in scoped_active_names)
 
     perturb_spec = PERTURBSEQ_DOMAIN.analysis_graph
     check("perturbseq default spec present", bool(perturb_spec and perturb_spec.get("nodes")))
@@ -2091,6 +2112,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     from pertura._api import (
         analysis_spec_audit_payload,
         analysis_spec_contract_payload,
+        capabilities_view_payload,
         context_review_payload,
         harness_manifest_payload,
         rethinking_payload,
@@ -2101,6 +2123,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     api_contract_payload = analysis_spec_contract_payload(wb_spec, node_id="target_interpretation")
     api_runtime_payload = runtime_node_contract_payload(wb_spec)
     api_context_payload = context_review_payload(wb_spec, purpose="audit", max_items=4)
+    api_capabilities_payload = capabilities_view_payload(wb_spec)
     api_harness_payload = harness_manifest_payload()
     api_run_audit_payload = run_audit_payload(wb_spec)
     api_rethinking_payload = rethinking_payload(wb_spec, issue="review API run state")
@@ -2108,11 +2131,15 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     check("api helper exposes analysis node contract", api_contract_payload["node"]["id"] == "target_interpretation")
     check("api helper exposes runtime node dashboard", api_runtime_payload["runtime"]["target_node_id"] == "workspace_inspection")
     check("api helper exposes context review", api_context_payload["view_type"] == "context_envelope")
+    check("api helper exposes scoped LLM tool surface", api_capabilities_payload["llm_tool_surface"]["surface_type"] == "scoped_llm_tools")
+    check("api helper exposes tool hidden reasons", any(item["why_hidden"] for item in api_capabilities_payload["llm_tool_surface"]["hidden_tools"]))
+    check("api helper links capabilities to tool visibility", all("tool_visibility" in item for item in api_capabilities_payload["capabilities"]))
     check("api helper exposes harness manifest", api_harness_payload["thesis"]["core_principle"] == "free_reasoning_gated_commit")
     check("api helper exposes run audit", api_run_audit_payload["audit_type"] == "run_audit")
     check("api helper exposes rethinking plan", api_rethinking_payload["view_type"] == "rethinking_plan")
     gui_html = (Path(__file__).resolve().parent.parent / "pertura" / "_gui.html").read_text(encoding="utf-8")
     check("GUI graph panel fetches rethinking endpoint", "/api/rethink/" in gui_html and "Rethinking" in gui_html)
+    check("GUI capability browser names LLM tool surface", "LLM visible tools this turn" in gui_html and "toggleCapability" in gui_html)
     from pertura.skills import init_pertura_dir
     starter_dir = init_pertura_dir(Path(td) / "starter_project")
     starter_graph = load_analysis_graph(starter_dir / "analysis_graph.json")

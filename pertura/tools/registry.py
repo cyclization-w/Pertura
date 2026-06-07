@@ -1803,17 +1803,78 @@ def execute_tool(name: str, args: dict, snap=None) -> dict:
         return {"error": str(exc)}
 
 
-def tool_schemas(readonly: bool = False) -> list[dict]:
+def _scoped_tool_names(snap=None) -> set[str]:
+    """Return the current LLM action surface without changing hard gates.
+
+    This is an ergonomics layer, not an authorization boundary. Gated dispatch
+    and the permission model remain the authoritative enforcement points.
+    """
+    from .permissions import ToolPermission, _TOOL_TIERS
+
+    names = {
+        name
+        for name in TOOLS
+        if _TOOL_TIERS.get(name, ToolPermission.local_read) == ToolPermission.local_read
+    }
+
+    open_interrupts = [
+        item for item in (getattr(snap, "interrupts", []) or [])
+        if getattr(item, "status", "") == "open"
+    ] if snap is not None else []
+    if open_interrupts:
+        names.update({"ask_user", "update_design", "finish"})
+        return {name for name in names if name in TOOLS}
+
+    names.update({
+        "request_node_transition",
+        "complete_node",
+        "skip_node",
+        "ask_user",
+        "finish",
+        "open_branch",
+        "switch_branch",
+        "close_branch",
+        "execute_code",
+        "submit_job",
+        "retry",
+        "update_design",
+    })
+
+    if snap is not None:
+        has_analysis_graph = bool(getattr(snap, "analysis_spec", {}) or {})
+        if has_analysis_graph and not getattr(snap, "active_node_id", ""):
+            names.difference_update({"execute_code", "submit_job", "retry", "complete_node"})
+
+        try:
+            budget = getattr(snap, "budget", None)
+            max_attempts = int(getattr(budget, "max_attempts", 0) or 0)
+            attempts = getattr(snap, "attempts", []) or []
+            if max_attempts and len(attempts) >= max_attempts:
+                names.difference_update({"execute_code", "submit_job", "retry"})
+        except Exception:
+            pass
+
+    return {name for name in names if name in TOOLS}
+
+
+def tool_schemas(readonly: bool = False, *, snap=None, scoped: bool = False) -> list[dict]:
     """Return OpenAI-compatible tool schemas.
 
     When readonly=True, only local_read tools are returned. External reads
     such as web/VLM calls and all execute/state-change tools are excluded.
+
+    When scoped=True, state-changing and execution tools are filtered to the
+    current run phase. This reduces LLM tool-choice noise but does not replace
+    runtime gate checks.
     """
     from .permissions import ToolPermission, _TOOL_TIERS
 
     if readonly:
         tools = {k: v for k, v in TOOLS.items()
                  if _TOOL_TIERS.get(k, ToolPermission.local_read) == ToolPermission.local_read}
+    elif scoped:
+        scoped_names = _scoped_tool_names(snap)
+        tools = {k: v for k, v in TOOLS.items() if k in scoped_names}
     else:
         tools = TOOLS
     return [{

@@ -262,6 +262,7 @@ def capabilities_view_payload(workbench, *, run_id: str = "", node_id: str = "",
     from pertura.capabilities import CapabilityRegistry
     from pertura.spec.gating import GateEvaluator
     from pertura.tools.permissions import tool_permission
+    from pertura.tools.registry import tool_schemas
 
     snap = _snapshot_for_workbench(workbench, run_id=run_id)
     registry = _capability_registry_for_workbench(workbench, run_id=run_id)
@@ -271,6 +272,15 @@ def capabilities_view_payload(workbench, *, run_id: str = "", node_id: str = "",
     if snap and snap.analysis_spec and active_node_id:
         allowed = set(GateEvaluator(snap.analysis_spec).allowed_capabilities(active_node_id))
     readiness = _capability_readiness_by_id(workbench, run_id=run_id, node_id=active_node_id)
+    visible_tool_names = {
+        item["function"]["name"]
+        for item in tool_schemas(snap=snap, scoped=True)
+    }
+    tool_surface = _llm_tool_surface(
+        snap=snap,
+        visible_tool_names=visible_tool_names,
+        tool_permission=tool_permission,
+    )
 
     capabilities = []
     for cap in registry.summarize(limit=max_items):
@@ -288,6 +298,13 @@ def capabilities_view_payload(workbench, *, run_id: str = "", node_id: str = "",
         if missing_inputs:
             why.append("missing_inputs")
         permission = _highest_permission(tool_names, tool_permission)
+        tool_visibility = [
+            _tool_visibility_card(tool_name, visible_tool_names=visible_tool_names, snap=snap, tool_permission=tool_permission)
+            for tool_name in tool_names
+        ]
+        tool_visible = any(item["visible_to_llm"] for item in tool_visibility) if tool_visibility else True
+        if tool_names and not tool_visible:
+            why.append("implementation_tools_hidden_this_turn")
         capabilities.append({
             "capability_id": cap_id,
             "title": cap.get("title", cap_id.replace("_", " ")),
@@ -303,7 +320,9 @@ def capabilities_view_payload(workbench, *, run_id: str = "", node_id: str = "",
             "permission_tier": permission,
             "backend_hint": cap.get("backend", ""),
             "enabled": enabled,
-            "ready": bool(ready.get("ready")) and enabled and allowed_here,
+            "ready": bool(ready.get("ready")) and enabled and allowed_here and tool_visible,
+            "llm_actionable": bool(ready.get("ready")) and enabled and allowed_here and tool_visible,
+            "tool_visibility": tool_visibility,
             "why_unavailable": why,
         })
     return {
@@ -312,6 +331,7 @@ def capabilities_view_payload(workbench, *, run_id: str = "", node_id: str = "",
         "run_id": snap.run_id if snap else run_id,
         "active_node_id": active_node_id,
         "disabled_capabilities": sorted(disabled),
+        "llm_tool_surface": tool_surface,
         "capabilities": capabilities,
     }
 
@@ -525,6 +545,90 @@ def _capability_readiness_by_id(workbench, *, run_id: str = "", node_id: str = "
     runtime = payload.get("runtime", {}) if isinstance(payload, dict) else {}
     cards = runtime.get("capability_readiness", []) or []
     return {card.get("id", ""): card for card in cards if card.get("id")}
+
+
+def _llm_tool_surface(*, snap, visible_tool_names: set[str], tool_permission) -> dict:
+    from pertura.tools.registry import TOOLS
+
+    tools = [
+        _tool_visibility_card(
+            tool_name,
+            visible_tool_names=visible_tool_names,
+            snap=snap,
+            tool_permission=tool_permission,
+        )
+        for tool_name in sorted(TOOLS)
+    ]
+    visible = [item for item in tools if item["visible_to_llm"]]
+    hidden = [item for item in tools if not item["visible_to_llm"]]
+    return {
+        "surface_type": "scoped_llm_tools",
+        "visible_count": len(visible),
+        "hidden_count": len(hidden),
+        "visible_tools": visible,
+        "hidden_tools": hidden,
+        "summary": _tool_surface_summary(visible, hidden),
+    }
+
+
+def _tool_visibility_card(tool_name: str, *, visible_tool_names: set[str], snap, tool_permission) -> dict:
+    from pertura.tools.registry import TOOLS
+
+    spec = TOOLS.get(tool_name, {})
+    visible = tool_name in visible_tool_names
+    permission = tool_permission(tool_name).value
+    return {
+        "tool_id": tool_name,
+        "permission_tier": permission,
+        "description": spec.get("description", ""),
+        "visible_to_llm": visible,
+        "why_hidden": [] if visible else _tool_hidden_reasons(tool_name, permission=permission, snap=snap),
+    }
+
+
+def _tool_hidden_reasons(tool_name: str, *, permission: str, snap) -> list[str]:
+    reasons = []
+    open_interrupts = [
+        item for item in (getattr(snap, "interrupts", []) or [])
+        if getattr(item, "status", "") == "open"
+    ] if snap is not None else []
+    if open_interrupts and permission not in {"local_read"} and tool_name not in {"ask_user", "update_design", "finish"}:
+        reasons.append("open_human_interrupt")
+    if permission == "external_read":
+        reasons.append("external_read_requires_policy_or_approval")
+    if permission == "execute":
+        if snap is not None and getattr(snap, "analysis_spec", {}) and not getattr(snap, "active_node_id", ""):
+            reasons.append("requires_active_analysis_node")
+        try:
+            budget = getattr(snap, "budget", None)
+            max_attempts = int(getattr(budget, "max_attempts", 0) or 0)
+            attempts = getattr(snap, "attempts", []) or []
+            if max_attempts and len(attempts) >= max_attempts:
+                reasons.append("attempt_budget_exhausted")
+        except Exception:
+            pass
+    if not reasons:
+        reasons.append("hidden_by_current_tool_scope")
+    return reasons
+
+
+def _tool_surface_summary(visible: list[dict], hidden: list[dict]) -> dict:
+    def count_by(items: list[dict], key: str) -> dict:
+        counts: dict[str, int] = {}
+        for item in items:
+            value = str(item.get(key) or "")
+            counts[value] = counts.get(value, 0) + 1
+        return counts
+
+    hidden_reasons: dict[str, int] = {}
+    for item in hidden:
+        for reason in item.get("why_hidden", []) or []:
+            hidden_reasons[reason] = hidden_reasons.get(reason, 0) + 1
+    return {
+        "visible_by_permission": count_by(visible, "permission_tier"),
+        "hidden_by_permission": count_by(hidden, "permission_tier"),
+        "hidden_reasons": hidden_reasons,
+    }
 
 
 def _highest_permission(tool_names: list[str], tool_permission) -> str:

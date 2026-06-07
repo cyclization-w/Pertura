@@ -97,8 +97,14 @@ PROTOCOL:
    - skip_node(node_id, reason): explicitly skip a node when not applicable.
    - ask_user(question): request human input when blocked.
    - finish(summary): complete the analysis.
-4. Read tools (list_capabilities, get_harness_manifest, get_audit_toolbox, get_context_review, audit_run, get_node_contract, get_capability_template, query_observations, read_file,
-   view_plot, search_web, compare_branches, sweep_thresholds, compare_methods) can be called freely to gather context before acting.
+4. Read tools exposed in the current tool schema can be called freely to gather context before acting.
+   Local audit/read tools include get_harness_manifest, get_audit_toolbox,
+   get_context_review, audit_run, get_node_contract, get_capability_template,
+   review_evidence_chain, plan_rethinking, query_observations, read_file,
+   compare_branches, sweep_thresholds, and compare_methods when exposed.
+   The tool schema is the authoritative action menu for this turn. External
+   read tools such as view_plot or search_web may be omitted unless policy or
+   approval exposes them.
 5. register_observation() for findings. register_artifact() for files.
 6. Data persists in the kernel across cells. DO NOT reload. Imports persist. DO NOT re-import.
 

@@ -166,7 +166,7 @@ def run_tool_loop(result: dict | None, obs_count: int, snap, attempt,
         {"role": "user", "content": user},
     ]
 
-    all_tools = tool_schemas(readonly=False)
+    all_tools = tool_schemas(readonly=False, snap=snap, scoped=True)
     provider_tools = _provider_tool_schemas(all_tools, provider)
     from pertura.core import hash_llm_request
     request_hash = hash_llm_request(

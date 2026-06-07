@@ -149,7 +149,8 @@ button.success { border-color: var(--good); background: var(--good); color: #fff
 .item { border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 8px; margin-bottom: 6px; }
 .item-title { font-size: 12px; font-weight: 720; }
 .item-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
-.capability-browser { display: grid; gap: 6px; max-height: 180px; overflow: auto; }
+.capability-browser { display: grid; gap: 8px; max-height: 260px; overflow: auto; }
+.capability-list { display: grid; gap: 6px; }
 .capability-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(120px, .42fr);
@@ -158,6 +159,32 @@ button.success { border-color: var(--good); background: var(--good); color: #fff
   border-radius: 6px;
   background: #fff;
   padding: 8px;
+}
+.cap-main, .cap-side { min-width: 0; }
+.cap-side { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
+.small-button {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.tool-surface {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfcfd;
+  padding: 8px;
+}
+.tool-surface-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tool-chip-row, .tool-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
 }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 188px; }
 .answer-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; margin-top: 8px; }
