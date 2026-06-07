@@ -7,6 +7,7 @@ can I do?" from a large debug envelope.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from pertura.models import Snapshot, _model_dump
@@ -83,6 +84,16 @@ def build_active_work_order(
             "raw_state_mutation_allowed": False,
         },
     }
+    candidate_path = _dataset_candidate_path(payload["workspace"]["files"], snap.workspace)
+    if candidate_path:
+        payload["dataset_load_plan"] = {
+            "path": candidate_path,
+            "instruction": "Call load_dataset(path=...) first, then execute the returned code with capability_ids=['load_dataset'].",
+        }
+        payload["recommended_actions"] = _prioritize_load_dataset_action(
+            payload.get("recommended_actions", []),
+            candidate_path,
+        )
     payload["markdown"] = render_active_work_order(payload)
     return payload
 
@@ -124,6 +135,15 @@ def render_active_work_order(work_order: dict[str, Any]) -> str:
         lines.append(f"- {cap.get('id') or cap.get('capability_id')}: {_line(cap.get('description') or '')}{detail}")
     if not caps:
         lines.append("- none; request a node transition or ask the user if blocked")
+    load_plan = work_order.get("dataset_load_plan") or {}
+    if load_plan.get("path"):
+        lines.extend([
+            "",
+            "## Dataset Loading Plan",
+            f"- Call load_dataset(path={load_plan.get('path')!r}) before hand-writing loading code.",
+            "- Then call execute_code with the returned code and capability_ids=['load_dataset'].",
+            "- Do not use subprocess for data loading or file inspection.",
+        ])
     issue_rows = (issues.get("triggers") or []) + (issues.get("findings") or [])
     if issue_rows or rethink.get("status") not in {"", "not_needed", None}:
         lines.extend(["", "## Open Issue / Rethinking"])
@@ -175,9 +195,11 @@ def _workspace_files(context_view) -> list[dict[str, Any]]:
     for item in (getattr(context_view, "workspace_files", []) or [])[:8]:
         if isinstance(item, dict):
             rows.append({
-                "target": item.get("target") or item.get("name") or item.get("path") or "",
+                "target": item.get("target") or item.get("subject") or item.get("name") or item.get("path") or "",
                 "metric": item.get("metric", ""),
                 "summary": item.get("summary") or item.get("value") or item.get("metric") or "",
+                "type": item.get("type", ""),
+                "value": item.get("value", ""),
             })
         else:
             rows.append({"target": str(item), "summary": ""})
@@ -231,6 +253,8 @@ def _recommended_actions(
         return _dedupe(actions) or ["repair the open issue before continuing"]
     ready = [cap for cap in capabilities if cap.get("ready") or not cap.get("missing_inputs")]
     if ready:
+        if ready[0].get("id") == "load_dataset":
+            return ["call load_dataset(path=<detected data path>) before writing custom loading code"]
         return [f"execute_code with capability_ids=['{ready[0].get('id')}']"]
     if missing:
         return [f"resolve missing item: {missing[0]}"]
@@ -258,6 +282,30 @@ def _dedupe(values: list[str]) -> list[str]:
         seen.add(value)
         out.append(value)
     return out
+
+
+def _dataset_candidate_path(workspace_files: list[dict[str, Any]], workspace: str) -> str:
+    candidates = []
+    for item in workspace_files:
+        target = str(item.get("target") or "").rstrip("/")
+        metric = str(item.get("metric") or "")
+        value = str(item.get("value") or item.get("summary") or "")
+        if metric == "detected_format" and value in {"h5ad", "hdf5_or_10x_h5", "10x_mtx_directory"}:
+            candidates.append(target)
+        elif target.lower().endswith((".h5ad", ".h5", ".hdf5")):
+            candidates.append(target)
+    if not candidates:
+        return ""
+    first = candidates[0]
+    path = Path(first)
+    if path.is_absolute():
+        return str(path)
+    return str(Path(workspace) / first) if workspace else first
+
+
+def _prioritize_load_dataset_action(actions: list[str], path: str) -> list[str]:
+    first = f"call load_dataset(path={path!r}), then execute returned code with capability_ids=['load_dataset']"
+    return _dedupe([first] + list(actions))[:5]
 
 
 def _line(value: Any) -> str:

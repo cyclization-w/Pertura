@@ -262,11 +262,26 @@ def build_intent_entries(snap: Snapshot) -> list[IntentEntry]:
 
 
 def _workspace_file_view(snap: Snapshot, *, max_items: int) -> list[dict]:
-    return [
-        {"subject": o.target, "metric": o.metric, "value": o.value}
+    rows = [
+        {"subject": o.target, "metric": o.metric, "value": o.value, "type": o.type}
         for o in snap.observations
-        if o.type == "workspace_file"
-    ][-max_items:]
+        if o.type in {"workspace_file", "workspace_probe"}
+    ]
+    def score(row: dict) -> int:
+        metric = str(row.get("metric") or "")
+        subject = str(row.get("subject") or "").lower()
+        value = str(row.get("value") or "")
+        if metric == "detected_format" and value in {"h5ad", "hdf5_or_10x_h5", "10x_mtx_directory"}:
+            return 100
+        if subject.endswith((".h5ad", ".h5", ".hdf5")):
+            return 90
+        if metric == "table_columns":
+            return 50
+        if metric == "candidate_design_column":
+            return 20
+        return 10
+    rows.sort(key=score, reverse=True)
+    return rows[:max_items]
 
 
 def _active_stage(snap: Snapshot) -> str:

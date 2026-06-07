@@ -315,6 +315,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     ws = Path(td)
     (ws / "input.txt").write_text("ok", encoding="utf-8")
     (ws / "metadata.csv").write_text("cell,guide,target,batch,control_label\nc1,g1,TargetX,b1,NTC\n", encoding="utf-8")
+    (ws / "data.h5ad").write_text("placeholder", encoding="utf-8")
     wb = Workbench(Domain(name="test"), provider="openai", sandbox="subprocess")
     wb.run(str(ws), goal="smoke", steps=0)
     code = """
@@ -333,8 +334,11 @@ register_observation("de_effect", target="TargetX", metric="logFC", value=1.2, c
     wb.step(1)
     smoke_snap = wb._store.read_snapshot()
     check("execution outcome recorded", any(o.attempt_id == "att_smoke" and o.status == "success" for o in smoke_snap.outcomes))
+    check("workspace probe registers dataset candidate", any(o.type == "workspace_probe" and o.metric == "detected_format" and o.target == "data.h5ad" for o in smoke_snap.observations))
     check("workspace probe registers table schema", any(o.type == "workspace_probe" and o.metric == "table_columns" and o.target == "metadata.csv" for o in smoke_snap.observations))
     check("workspace probe registers design column candidates", any(o.type == "workspace_probe" and o.metric == "candidate_design_column" and o.target == "guide" for o in smoke_snap.observations))
+    smoke_work_order = build_active_work_order(smoke_snap, compile_context(smoke_snap, max_items=8))
+    check("active work order recommends load_dataset plan", "load_dataset(path=" in " ".join(smoke_work_order["recommended_actions"]))
     check("manifest observation registered", any(o.target == "TargetX" and o.metric == "logFC" for o in smoke_snap.observations))
     check("manifest artifact registered", any(a.kind == "table" and "summary.csv" in a.path for a in smoke_snap.artifacts))
     smoke_graph = wb._store.read_graph()
@@ -1988,6 +1992,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         )
     }
     check("scoped schema exposes execute only inside active node", "execute_code" in scoped_active_names and "search_web" not in scoped_active_names)
+    check("scoped schema exposes load_dataset helper", "load_dataset" in scoped_active_names)
     check("scoped schema is smaller than full tool surface", len(scoped_active_names) < len(unscoped_tool_names))
     scoped_issue_names = {
         item["function"]["name"]

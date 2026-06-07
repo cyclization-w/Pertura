@@ -1813,6 +1813,7 @@ def _scoped_tool_names(snap=None) -> set[str]:
         "get_context_review",
         "get_node_contract",
         "get_capability_template",
+        "load_dataset",
         "request_node_transition",
         "evaluate_node_conditions",
         "execute_code",
