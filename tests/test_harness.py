@@ -2140,6 +2140,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     gui_html = (Path(__file__).resolve().parent.parent / "pertura" / "_gui.html").read_text(encoding="utf-8")
     check("GUI graph panel fetches rethinking endpoint", "/api/rethink/" in gui_html and "Rethinking" in gui_html)
     check("GUI capability browser names LLM tool surface", "LLM visible tools this turn" in gui_html and "toggleCapability" in gui_html)
+    check("GUI actions surface API failures", "actionStatus" in gui_html and "postJson" in gui_html and "!r.ok" in gui_html)
     cli_help = subprocess.run(
         [sys.executable, "-m", "pertura._cli", "--help"],
         text=True,

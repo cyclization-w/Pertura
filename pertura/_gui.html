@@ -69,6 +69,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
     <button class="success" onclick="runSteps(5)">Run 5</button>
     <button onclick="generateReport()">Report</button>
     <span id="phaseChip" class="chip">not initialized</span>
+    <span id="actionStatus" class="chip" style="display:none"></span>
   </div>
 </header>
 
@@ -156,6 +157,36 @@ const TYPE_COLORS = {workspace:"#667085",analysis_node:"#6d28d9",branch:"#2563eb
 function esc(value){return String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
 function chipClass(value){const v=String(value||"").toLowerCase();if(v.includes("block")||v.includes("fail")||v.includes("interrupt"))return"bad";if(v.includes("warn")||v.includes("wait")||v.includes("stale"))return"warn";if(v.includes("success")||v.includes("complete")||v.includes("ready")||v.includes("actionable"))return"good";return"";}
 async function getJson(url, fallback){try{const r=await fetch(url);return await r.json();}catch{return fallback;}}
+function setBusy(busy){document.querySelectorAll("header button").forEach(b=>b.disabled=busy);}
+function setActionStatus(message, kind=""){
+  const chip=document.getElementById("actionStatus");
+  if(!chip)return;
+  chip.style.display=message?"inline-flex":"none";
+  chip.className=`chip ${kind||""}`.trim();
+  chip.textContent=message||"";
+}
+async function postJson(url, payload={}, successMessage="Updated"){
+  setBusy(true);
+  setActionStatus("Working...", "warn");
+  try{
+    const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const text=await r.text();
+    let data={};
+    if(text){try{data=JSON.parse(text);}catch{data={detail:text};}}
+    if(!r.ok){
+      const detail=typeof data.detail==="string"?data.detail:(data.detail?JSON.stringify(data.detail):text);
+      throw new Error(detail||`${r.status} ${r.statusText}`);
+    }
+    setActionStatus(successMessage, "good");
+    await refresh();
+    return data;
+  }catch(e){
+    setActionStatus(e && e.message ? e.message : "Request failed", "bad");
+    return null;
+  }finally{
+    setBusy(false);
+  }
+}
 
 async function refresh(){
   const [view, derivation] = await Promise.all([
@@ -397,12 +428,19 @@ async function showTrace(nodeId){
   }catch(e){box.textContent="No trace available.";}
 }
 
-async function initRun(){await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:document.getElementById("workspaceInput").value,goal:document.getElementById("goalInput").value,steps:0})});refresh();}
-async function stepRun(){await fetch("/api/step",{method:"POST"});refresh();}
-async function runSteps(steps){await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:document.getElementById("workspaceInput").value||"data",goal:document.getElementById("goalInput").value,steps})});refresh();}
-async function generateReport(){await fetch("/api/report/generate",{method:"POST"});refresh();}
-async function answerInterrupt(){const interrupts=((CURRENT_VIEW||{}).review||{}).open_interrupts||[];if(!interrupts.length)return;await fetch(`/api/answer/${encodeURIComponent(interrupts[0].interrupt_id)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({answer:document.getElementById("answerInput").value})});document.getElementById("answerInput").value="";refresh();}
-async function toggleCapability(capabilityId, enabled){await fetch(`/api/capabilities/${encodeURIComponent(capabilityId)}/toggle`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled})});refresh();}
+async function initRun(){
+  const workspace=document.getElementById("workspaceInput").value.trim();
+  if(!workspace){setActionStatus("Workspace path is required.", "bad");return;}
+  await postJson("/api/run",{workspace,goal:document.getElementById("goalInput").value,steps:0},"Initialized");
+}
+async function stepRun(){await postJson("/api/step",{},"Step completed");}
+async function runSteps(steps){
+  const workspace=document.getElementById("workspaceInput").value.trim()||"data";
+  await postJson("/api/run",{workspace,goal:document.getElementById("goalInput").value,steps},"Run completed");
+}
+async function generateReport(){await postJson("/api/report/generate",{},"Report generated");}
+async function answerInterrupt(){const interrupts=((CURRENT_VIEW||{}).review||{}).open_interrupts||[];if(!interrupts.length)return;await postJson(`/api/answer/${encodeURIComponent(interrupts[0].interrupt_id)}`,{answer:document.getElementById("answerInput").value},"Answer recorded");document.getElementById("answerInput").value="";}
+async function toggleCapability(capabilityId, enabled){await postJson(`/api/capabilities/${encodeURIComponent(capabilityId)}/toggle`,{enabled},enabled?"Capability enabled":"Capability disabled");}
 refresh();
 setInterval(refresh,4000);
 </script>
