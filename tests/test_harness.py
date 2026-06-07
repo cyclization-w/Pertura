@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pertura as pt
 from pertura.models import (
-    Event, Snapshot, Attempt, Outcome, Observation, Branch,
+    Event, Snapshot, Attempt, Outcome, Observation, Branch, Finding,
     ReviewDecision, ToolCall, Budget,
 )
 from pertura.core import (
@@ -17,6 +17,7 @@ from pertura.core import (
     trace_upstream, impact_of_change,
     Behavior, BehaviorRegistry,
     build_context_view, build_view, build_observation_view, build_trace_view, build_impact_view,
+    build_active_work_order,
     ResponseCache, hash_tool_call,
     ReplayError, replay_store, fork_store, diff_stores,
     run_integrity, stable_json_sha256,
@@ -313,6 +314,7 @@ start_segment("execution_chain")
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     ws = Path(td)
     (ws / "input.txt").write_text("ok", encoding="utf-8")
+    (ws / "metadata.csv").write_text("cell,guide,target,batch,control_label\nc1,g1,TargetX,b1,NTC\n", encoding="utf-8")
     wb = Workbench(Domain(name="test"), provider="openai", sandbox="subprocess")
     wb.run(str(ws), goal="smoke", steps=0)
     code = """
@@ -331,6 +333,8 @@ register_observation("de_effect", target="TargetX", metric="logFC", value=1.2, c
     wb.step(1)
     smoke_snap = wb._store.read_snapshot()
     check("execution outcome recorded", any(o.attempt_id == "att_smoke" and o.status == "success" for o in smoke_snap.outcomes))
+    check("workspace probe registers table schema", any(o.type == "workspace_probe" and o.metric == "table_columns" and o.target == "metadata.csv" for o in smoke_snap.observations))
+    check("workspace probe registers design column candidates", any(o.type == "workspace_probe" and o.metric == "candidate_design_column" and o.target == "guide" for o in smoke_snap.observations))
     check("manifest observation registered", any(o.target == "TargetX" and o.metric == "logFC" for o in smoke_snap.observations))
     check("manifest artifact registered", any(a.kind == "table" and "summary.csv" in a.path for a in smoke_snap.artifacts))
     smoke_graph = wb._store.read_graph()
@@ -918,6 +922,16 @@ trace_loop_hint = _trace_driven_rethinking(
 )
 check("tool loop injects trace-driven rethinking", trace_loop_hint["status"] == "needs_trace_driven_repair")
 check("tool loop rethinking carries actions", any(action.get("tool") == "review_evidence_chain" for action in trace_loop_hint["recommended_actions"]))
+active_work_order = build_active_work_order(
+    trace_snap,
+    compile_context(trace_snap, graph=trace_graph, max_items=4),
+    context_envelope,
+    trace_driven_rethinking=trace_loop_hint,
+    tool_names=["get_context_review", "execute_code", "plan_rethinking"],
+)
+check("active work order renders markdown", active_work_order["view_type"] == "active_work_order" and "# Active Work Order" in active_work_order["markdown"])
+check("active work order foregrounds rethink mode", active_work_order["mode"] == "rethink")
+check("active work order keeps compact contract", active_work_order["contract"]["state_changes_go_through"] == "gated_dispatch")
 restored_context_envelope = build_view(
     trace_snap,
     trace_graph,
@@ -1974,6 +1988,19 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         )
     }
     check("scoped schema exposes execute only inside active node", "execute_code" in scoped_active_names and "search_web" not in scoped_active_names)
+    check("scoped schema is smaller than full tool surface", len(scoped_active_names) < len(unscoped_tool_names))
+    scoped_issue_names = {
+        item["function"]["name"]
+        for item in tool_schemas(
+            snap=Snapshot(
+                analysis_spec={"nodes": [{"node_id": "inspect"}]},
+                active_node_id="inspect",
+                findings=[Finding(finding_id="find_issue", severity="blocking", summary="needs repair")],
+            ),
+            scoped=True,
+        )
+    }
+    check("issue scoped schema exposes rethinking tools", {"plan_rethinking", "review_evidence_chain", "audit_run"} <= scoped_issue_names)
 
     perturb_spec = PERTURBSEQ_DOMAIN.analysis_graph
     check("perturbseq default spec present", bool(perturb_spec and perturb_spec.get("nodes")))
@@ -2141,6 +2168,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     check("GUI graph panel fetches rethinking endpoint", "/api/rethink/" in gui_html and "Rethinking" in gui_html)
     check("GUI capability browser names LLM tool surface", "LLM visible tools this turn" in gui_html and "toggleCapability" in gui_html)
     check("GUI actions surface API failures", "actionStatus" in gui_html and "postJson" in gui_html and "!r.ok" in gui_html)
+    check("GUI foregrounds active work order", "Active Work Order" in gui_html and "active_work_order" in gui_html)
     cli_help = subprocess.run(
         [sys.executable, "-m", "pertura._cli", "--help"],
         text=True,
@@ -2307,12 +2335,15 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         check("api exposes context review", api_context["view_type"] == "context_envelope")
         check("api exposes workbench view", api_workbench_view["view_type"] == "workbench_view")
         check("api workbench view contains active node contract", "active_node_contract" in api_workbench_view["analysis"])
+        check("api workbench view contains active work order", api_workbench_view["analysis"]["active_work_order"]["view_type"] == "active_work_order")
         check("api workbench view contains analysis nodes", len(api_workbench_view["analysis"]["nodes"]) >= 1)
         check("api workbench view contains agent context", api_workbench_view["agent_context"].get("view_type") == "context_envelope")
         check("api workbench view exposes review summary", "run_audit_summary" in api_workbench_view["review"])
         check("api exposes harness manifest", api_harness["thesis"]["core_principle"] == "free_reasoning_gated_commit")
         check("api exposes run audit", api_run_audit["audit_type"] == "run_audit")
         check("api exposes rethinking endpoint", api_rethink["view_type"] == "rethinking_plan")
+        api_run_response = client.post("/api/run", json={"workspace": str(ws_spec), "goal": "api body parse", "steps": 0})
+        check("api run accepts JSON body", api_run_response.status_code == 200)
     except Exception as exc:
         check("api contract endpoints skipped without fastapi", True, str(exc))
 

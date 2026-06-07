@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import csv
 from pathlib import Path
 from uuid import uuid4
 
@@ -572,3 +573,88 @@ def _scan_workspace(wb: Workbench, workspace: str):
                 value=f.stat().st_size, method="auto_discover",
                 attempt_id="", branch_id="main",
             ))})
+        _probe_workspace_entry(wb, f)
+
+
+def _probe_workspace_entry(wb: Workbench, path: Path) -> None:
+    """Register lightweight dataset/schema hints without loading large matrices."""
+    try:
+        lower = path.name.lower()
+        if path.is_dir():
+            names = {item.name.lower() for item in path.iterdir()} if path.exists() else set()
+            if {"matrix.mtx", "matrix.mtx.gz"} & names or {"features.tsv", "features.tsv.gz"} & names:
+                _register_probe_observation(
+                    wb, target=path.name, metric="detected_format", value="10x_mtx_directory",
+                    summary="Directory looks like a 10X matrix folder.",
+                )
+            return
+        if lower.endswith(".h5ad"):
+            _register_probe_observation(
+                wb, target=path.name, metric="detected_format", value="h5ad",
+                summary="AnnData file candidate. Prefer backed read for large data.",
+            )
+            return
+        if lower.endswith(".h5") or lower.endswith(".hdf5"):
+            _register_probe_observation(
+                wb, target=path.name, metric="detected_format", value="hdf5_or_10x_h5",
+                summary="HDF5 candidate. Inspect keys before choosing loader.",
+            )
+            return
+        if lower.endswith((".csv", ".tsv", ".txt")):
+            columns = _read_table_header(path)
+            if columns:
+                _register_probe_observation(
+                    wb, target=path.name, metric="table_columns",
+                    value=columns[:40],
+                    summary=f"Table header detected with {len(columns)} columns.",
+                )
+                for column in _candidate_design_columns(columns):
+                    _register_probe_observation(
+                        wb, target=column, metric="candidate_design_column",
+                        value=path.name,
+                        summary=f"Column {column} may encode perturbation design or metadata.",
+                    )
+    except Exception as exc:
+        _register_probe_observation(
+            wb, target=path.name, metric="probe_warning", value=str(exc)[:200],
+            summary="Workspace probe could not inspect this entry.",
+        )
+
+
+def _read_table_header(path: Path) -> list[str]:
+    delimiter = "\t" if path.suffix.lower() == ".tsv" else ","
+    with path.open("r", encoding="utf-8", errors="ignore", newline="") as handle:
+        sample = handle.readline()
+    if not sample:
+        return []
+    try:
+        return [item.strip() for item in next(csv.reader([sample], delimiter=delimiter)) if item.strip()]
+    except Exception:
+        return []
+
+
+def _candidate_design_columns(columns: list[str]) -> list[str]:
+    hints = (
+        "guide", "grna", "sgrna", "perturb", "target", "gene",
+        "control", "ntc", "batch", "condition", "sample", "moi",
+    )
+    out = []
+    for column in columns:
+        lower = column.lower()
+        if any(hint in lower for hint in hints):
+            out.append(column)
+    return out[:12]
+
+
+def _register_probe_observation(wb: Workbench, *, target: str, metric: str, value, summary: str) -> None:
+    wb._emit("observation_registered", {"observation": _model_dump(Observation(
+        observation_id=f"obs_probe_{uuid4().hex[:8]}",
+        type="workspace_probe",
+        target=target,
+        metric=metric,
+        value=value,
+        method="workspace_probe",
+        parameters={"summary": summary},
+        attempt_id="",
+        branch_id="main",
+    ))})

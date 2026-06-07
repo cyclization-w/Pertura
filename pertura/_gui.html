@@ -24,12 +24,12 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .toolbar{display:flex;gap:8px;align-items:center;min-width:0;flex-wrap:wrap}
 .chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:999px;background:#eef0f3;color:#344054;font-size:12px;font-weight:650}
 .chip.good{background:var(--good-soft);color:var(--good)}.chip.warn{background:var(--warn-soft);color:var(--warn)}.chip.bad{background:var(--bad-soft);color:var(--bad)}
-.shell{flex:1;min-height:0;display:grid;grid-template-columns:292px minmax(420px,1fr) 386px;gap:10px;padding:10px}
-.column{min-height:0;display:flex;flex-direction:column;gap:10px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:0;overflow:hidden}
+.shell{flex:1;min-height:0;overflow:hidden;display:grid;grid-template-columns:292px minmax(420px,1fr) 386px;gap:10px;padding:10px}
+.column{min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:0;overflow:hidden;display:flex;flex-direction:column}
 .panel-head{height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;border-bottom:1px solid var(--line);background:var(--panel-soft)}
 .panel-title{font-size:12px;font-weight:760;text-transform:uppercase;letter-spacing:.02em;color:#475467}
-.panel-body{padding:10px;overflow:auto}
+.panel-body{padding:10px;overflow:auto;min-height:0}
 .grow{flex:1}.small{font-size:12px;line-height:1.45;color:#344054}.muted{color:var(--muted)}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .metric{border:1px solid var(--line);border-radius:6px;background:#fff;padding:8px}
@@ -48,6 +48,9 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .capability-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,.42fr);gap:8px}
 .small-button{height:26px;padding:0 8px;font-size:11px;font-weight:700}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:180px}
+.compact-panel{flex:0 1 260px}.compact-panel .panel-body{max-height:220px}
+.work-order-panel{flex:0 0 auto}.work-order-panel .panel-body{max-height:270px}
+.advanced-details{margin-top:8px}.advanced-details summary{cursor:pointer;font-weight:720;color:#475467}
 .graph-wrap{height:100%;min-height:340px;background:#fbfcfd}
 #graphSvg{width:100%;height:100%;display:block}
 .graph-node{cursor:pointer}.graph-node rect{fill:#fff;stroke:#c7ced8;stroke-width:1.2}.graph-node.active rect{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2}.graph-node.dim rect{fill:#f7f8fa;stroke:#e0e5ec}.graph-node text{font-size:11px;fill:#111827}.graph-node .type-label{font-size:9px;fill:#667085;text-transform:uppercase}.graph-edge{stroke:#9aa4b2;stroke-width:1.2;fill:none;marker-end:url(#arrow)}.graph-edge.highlight{stroke:var(--accent);stroke-width:2}.graph-edge.suspicious{stroke:var(--warn);stroke-dasharray:5 4;stroke-width:2}.lane-label{font-size:11px;font-weight:760;fill:#475467;text-transform:uppercase;letter-spacing:.04em}.lane-bg{fill:#f6f8fa;stroke:#e1e6ed;stroke-width:1}
@@ -94,11 +97,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
   </section>
 
   <section class="column">
-    <div class="panel">
-      <div class="panel-head"><div class="panel-title">Active Node Contract</div><span id="activeNodeChip" class="chip">none</span></div>
+    <div class="panel work-order-panel">
+      <div class="panel-head"><div class="panel-title">Active Work Order</div><span id="activeNodeChip" class="chip">none</span></div>
       <div id="nodeContract" class="panel-body small"></div>
     </div>
-    <div class="panel">
+    <div class="panel compact-panel">
       <div class="panel-head"><div class="panel-title">Capability Browser</div><span id="capabilityCount" class="chip">0 caps</span></div>
       <div id="capabilityBrowser" class="panel-body small"></div>
     </div>
@@ -134,7 +137,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
       <div class="panel-head"><div class="panel-title">Trace / Rethinking</div></div>
       <div id="traceBox" class="panel-body small trace-box">Select a graph node.</div>
     </div>
-    <div class="panel grow">
+    <div class="panel grow compact-panel">
       <div class="panel-head"><div class="panel-title">LLM Context Surface</div><span id="budgetChip" class="chip">budget</span></div>
       <div class="panel-body">
         <div id="contextSummary" class="small"></div>
@@ -242,19 +245,30 @@ function renderNodes(view){
 
 function renderContract(view){
   const contract=(view.analysis||{}).active_node_contract||{};
+  const workOrder=(view.analysis||{}).active_work_order||{};
   const node=contract.node||{};
   const runtime=contract.runtime||{};
   const caps=contract.capabilities||[];
   const inputs=(contract.inputs||{}).required||runtime.missing_inputs||[];
-  document.getElementById("activeNodeChip").textContent=node.id||view.active?.node_id||"none";
+  const activeNode=(workOrder.active_node||{});
+  const progress=(workOrder.node_progress||{});
+  const missing=progress.missing_completion||[];
+  const actions=workOrder.recommended_actions||[];
+  const woCaps=workOrder.available_capabilities||[];
+  document.getElementById("activeNodeChip").textContent=activeNode.id||node.id||view.active?.node_id||"none";
   document.getElementById("nodeContract").innerHTML=`
     <div class="item">
-      <div class="item-title">${esc(node.title||node.id||"No active node")}</div>
-      <div class="item-sub">${esc(node.purpose||"")}</div>
+      <div class="item-title">${esc(activeNode.title||node.title||activeNode.id||node.id||"No active node")} <span class="badge ${chipClass(workOrder.mode)}">${esc(workOrder.mode||"normal")}</span></div>
+      <div class="item-sub">${esc(activeNode.purpose||node.purpose||"")}</div>
+      <div class="item-sub" style="margin-top:5px"><b>Goal:</b> ${esc(workOrder.run_goal||((view.status||{}).goal)||"No goal recorded")}</div>
     </div>
-    <div>${caps.slice(0,8).map(c=>`<span class="badge violet">${esc(c.id||c.capability_id)}</span>`).join("")||"<span class='muted'>No capabilities</span>"}</div>
-    <div style="margin-top:8px"><b>Inputs:</b> ${inputs.length?inputs.map(i=>`<span class="badge">${esc(i)}</span>`).join(""):"<span class='muted'>none</span>"}</div>
-    <div style="margin-top:8px"><b>Ready:</b> ${((runtime.ready_capabilities||[]).map(c=>`<span class="badge good">${esc(c)}</span>`).join(""))||"<span class='muted'>no ready capability reported</span>"}</div>
+    <div><b>Missing:</b> ${missing.length?missing.slice(0,6).map(i=>`<span class="badge warn">${esc(i)}</span>`).join(""):"<span class='muted'>none reported</span>"}</div>
+    <div style="margin-top:7px"><b>Recommended:</b> ${actions.length?actions.slice(0,4).map(i=>`<div class="item-sub">- ${esc(i)}</div>`).join(""):"<span class='muted'>choose one allowed action</span>"}</div>
+    <div style="margin-top:7px"><b>Available here:</b> ${woCaps.length?woCaps.slice(0,6).map(c=>`<span class="badge violet">${esc(c.id||c.capability_id)}</span>`).join(""):caps.slice(0,6).map(c=>`<span class="badge violet">${esc(c.id||c.capability_id)}</span>`).join("")||"<span class='muted'>No capabilities</span>"}</div>
+    <details class="advanced-details"><summary>Node contract details</summary>
+      <div style="margin-top:8px"><b>Inputs:</b> ${inputs.length?inputs.map(i=>`<span class="badge">${esc(i)}</span>`).join(""):"<span class='muted'>none</span>"}</div>
+      <div style="margin-top:8px"><b>Ready:</b> ${((runtime.ready_capabilities||[]).map(c=>`<span class="badge good">${esc(c)}</span>`).join(""))||"<span class='muted'>no ready capability reported</span>"}</div>
+    </details>
   `;
 }
 
@@ -274,7 +288,7 @@ function renderCapabilities(view){
     <div class="tool-chip-row">${visible.slice(0,12).map(t=>`<span class="badge good" title="${esc(t.description||"")}">${esc(t.tool_id)}</span>`).join("")||"<span class='muted'>No tools exposed.</span>"}</div>
     <div class="tool-reasons">${Object.entries(reasons).slice(0,5).map(([reason,count])=>`<span class="badge warn">${esc(reason)}: ${count}</span>`).join("")}</div>
   </div>`;
-  const rows=caps.slice(0,16).map(c=>{
+  const rows=caps.slice(0,10).map(c=>{
     const id=c.capability_id||c.id||"";
     const status=!c.enabled?"disabled":c.llm_actionable?"actionable":c.ready?"ready":c.allowed_in_active_node?"available":"other node";
     const missing=(c.missing_inputs||[]);
@@ -297,7 +311,7 @@ function renderCapabilities(view){
       </div>
     </div>`;
   }).join("")||"<div class='muted'>No capabilities loaded.</div>";
-  document.getElementById("capabilityBrowser").innerHTML=toolPanel+rows;
+  document.getElementById("capabilityBrowser").innerHTML=toolPanel+`<details class="advanced-details" open><summary>Domain capabilities</summary>${rows}</details>`;
 }
 
 function laneForType(type){
@@ -398,9 +412,10 @@ function renderReview(view){
 function renderContext(view){
   const ctx=view.agent_context||{};
   const active=view.active||{};
+  const workOrder=(view.analysis||{}).active_work_order||{};
   document.getElementById("budgetChip").textContent=`attempts ${(view.budget||{}).max_attempts||"-"}`;
-  document.getElementById("contextSummary").innerHTML=`<b>Active:</b> ${esc(active.node_id||"none")} / ${esc(active.branch_id||"main")}<br><b>Context:</b> ${esc(ctx.purpose||ctx.view_type||"context")}`;
-  const compact={view_type:ctx.view_type,purpose:ctx.purpose,llm_tool_surface:(((view.analysis||{}).capabilities_view||{}).llm_tool_surface||{}).summary,audit_preview:ctx.audit_preview,trace_driven_rethinking:ctx.trace_driven_rethinking,affordances:(ctx.affordances||[]).slice(0,6)};
+  document.getElementById("contextSummary").innerHTML=`<b>Active:</b> ${esc(active.node_id||"none")} / ${esc(active.branch_id||"main")}<br><b>Work order:</b> ${esc(workOrder.mode||"normal")}<br><b>Context:</b> ${esc(ctx.purpose||ctx.view_type||"context")}`;
+  const compact={active_work_order:{mode:workOrder.mode,active_node:workOrder.active_node,missing:(workOrder.node_progress||{}).missing_completion,recommended_actions:workOrder.recommended_actions,allowed_tools:workOrder.allowed_tools},llm_tool_surface:(((view.analysis||{}).capabilities_view||{}).llm_tool_surface||{}).summary,audit_preview:ctx.audit_preview,trace_driven_rethinking:ctx.trace_driven_rethinking};
   document.getElementById("contextJson").textContent=JSON.stringify(compact,null,2);
 }
 

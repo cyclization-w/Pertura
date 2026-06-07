@@ -1809,12 +1809,17 @@ def _scoped_tool_names(snap=None) -> set[str]:
     This is an ergonomics layer, not an authorization boundary. Gated dispatch
     and the permission model remain the authoritative enforcement points.
     """
-    from .permissions import ToolPermission, _TOOL_TIERS
-
     names = {
-        name
-        for name in TOOLS
-        if _TOOL_TIERS.get(name, ToolPermission.local_read) == ToolPermission.local_read
+        "get_context_review",
+        "get_node_contract",
+        "get_capability_template",
+        "request_node_transition",
+        "evaluate_node_conditions",
+        "execute_code",
+        "submit_job",
+        "complete_node",
+        "ask_user",
+        "finish",
     }
 
     open_interrupts = [
@@ -1822,28 +1827,41 @@ def _scoped_tool_names(snap=None) -> set[str]:
         if getattr(item, "status", "") == "open"
     ] if snap is not None else []
     if open_interrupts:
-        names.update({"ask_user", "update_design", "finish"})
+        names = {"get_context_review", "get_node_contract", "ask_user", "update_design", "finish"}
         return {name for name in names if name in TOOLS}
 
-    names.update({
-        "request_node_transition",
-        "complete_node",
-        "skip_node",
-        "ask_user",
-        "finish",
-        "open_branch",
-        "switch_branch",
-        "close_branch",
-        "execute_code",
-        "submit_job",
-        "retry",
-        "update_design",
-    })
+    has_issue = False
+    if snap is not None:
+        has_issue = any(
+            getattr(item, "status", "") == "open"
+            for item in (getattr(snap, "triggers", []) or [])
+        ) or any(
+            getattr(item, "severity", "") in {"warning", "blocking"}
+            for item in (getattr(snap, "findings", []) or [])
+        ) or any(
+            getattr(item, "status", "") in {"failed", "error"}
+            for item in (getattr(snap, "outcomes", []) or [])[-3:]
+        )
+    if has_issue:
+        names.update({
+            "get_audit_toolbox",
+            "audit_run",
+            "plan_rethinking",
+            "trace_upstream",
+            "review_evidence_chain",
+            "impact_of_change",
+            "inspect_artifact_summary",
+            "retry",
+        })
+
+    if snap is not None and getattr(snap, "active_branch", "main") != "main":
+        names.update({"close_branch", "switch_branch", "compare_branches"})
 
     if snap is not None:
         has_analysis_graph = bool(getattr(snap, "analysis_spec", {}) or {})
         if has_analysis_graph and not getattr(snap, "active_node_id", ""):
             names.difference_update({"execute_code", "submit_job", "retry", "complete_node"})
+            names.update({"list_analysis_nodes"})
 
         try:
             budget = getattr(snap, "budget", None)

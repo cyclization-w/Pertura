@@ -41,6 +41,7 @@ from .claims import (
 from .harness_manifest import (
     build_harness_manifest, harness_thesis, harness_vocabulary,
 )
+from .work_order import build_active_work_order, render_active_work_order
 from pertura.spec.gating import GateEvaluator, GateDecision
 
 __all__ = [
@@ -68,5 +69,6 @@ __all__ = [
     "capsule_claim_id", "standalone_claim_command", "standalone_claim_command_array",
     "source_tree_claim_command", "claim_id_for_script",
     "build_harness_manifest", "harness_thesis", "harness_vocabulary",
+    "build_active_work_order", "render_active_work_order",
     "GateEvaluator", "GateDecision",
 ]

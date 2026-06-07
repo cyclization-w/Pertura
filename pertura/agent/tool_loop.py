@@ -7,7 +7,7 @@ import os
 
 from pertura.tools import execute_tool, tool_schemas
 from pertura.memory.compiler import compile_context
-from pertura.core import build_view
+from pertura.core import build_active_work_order, build_view
 
 
 _STATE_CHANGE_TOOLS = {
@@ -134,10 +134,28 @@ def run_tool_loop(result: dict | None, obs_count: int, snap, attempt,
         obs_count,
         context_envelope,
     ) if not is_first else {}
+    all_tools = tool_schemas(readonly=False, snap=snap, scoped=True)
+    visible_tool_names = [
+        item.get("function", {}).get("name", "")
+        for item in all_tools
+        if item.get("function", {}).get("name")
+    ]
+    active_work_order = build_active_work_order(
+        snap,
+        context_view,
+        context_envelope,
+        outcome_text=outcome_text,
+        last_attempt_delta=last_delta,
+        trace_driven_rethinking=trace_driven_rethinking,
+        tool_names=visible_tool_names,
+    )
 
     user_payload = {
-        "context_envelope": context_envelope,
-        "legacy_context_view": {
+        "active_work_order": {
+            key: value for key, value in active_work_order.items()
+            if key != "markdown"
+        },
+        "compact_context": {
             "active_node_id": context_view.active_node_id,
             "analysis_node": context_view.analysis_node,
             "current_node_progress": context_view.current_node_progress,
@@ -146,6 +164,9 @@ def run_tool_loop(result: dict | None, obs_count: int, snap, attempt,
             "open_triggers": context_view.open_triggers,
             "recent_findings": context_view.recent_findings,
             "observation_memory": context_view.observation_memory,
+            "audit_preview": context_envelope.get("audit_preview", {}),
+            "trace_driven_rethinking": context_envelope.get("trace_driven_rethinking", {}),
+            "runtime_state": context_envelope.get("runtime_state", {}),
         },
         "user_said": latest_goal,
         "previous_code": (attempt.notebook_cells[0].get("source", "")[:1500]
@@ -159,14 +180,17 @@ def run_tool_loop(result: dict | None, obs_count: int, snap, attempt,
         "last_attempt_delta": last_delta,
         "trace_driven_rethinking": trace_driven_rethinking,
     }
-    user = _json_for_prompt(user_payload, max_chars=20000)
+    user = (
+        active_work_order["markdown"]
+        + "\n\n# Compact Machine-Readable Context\n"
+        + _json_for_prompt(user_payload, max_chars=9000)
+    )
 
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
 
-    all_tools = tool_schemas(readonly=False, snap=snap, scoped=True)
     provider_tools = _provider_tool_schemas(all_tools, provider)
     from pertura.core import hash_llm_request
     request_hash = hash_llm_request(

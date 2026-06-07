@@ -4,6 +4,43 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import BaseModel
+
+
+class RunRequest(BaseModel):
+    workspace: str
+    goal: str = ""
+    steps: int = 5
+
+
+class AnswerRequest(BaseModel):
+    answer: str
+
+
+class AnalysisSpecRequest(BaseModel):
+    analysis_spec: dict
+    reason: str = "api_update"
+
+
+class AnalysisSpecCompileRequest(BaseModel):
+    analysis_spec: dict
+    provider: str = "deterministic"
+    apply: bool = False
+    reason: str = "api_compile"
+    domain_context: str = ""
+
+
+class DesignUpdateRequest(BaseModel):
+    design: dict
+    reason: str = "api_update"
+    source: str = "api_confirmed"
+    confidence: str = "high"
+
+
+class CapabilityToggleRequest(BaseModel):
+    enabled: bool = True
+    reason: str = "api_toggle"
+
 
 def analysis_spec_audit_payload(workbench, *, run_id: str = "", strict: bool = False) -> dict:
     from pertura.spec.contracts import audit_analysis_graph
@@ -174,6 +211,22 @@ def workbench_view_payload(
     artifact_summary = [_artifact_card(item) for item in ((snap.artifacts if snap else []) or [])[-max_items:]]
     runtime_events = _runtime_event_cards(store.read_events()[-max_items * 4:] if store else [], max_items=max_items)
     capability_view = capabilities_view_payload(workbench, run_id=run_id, node_id=active_node_id, max_items=100)
+    active_work_order = {}
+    if snap:
+        from pertura.core import build_active_work_order
+        from pertura.memory.compiler import compile_context
+        visible_tools = [
+            item.get("tool_id", "")
+            for item in ((capability_view.get("llm_tool_surface") or {}).get("visible_tools") or [])
+            if item.get("tool_id")
+        ]
+        active_work_order = build_active_work_order(
+            snap,
+            compile_context(snap, max_items=max_items),
+            context_review if isinstance(context_review, dict) else {},
+            trace_driven_rethinking=(context_review or {}).get("trace_driven_rethinking", {}),
+            tool_names=visible_tools,
+        )
 
     domain_payload = domain_browser_payload(workbench, include_core_tools=False)
     runtime_jobs = [_model_dump(item) for item in ((snap.jobs if snap else []) or [])]
@@ -223,6 +276,7 @@ def workbench_view_payload(
             ],
             "capabilities_by_node": domain_payload.get("capabilities_by_node", {}),
             "capabilities_view": capability_view,
+            "active_work_order": active_work_order,
         },
         "agent_context": context_review,
         "review": {
@@ -758,7 +812,6 @@ def create_app(workbench, *, ui: str = "auto"):
     from fastapi import FastAPI, HTTPException
     from fastapi.responses import FileResponse, HTMLResponse
     from fastapi.staticfiles import StaticFiles
-    from pydantic import BaseModel
 
     from pertura.core import Store, build_impact_view, build_trace_view
     from pertura.jobs import JobRunner
@@ -772,35 +825,6 @@ def create_app(workbench, *, ui: str = "auto"):
     use_react = ui_mode in {"auto", "react"} and (react_dist / "index.html").exists()
     if use_react and (react_dist / "assets").exists():
         app.mount("/assets", StaticFiles(directory=str(react_dist / "assets")), name="assets")
-
-    class RunRequest(BaseModel):
-        workspace: str
-        goal: str = ""
-        steps: int = 5
-
-    class AnswerRequest(BaseModel):
-        answer: str
-
-    class AnalysisSpecRequest(BaseModel):
-        analysis_spec: dict
-        reason: str = "api_update"
-
-    class AnalysisSpecCompileRequest(BaseModel):
-        analysis_spec: dict
-        provider: str = "deterministic"
-        apply: bool = False
-        reason: str = "api_compile"
-        domain_context: str = ""
-
-    class DesignUpdateRequest(BaseModel):
-        design: dict
-        reason: str = "api_update"
-        source: str = "api_confirmed"
-        confidence: str = "high"
-
-    class CapabilityToggleRequest(BaseModel):
-        enabled: bool = True
-        reason: str = "api_toggle"
 
     def _store_for_run(run_id: str = ""):
         return _store_for_workbench(workbench, run_id=run_id)
