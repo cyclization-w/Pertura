@@ -40,15 +40,30 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .metric{border:1px solid var(--line);border-radius:6px;background:#fff;padding:8px}
 .metric b{display:block;font-size:18px}.metric span{font-size:11px;color:var(--muted)}
 .analysis-console{border-color:#bdd8d4;box-shadow:0 18px 42px rgba(15,118,110,.11)}
-.console-grid{display:grid;grid-template-columns:minmax(210px,.5fr) minmax(320px,1fr) auto;gap:10px;align-items:stretch}
-.console-actions{display:flex;flex-direction:column;gap:8px;min-width:160px}
-.console-actions button{width:100%}
-.candidate-actions{display:flex;gap:8px;overflow:auto;padding-top:10px}
+.conversation-panel{min-height:560px;max-height:calc(100vh - 116px)}
+.session-body{padding:0;display:flex;flex-direction:column;min-height:0;flex:1}
+.conversation-stream{flex:1;min-height:290px;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:linear-gradient(180deg,#fbfdfc 0,#f6f9fb 100%)}
+.message{max-width:86%;border:1px solid var(--line);border-radius:8px;background:#fff;padding:10px 12px;box-shadow:0 8px 18px rgba(16,24,40,.035)}
+.message.user{align-self:flex-end;background:var(--accent);border-color:var(--accent);color:#fff}
+.message.agent,.message.system,.message.output{align-self:flex-start}
+.message.system{background:#f7f8fa}
+.message.output{border-left:4px solid var(--blue);background:#fff}
+.message-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;font-size:11px;font-weight:760;color:#475467;text-transform:uppercase}
+.message.user .message-head{color:#d8fbf5}.message-meta{font-size:10px;color:var(--muted);text-transform:none;font-weight:650}.message.user .message-meta{color:#c9f6ef}
+.message-body{font-size:13px;line-height:1.48;white-space:pre-wrap;overflow-wrap:anywhere}.message-body b{font-weight:760}
+.message pre{margin:8px 0 0;max-height:190px;overflow:auto;border-radius:6px;background:#101828;color:#f8fafc;padding:8px;font-size:11px;line-height:1.45;white-space:pre-wrap}
+.composer{position:sticky;bottom:0;z-index:3;border-top:1px solid var(--line);background:rgba(255,255,255,.98);padding:10px 12px;backdrop-filter:blur(8px)}
+.composer-grid{display:grid;grid-template-columns:minmax(190px,.38fr) minmax(280px,1fr) minmax(148px,.22fr);gap:9px;align-items:end}
+.composer textarea{min-height:54px;max-height:125px}
+.composer-actions{display:flex;flex-direction:column;gap:7px}
+.composer-actions button{width:100%}
+.composer-secondary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.candidate-actions{display:flex;gap:8px;overflow:auto;padding:9px 12px 10px;border-top:1px solid #edf0f3;background:#fbfcfd}
 .action-card{min-width:180px;max-width:260px;text-align:left;height:auto;min-height:66px;padding:9px;border-radius:7px;background:#fff}
 .action-card.primary-action{border-color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
 .action-card:disabled{background:#f2f4f7}
 .action-label{font-size:12px;font-weight:760}.action-desc{font-size:11px;color:var(--muted);line-height:1.35;margin-top:4px}
-.question-console{display:none;margin-top:10px;border:1px solid #f5c2bf;border-left:4px solid var(--bad);border-radius:7px;background:var(--bad-soft);padding:10px}
+.question-console{display:none;margin:0 12px 10px;border:1px solid #f5c2bf;border-left:4px solid var(--bad);border-radius:7px;background:var(--bad-soft);padding:10px}
 .question-options,.question-fields{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
 .question-fields input{min-width:190px;flex:1}
 .live-layout{display:grid;grid-template-columns:minmax(0,1fr) 318px;gap:10px}
@@ -70,7 +85,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .tool-chip-row,.tool-reasons{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
 .capability-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,.42fr);gap:8px}
 .small-button{height:26px;padding:0 8px;font-size:11px;font-weight:700}
-.split{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:220px}
+.split,.output-strip{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:220px}
+.output-strip{min-height:250px}.output-strip .panel-body{max-height:310px}
 .compact-panel{flex:0 0 auto}.compact-panel .panel-body{max-height:260px}
 .work-order-panel{flex:0 0 auto}.work-order-panel .panel-body{max-height:320px}
 .thinking-panel{border-color:#b9d7d2;box-shadow:0 10px 28px rgba(15,118,110,.08)}.thinking-panel .panel-body{overflow:visible}
@@ -101,7 +117,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .tab-section-title{font-size:12px;font-weight:760;color:#475467;text-transform:uppercase;letter-spacing:0}
 .tab-section-body{padding:10px;overflow:auto}
 @media(max-width:1180px){.shell{grid-template-columns:1fr}.column{overflow:visible}.live-layout{grid-template-columns:1fr}.right{display:grid;grid-template-columns:1fr 1fr}.right .grow{min-height:280px}}
-@media(max-width:760px){header{height:auto;align-items:flex-start;flex-direction:column}.shell{overflow:auto}.console-grid{grid-template-columns:1fr}.right{display:flex}.metric-grid{grid-template-columns:repeat(2,1fr)}.split{grid-template-columns:1fr}}
+@media(max-width:760px){header{height:auto;align-items:flex-start;flex-direction:column}.shell{overflow:auto}.composer-grid{grid-template-columns:1fr}.composer-secondary{grid-template-columns:1fr}.right{display:flex}.metric-grid{grid-template-columns:repeat(2,1fr)}.split,.output-strip{grid-template-columns:1fr}.message{max-width:100%}}
 </style>
 </head>
 <body>
@@ -121,23 +137,26 @@ button:disabled{opacity:.55;cursor:not-allowed}
 
 <main class="shell">
   <section class="column">
-    <div class="panel analysis-console">
-      <div class="panel-head"><div class="panel-title">Analysis Console</div><span id="runChip" class="chip">idle</span></div>
-      <div class="panel-body">
-        <div class="console-grid">
-          <input id="workspaceInput" placeholder="Workspace path">
-          <textarea id="goalInput" placeholder="Describe the scientific analysis goal"></textarea>
-          <div class="console-actions">
-            <button id="primaryActionButton" class="primary" onclick="submitPrimaryAction()">Start Analysis</button>
-            <div class="toolbar">
-              <button onclick="agentContinue()">Continue</button>
-              <button onclick="agentPause()">Pause</button>
-              <button onclick="generateReport()">Report</button>
+    <div class="panel analysis-console conversation-panel">
+      <div class="panel-head"><div class="panel-title">Analysis Session</div><span id="runChip" class="chip">idle</span></div>
+      <div class="panel-body session-body">
+        <div id="conversationStream" class="conversation-stream"></div>
+        <div id="questionConsole" class="question-console"></div>
+        <div id="candidateActions" class="candidate-actions"></div>
+        <div class="composer">
+          <div class="composer-grid">
+            <input id="workspaceInput" placeholder="Workspace path">
+            <textarea id="goalInput" placeholder="Ask the agent what to analyze"></textarea>
+            <div class="composer-actions">
+              <button id="primaryActionButton" class="primary" onclick="submitPrimaryAction()">Start Analysis</button>
+              <div class="composer-secondary">
+                <button onclick="agentContinue()">Continue</button>
+                <button onclick="agentPause()">Pause</button>
+                <button onclick="generateReport()">Report</button>
+              </div>
             </div>
           </div>
         </div>
-        <div id="questionConsole" class="question-console"></div>
-        <div id="candidateActions" class="candidate-actions"></div>
       </div>
     </div>
 
@@ -157,13 +176,13 @@ button:disabled{opacity:.55;cursor:not-allowed}
       <div id="nodeContract" class="panel-body small"></div>
     </div>
 
-    <div class="split">
+    <div class="output-strip">
       <div class="panel">
-        <div class="panel-head"><div class="panel-title">Recent Attempts</div></div>
+        <div class="panel-head"><div class="panel-title">Code Runs</div></div>
         <div id="attemptsList" class="panel-body"></div>
       </div>
       <div class="panel">
-        <div class="panel-head"><div class="panel-title">Artifacts</div></div>
+        <div class="panel-head"><div class="panel-title">Artifacts / Plots</div></div>
         <div id="artifactList" class="panel-body"></div>
       </div>
     </div>
@@ -333,6 +352,7 @@ function renderAll(){
   if(!CURRENT_VIEW)return;
   renderStatus(CURRENT_VIEW);
   renderConsole(CURRENT_VIEW);
+  renderConversation(CURRENT_VIEW);
   renderNodes(CURRENT_VIEW);
   renderThinkingPath(CURRENT_VIEW);
   renderContract(CURRENT_VIEW);
@@ -407,6 +427,120 @@ function renderQuestionConsole(action){
     }).join("")}<button class="primary" onclick="submitQuestionFields('${arg(action.id)}')">Submit</button></div>`:""}
     ${(!options.length&&!fields.length)?`<div class="answer-row"><input id="questionFreeText" placeholder="Answer"><button class="primary" onclick="submitQuestionFreeText('${arg(action.id)}')">Send</button></div>`:""}
   `;
+}
+
+function eventKind(event){
+  return String(event.product_type||event.card_type||event.kind||event.event_type||"event");
+}
+
+function eventDisplayName(kind){
+  const names={
+    planning:"Planning",
+    running_code:"Running code",
+    execution_output:"Execution output",
+    artifact_ready:"Artifact ready",
+    question_opened:"Question",
+    repair_proposed:"Repair proposed",
+    repair_applied:"Repair applied",
+    result_recorded:"Result recorded",
+    blocked:"Blocked",
+    complete:"Complete",
+    job_submitted:"Job",
+    job_completed:"Job complete",
+    gate_evaluated:"Gate",
+    gate_blocked:"Gate blocked",
+    human_interrupt:"Question"
+  };
+  return names[kind]||kind.replaceAll("_"," ");
+}
+
+function messageHtml(role, label, body, meta="", extra=""){
+  return `<div class="message ${role}">
+    <div class="message-head"><span>${esc(label)}</span>${meta?`<span class="message-meta">${esc(meta)}</span>`:""}</div>
+    ${body?`<div class="message-body">${esc(body)}</div>`:""}
+    ${extra||""}
+  </div>`;
+}
+
+function renderConversationEvent(event){
+  const kind=eventKind(event);
+  const title=event.title||eventDisplayName(kind);
+  const summary=event.summary||event.description||event.event_type||"";
+  const role=kind.match(/output|artifact|result|complete/i)?"output":kind.match(/blocked|failed|error|question|repair/i)?"system":"agent";
+  const meta=event.timestamp||event.ts||"";
+  const extra=kind==="execution_output" && summary ? `<pre>${esc(summary)}</pre>` : "";
+  const body=kind==="execution_output" ? "" : summary;
+  return messageHtml(role, title, trunc(body, 420), meta, extra);
+}
+
+function renderConversation(view){
+  const stream=document.getElementById("conversationStream");
+  if(!stream)return;
+  const s=view.status||{};
+  const exec=view.execution_state||{};
+  const runtime=(view.activity||{}).runtime_events||[];
+  const jobs=((view.activity||{}).jobs||[]).map(j=>({
+    product_type:j.status==="running"?"running_code":"planning",
+    title:`${j.job_type||"job"} ${j.status||""}`.trim(),
+    summary:j.already_running?"Already running":j.job_id||"",
+    event_id:j.job_id||""
+  }));
+  const events=mergeEvents(PRODUCT_EVENTS, mergeEvents(RUNTIME_STREAM_EVENTS, [...jobs, ...runtime], 22), 24);
+  const actions=actionList(view);
+  const question=actions.find(a=>a.kind==="answer_question")||{};
+  const attempts=(view.activity||{}).recent_attempts||[];
+  const artifacts=(view.artifacts||{}).recent||[];
+  const goal=s.goal||"";
+  const workspace=s.workspace||"";
+  const mode=exec.mode||s.phase||s.state||"not_initialized";
+  const messages=[];
+
+  if(goal){
+    messages.push(messageHtml("user", "User", goal, workspace||""));
+  }else{
+    messages.push(messageHtml(
+      "system",
+      "Pertura",
+      "Give me a workspace path and a scientific goal. I will plan the analysis, run code through the audited harness, and surface outputs here as they arrive.",
+      mode
+    ));
+  }
+
+  if(!events.length){
+    messages.push(messageHtml(
+      "agent",
+      "Agent",
+      mode==="not_initialized" ? "Ready to start. The main action button will launch the run once the workspace is set." : "Waiting for the next event from the run.",
+      mode
+    ));
+  }else{
+    messages.push(...events.map(renderConversationEvent));
+  }
+
+  if(question.id){
+    messages.push(messageHtml(
+      "system",
+      "Input needed",
+      question.description||"The agent needs your answer before continuing. Use the buttons or form below.",
+      question.risk_level||""
+    ));
+  }
+
+  const latestAttempt=attempts.length?attempts[attempts.length-1]:null;
+  if(latestAttempt){
+    const status=latestAttempt.outcome_status||latestAttempt.status||"attempt";
+    const summary=latestAttempt.outcome_summary||latestAttempt.objective||latestAttempt.rationale||"";
+    const code=latestAttempt.code_preview?`<pre>${esc(latestAttempt.code_preview)}</pre>`:"";
+    messages.push(messageHtml("output", `Latest code run: ${latestAttempt.title||latestAttempt.attempt_id}`, trunc(summary, 360), status, code));
+  }
+
+  if(artifacts.length){
+    const body=artifacts.slice(-3).map(a=>`${a.kind||"artifact"}: ${a.summary||a.path||a.artifact_id||""}`).join("\n");
+    messages.push(messageHtml("output", "Artifacts / plots", body, `${artifacts.length} total`));
+  }
+
+  stream.innerHTML=messages.join("");
+  stream.scrollTop=stream.scrollHeight;
 }
 
 function findAction(actionId){
@@ -818,6 +952,7 @@ function connectEventStream(){
     try{
       const data=JSON.parse(ev.data);
       PRODUCT_EVENTS=mergeEvents([data], PRODUCT_EVENTS, 24);
+      renderConversation(CURRENT_VIEW||{activity:{}});
       renderLiveProcess(CURRENT_VIEW||{activity:{}});
     }catch{}
   });
@@ -825,6 +960,7 @@ function connectEventStream(){
     try{
       const data=JSON.parse(ev.data);
       RUNTIME_STREAM_EVENTS=mergeEvents([data], RUNTIME_STREAM_EVENTS, 24);
+      renderConversation(CURRENT_VIEW||{activity:{}});
       renderLiveProcess(CURRENT_VIEW||{activity:{}});
     }catch{}
   });
