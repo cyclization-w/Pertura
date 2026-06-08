@@ -322,6 +322,7 @@ def workbench_view_payload(
             "rethink": "/api/rethink",
             "artifacts": "/api/artifacts",
             "jobs": "/api/jobs",
+            "events_stream": "/api/events/stream",
             "capabilities_view": "/api/capabilities/view",
             "derivation_view": "/api/derivation-view",
             "interrupts": "/api/interrupts",
@@ -558,19 +559,47 @@ def _attempt_card(attempt, *, snap) -> dict:
     observations = [item for item in (snap.observations if snap else []) if item.attempt_id == attempt.attempt_id]
     artifacts = [item for item in (snap.artifacts if snap else []) if item.attempt_id == attempt.attempt_id]
     last_outcome = outcomes[-1] if outcomes else None
+    metrics = dict(getattr(last_outcome, "metrics", {}) or {}) if last_outcome else {}
+    kernel_state = metrics.get("kernel_state", {}) if isinstance(metrics.get("kernel_state", {}), dict) else {}
+    variables = kernel_state.get("variables", {}) if isinstance(kernel_state.get("variables", {}), dict) else {}
     return {
         "attempt_id": attempt.attempt_id,
         "title": attempt.title,
+        "objective": attempt.objective,
+        "stage": attempt.stage,
         "status": attempt.status,
         "analysis_node_id": attempt.analysis_node_id,
         "branch_id": attempt.branch_id,
         "capability_ids": list(attempt.capability_ids),
+        "rationale": attempt.rationale,
+        "repair_count": attempt.repair_count,
+        "code_preview": _attempt_code_preview(attempt),
         "outcome_status": last_outcome.status if last_outcome else "",
         "outcome_summary": last_outcome.summary if last_outcome else "",
+        "execution": {
+            "returncode": metrics.get("returncode"),
+            "timed_out": metrics.get("timed_out", False),
+            "soft_timeout_hit": metrics.get("soft_timeout_hit", False),
+            "execution_time": metrics.get("execution_time"),
+            "stdout_chars": metrics.get("stdout_chars", 0),
+            "stderr_tail": metrics.get("stderr", ""),
+            "observations_registered": metrics.get("observations_registered", 0),
+            "kernel_refs": list(variables)[:12],
+        },
         "observations": len(observations),
         "artifacts": len(artifacts),
         "created_at": str(attempt.created_at),
     }
+
+
+def _attempt_code_preview(attempt, *, max_chars: int = 1800) -> str:
+    cells = getattr(attempt, "notebook_cells", []) or []
+    for cell in cells:
+        source = cell.get("source", "") if isinstance(cell, dict) else ""
+        if source:
+            text = str(source)
+            return text[:max_chars] + ("..." if len(text) > max_chars else "")
+    return ""
 
 
 def _artifact_card(artifact) -> dict:
@@ -582,6 +611,7 @@ def _artifact_card(artifact) -> dict:
         "path": artifact.path,
         "metadata": artifact.metadata,
         "preview_url": f"/api/artifacts/{artifact.artifact_id}/preview",
+        "file_url": f"/api/artifacts/{artifact.artifact_id}/file",
     }
 
 
@@ -742,6 +772,8 @@ def _runtime_event_cards(events: list, *, max_items: int) -> list[dict]:
         "node_transition_blocked": "gate_blocked",
         "gate_evaluated": "gate_evaluated",
         "attempt_planned": "attempt_started",
+        "execution_output": "execution_output",
+        "outcome_recorded": "execution_result",
         "artifact_registered": "artifact_registered",
         "observation_registered": "observation_registered",
         "finding_recorded": "critic_finding",
@@ -768,9 +800,21 @@ def _runtime_event_cards(events: list, *, max_items: int) -> list[dict]:
     return list(reversed(cards))
 
 
+def _sse_event(event_type: str, payload: dict) -> str:
+    import json
+    return f"event: {event_type}\ndata: {json.dumps(payload, default=str)}\n\n"
+
+
 def _event_card_title(event_type: str, payload: dict) -> str:
     if event_type == "attempt_planned":
         return (payload.get("attempt") or {}).get("title", "Attempt planned")
+    if event_type == "outcome_recorded":
+        outcome = payload.get("outcome") or {}
+        status = outcome.get("status") or "outcome"
+        return f"Execution {status}"
+    if event_type == "execution_output":
+        stream = str(payload.get("stream") or "stdout").upper()
+        return f"{stream} output"
     if event_type == "artifact_registered":
         return (payload.get("artifact") or {}).get("kind", "Artifact")
     if event_type == "observation_registered":
@@ -789,7 +833,9 @@ def _event_card_summary(event_type: str, payload: dict) -> str:
     for key in ("reason", "summary", "question"):
         if payload.get(key):
             return str(payload.get(key))
-    for entity_key in ("finding", "interrupt", "artifact", "observation", "attempt", "job"):
+    if event_type == "execution_output":
+        return str(payload.get("text") or "")[-500:]
+    for entity_key in ("finding", "interrupt", "artifact", "observation", "attempt", "outcome", "job"):
         entity = payload.get(entity_key)
         if isinstance(entity, dict):
             return str(entity.get("summary") or entity.get("question") or entity.get("status") or "")
@@ -850,8 +896,8 @@ def _react_dist_dir() -> Path:
 
 
 def create_app(workbench, *, ui: str = "auto"):
-    from fastapi import FastAPI, HTTPException
-    from fastapi.responses import FileResponse, HTMLResponse
+    from fastapi import FastAPI, HTTPException, Request
+    from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
     from fastapi.staticfiles import StaticFiles
 
     from pertura.core import Store, build_impact_view, build_trace_view
@@ -973,6 +1019,58 @@ def create_app(workbench, *, ui: str = "auto"):
             token_budget=token_budget,
             jobs=runner.list_jobs()[:max_items],
             include_debug=include_debug,
+        )
+
+    @app.get("/api/events/stream")
+    async def events_stream(
+        request: Request,
+        run_id: str = "",
+        max_items: int = 20,
+        poll_ms: int = 750,
+    ):
+        async def stream():
+            import asyncio
+            import json
+
+            seen_event_ids: set[str] = set()
+            last_jobs_signature = ""
+            interval = max(0.25, min(5.0, poll_ms / 1000))
+            yield _sse_event("ready", {
+                "run_id": run_id or getattr(workbench, "_run_id", ""),
+                "stream": "event_store",
+            })
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                store = _store_for_run(run_id)
+                if store:
+                    cards = _runtime_event_cards(
+                        store.read_events()[-max_items * 4:],
+                        max_items=max_items,
+                    )
+                    for card in cards:
+                        event_id = str(card.get("event_id") or "")
+                        if not event_id or event_id in seen_event_ids:
+                            continue
+                        seen_event_ids.add(event_id)
+                        yield _sse_event("runtime_event", card)
+
+                jobs = runner.list_jobs()[:max_items]
+                jobs_signature = json.dumps(jobs, sort_keys=True, default=str)
+                if jobs_signature != last_jobs_signature:
+                    last_jobs_signature = jobs_signature
+                    yield _sse_event("jobs", {"jobs": jobs})
+
+                await asyncio.sleep(interval)
+
+        return StreamingResponse(
+            stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
         )
 
     @app.get("/api/execution-state")
@@ -1196,6 +1294,23 @@ def create_app(workbench, *, ui: str = "auto"):
         if "error" in preview:
             raise HTTPException(404, f"Artifact {artifact_id} not found")
         return {"artifact_id": artifact_id, **preview}
+
+    @app.get("/api/artifacts/{artifact_id}/file")
+    def artifact_file(artifact_id: str, run_id: str = ""):
+        snap = _snapshot_for_run(run_id)
+        if not snap:
+            raise HTTPException(404, "No data")
+        artifact = next((item for item in snap.artifacts if item.artifact_id == artifact_id), None)
+        if not artifact:
+            raise HTTPException(404, f"Artifact {artifact_id} not found")
+        try:
+            from pertura.tools.registry import _allowed_path
+            path = _allowed_path(artifact.path, snap=snap)
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc)) from exc
+        if not path.exists() or not path.is_file():
+            raise HTTPException(404, "Artifact file not found")
+        return FileResponse(str(path))
 
     @app.post("/api/jobs/run")
     def start_run_job(req: RunRequest):

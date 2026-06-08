@@ -85,12 +85,27 @@ export type NodeContract = {
 export type AttemptCard = {
   attempt_id: string;
   title: string;
+  objective?: string;
+  stage?: string;
   status: string;
   analysis_node_id: string;
   branch_id: string;
   capability_ids: string[];
+  rationale?: string;
+  repair_count?: number;
+  code_preview?: string;
   outcome_status: string;
   outcome_summary: string;
+  execution?: {
+    returncode?: number;
+    timed_out?: boolean;
+    soft_timeout_hit?: boolean;
+    execution_time?: number;
+    stdout_chars?: number;
+    stderr_tail?: string;
+    observations_registered?: number;
+    kernel_refs?: string[];
+  };
   observations: number;
   artifacts: number;
 };
@@ -101,7 +116,9 @@ export type ArtifactCard = {
   kind: string;
   summary: string;
   path: string;
+  metadata?: Record<string, unknown>;
   preview_url: string;
+  file_url?: string;
 };
 
 export type ReviewItem = {
@@ -245,7 +262,7 @@ export type WorkbenchView = {
   activity: {
     recent_attempts: AttemptCard[];
     jobs: Array<Record<string, unknown>>;
-    runtime_events?: Array<Record<string, unknown>>;
+    runtime_events?: RuntimeEventCard[];
   };
   artifacts: {
     recent: ArtifactCard[];
@@ -313,4 +330,13 @@ export type DerivationView = {
   issue_edges: GraphEdge[];
   folded_counts: Record<string, number>;
   summary: Record<string, number>;
+};
+
+export type RuntimeEventCard = {
+  event_id?: string;
+  event_type?: string;
+  card_type?: string;
+  timestamp?: string;
+  title?: string;
+  summary?: string;
 };

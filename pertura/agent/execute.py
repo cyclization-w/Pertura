@@ -13,6 +13,23 @@ from pertura.models import (
     RuntimeJob, _model_dump,
 )
 
+
+def _emit_execution_output(wb, attempt_id: str, stream: str, text: str, *, max_chars: int = 2000) -> None:
+    if not text:
+        return
+    for line in text.splitlines(True) or [text]:
+        chunk = line[-max_chars:]
+        try:
+            wb._emit("execution_output", {
+                "attempt_id": attempt_id,
+                "stream": stream,
+                "text": chunk,
+                "truncated": len(line) > max_chars,
+            })
+        except Exception:
+            pass
+
+
 def _execute_attempt(wb, attempt: Attempt) -> str:
     """Execute notebook code in kernel/sandbox, parse manifest, run hooks."""
     from pertura.hooks import pre_execute
@@ -239,6 +256,9 @@ def _run_attempt_code(wb, attempt: Attempt, code: str, workspace: str, artifacts
                 soft_timeout=soft_timeout,
                 hard_timeout=hard_timeout,
                 heartbeat_timeout=heartbeat_timeout,
+                on_output=lambda stream, text: _emit_execution_output(
+                    wb, attempt.attempt_id, stream, text
+                ),
             )
         except Exception as exc:
             return {

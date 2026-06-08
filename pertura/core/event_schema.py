@@ -77,6 +77,7 @@ _REQUIRED_KEYS = {
     "node_completed": {"node_id": str},
     "design_updated": {"design": dict},
     "tool_call_recorded": {"tool_call_id": str, "tool_name": str},
+    "execution_output": {"attempt_id": str, "stream": str, "text": str},
     "patch_applied": {"patch_id": str, "event_ids": list},
     "patch_rejected": {"patch_id": str, "reason": str},
     "node_transition_requested": {"target_node_id": str},
@@ -169,3 +170,6 @@ def _validate_special_cases(event_type: str, payload: dict[str, Any]) -> None:
             raise EventSchemaError("behavior_completed.output_event_ids must be list")
         if "output_count" in payload and not isinstance(payload["output_count"], int):
             raise EventSchemaError("behavior_completed.output_count must be int")
+    elif event_type == "execution_output":
+        if payload.get("stream") not in {"stdout", "stderr"}:
+            raise EventSchemaError("execution_output.stream must be stdout or stderr")

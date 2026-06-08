@@ -16,11 +16,14 @@ import {
 } from "./api";
 import type {
   AttemptGraph,
+  AttemptCard,
+  ArtifactCard,
   CapabilityCard,
   ExecutionState,
   GraphNode,
   LlmToolSurface,
   RuntimeIssue,
+  RuntimeEventCard,
   ToolVisibilityCard,
   WorkbenchNode,
   WorkbenchView
@@ -73,6 +76,30 @@ function numberValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+type ProcessEvent = {
+  id: string;
+  kind: string;
+  title: string;
+  summary: string;
+  status?: string;
+  timestamp?: string;
+  source: "llm" | "kernel" | "runtime" | "artifact" | "issue" | "job";
+};
+
+function recordValue(row: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = row[key];
+    if (value != null && String(value)) return String(value);
+  }
+  return "";
+}
+
+function isVisualArtifact(artifact: ArtifactCard) {
+  const kind = String(artifact.kind ?? "").toLowerCase();
+  const path = String(artifact.path ?? "").toLowerCase();
+  return kind.includes("figure") || /\.(png|jpe?g|gif|svg|webp)$/.test(path);
+}
+
 function laneForType(type?: string) {
   const text = String(type ?? "").toLowerCase();
   if (["workspace", "dataset", "metadata", "description", "parameter_set", "analysis_node", "branch"].includes(text)) return "Inputs";
@@ -106,6 +133,109 @@ function pickFocusNode(nodes: GraphNode[], selectedNode: string, activeNodeId: s
   return activeNodeId;
 }
 
+function buildProcessEvents(
+  view: WorkbenchView | null,
+  streamEvents: RuntimeEventCard[] = [],
+  streamJobs: Array<Record<string, unknown>> = []
+): ProcessEvent[] {
+  if (!view) return [];
+  const events: ProcessEvent[] = [];
+  const workOrder = view.analysis.active_work_order;
+  const selectedCapability = workOrder?.selected_capability;
+  const runtimeEvents = new Map<string, RuntimeEventCard>();
+  for (const item of view.activity.runtime_events ?? []) {
+    runtimeEvents.set(item.event_id ?? `${item.event_type}-${runtimeEvents.size}`, item);
+  }
+  for (const item of streamEvents) {
+    runtimeEvents.set(item.event_id ?? `${item.event_type}-${runtimeEvents.size}`, item);
+  }
+  const jobs = streamJobs.length ? streamJobs : (view.activity.jobs ?? []);
+  if (workOrder) {
+    events.push({
+      id: "llm-work-order",
+      kind: "llm_decision",
+      source: "llm",
+      status: workOrder.mode ?? view.execution_state?.mode,
+      title: selectedCapability?.title ?? selectedCapability?.id ?? selectedCapability?.capability_id ?? "Active work order",
+      summary: selectedCapability?.next_repair
+        ?? workOrder.recommended_actions?.[0]
+        ?? "Current bounded decision surface is ready."
+    });
+  }
+
+  for (const job of jobs) {
+    const row = job as Record<string, unknown>;
+    events.push({
+      id: recordValue(row, ["job_id", "id"]) || `job-${events.length}`,
+      kind: recordValue(row, ["job_type", "type"]) || "job",
+      source: "job",
+      status: recordValue(row, ["status", "state"]),
+      title: recordValue(row, ["job_type", "type"]) || "Background job",
+      summary: recordValue(row, ["summary", "error", "message", "run_id"])
+    });
+  }
+
+  for (const item of runtimeEvents.values()) {
+    const event = item as RuntimeEventCard;
+    events.push({
+      id: event.event_id ?? `${event.event_type}-${events.length}`,
+      kind: event.card_type ?? event.event_type ?? "runtime_event",
+      source: "runtime",
+      status: event.card_type,
+      title: event.title ?? event.event_type ?? "Runtime event",
+      summary: event.summary ?? "",
+      timestamp: event.timestamp
+    });
+  }
+
+  for (const attempt of view.activity.recent_attempts ?? []) {
+    events.push({
+      id: attempt.attempt_id,
+      kind: "code_cell",
+      source: "kernel",
+      status: attempt.outcome_status || attempt.status,
+      title: attempt.title || attempt.attempt_id,
+      summary: [
+        attempt.capability_ids.join(", "),
+        attempt.outcome_summary,
+        `${attempt.observations} observations / ${attempt.artifacts} artifacts`
+      ].filter(Boolean).join(" | ")
+    });
+  }
+
+  for (const artifact of view.artifacts.recent ?? []) {
+    events.push({
+      id: artifact.artifact_id,
+      kind: isVisualArtifact(artifact) ? "plot" : artifact.kind || "artifact",
+      source: "artifact",
+      status: artifact.kind,
+      title: artifact.kind || artifact.artifact_id,
+      summary: artifact.summary || artifact.path
+    });
+  }
+
+  for (const issue of view.execution_state?.issues ?? []) {
+    events.push({
+      id: issue.issue_id,
+      kind: issue.kind,
+      source: "issue",
+      status: issue.severity || issue.status,
+      title: issue.kind === "question" ? "Clarification needed" : issue.kind,
+      summary: issue.question || issue.summary || issue.suggested_action || ""
+    });
+  }
+
+  return events.slice(-18);
+}
+
+function mergeStreamEvent(prev: RuntimeEventCard[], next: RuntimeEventCard): RuntimeEventCard[] {
+  const keyed = new Map<string, RuntimeEventCard>();
+  for (const item of [...prev, next]) {
+    keyed.set(item.event_id ?? `${item.event_type}-${item.timestamp}-${keyed.size}`, item);
+  }
+  return Array.from(keyed.values()).slice(-60);
+}
+
 export default function App() {
   const [view, setView] = useState<WorkbenchView | null>(null);
   const [graph, setGraph] = useState<AttemptGraph>({ nodes: [], edges: [] });
@@ -114,6 +244,9 @@ export default function App() {
   const [answer, setAnswer] = useState("");
   const [selectedNode, setSelectedNode] = useState("");
   const [error, setError] = useState("");
+  const [streamEvents, setStreamEvents] = useState<RuntimeEventCard[]>([]);
+  const [streamJobs, setStreamJobs] = useState<Array<Record<string, unknown>>>([]);
+  const [streamStatus, setStreamStatus] = useState("connecting");
 
   async function refresh() {
     try {
@@ -137,6 +270,49 @@ export default function App() {
     refresh();
     const timer = window.setInterval(refresh, 4000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!("EventSource" in window)) {
+      setStreamStatus("polling");
+      return;
+    }
+    const source = new EventSource("/api/events/stream");
+    let refreshTimer = 0;
+    const refreshSoon = () => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(refresh, 350);
+    };
+    source.addEventListener("ready", () => {
+      setStreamStatus("live");
+    });
+    source.addEventListener("runtime_event", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as RuntimeEventCard;
+        setStreamEvents((prev) => mergeStreamEvent(prev, payload));
+        setStreamStatus("live");
+        refreshSoon();
+      } catch (err) {
+        setStreamStatus("polling");
+      }
+    });
+    source.addEventListener("jobs", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as { jobs?: Array<Record<string, unknown>> };
+        setStreamJobs(payload.jobs ?? []);
+        setStreamStatus("live");
+        refreshSoon();
+      } catch {
+        setStreamStatus("polling");
+      }
+    });
+    source.onerror = () => {
+      setStreamStatus("polling");
+    };
+    return () => {
+      window.clearTimeout(refreshTimer);
+      source.close();
+    };
   }, []);
 
   async function run(steps: number) {
@@ -194,8 +370,8 @@ export default function App() {
 
       {error && <div className="errorbar">{error}</div>}
 
-      <main className="layout">
-        <aside className="column">
+      <main className="analysis-layout">
+        <aside className="column nav-rail">
           <Panel title="Run">
             <div className="metrics">
               <Metric label="attempts" value={status.attempts ?? 0} />
@@ -222,9 +398,21 @@ export default function App() {
           </Panel>
         </aside>
 
-        <section className="column center">
-          <Panel title="LLM Thinking Path" badge={view?.analysis.active_work_order?.mode ?? executionState?.mode ?? "not initialized"} className="thinking-panel">
-            <ThinkingPath view={view} />
+        <section className="column process-column">
+          <LiveProcessStage view={view} streamEvents={streamEvents} streamJobs={streamJobs} streamStatus={streamStatus} />
+          <LiveArtifactsStage view={view} />
+          <Panel title="Derivation Lanes" fill badge={`${graph.nodes.length} / ${graph.edges.length}`}>
+            <AttemptGraphSvg graph={graph} activeNodeId={view?.active.node_id ?? ""} selectedNode={selectedNode} onSelect={setSelectedNode} />
+          </Panel>
+        </section>
+
+        <aside className="column inspector-rail">
+          <Panel title="Review And Interrupts" badge={openIssueCount ? `${openIssueCount} open` : "clear"}>
+            <Review view={view} />
+            <div className="answer-row">
+              <input value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Answer active interrupt" />
+              <button className="primary" onClick={sendAnswer}>Send</button>
+            </div>
           </Panel>
           <Panel title="Execution State" badge={executionState?.mode ?? "not initialized"}>
             <ExecutionStatePanel state={executionState} />
@@ -240,27 +428,6 @@ export default function App() {
                 await refresh();
               }}
             />
-          </Panel>
-          <Panel title="Derivation Lanes" fill badge={`${graph.nodes.length} / ${graph.edges.length}`}>
-            <AttemptGraphSvg graph={graph} activeNodeId={view?.active.node_id ?? ""} selectedNode={selectedNode} onSelect={setSelectedNode} />
-          </Panel>
-          <div className="split">
-            <Panel title="Recent Attempts">
-              <RecentAttempts view={view} />
-            </Panel>
-            <Panel title="Artifacts">
-              <Artifacts view={view} />
-            </Panel>
-          </div>
-        </section>
-
-        <aside className="column right">
-          <Panel title="Review And Interrupts" badge={openIssueCount ? `${openIssueCount} open` : "clear"}>
-            <Review view={view} />
-            <div className="answer-row">
-              <input value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Answer active interrupt" />
-              <button className="primary" onClick={sendAnswer}>Send</button>
-            </div>
           </Panel>
           <Panel title="Trace / Rethinking">
             <Rethinking view={view} selectedNode={selectedNode} />
@@ -286,6 +453,230 @@ function Panel(props: { title: string; badge?: string; fill?: boolean; className
       </div>
       <div className="panel-body">{props.children}</div>
     </section>
+  );
+}
+
+function LiveProcessStage(props: {
+  view: WorkbenchView | null;
+  streamEvents: RuntimeEventCard[];
+  streamJobs: Array<Record<string, unknown>>;
+  streamStatus: string;
+}) {
+  const view = props.view;
+  const executionState = view?.execution_state;
+  const workOrder = view?.analysis.active_work_order;
+  const task = executionState?.current_task ?? {};
+  const events = buildProcessEvents(view, props.streamEvents, props.streamJobs);
+  const lastDelta = workOrder?.last_attempt_delta ?? {};
+  const execution = (lastDelta.execution ?? {}) as Record<string, unknown>;
+  const jobs = props.streamJobs.length ? props.streamJobs : (view?.activity.jobs ?? []);
+  const activeJobs = jobs.filter((job) => {
+    const status = String((job as Record<string, unknown>).status ?? "");
+    return status === "queued" || status === "running";
+  });
+
+  return (
+    <Panel
+      title="Live Analysis Process"
+      badge={executionState?.mode ?? workOrder?.mode ?? "not initialized"}
+      className="process-panel"
+    >
+      <div className="process-hero">
+        <div className="process-hero-main">
+          <div className="process-kicker">Current Step</div>
+          <h2>{task.title || workOrder?.active_node?.title || task.node_id || "Waiting for analysis"}</h2>
+          <p>{task.goal || view?.status.goal || workOrder?.run_goal || "Start an analysis to watch the run unfold."}</p>
+        </div>
+        <div className="process-hero-meta">
+          <span className={`chip ${badgeClass(executionState?.mode)}`}>{executionState?.mode ?? "idle"}</span>
+          <span className="chip">{view?.active.branch_id || workOrder?.branch_id || "main"}</span>
+          <span className={`chip ${props.streamStatus === "live" ? "good" : "warn"}`}>
+            {props.streamStatus === "live" ? "event stream" : "polling"}
+          </span>
+          <span className="chip">{activeJobs.length ? `${activeJobs.length} live job` : "no live jobs"}</span>
+        </div>
+      </div>
+      <div className="process-stage-grid">
+        <div className="process-stage-main">
+          <ThinkingPath view={view} />
+          <ProcessTimeline events={events} />
+          <AgentTerminal view={view} streamEvents={props.streamEvents} jobs={jobs} />
+        </div>
+        <div className="process-stage-side">
+          <div className="console-card">
+            <div className="console-head">
+              <span>Kernel / Code</span>
+              <span className={`badge ${badgeClass(String(execution.returncode ?? executionState?.mode ?? ""))}`}>
+                {execution.returncode != null ? `return ${String(execution.returncode)}` : executionState?.mode ?? "idle"}
+              </span>
+            </div>
+            <div className="console-grid">
+              <Metric label="attempts" value={view?.status.attempts ?? 0} />
+              <Metric label="obs" value={view?.status.observations ?? 0} />
+              <Metric label="artifacts" value={view?.status.artifacts ?? 0} />
+              <Metric label="issues" value={executionState?.issues.length ?? 0} />
+            </div>
+            <KernelRuntimeRefs delta={lastDelta} />
+          </div>
+          <JobStack jobs={jobs} />
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function ProcessTimeline(props: { events: ProcessEvent[] }) {
+  if (!props.events.length) {
+    return <p className="small muted">No runtime activity yet.</p>;
+  }
+  return (
+    <div className="process-timeline">
+      {props.events.map((event) => (
+        <div className={`process-event ${event.source}`} key={`${event.source}-${event.id}`}>
+          <div className="process-dot" />
+          <div className="process-event-body">
+            <div className="process-event-top">
+              <span className="process-event-kind">{event.kind.replace(/_/g, " ")}</span>
+              {event.status && <span className={`badge ${badgeClass(event.status)}`}>{truncate(event.status, 28)}</span>}
+            </div>
+            <div className="process-event-title">{truncate(event.title, 92)}</div>
+            {event.summary && <div className="process-event-summary">{truncate(event.summary, 180)}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AgentTerminal(props: {
+  view: WorkbenchView | null;
+  streamEvents: RuntimeEventCard[];
+  jobs: Array<Record<string, unknown>>;
+}) {
+  const view = props.view;
+  const workOrder = view?.analysis.active_work_order;
+  const selected = workOrder?.selected_capability;
+  const attempts = view?.activity.recent_attempts ?? [];
+  const latestAttempt = attempts[attempts.length - 1];
+  const events = [
+    ...(view?.activity.runtime_events ?? []),
+    ...props.streamEvents
+  ].slice(-8);
+  const visibleTools = (workOrder?.allowed_tools ?? []).slice(0, 8);
+  const lines = [
+    `$ mode ${view?.execution_state?.mode ?? "idle"} run=${view?.run_id ?? "none"}`,
+    `$ goal ${truncate(view?.status.goal || workOrder?.run_goal || "No goal recorded", 140)}`,
+    selected
+      ? `$ strategy capability=${selected.id ?? selected.capability_id ?? "unknown"} ready=${String(Boolean(selected.ready))}`
+      : "$ strategy waiting_for_capability_selection",
+    selected?.next_repair ? `$ repair_hint ${truncate(selected.next_repair, 160)}` : "",
+    visibleTools.length ? `$ tools ${visibleTools.join(" ")}` : "$ tools none_visible",
+    ...props.jobs.slice(0, 3).map((job) => {
+      const status = recordValue(job, ["status", "state"]) || "pending";
+      const type = recordValue(job, ["job_type", "type"]) || "job";
+      const id = recordValue(job, ["job_id", "id"]);
+      return `$ job ${type} ${status}${id ? ` id=${id}` : ""}`;
+    }),
+    latestAttempt ? `$ attempt ${latestAttempt.attempt_id} ${latestAttempt.outcome_status || latestAttempt.status}` : "",
+    latestAttempt?.execution
+      ? `$ result returncode=${String(latestAttempt.execution.returncode ?? "?")} stdout_chars=${latestAttempt.execution.stdout_chars ?? 0} obs=${latestAttempt.execution.observations_registered ?? latestAttempt.observations}`
+      : "",
+    latestAttempt?.execution?.stderr_tail
+      ? `$ stderr ${truncate(latestAttempt.execution.stderr_tail.replace(/\s+/g, " "), 220)}`
+      : "",
+    ...events.map((event) => {
+      if (event.card_type === "execution_output") {
+        const stream = String(event.title || "").toLowerCase().includes("stderr") ? "stderr" : "stdout";
+        return `$ ${stream} ${truncate((event.summary || "").replace(/\s+$/g, ""), 180)}`;
+      }
+      return `$ event ${event.card_type ?? event.event_type ?? "runtime"} ${truncate(event.title ?? "", 80)} ${event.summary ? `:: ${truncate(event.summary, 120)}` : ""}`;
+    }),
+  ].filter(Boolean);
+  const code = latestAttempt?.code_preview?.trim() ?? "";
+  return (
+    <div className="agent-terminal">
+      <div className="terminal-head">
+        <span>Agent Terminal Strategy</span>
+        <span className="badge">read-only</span>
+      </div>
+      <pre className="terminal-log">{lines.join("\n")}</pre>
+      {code && (
+        <details className="terminal-code">
+          <summary>Latest code cell</summary>
+          <pre>{code}</pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function KernelRuntimeRefs(props: { delta: Record<string, unknown> }) {
+  const refs = Array.isArray(props.delta.runtime_refs) ? props.delta.runtime_refs : [];
+  const observations = props.delta.observations_registered;
+  if (!refs.length && observations == null) {
+    return <pre className="console-output">No kernel refs captured for the latest attempt yet.</pre>;
+  }
+  return (
+    <pre className="console-output">
+      {[
+        observations != null ? `observations_registered=${String(observations)}` : "",
+        ...refs.slice(0, 10).map((item) => `ref ${String(item)}`)
+      ].filter(Boolean).join("\n")}
+    </pre>
+  );
+}
+
+function JobStack(props: { jobs: Array<Record<string, unknown>> }) {
+  const jobs = props.jobs.slice(0, 4);
+  if (!jobs.length) return <div className="job-stack empty">No queued jobs.</div>;
+  return (
+    <div className="job-stack">
+      {jobs.map((job, index) => {
+        const id = recordValue(job, ["job_id", "id"]) || `job-${index}`;
+        const status = recordValue(job, ["status", "state"]);
+        return (
+          <div className="job-row" key={id}>
+            <span>{recordValue(job, ["job_type", "type"]) || "job"}</span>
+            <span className={`badge ${badgeClass(status)}`}>{status || "pending"}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LiveArtifactsStage(props: { view: WorkbenchView | null }) {
+  const artifacts = props.view?.artifacts.recent ?? [];
+  return (
+    <Panel title="Generated Artifacts / Plots" badge={`${artifacts.length} recent`} className="artifact-stage">
+      {artifacts.length ? (
+        <div className="artifact-strip">
+          {artifacts.slice().reverse().slice(0, 6).map((artifact) => (
+            <ArtifactPreviewCard artifact={artifact} key={artifact.artifact_id} />
+          ))}
+        </div>
+      ) : (
+        <p className="small muted">Plots, tables, and registered outputs will appear here as the kernel produces them.</p>
+      )}
+    </Panel>
+  );
+}
+
+function ArtifactPreviewCard(props: { artifact: ArtifactCard }) {
+  const artifact = props.artifact;
+  const visual = isVisualArtifact(artifact);
+  return (
+    <div className={`artifact-preview ${visual ? "visual" : ""}`}>
+      {visual && artifact.file_url ? (
+        <img src={artifact.file_url} alt={artifact.summary || artifact.kind || artifact.artifact_id} />
+      ) : (
+        <div className="artifact-icon">{artifact.kind || "artifact"}</div>
+      )}
+      <div className="artifact-preview-text">
+        <div className="item-title">{truncate(artifact.kind || artifact.artifact_id, 42)}</div>
+        <div className="item-sub">{truncate(artifact.summary || artifact.path || artifact.artifact_id, 92)}</div>
+      </div>
+    </div>
   );
 }
 

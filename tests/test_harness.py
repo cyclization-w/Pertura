@@ -599,6 +599,16 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         raw_first_event_rejected = True
     check("raw Store.append rejects non-run_started first event", raw_first_event_rejected)
 
+    output_store = Store(Path(td) / "run_output_schema")
+    output_store.append([
+        Event(event_id="out_schema_1", event_type="run_started", run_id="out_schema",
+              payload={"config": {"run_id": "out_schema", "workspace": td, "goal": "output schema",
+                                  "domain": "test", "budget": {"max_attempts": 1}, "capabilities": []}}),
+        Event(event_id="out_schema_2", event_type="execution_output", run_id="out_schema",
+              payload={"attempt_id": "att_output", "stream": "stdout", "text": "hello\n"}),
+    ])
+    check("execution output event accepted", any(e.event_type == "execution_output" for e in output_store.read_events()))
+
     risky = PatchProposal(
         patch_id="patch_risky",
         patch_type="web_research",

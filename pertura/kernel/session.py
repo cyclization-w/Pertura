@@ -12,7 +12,16 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+
+
+def _emit_output(callback: Callable[[str, str], None] | None, stream: str, text: str) -> None:
+    if callback is None or not text:
+        return
+    try:
+        callback(stream, text)
+    except Exception:
+        pass
 
 
 class KernelSession:
@@ -101,6 +110,7 @@ class KernelSession:
         soft_timeout: float | None = None,
         hard_timeout: float | None = None,
         heartbeat_timeout: float | None = None,
+        on_output: Callable[[str, str], None] | None = None,
     ) -> dict:
         """Execute code in the kernel. Manifest reset + flushed per attempt."""
         self.start()
@@ -123,6 +133,7 @@ class KernelSession:
             soft_timeout=float(soft_timeout),
             hard_timeout=float(hard_timeout),
             heartbeat_timeout=float(heartbeat_timeout),
+            on_output=on_output,
         )
         # Force flush — observations written immediately
         self._execute_sync("_flush_manifest()")
@@ -148,6 +159,7 @@ class KernelSession:
         soft_timeout: float | None = None,
         hard_timeout: float | None = None,
         heartbeat_timeout: float | None = None,
+        on_output: Callable[[str, str], None] | None = None,
     ) -> dict:
         """Execute synchronously using the Jupyter kernel."""
         if self.kc is None:
@@ -176,29 +188,35 @@ class KernelSession:
                 if now > hard_deadline:
                     status = "timeout"
                     timed_out_at = "hard"
-                    stderr_parts.append(f"Hard timeout after {hard_timeout}s; interrupting kernel.\n")
+                    text = f"Hard timeout after {hard_timeout}s; interrupting kernel.\n"
+                    stderr_parts.append(text)
+                    _emit_output(on_output, "stderr", text)
                     try:
                         self.km.interrupt_kernel()
                     except Exception as exc:
-                        stderr_parts.append(f"Kernel interrupt failed: {exc}\n")
+                        text = f"Kernel interrupt failed: {exc}\n"
+                        stderr_parts.append(text)
+                        _emit_output(on_output, "stderr", text)
                     break
                 if not soft_timeout_hit and now > soft_deadline:
                     soft_timeout_hit = True
-                    stderr_parts.append(
-                        f"Soft timeout after {soft_timeout}s; kernel is still responsive, continuing until hard timeout.\n"
-                    )
+                    text = f"Soft timeout after {soft_timeout}s; kernel is still responsive, continuing until hard timeout.\n"
+                    stderr_parts.append(text)
+                    _emit_output(on_output, "stderr", text)
                 if self._heartbeat_alive():
                     last_heartbeat = now
                 elif now - last_heartbeat > heartbeat_timeout:
                     status = "timeout"
                     timed_out_at = "heartbeat"
-                    stderr_parts.append(
-                        f"Kernel heartbeat lost for {heartbeat_timeout}s; interrupting kernel.\n"
-                    )
+                    text = f"Kernel heartbeat lost for {heartbeat_timeout}s; interrupting kernel.\n"
+                    stderr_parts.append(text)
+                    _emit_output(on_output, "stderr", text)
                     try:
                         self.km.interrupt_kernel()
                     except Exception as exc:
-                        stderr_parts.append(f"Kernel interrupt failed: {exc}\n")
+                        text = f"Kernel interrupt failed: {exc}\n"
+                        stderr_parts.append(text)
+                        _emit_output(on_output, "stderr", text)
                     break
                 try:
                     msg = self.kc.get_iopub_msg(timeout=1)
@@ -216,13 +234,17 @@ class KernelSession:
                     text = content.get("text", "")
                     if content.get("name") == "stderr":
                         stderr_parts.append(text)
+                        _emit_output(on_output, "stderr", text)
                     else:
                         stdout_parts.append(text)
+                        _emit_output(on_output, "stdout", text)
 
                 elif msg_type == "error":
                     last_heartbeat = time.time()
                     status = "error"
                     traceback = content.get("traceback", [])
+                    if traceback:
+                        _emit_output(on_output, "stderr", "\n".join(str(item) for item in traceback))
 
                 elif msg_type in {"execute_result", "display_data"}:
                     last_heartbeat = time.time()
@@ -235,7 +257,9 @@ class KernelSession:
 
         except Exception as exc:
             status = "error"
-            stderr_parts.insert(0, f"Kernel error: {exc}\n")
+            text = f"Kernel error: {exc}\n"
+            stderr_parts.insert(0, text)
+            _emit_output(on_output, "stderr", text)
 
         return {
             "returncode": 0 if status == "success" else 1,
