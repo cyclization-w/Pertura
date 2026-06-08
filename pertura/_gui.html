@@ -509,11 +509,12 @@ function renderConversation(view){
   }
 
   if(!events.length){
+    const activeJob=(exec.activity||{}).active_job||((exec.activity||{}).jobs||[]).find(j=>["queued","running"].includes(j.status||""))||{};
     messages.push(messageHtml(
       "agent",
       "Agent",
-      mode==="not_initialized" ? "Ready to start. The main action button will launch the run once the workspace is set." : "Waiting for the next event from the run.",
-      mode
+      activeJob.job_id ? `Agent job ${activeJob.status||"queued"}: ${activeJob.job_id}` : (mode==="not_initialized" ? "Ready to start. The main action button will launch the run once the workspace is set." : "Waiting for the next event from the run."),
+      activeJob.job_type||mode
     ));
   }else{
     messages.push(...events.map(renderConversationEvent));

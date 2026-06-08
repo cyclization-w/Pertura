@@ -115,3 +115,14 @@ def test_empty_behaviors_do_not_pollute_graph(tmp_path: Path) -> None:
     graph = store.read_graph()
     assert not snap.behavior_runs
     assert not any(node.get("node_type") == "behavior_run" for node in graph.get("nodes", []))
+
+
+def test_starting_job_projects_running_without_snapshot() -> None:
+    from pertura.core import compile_execution_state
+
+    jobs = [{"job_id": "job_start", "job_type": "agent_run", "status": "queued"}]
+    state = compile_execution_state(None, jobs=jobs)
+
+    assert state["mode"] == "running"
+    assert state["activity"]["active_job"]["job_id"] == "job_start"
+    assert state["candidate_actions"][0]["kind"] == "pause"

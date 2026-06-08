@@ -19,6 +19,30 @@ def compile_candidate_actions(
 ) -> list[dict[str, Any]]:
     """Return product actions the user can take now."""
     if snap is None:
+        active_job = next(
+            (item for item in (jobs or []) if item.get("status") in {"queued", "running"}),
+            {},
+        )
+        if active_job:
+            return [
+                _action(
+                    "pause",
+                    "pause",
+                    "Pause",
+                    "Stop the active agent job while the run is starting.",
+                    primary=True,
+                    endpoint="/api/agent/pause",
+                    method="POST",
+                ),
+                _action(
+                    "open_evidence",
+                    "open_evidence",
+                    "Inspect live status",
+                    active_job.get("job_id") or "Agent job is queued.",
+                    endpoint="/api/workbench-view",
+                    method="GET",
+                ),
+            ]
         return [_action(
             "start_analysis",
             "start_analysis",

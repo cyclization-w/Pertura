@@ -105,19 +105,28 @@ def compile_execution_state(
 ) -> dict[str, Any]:
     """Return the stable product-facing execution state for GUI/API use."""
     if snap is None:
+        active_job = next(
+            (item for item in (jobs or []) if item.get("status") in {"queued", "running"}),
+            {},
+        )
+        mode = "running" if active_job else "not_initialized"
         payload = {
             "view_type": "execution_state",
             "schema_version": "v1",
-            "mode": "not_initialized",
+            "mode": mode,
             "run_id": "",
             "stop_reason": "",
-            "current_task": {"node_id": "", "title": "No run", "purpose": ""},
+            "current_task": {
+                "node_id": "",
+                "title": "Starting analysis" if active_job else "No run",
+                "purpose": active_job.get("job_type", "") if active_job else "",
+            },
             "question": {},
             "issues": [],
-            "recommended_actions": ["start_analysis"],
+            "recommended_actions": ["pause"] if active_job else ["start_analysis"],
             "visible_capabilities": [],
             "evidence_summary": {},
-            "activity": {"jobs": jobs or []},
+            "activity": {"jobs": jobs or [], "active_job": active_job},
             "debug_refs": {},
         }
         from pertura.core.candidate_actions import compile_candidate_actions
