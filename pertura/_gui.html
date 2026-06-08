@@ -13,27 +13,47 @@
 }
 *{box-sizing:border-box}
 body{margin:0;height:100vh;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;flex-direction:column}
-header{height:58px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
-h1{font-size:16px;margin:0;font-weight:700;white-space:nowrap}
-button,input{font:inherit}
-input{height:34px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;color:var(--ink);padding:0 9px;font-size:13px}
-button{height:34px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;color:var(--ink);padding:0 11px;font-size:13px;font-weight:650;cursor:pointer}
+header{height:54px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+h1{font-size:17px;margin:0;font-weight:760;white-space:nowrap}
+button,input,textarea{font:inherit}
+input,textarea{border:1px solid var(--line-strong);border-radius:6px;background:#fff;color:var(--ink);padding:8px 10px;font-size:13px}
+input{height:36px}
+textarea{min-height:70px;resize:vertical;line-height:1.45}
+button{height:36px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;color:var(--ink);padding:0 12px;font-size:13px;font-weight:650;cursor:pointer}
 button.primary{border-color:var(--accent);background:var(--accent);color:white}
 button.success{border-color:var(--good);background:var(--good);color:white}
 button:disabled{opacity:.55;cursor:not-allowed}
 .toolbar{display:flex;gap:8px;align-items:center;min-width:0;flex-wrap:wrap}
 .chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:999px;background:#eef0f3;color:#344054;font-size:12px;font-weight:650}
 .chip.good{background:var(--good-soft);color:var(--good)}.chip.warn{background:var(--warn-soft);color:var(--warn)}.chip.bad{background:var(--bad-soft);color:var(--bad)}
-.shell{flex:1;min-height:0;overflow:hidden;display:grid;grid-template-columns:292px minmax(420px,1fr) 386px;gap:10px;padding:10px}
-.column{min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:10px}
+.shell{flex:1;min-height:0;overflow:hidden;display:grid;grid-template-columns:minmax(620px,1fr) 380px;gap:12px;padding:12px}
+.column{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:0;overflow:hidden;display:flex;flex-direction:column}
-.panel-head{height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;border-bottom:1px solid var(--line);background:var(--panel-soft)}
-.panel-title{font-size:12px;font-weight:760;text-transform:uppercase;letter-spacing:.02em;color:#475467}
+.panel-head{min-height:40px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--panel-soft)}
+.panel-title{font-size:12px;font-weight:760;text-transform:uppercase;letter-spacing:0;color:#475467}
 .panel-body{padding:10px;overflow:auto;min-height:0}
 .grow{flex:1}.small{font-size:12px;line-height:1.45;color:#344054}.muted{color:var(--muted)}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .metric{border:1px solid var(--line);border-radius:6px;background:#fff;padding:8px}
 .metric b{display:block;font-size:18px}.metric span{font-size:11px;color:var(--muted)}
+.analysis-console{border-color:#bdd8d4;box-shadow:0 12px 32px rgba(15,118,110,.08)}
+.console-grid{display:grid;grid-template-columns:minmax(180px,.52fr) minmax(280px,1fr) auto;gap:10px;align-items:stretch}
+.console-actions{display:flex;flex-direction:column;gap:8px;min-width:160px}
+.console-actions button{width:100%}
+.candidate-actions{display:flex;gap:8px;overflow:auto;padding-top:10px}
+.action-card{min-width:180px;max-width:260px;text-align:left;height:auto;min-height:66px;padding:9px;border-radius:7px;background:#fff}
+.action-card.primary-action{border-color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
+.action-card:disabled{background:#f2f4f7}
+.action-label{font-size:12px;font-weight:760}.action-desc{font-size:11px;color:var(--muted);line-height:1.35;margin-top:4px}
+.question-console{display:none;margin-top:10px;border:1px solid #f5c2bf;border-left:4px solid var(--bad);border-radius:7px;background:var(--bad-soft);padding:10px}
+.question-options,.question-fields{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.question-fields input{min-width:190px;flex:1}
+.live-layout{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:10px}
+.live-events{border:1px solid var(--line);border-radius:7px;background:#fff;min-height:190px;max-height:300px;overflow:auto;padding:8px}
+.event-row{display:grid;grid-template-columns:10px minmax(0,1fr);gap:8px;padding:8px;border-bottom:1px solid #eef1f4}
+.event-row:last-child{border-bottom:0}.event-dot{width:9px;height:9px;border-radius:50%;margin-top:5px;background:var(--line-strong)}
+.event-row.product .event-dot{background:var(--accent)}.event-row.running .event-dot{background:var(--blue)}.event-row.warn .event-dot{background:var(--warn)}.event-row.bad .event-dot{background:var(--bad)}
+.event-title{font-size:12px;font-weight:740}.event-sub{font-size:11px;color:var(--muted);line-height:1.35;margin-top:2px}
 .node-list{display:flex;flex-direction:column;gap:6px}
 .node-card{border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:7px;background:#fff;padding:8px;cursor:pointer}
 .node-card.active{border-left-color:var(--accent);background:var(--accent-soft)}
@@ -47,41 +67,34 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .tool-chip-row,.tool-reasons{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
 .capability-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,.42fr);gap:8px}
 .small-button{height:26px;padding:0 8px;font-size:11px;font-weight:700}
-.split{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:180px}
-.compact-panel{flex:0 1 260px}.compact-panel .panel-body{max-height:220px}
-.work-order-panel{flex:0 0 auto}.work-order-panel .panel-body{max-height:270px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:220px}
+.compact-panel{flex:0 0 auto}.compact-panel .panel-body{max-height:260px}
+.work-order-panel{flex:0 0 auto}.work-order-panel .panel-body{max-height:320px}
 .thinking-panel{border-color:#b9d7d2;box-shadow:0 10px 28px rgba(15,118,110,.08)}.thinking-panel .panel-body{overflow:visible}
-.thought-flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
-.thought-stage{position:relative;min-width:0;min-height:138px;display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:7px;background:#fff;padding:9px}
+.thought-flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:8px}
+.thought-stage{position:relative;min-width:0;min-height:112px;display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:7px;background:#fff;padding:9px}
 .thought-stage:nth-child(2){border-top-color:var(--blue)}.thought-stage:nth-child(3){border-top-color:var(--violet)}.thought-stage:nth-child(4){border-top-color:var(--warn)}.thought-stage:nth-child(5){border-top-color:var(--good)}
-.thought-stage:not(:last-child)::after{content:"";position:absolute;top:24px;right:-8px;width:8px;height:1px;background:var(--line-strong)}
 .thought-index{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:760}
-.thought-content{min-width:0;display:flex;flex-direction:column}.thought-label{font-size:10px;font-weight:780;color:var(--muted);text-transform:uppercase;letter-spacing:.02em}.thought-title{margin-top:3px;font-size:13px;line-height:1.3;font-weight:760;overflow-wrap:anywhere}.thought-body{margin-top:5px;font-size:11px;line-height:1.4;color:var(--muted);overflow-wrap:anywhere}
+.thought-content{min-width:0;display:flex;flex-direction:column}.thought-label{font-size:10px;font-weight:780;color:var(--muted);text-transform:uppercase;letter-spacing:0}.thought-title{margin-top:3px;font-size:13px;line-height:1.3;font-weight:760;overflow-wrap:anywhere}.thought-body{margin-top:5px;font-size:11px;line-height:1.4;color:var(--muted);overflow-wrap:anywhere}
 .thought-footer{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;min-height:26px}.thought-next{display:inline-flex;align-items:center;max-width:100%;min-height:24px;border:1px solid #c9ddd9;border-radius:999px;background:var(--accent-soft);color:#0f5f59;padding:3px 9px;font-size:11px;font-weight:700;overflow-wrap:anywhere}
 .advanced-details{margin-top:8px}.advanced-details summary{cursor:pointer;font-weight:720;color:#475467}
 .dev-details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}.dev-details summary{cursor:pointer;font-size:12px;font-weight:720;color:#475467}.dev-controls{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.dev-controls button{height:30px;font-size:12px}
 .issue-item{border-left:4px solid var(--warn)}.issue-item.question{border-left-color:var(--bad)}
 .evidence-row{display:flex;gap:5px;flex-wrap:wrap;min-height:20px}
-.graph-wrap{height:100%;min-height:340px;background:#fbfcfd}
+.graph-wrap{height:320px;min-height:260px;background:#fbfcfd}
 #graphSvg{width:100%;height:100%;display:block}
-.graph-node{cursor:pointer}.graph-node rect{fill:#fff;stroke:#c7ced8;stroke-width:1.2}.graph-node.active rect{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2}.graph-node.dim rect{fill:#f7f8fa;stroke:#e0e5ec}.graph-node text{font-size:11px;fill:#111827}.graph-node .type-label{font-size:9px;fill:#667085;text-transform:uppercase}.graph-edge{stroke:#9aa4b2;stroke-width:1.2;fill:none;marker-end:url(#arrow)}.graph-edge.highlight{stroke:var(--accent);stroke-width:2}.graph-edge.suspicious{stroke:var(--warn);stroke-dasharray:5 4;stroke-width:2}.lane-label{font-size:11px;font-weight:760;fill:#475467;text-transform:uppercase;letter-spacing:.04em}.lane-bg{fill:#f6f8fa;stroke:#e1e6ed;stroke-width:1}
+.graph-node{cursor:pointer}.graph-node rect{fill:#fff;stroke:#c7ced8;stroke-width:1.2}.graph-node.active rect{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2}.graph-node.dim rect{fill:#f7f8fa;stroke:#e0e5ec}.graph-node text{font-size:11px;fill:#111827}.graph-node .type-label{font-size:9px;fill:#667085;text-transform:uppercase}.graph-edge{stroke:#9aa4b2;stroke-width:1.2;fill:none;marker-end:url(#arrow)}.graph-edge.highlight{stroke:var(--accent);stroke-width:2}.graph-edge.suspicious{stroke:var(--warn);stroke-dasharray:5 4;stroke-width:2}.lane-label{font-size:11px;font-weight:760;fill:#475467;text-transform:uppercase;letter-spacing:0}.lane-bg{fill:#f6f8fa;stroke:#e1e6ed;stroke-width:1}
 .trace-box{min-height:120px;max-height:260px;overflow:auto}
 .context-json{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.45;background:#101828;color:#f8fafc;border-radius:6px;padding:9px;max-height:220px;overflow:auto}
 .answer-row{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:8px}
-@media(max-width:1120px){.shell{grid-template-columns:260px 1fr}.right{grid-column:1 / span 2;display:grid;grid-template-columns:1fr 1fr}.right .grow{min-height:280px}.thought-flow{grid-template-columns:repeat(3,minmax(0,1fr))}.thought-stage:not(:last-child)::after{display:none}}
-@media(max-width:760px){header{height:auto;align-items:flex-start;flex-direction:column}.shell{grid-template-columns:1fr}.right{grid-column:auto;display:flex}.metric-grid{grid-template-columns:repeat(2,1fr)}.thought-flow{grid-template-columns:1fr}}
+@media(max-width:1180px){.shell{grid-template-columns:1fr}.column{overflow:visible}.live-layout{grid-template-columns:1fr}.right{display:grid;grid-template-columns:1fr 1fr}.right .grow{min-height:280px}}
+@media(max-width:760px){header{height:auto;align-items:flex-start;flex-direction:column}.shell{overflow:auto}.console-grid{grid-template-columns:1fr}.right{display:flex}.metric-grid{grid-template-columns:repeat(2,1fr)}.split{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
   <h1>Pertura Workbench - {domain_name}</h1>
   <div class="toolbar">
-    <input id="workspaceInput" placeholder="Workspace path" style="width:220px">
-    <input id="goalInput" placeholder="Goal" style="width:260px">
-    <button class="primary" onclick="agentStart()">Start Analysis</button>
-    <button class="success" onclick="agentContinue()">Continue</button>
-    <button onclick="agentPause()">Pause</button>
-    <button onclick="generateReport()">Report</button>
     <span id="phaseChip" class="chip">not initialized</span>
     <span id="actionStatus" class="chip" style="display:none"></span>
   </div>
@@ -89,14 +102,68 @@ button:disabled{opacity:.55;cursor:not-allowed}
 
 <main class="shell">
   <section class="column">
+    <div class="panel analysis-console">
+      <div class="panel-head"><div class="panel-title">Analysis Console</div><span id="runChip" class="chip">idle</span></div>
+      <div class="panel-body">
+        <div class="console-grid">
+          <input id="workspaceInput" placeholder="Workspace path">
+          <textarea id="goalInput" placeholder="Describe the scientific analysis goal"></textarea>
+          <div class="console-actions">
+            <button id="primaryActionButton" class="primary" onclick="submitPrimaryAction()">Start Analysis</button>
+            <div class="toolbar">
+              <button onclick="agentContinue()">Continue</button>
+              <button onclick="agentPause()">Pause</button>
+              <button onclick="generateReport()">Report</button>
+            </div>
+          </div>
+        </div>
+        <div id="questionConsole" class="question-console"></div>
+        <div id="candidateActions" class="candidate-actions"></div>
+      </div>
+    </div>
+
+    <div class="live-layout">
+      <div class="panel thinking-panel">
+        <div class="panel-head"><div class="panel-title">LLM Thinking Path</div><span id="thinkingChip" class="chip">not initialized</span></div>
+        <div id="thinkingPath" class="panel-body small"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Live Process</div><span id="liveChip" class="chip">events</span></div>
+        <div id="liveProcess" class="live-events"></div>
+      </div>
+    </div>
+
+    <div class="panel work-order-panel">
+      <div class="panel-head"><div class="panel-title">Execution State</div><span id="activeNodeChip" class="chip">none</span></div>
+      <div id="nodeContract" class="panel-body small"></div>
+    </div>
+
+    <div class="split">
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Recent Attempts</div></div>
+        <div id="attemptsList" class="panel-body"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Artifacts</div></div>
+        <div id="artifactList" class="panel-body"></div>
+      </div>
+    </div>
+
     <div class="panel">
-      <div class="panel-head"><div class="panel-title">Run</div><span id="runChip" class="chip">idle</span></div>
+      <div class="panel-head"><div class="panel-title">Derivation Lanes</div><span id="graphCount" class="chip">0 / 0</span></div>
+      <div class="graph-wrap"><svg id="graphSvg" role="img" aria-label="Attempt graph"></svg></div>
+    </div>
+  </section>
+
+  <section class="column right">
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Run Summary</div><span id="nodeCount" class="chip">0 nodes</span></div>
       <div class="panel-body">
         <div class="metric-grid">
           <div class="metric"><b id="attemptCount">0</b><span>attempts</span></div>
           <div class="metric"><b id="obsCount">0</b><span>observations</span></div>
           <div class="metric"><b id="artifactCount">0</b><span>artifacts</span></div>
-          <div class="metric"><b id="issueCount">0</b><span>open issues</span></div>
+          <div class="metric"><b id="issueCount">0</b><span>issues</span></div>
         </div>
         <div id="runMeta" class="small muted" style="margin-top:8px">No run loaded.</div>
         <details class="dev-details">
@@ -109,42 +176,6 @@ button:disabled{opacity:.55;cursor:not-allowed}
         </details>
       </div>
     </div>
-    <div class="panel grow">
-      <div class="panel-head"><div class="panel-title">Analysis Graph</div><span id="nodeCount" class="chip">0 nodes</span></div>
-      <div id="nodeList" class="panel-body node-list"></div>
-    </div>
-  </section>
-
-  <section class="column">
-    <div class="panel thinking-panel">
-      <div class="panel-head"><div class="panel-title">LLM Thinking Path</div><span id="thinkingChip" class="chip">not initialized</span></div>
-      <div id="thinkingPath" class="panel-body small"></div>
-    </div>
-    <div class="panel work-order-panel">
-      <div class="panel-head"><div class="panel-title">Execution State</div><span id="activeNodeChip" class="chip">none</span></div>
-      <div id="nodeContract" class="panel-body small"></div>
-    </div>
-    <div class="panel compact-panel">
-      <div class="panel-head"><div class="panel-title">Capability Browser</div><span id="capabilityCount" class="chip">0 caps</span></div>
-      <div id="capabilityBrowser" class="panel-body small"></div>
-    </div>
-    <div class="panel grow">
-      <div class="panel-head"><div class="panel-title">Derivation Lanes</div><span id="graphCount" class="chip">0 / 0</span></div>
-      <div class="graph-wrap"><svg id="graphSvg" role="img" aria-label="Attempt graph"></svg></div>
-    </div>
-    <div class="split">
-      <div class="panel">
-        <div class="panel-head"><div class="panel-title">Recent Attempts</div></div>
-        <div id="attemptsList" class="panel-body"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-head"><div class="panel-title">Artifacts</div></div>
-        <div id="artifactList" class="panel-body"></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="column right">
     <div class="panel">
       <div class="panel-head"><div class="panel-title">Review And Interrupts</div><span id="reviewChip" class="chip">clear</span></div>
       <div class="panel-body">
@@ -155,6 +186,14 @@ button:disabled{opacity:.55;cursor:not-allowed}
         </div>
         <div id="reviewList" style="margin-top:8px"></div>
       </div>
+    </div>
+    <div class="panel compact-panel">
+      <div class="panel-head"><div class="panel-title">Analysis Graph</div></div>
+      <div id="nodeList" class="panel-body node-list"></div>
+    </div>
+    <div class="panel compact-panel">
+      <div class="panel-head"><div class="panel-title">Capability Browser</div><span id="capabilityCount" class="chip">0 caps</span></div>
+      <div id="capabilityBrowser" class="panel-body small"></div>
     </div>
     <div class="panel">
       <div class="panel-head"><div class="panel-title">Trace / Rethinking</div></div>
@@ -179,9 +218,15 @@ let CURRENT_VIEW = null;
 let CURRENT_GRAPH = {nodes:[], edges:[]};
 let SELECTED_NODE = "";
 let DEBUG_CONTEXT = null;
+let CANDIDATE_ACTIONS = [];
+let PRIMARY_ACTION_ID = "";
+let PRODUCT_EVENTS = [];
+let RUNTIME_STREAM_EVENTS = [];
 const TYPE_COLORS = {workspace:"#667085",analysis_node:"#6d28d9",branch:"#2563eb",attempt:"#15803d",job:"#0369a1",artifact:"#b45309",observation:"#0f766e",outcome:"#15803d",trigger:"#b42318",finding:"#b42318",conclusion:"#ca8a04",tool_call:"#667085",review_decision:"#0f766e",behavior_run:"#6d28d9"};
 
 function esc(value){return String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+function arg(value){return encodeURIComponent(String(value ?? ""));}
+function unarg(value){try{return decodeURIComponent(String(value ?? ""));}catch{return String(value ?? "");}}
 function brief(value){
   if(value===null||value===undefined)return"";
   if(["string","number","boolean"].includes(typeof value))return String(value);
@@ -193,7 +238,7 @@ function trunc(value,n=86){const text=brief(value);return text.length>n?`${text.
 function num(value){return typeof value==="number"&&Number.isFinite(value)?value:0;}
 function chipClass(value){const v=String(value||"").toLowerCase();if(v.includes("block")||v.includes("fail")||v.includes("interrupt"))return"bad";if(v.includes("warn")||v.includes("wait")||v.includes("stale"))return"warn";if(v.includes("success")||v.includes("complete")||v.includes("ready")||v.includes("actionable"))return"good";return"";}
 async function getJson(url, fallback){try{const r=await fetch(url);return await r.json();}catch{return fallback;}}
-function setBusy(busy){document.querySelectorAll("header button").forEach(b=>b.disabled=busy);}
+function setBusy(busy){document.querySelectorAll("button").forEach(b=>b.disabled=busy);}
 function setActionStatus(message, kind=""){
   const chip=document.getElementById("actionStatus");
   if(!chip)return;
@@ -237,12 +282,14 @@ async function refresh(){
 function renderAll(){
   if(!CURRENT_VIEW)return;
   renderStatus(CURRENT_VIEW);
+  renderConsole(CURRENT_VIEW);
   renderNodes(CURRENT_VIEW);
   renderThinkingPath(CURRENT_VIEW);
   renderContract(CURRENT_VIEW);
   renderCapabilities(CURRENT_VIEW);
   renderGraph(CURRENT_GRAPH, CURRENT_VIEW);
   renderActivity(CURRENT_VIEW);
+  renderLiveProcess(CURRENT_VIEW);
   renderReview(CURRENT_VIEW);
   renderContext(CURRENT_VIEW);
   renderReport(CURRENT_VIEW);
@@ -261,6 +308,114 @@ function renderStatus(view){
   document.getElementById("artifactCount").textContent=s.artifacts||0;
   document.getElementById("issueCount").textContent=open;
   document.getElementById("runMeta").innerHTML=`<b>${esc(s.goal||"No goal")}</b><br><span class="mono">${esc(s.workspace||"")}</span>`;
+}
+
+function actionList(view){
+  return ((view.analysis||{}).candidate_actions)||((view.execution_state||{}).candidate_actions)||[];
+}
+
+function renderConsole(view){
+  const actions=actionList(view);
+  CANDIDATE_ACTIONS=actions;
+  const primary=actions.find(a=>a.primary)||actions[0]||{};
+  PRIMARY_ACTION_ID=primary.id||"";
+  const primaryButton=document.getElementById("primaryActionButton");
+  primaryButton.textContent=primary.label||"Start Analysis";
+  primaryButton.disabled=!!primary.disabled_reason;
+  const question=actions.find(a=>a.kind==="answer_question")||{};
+  renderQuestionConsole(question);
+  document.getElementById("candidateActions").innerHTML=actions.map(a=>`
+    <button class="action-card ${a.primary?"primary-action":""}" ${a.disabled_reason?"disabled":""} onclick="submitCandidateAction('${arg(a.id||"")}')">
+      <div class="action-label">${esc(a.label||a.kind||a.id)}</div>
+      <div class="action-desc">${esc(a.disabled_reason||a.description||"")}</div>
+      <div style="margin-top:6px">
+        <span class="badge ${chipClass(a.risk_level)}">${esc(a.risk_level||"low")}</span>
+        ${a.capability_id?`<span class="badge violet">${esc(a.capability_id)}</span>`:""}
+      </div>
+    </button>
+  `).join("")||"<div class='small muted'>No available actions yet.</div>";
+}
+
+function renderQuestionConsole(action){
+  const box=document.getElementById("questionConsole");
+  if(!action.id){
+    box.style.display="none";
+    box.innerHTML="";
+    return;
+  }
+  box.style.display="block";
+  const fields=action.fields||[];
+  const options=action.options||[];
+  box.innerHTML=`
+    <div class="item-title">Input needed</div>
+    <div class="item-sub">${esc(action.description||"Please answer the open question before continuing.")}</div>
+    ${options.length?`<div class="question-options">${options.map(opt=>`<button onclick="submitQuestionOption('${arg(action.id)}','${arg(opt)}')">${esc(opt)}</button>`).join("")}</div>`:""}
+    ${fields.length?`<div class="question-fields">${fields.map(f=>{
+      const name=f.name||f.id||f.key||"answer";
+      const label=f.label||name;
+      return `<input data-question-field="${esc(name)}" placeholder="${esc(label)}">`;
+    }).join("")}<button class="primary" onclick="submitQuestionFields('${arg(action.id)}')">Submit</button></div>`:""}
+    ${(!options.length&&!fields.length)?`<div class="answer-row"><input id="questionFreeText" placeholder="Answer"><button class="primary" onclick="submitQuestionFreeText('${arg(action.id)}')">Send</button></div>`:""}
+  `;
+}
+
+function findAction(actionId){
+  return CANDIDATE_ACTIONS.find(a=>a.id===actionId)||{};
+}
+
+async function submitPrimaryAction(){
+  await submitCandidateAction(PRIMARY_ACTION_ID||"start_analysis");
+}
+
+async function submitCandidateAction(actionId){
+  actionId=unarg(actionId);
+  const action=findAction(actionId);
+  if(action.kind==="answer_question"){
+    document.getElementById("questionConsole").scrollIntoView({block:"center",behavior:"smooth"});
+    return;
+  }
+  if(action.endpoint && action.endpoint!=="/api/console/turn"){
+    if(String(action.method||"POST").toUpperCase()==="GET"){
+      if(action.endpoint==="/api/workbench-view"){
+        setActionStatus("Evidence view refreshed", "good");
+        await refresh();
+      }else{
+        window.open(action.endpoint, "_blank", "noopener");
+      }
+      return;
+    }
+    await postJson(action.endpoint, action.payload||{}, action.label||"Action completed");
+    return;
+  }
+  await submitConsoleTurn(actionId);
+}
+
+async function submitConsoleTurn(actionId="", answers={}, messageOverride=null){
+  const workspace=document.getElementById("workspaceInput").value.trim();
+  const message=messageOverride===null?document.getElementById("goalInput").value.trim():String(messageOverride||"");
+  const mode=((CURRENT_VIEW||{}).execution_state||{}).mode||"not_initialized";
+  if(mode==="not_initialized" && !workspace){
+    setActionStatus("Workspace path is required.", "bad");
+    return null;
+  }
+  return await postJson("/api/console/turn",{workspace,message,action_id:actionId,answers},actionId==="continue_analysis"?"Analysis resumed":"Analysis submitted");
+}
+
+async function submitQuestionOption(actionId, option){
+  await submitConsoleTurn(unarg(actionId), {}, unarg(option));
+}
+
+async function submitQuestionFields(actionId){
+  const fields={};
+  document.querySelectorAll("[data-question-field]").forEach(input=>{
+    fields[input.getAttribute("data-question-field")]=input.value;
+  });
+  await submitConsoleTurn(unarg(actionId), fields, "");
+}
+
+async function submitQuestionFreeText(actionId){
+  const input=document.getElementById("questionFreeText");
+  await submitConsoleTurn(unarg(actionId), {}, input ? input.value : "");
 }
 
 function renderNodes(view){
@@ -483,6 +638,45 @@ function renderActivity(view){
   </div>`).join("")||"<div class='small muted'>No artifacts yet.</div>";
 }
 
+function eventKey(event){
+  return event.event_id||event.id||`${event.kind||event.event_type||"event"}:${event.title||event.summary||""}:${event.ts||event.timestamp||""}`;
+}
+
+function mergeEvents(primary, secondary, limit=18){
+  const out=[], seen=new Set();
+  for(const item of [...primary, ...secondary]){
+    const key=eventKey(item);
+    if(seen.has(key))continue;
+    seen.add(key);
+    out.push(item);
+    if(out.length>=limit)break;
+  }
+  return out;
+}
+
+function renderLiveProcess(view){
+  const runtime=(view.activity||{}).runtime_events||[];
+  const jobs=((view.activity||{}).jobs||[]).map(j=>({
+    kind:j.status==="running"?"running_code":"planning",
+    title:`${j.job_type||"job"} ${j.status||""}`.trim(),
+    summary:j.already_running?"Already running":j.job_id||"",
+    event_id:j.job_id||""
+  }));
+  const events=mergeEvents(PRODUCT_EVENTS, mergeEvents(RUNTIME_STREAM_EVENTS, [...jobs, ...runtime], 18), 18);
+  document.getElementById("liveChip").textContent=`${events.length} events`;
+  document.getElementById("liveProcess").innerHTML=events.map(e=>{
+    const kind=String(e.kind||e.event_type||"event");
+    const cls=kind.match(/error|blocked|failed|safety/i)?"bad":kind.match(/repair|question|warning|timeout/i)?"warn":kind.match(/running|execution/i)?"running":"product";
+    return `<div class="event-row ${cls}">
+      <div class="event-dot"></div>
+      <div>
+        <div class="event-title">${esc(e.title||kind)}</div>
+        <div class="event-sub">${esc(e.summary||e.description||e.event_type||"")}</div>
+      </div>
+    </div>`;
+  }).join("")||"<div class='small muted'>Live events will appear here when the agent starts.</div>";
+}
+
 function renderReview(view){
   const review=view.review||{};
   const runtimeIssues=((view.execution_state||{}).issues)||[];
@@ -545,8 +739,7 @@ async function runSteps(steps){
   await postJson("/api/run",{workspace,goal:document.getElementById("goalInput").value,steps},"Run completed");
 }
 async function agentStart(){
-  const workspace=document.getElementById("workspaceInput").value.trim()||"data";
-  await postJson("/api/agent/start",{workspace,goal:document.getElementById("goalInput").value,max_turns:20},"Analysis started");
+  await submitConsoleTurn("start_analysis");
 }
 async function agentContinue(){
   await postJson("/api/agent/continue",{max_turns:20},"Analysis resumed");
@@ -568,7 +761,26 @@ async function loadDebugContext(){
   DEBUG_CONTEXT=await getJson("/api/context-review?purpose=ui&max_items=8",{});
   renderContext(CURRENT_VIEW||{});
 }
+function connectEventStream(){
+  if(!("EventSource" in window))return;
+  const source=new EventSource("/api/events/stream");
+  source.addEventListener("product_event", ev=>{
+    try{
+      const data=JSON.parse(ev.data);
+      PRODUCT_EVENTS=mergeEvents([data], PRODUCT_EVENTS, 24);
+      renderLiveProcess(CURRENT_VIEW||{activity:{}});
+    }catch{}
+  });
+  source.addEventListener("runtime_event", ev=>{
+    try{
+      const data=JSON.parse(ev.data);
+      RUNTIME_STREAM_EVENTS=mergeEvents([data], RUNTIME_STREAM_EVENTS, 24);
+      renderLiveProcess(CURRENT_VIEW||{activity:{}});
+    }catch{}
+  });
+}
 refresh();
+connectEventStream();
 setInterval(refresh,4000);
 </script>
 </body>
