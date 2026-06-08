@@ -159,6 +159,7 @@ def workbench_view_payload(
     max_items: int = 8,
     token_budget: int = 6000,
     jobs: list[dict] | None = None,
+    include_debug: bool = True,
 ) -> dict:
     """Return the stable compact UI contract for the workbench shell.
 
@@ -178,30 +179,34 @@ def workbench_view_payload(
         lambda: runtime_node_contract_payload(workbench, node_id=active_node_id, run_id=run_id),
         default={},
     )
-    context_review = _safe_payload(
-        lambda: context_review_payload(
-            workbench,
-            run_id=run_id,
-            purpose="ui",
-            max_items=max_items,
-            token_budget=token_budget,
-        ),
-        default={},
-    )
-    run_audit = _safe_payload(
-        lambda: run_audit_payload(workbench, run_id=run_id),
-        default={},
-    )
-    rethinking = _safe_payload(
-        lambda: rethinking_payload(
-            workbench,
-            run_id=run_id,
-            node_id=active_node_id,
-            issue="workbench_view",
-            depth=4,
-        ),
-        default={},
-    )
+    context_review = {}
+    run_audit = {}
+    rethinking = {}
+    if include_debug:
+        context_review = _safe_payload(
+            lambda: context_review_payload(
+                workbench,
+                run_id=run_id,
+                purpose="ui",
+                max_items=max_items,
+                token_budget=token_budget,
+            ),
+            default={},
+        )
+        run_audit = _safe_payload(
+            lambda: run_audit_payload(workbench, run_id=run_id),
+            default={},
+        )
+        rethinking = _safe_payload(
+            lambda: rethinking_payload(
+                workbench,
+                run_id=run_id,
+                node_id=active_node_id,
+                issue="workbench_view",
+                depth=4,
+            ),
+            default={},
+        )
 
     open_interrupts = [
         _model_dump(item) for item in ((snap.interrupts if snap else []) or [])
@@ -222,7 +227,6 @@ def workbench_view_payload(
     active_work_order = {}
     if snap:
         from pertura.core import build_active_work_order
-        from pertura.memory.compiler import compile_context
         visible_tools = [
             item.get("tool_id", "")
             for item in ((capability_view.get("llm_tool_surface") or {}).get("visible_tools") or [])
@@ -230,8 +234,6 @@ def workbench_view_payload(
         ]
         active_work_order = build_active_work_order(
             snap,
-            compile_context(snap, max_items=max_items),
-            context_review if isinstance(context_review, dict) else {},
             trace_driven_rethinking=(context_review or {}).get("trace_driven_rethinking", {}),
             tool_names=visible_tools,
         )
@@ -963,13 +965,14 @@ def create_app(workbench, *, ui: str = "auto"):
         return payload
 
     @app.get("/api/workbench-view")
-    def workbench_view(run_id: str = "", max_items: int = 8, token_budget: int = 6000):
+    def workbench_view(run_id: str = "", max_items: int = 8, token_budget: int = 6000, include_debug: bool = True):
         return workbench_view_payload(
             workbench,
             run_id=run_id,
             max_items=max_items,
             token_budget=token_budget,
             jobs=runner.list_jobs()[:max_items],
+            include_debug=include_debug,
         )
 
     @app.get("/api/execution-state")

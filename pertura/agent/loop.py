@@ -32,47 +32,50 @@ ENVIRONMENT: workspace and artifacts_dir are already defined in the kernel.
 DO NOT redefine them. The workspace file listing is in the prompt. Trust it.
 DO NOT os.walk(), os.listdir(), or os.getcwd().
 Use the pre-loaded workspace variable: print(workspace), workspace.iterdir(), etc.
-Use context_envelope.runtime_symbols as the authoritative inventory of
-available kernel variables and artifacts. working_set.current_assets and
-runtime_state.symbol_refs are references into that same inventory. If a needed
-dataset or artifact appears there, inspect/reuse it before reloading or
-recomputing it.
+Use the Active Work Order as the authoritative decision surface for this turn:
+current node, node progress, selected capability card, observation memory,
+open issues/rethinking, previous outcome, and allowed tools. If you need the
+full runtime inventory of kernel variables, artifacts, jobs, processes, or
+provenance details, call get_context_review() instead of assuming those fields
+are already in the prompt.
 If you are unsure which self-audit/local-read tool to call, call
 get_audit_toolbox() first. It is a compact index of the audit/dashboard/evidence
 tools and keeps context bounded.
-Use context_envelope.provenance_index for the first-pass audit of observations
-and conclusions. Call review_evidence_chain(node_id=...) when you need to
-self-audit whether a conclusion, observation, or artifact is backed by
-successful, non-stale evidence. Call trace_upstream only when the compact
-review says the dependency path needs expansion.
+Use the Active Work Order's observation memory and open issue/rethinking
+sections for the first-pass audit of observations and conclusions. Call
+review_evidence_chain(node_id=...) when you need to self-audit whether a
+conclusion, observation, or artifact is backed by successful, non-stale
+evidence. Call trace_upstream only when the compact review says the dependency
+path needs expansion.
 When a result is suspicious, empty/negative, stale, unsupported, or blocks
 progress, call plan_rethinking(node_id=..., issue=...) before rerunning. It
 combines evidence review, upstream trace, downstream impact, suspected root
 causes, and a compact repair/branch/intervention action menu.
-Read context_envelope.trace_driven_rethinking first when present. If its status
-is not not_needed, treat its recommended_actions as the preferred trace/repair
-menu for the next tool call unless a human interrupt or explicit user request
-has higher priority.
-Check context_envelope.runtime_state.active_attempt, recent_executions, jobs,
-and processes before starting new work. If something is already running or an
-attempt just produced usable output, inspect or continue it instead of rerunning.
+Read the Active Work Order's rethinking section first when present. If its
+status is not not_needed, treat its recommended_actions as the preferred
+trace/repair menu for the next tool call unless a human interrupt or explicit
+user request has higher priority.
+Check the Active Work Order's previous outcome and last attempt delta before
+starting new work. If an attempt just produced usable output, inspect or
+continue it instead of rerunning. Call get_context_review() when you need the
+full runtime_state for active jobs or kernel symbols.
 Use get_node_contract() when you need a compact dashboard for the active
 analysis node: gate status, missing inputs, ready capabilities, and next
 actions.
-Use get_context_review() when you need the full bounded dashboard: protected
-context, runtime symbols, working set, active contract, provenance index,
-audit_preview, risks/gates, affordances, and budget report. Treat it as the
-source of truth before deciding to rerun expensive analysis.
-If context_envelope.audit_preview has error/blocking issues or next_actions,
+Use get_context_review() when you need the full bounded debug dashboard:
+protected context, runtime symbols, working set, active contract, provenance
+index, audit_preview, risks/gates, affordances, and budget report. Treat it as
+the expansion path before deciding to rerun expensive analysis.
+If the Active Work Order lists audit next actions or blocking open issues,
 follow those local-read repair actions first (plan_rethinking, trace_upstream,
-get_node_contract, get_capability_template, inspect_artifact_summary, audit_run) before committing
-new code, completing a node, or finishing.
+get_node_contract, get_capability_template, inspect_artifact_summary, audit_run)
+before committing new code, completing a node, or finishing.
 Use audit_run() before finish/report decisions to check graph validity, open
 gates, node coverage, conclusion support, stale evidence, artifact files, and
 blocking findings. Use audit_run.next_actions as your repair menu; do not
 ignore audit errors just because a conclusion sounds plausible.
-Before execute_code or submit_job, read context_envelope.active_contract.selected_capability
-and audit_checklist. Pass capability_ids=[selected_capability.id] unless you
+Before execute_code or submit_job, read the Active Work Order's Selected
+Capability Card. Pass capability_ids=[selected_capability.id] unless you
 deliberately choose another allowed capability. Use the selected capability's
 packages/functions/analysis_modes as implementation hints, not as mandatory
 imports. Register the expected observations/artifacts or explain limitations.
@@ -110,7 +113,7 @@ PROTOCOL:
 6. Data persists in the kernel across cells. DO NOT reload. Imports persist. DO NOT re-import.
 
 NODE NAVIGATION:
-- Treat analysis_node/current_node_progress as your current contract.
+- Treat the Active Work Order's active_node/node_progress as your current contract.
 - If you need another stage, call request_node_transition first; do not execute code for a different node.
 - Inside the active node, execute one meaningful code cell, inspect the outcome, then decide whether to retry, continue, branch, skip, complete_node, ask_user, or finish.
 - Before calling complete_node, check current_node_progress.completion and missing_completion.

@@ -178,6 +178,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 let CURRENT_VIEW = null;
 let CURRENT_GRAPH = {nodes:[], edges:[]};
 let SELECTED_NODE = "";
+let DEBUG_CONTEXT = null;
 const TYPE_COLORS = {workspace:"#667085",analysis_node:"#6d28d9",branch:"#2563eb",attempt:"#15803d",job:"#0369a1",artifact:"#b45309",observation:"#0f766e",outcome:"#15803d",trigger:"#b42318",finding:"#b42318",conclusion:"#ca8a04",tool_call:"#667085",review_decision:"#0f766e",behavior_run:"#6d28d9"};
 
 function esc(value){return String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
@@ -225,7 +226,7 @@ async function postJson(url, payload={}, successMessage="Updated"){
 
 async function refresh(){
   const [view, derivation] = await Promise.all([
-    getJson("/api/workbench-view?max_items=8", null),
+    getJson("/api/workbench-view?max_items=8&include_debug=false", null),
     getJson(`/api/derivation-view${SELECTED_NODE ? "?focus_node=" + encodeURIComponent(SELECTED_NODE) : ""}`, {nodes:[],edges:[]})
   ]);
   if(view) CURRENT_VIEW = view;
@@ -499,13 +500,14 @@ function renderReview(view){
 }
 
 function renderContext(view){
-  const ctx=view.agent_context||{};
+  const ctx=DEBUG_CONTEXT||view.agent_context||{};
   const active=view.active||{};
   const workOrder=(view.analysis||{}).active_work_order||{};
   document.getElementById("budgetChip").textContent=`attempts ${(view.budget||{}).max_attempts||"-"}`;
-  document.getElementById("contextSummary").innerHTML=`<b>Active:</b> ${esc(active.node_id||"none")} / ${esc(active.branch_id||"main")}<br><b>Work order:</b> ${esc(workOrder.mode||"normal")}<br><b>Context:</b> ${esc(ctx.purpose||ctx.view_type||"context")}`;
+  const hasDebug=!!(ctx.view_type||ctx.purpose);
+  document.getElementById("contextSummary").innerHTML=`<b>Active:</b> ${esc(active.node_id||"none")} / ${esc(active.branch_id||"main")}<br><b>Work order:</b> ${esc(workOrder.mode||"normal")}<br><b>Context:</b> ${esc(ctx.purpose||ctx.view_type||(hasDebug?"context":"on demand"))}${hasDebug?"":`<br><button class="small-button" onclick="loadDebugContext()" style="margin-top:7px">Load Debug</button>`}`;
   const compact={active_work_order:{mode:workOrder.mode,active_node:workOrder.active_node,missing:(workOrder.node_progress||{}).missing_completion,recommended_actions:workOrder.recommended_actions,allowed_tools:workOrder.allowed_tools},llm_tool_surface:(((view.analysis||{}).capabilities_view||{}).llm_tool_surface||{}).summary,audit_preview:ctx.audit_preview,trace_driven_rethinking:ctx.trace_driven_rethinking};
-  document.getElementById("contextJson").textContent=JSON.stringify(compact,null,2);
+  document.getElementById("contextJson").textContent=hasDebug?JSON.stringify(compact,null,2):"";
 }
 
 function renderReport(view){
@@ -562,6 +564,10 @@ async function answerInterrupt(){
   document.getElementById("answerInput").value="";
 }
 async function toggleCapability(capabilityId, enabled){await postJson(`/api/capabilities/${encodeURIComponent(capabilityId)}/toggle`,{enabled},enabled?"Capability enabled":"Capability disabled");}
+async function loadDebugContext(){
+  DEBUG_CONTEXT=await getJson("/api/context-review?purpose=ui&max_items=8",{});
+  renderContext(CURRENT_VIEW||{});
+}
 refresh();
 setInterval(refresh,4000);
 </script>

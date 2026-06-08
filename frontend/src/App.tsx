@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import {
   answerInterrupt,
   continueAgent,
+  getContextReview,
   generateReport,
   getAttemptGraph,
   getDerivationView,
@@ -765,7 +766,11 @@ function Rethinking(props: { view: WorkbenchView | null; selectedNode: string })
 }
 
 function ContextSurface(props: { view: WorkbenchView | null }) {
-  const context = props.view?.agent_context ?? {};
+  const [debugContext, setDebugContext] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const context = debugContext ?? props.view?.agent_context ?? {};
+  const hasDebugContext = Boolean(context.view_type || context.purpose);
   const compact = {
     view_type: context.view_type,
     purpose: context.purpose,
@@ -774,7 +779,31 @@ function ContextSurface(props: { view: WorkbenchView | null }) {
     trace_driven_rethinking: context.trace_driven_rethinking,
     affordances: Array.isArray(context.affordances) ? context.affordances.slice(0, 6) : []
   };
-  return <pre className="context-json">{JSON.stringify(compact, null, 2)}</pre>;
+  async function loadDebugContext() {
+    setLoading(true);
+    setError("");
+    try {
+      setDebugContext(await getContextReview());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <div>
+      {!hasDebugContext && (
+        <div className="debug-load">
+          <p className="small muted">Debug context is loaded on demand.</p>
+          <button className="small-button" onClick={loadDebugContext} disabled={loading}>
+            {loading ? "Loading" : "Load Debug"}
+          </button>
+          {error && <p className="small bad-text">{error}</p>}
+        </div>
+      )}
+      {hasDebugContext && <pre className="context-json">{JSON.stringify(compact, null, 2)}</pre>}
+    </div>
+  );
 }
 
 function ReportSummary(props: { view: WorkbenchView | null }) {

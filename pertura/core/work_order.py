@@ -193,6 +193,26 @@ def render_active_work_order(work_order: dict[str, Any]) -> str:
             lines.append(f"- coverage: {label_text}")
         for item in (memory.get("needs_review") or [])[:3]:
             lines.append(f"- review: {_line(item.get('variable_key') or item.get('subject_metric') or item)}")
+    delta = work_order.get("last_attempt_delta") or {}
+    if delta:
+        lines.extend(["", "## Last Attempt Delta"])
+        if delta.get("attempt_id"):
+            lines.append(f"- attempt: {_line(delta.get('attempt_id'))} ({_line(delta.get('status'))})")
+        execution = delta.get("execution") or {}
+        if execution:
+            returncode = execution.get("returncode")
+            timed_out = execution.get("timed_out") or execution.get("soft_timeout_hit")
+            lines.append(f"- execution: returncode={returncode}, timed_out={bool(timed_out)}")
+        if delta.get("observations_registered") is not None:
+            lines.append(f"- observations registered: {delta.get('observations_registered')}")
+        for item in (delta.get("new_observations") or [])[:4]:
+            lines.append(f"- observation: {_delta_observation_line(item)}")
+        for item in (delta.get("new_artifacts") or [])[:3]:
+            lines.append(f"- artifact: {_delta_artifact_line(item)}")
+        for item in (delta.get("new_findings") or [])[:3]:
+            lines.append(f"- finding: {_delta_finding_line(item)}")
+        if delta.get("runtime_refs"):
+            lines.append(f"- runtime refs: {', '.join(str(item) for item in delta.get('runtime_refs', [])[:6])}")
     load_plan = work_order.get("dataset_load_plan") or {}
     if load_plan.get("path"):
         lines.extend([
@@ -378,6 +398,29 @@ def _prioritize_load_dataset_action(actions: list[str], path: str) -> list[str]:
 
 def _line(value: Any) -> str:
     return " ".join(str(value or "").split())
+
+
+def _delta_observation_line(item: dict[str, Any]) -> str:
+    observation_id = item.get("observation_id") or ""
+    target = item.get("target") or ""
+    metric = item.get("metric") or item.get("type") or ""
+    value = item.get("value")
+    method = item.get("method") or ""
+    return _line(f"{observation_id} {target} {metric}={value} {method}".strip())
+
+
+def _delta_artifact_line(item: dict[str, Any]) -> str:
+    kind = item.get("kind") or "artifact"
+    path = item.get("path") or item.get("artifact_id") or ""
+    summary = item.get("summary") or ""
+    return _line(f"{kind} {path} {summary}".strip())
+
+
+def _delta_finding_line(item: dict[str, Any]) -> str:
+    severity = item.get("severity") or "finding"
+    kind = item.get("type") or item.get("finding_type") or ""
+    summary = item.get("summary") or item.get("action") or ""
+    return _line(f"{severity} {kind}: {summary}".strip(": "))
 
 
 def _snapshot_work_order_source(snap: Snapshot) -> dict[str, Any]:

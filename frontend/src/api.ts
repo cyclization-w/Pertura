@@ -12,11 +12,15 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function getWorkbenchView(): Promise<WorkbenchView> {
-  return json<WorkbenchView>("/api/workbench-view?max_items=8");
+  return json<WorkbenchView>("/api/workbench-view?max_items=8&include_debug=false");
 }
 
 export function getExecutionState(): Promise<ExecutionState> {
   return json<ExecutionState>("/api/execution-state");
+}
+
+export function getContextReview(): Promise<Record<string, unknown>> {
+  return json<Record<string, unknown>>("/api/context-review?purpose=ui&max_items=8");
 }
 
 export function getAttemptGraph(): Promise<AttemptGraph> {

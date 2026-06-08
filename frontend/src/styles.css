@@ -333,6 +333,14 @@ button.success { border-color: var(--good); background: var(--good); color: #fff
   max-height: 440px;
   overflow: auto;
 }
+.debug-load {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+}
+.bad-text {
+  color: var(--bad);
+}
 
 .graph {
   width: 100%;

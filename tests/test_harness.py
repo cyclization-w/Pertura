@@ -942,6 +942,19 @@ snapshot_work_order = build_active_work_order(
 )
 check("active work order compiles from snapshot", snapshot_work_order["active_node"]["id"] == trace_snap.active_node_id)
 check("active work order includes observation memory summary", "summary" in snapshot_work_order["observation_memory"])
+delta_work_order = build_active_work_order(
+    trace_snap,
+    last_attempt_delta={
+        "attempt_id": "att_retry",
+        "status": "succeeded",
+        "observations_registered": 1,
+        "new_observations": [{"observation_id": "obs_retry", "target": "TargetX", "metric": "logFC", "value": 2.0, "method": "retry"}],
+        "new_artifacts": [{"artifact_id": "art_retry", "kind": "table", "path": "retry.csv", "summary": "Retry result"}],
+        "new_findings": [{"finding_id": "finding_retry", "type": "stale", "severity": "warning", "summary": "Retry changed evidence"}],
+        "execution": {"returncode": 0, "timed_out": False},
+    },
+)
+check("active work order renders last attempt delta", "## Last Attempt Delta" in delta_work_order["markdown"] and "obs_retry" in delta_work_order["markdown"])
 restored_context_envelope = build_view(
     trace_snap,
     trace_graph,
@@ -1888,13 +1901,14 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     check("evidence review tool registered", "review_evidence_chain" in TOOLS)
     check("rethinking plan tool registered", "plan_rethinking" in TOOLS)
     from pertura.agent.loop import _TOOL_LOOP_PROMPT
-    check("tool loop prompt names audit preview", "audit_preview" in _TOOL_LOOP_PROMPT)
-    check("tool loop prompt prioritizes audit next actions", "audit_run.next_actions" in _TOOL_LOOP_PROMPT and "follow those local-read repair actions first" in _TOOL_LOOP_PROMPT)
+    check("tool loop prompt uses active work order", "Active Work Order" in _TOOL_LOOP_PROMPT and "authoritative decision surface" in _TOOL_LOOP_PROMPT)
+    check("tool loop prompt keeps context review as expansion path", "get_context_review()" in _TOOL_LOOP_PROMPT and "audit_preview" in _TOOL_LOOP_PROMPT)
+    check("tool loop prompt prioritizes audit next actions", "audit next actions" in _TOOL_LOOP_PROMPT and "follow those local-read repair actions first" in _TOOL_LOOP_PROMPT)
     check("tool loop prompt names harness manifest", "get_harness_manifest" in _TOOL_LOOP_PROMPT)
     check("tool loop prompt names audit toolbox", "get_audit_toolbox" in _TOOL_LOOP_PROMPT)
     check("tool loop prompt names evidence review", "review_evidence_chain" in _TOOL_LOOP_PROMPT)
     check("tool loop prompt names rethinking plan", "plan_rethinking" in _TOOL_LOOP_PROMPT)
-    check("tool loop prompt prioritizes context rethinking preview", "context_envelope.trace_driven_rethinking" in _TOOL_LOOP_PROMPT and "recommended_actions as the preferred trace/repair" in _TOOL_LOOP_PROMPT)
+    check("tool loop prompt prioritizes work order rethinking", "Active Work Order's rethinking section" in _TOOL_LOOP_PROMPT and "recommended_actions as the preferred" in _TOOL_LOOP_PROMPT and "trace/repair menu" in _TOOL_LOOP_PROMPT)
     check("context review tool description names next actions", "next actions" in TOOLS["get_context_review"]["description"])
     from pertura.core import build_audit_toolbox, build_harness_manifest
     harness_manifest = build_harness_manifest()
@@ -2312,6 +2326,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         rethinking_payload,
         run_audit_payload,
         runtime_node_contract_payload,
+        workbench_view_payload,
     )
     api_audit_payload = analysis_spec_audit_payload(wb_spec)
     api_contract_payload = analysis_spec_contract_payload(wb_spec, node_id="target_interpretation")
@@ -2321,6 +2336,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     api_harness_payload = harness_manifest_payload()
     api_run_audit_payload = run_audit_payload(wb_spec)
     api_rethinking_payload = rethinking_payload(wb_spec, issue="review API run state")
+    api_workbench_light_payload = workbench_view_payload(wb_spec, max_items=4, include_debug=False)
     check("api helper exposes analysis spec audit", api_audit_payload["audit_type"] == "analysis_graph_audit")
     check("api helper exposes analysis node contract", api_contract_payload["node"]["id"] == "target_interpretation")
     check("api helper exposes runtime node dashboard", api_runtime_payload["runtime"]["target_node_id"] == "workspace_inspection")
@@ -2331,6 +2347,8 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     check("api helper exposes harness manifest", api_harness_payload["thesis"]["core_principle"] == "free_reasoning_gated_commit")
     check("api helper exposes run audit", api_run_audit_payload["audit_type"] == "run_audit")
     check("api helper exposes rethinking plan", api_rethinking_payload["view_type"] == "rethinking_plan")
+    check("api workbench light view uses snapshot work order", api_workbench_light_payload["analysis"]["active_work_order"]["view_type"] == "active_work_order")
+    check("api workbench light view omits debug context", api_workbench_light_payload["agent_context"] == {})
     gui_html = (Path(__file__).resolve().parent.parent / "pertura" / "_gui.html").read_text(encoding="utf-8")
     check("GUI graph panel fetches rethinking endpoint", "/api/rethink/" in gui_html and "Rethinking" in gui_html)
     check("GUI capability browser names LLM tool surface", "LLM visible tools this turn" in gui_html and "toggleCapability" in gui_html)
