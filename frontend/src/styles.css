@@ -40,7 +40,7 @@ body {
 h1 { margin: 0; font-size: 16px; line-height: 1.2; }
 .subtle { margin-top: 2px; font-size: 12px; color: var(--muted); }
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-input, button { font: inherit; }
+input, textarea, button { font: inherit; }
 input {
   height: 34px;
   width: 220px;
@@ -50,6 +50,17 @@ input {
   color: var(--ink);
   padding: 0 9px;
   font-size: 13px;
+}
+textarea {
+  min-height: 72px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  padding: 9px;
+  font-size: 13px;
+  line-height: 1.4;
+  resize: vertical;
 }
 button {
   height: 34px;
@@ -64,6 +75,7 @@ button {
 }
 button.primary { border-color: var(--accent); background: var(--accent); color: #fff; }
 button.success { border-color: var(--good); background: var(--good); color: #fff; }
+button:disabled { opacity: .55; cursor: not-allowed; }
 .errorbar { padding: 8px 14px; background: var(--bad-soft); color: var(--bad); border-bottom: 1px solid #fecaca; font-size: 13px; }
 
 .analysis-layout {
@@ -160,6 +172,102 @@ button.success { border-color: var(--good); background: var(--good); color: #fff
   flex-wrap: wrap;
   gap: 5px;
   min-height: 20px;
+}
+
+.analysis-console-panel {
+  border-color: #a8cfc8;
+}
+.analysis-console {
+  display: grid;
+  gap: 10px;
+}
+.console-input-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(280px, 1fr) 150px;
+  gap: 8px;
+  align-items: stretch;
+}
+.console-input-grid input,
+.console-input-grid textarea {
+  width: 100%;
+}
+.console-submit {
+  height: auto;
+  min-height: 72px;
+  white-space: normal;
+}
+.console-error {
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: var(--bad-soft);
+  color: var(--bad);
+  padding: 8px;
+  font-size: 12px;
+}
+.console-kicker {
+  font-size: 10px;
+  font-weight: 780;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.question-console {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #f7d9a8;
+  border-radius: 8px;
+  background: #fffbf2;
+  padding: 10px;
+}
+.question-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #344054;
+}
+.question-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+.question-fields label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 720;
+  color: #475467;
+}
+.question-fields input {
+  width: 100%;
+}
+.candidate-actions,
+.action-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.candidate-action {
+  height: auto;
+  min-height: 52px;
+  width: min(220px, 100%);
+  display: grid;
+  gap: 3px;
+  align-content: center;
+  text-align: left;
+  white-space: normal;
+}
+.candidate-action span {
+  font-size: 12px;
+  font-weight: 780;
+}
+.candidate-action small {
+  color: var(--muted);
+  font-weight: 500;
+  line-height: 1.25;
+}
+.candidate-action.primary-action {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .process-panel {
@@ -259,6 +367,7 @@ button.success { border-color: var(--good); background: var(--good); color: #fff
   box-shadow: 0 0 0 1px #a8cfc8;
 }
 .process-event.kernel .process-dot { background: #2563eb; box-shadow: 0 0 0 1px #bfdbfe; }
+.process-event.product .process-dot { background: var(--accent); box-shadow: 0 0 0 1px #99d3c7; }
 .process-event.artifact .process-dot { background: var(--warn); box-shadow: 0 0 0 1px #fed7aa; }
 .process-event.issue .process-dot { background: var(--bad); box-shadow: 0 0 0 1px #fecaca; }
 .process-event.job .process-dot { background: #0369a1; box-shadow: 0 0 0 1px #bae6fd; }
@@ -673,6 +782,8 @@ button.success { border-color: var(--good); background: var(--good); color: #fff
   .analysis-layout { grid-template-columns: 260px 1fr; }
   .inspector-rail { grid-column: 1 / span 2; display: grid; grid-template-columns: 1fr 1fr; }
   .inspector-rail .panel.fill { min-height: 300px; }
+  .console-input-grid { grid-template-columns: 1fr; }
+  .console-submit { min-height: 42px; }
   .process-stage-grid { grid-template-columns: 1fr; }
   .thought-flow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .thought-stage:not(:last-child)::after { display: none; }

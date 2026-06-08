@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   answerInterrupt,
+  consoleTurn,
   continueAgent,
   getContextReview,
   generateReport,
@@ -24,6 +25,8 @@ import type {
   LlmToolSurface,
   RuntimeIssue,
   RuntimeEventCard,
+  ProductEventCard,
+  CandidateAction,
   ToolVisibilityCard,
   WorkbenchNode,
   WorkbenchView
@@ -83,7 +86,7 @@ type ProcessEvent = {
   summary: string;
   status?: string;
   timestamp?: string;
-  source: "llm" | "kernel" | "runtime" | "artifact" | "issue" | "job";
+  source: "llm" | "kernel" | "runtime" | "product" | "artifact" | "issue" | "job";
 };
 
 function recordValue(row: Record<string, unknown>, keys: string[]): string {
@@ -136,6 +139,7 @@ function pickFocusNode(nodes: GraphNode[], selectedNode: string, activeNodeId: s
 function buildProcessEvents(
   view: WorkbenchView | null,
   streamEvents: RuntimeEventCard[] = [],
+  productEvents: ProductEventCard[] = [],
   streamJobs: Array<Record<string, unknown>> = []
 ): ProcessEvent[] {
   if (!view) return [];
@@ -160,6 +164,18 @@ function buildProcessEvents(
       summary: selectedCapability?.next_repair
         ?? workOrder.recommended_actions?.[0]
         ?? "Current bounded decision surface is ready."
+    });
+  }
+
+  for (const item of productEvents) {
+    events.push({
+      id: item.event_id ?? `${item.product_type}-${events.length}`,
+      kind: item.product_type ?? item.event_type ?? "product_event",
+      source: "product",
+      status: item.product_type,
+      title: item.title ?? item.product_type ?? "Analysis event",
+      summary: item.summary ?? "",
+      timestamp: item.timestamp
     });
   }
 
@@ -236,6 +252,14 @@ function mergeStreamEvent(prev: RuntimeEventCard[], next: RuntimeEventCard): Run
   return Array.from(keyed.values()).slice(-60);
 }
 
+function mergeProductEvent(prev: ProductEventCard[], next: ProductEventCard): ProductEventCard[] {
+  const keyed = new Map<string, ProductEventCard>();
+  for (const item of [...prev, next]) {
+    keyed.set(item.event_id ?? `${item.event_type}-${item.timestamp}-${keyed.size}`, item);
+  }
+  return Array.from(keyed.values()).slice(-60);
+}
+
 export default function App() {
   const [view, setView] = useState<WorkbenchView | null>(null);
   const [graph, setGraph] = useState<AttemptGraph>({ nodes: [], edges: [] });
@@ -245,6 +269,7 @@ export default function App() {
   const [selectedNode, setSelectedNode] = useState("");
   const [error, setError] = useState("");
   const [streamEvents, setStreamEvents] = useState<RuntimeEventCard[]>([]);
+  const [productEvents, setProductEvents] = useState<ProductEventCard[]>([]);
   const [streamJobs, setStreamJobs] = useState<Array<Record<string, unknown>>>([]);
   const [streamStatus, setStreamStatus] = useState("connecting");
 
@@ -293,6 +318,16 @@ export default function App() {
         setStreamStatus("live");
         refreshSoon();
       } catch (err) {
+        setStreamStatus("polling");
+      }
+    });
+    source.addEventListener("product_event", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as ProductEventCard;
+        setProductEvents((prev) => mergeProductEvent(prev, payload));
+        setStreamStatus("live");
+        refreshSoon();
+      } catch {
         setStreamStatus("polling");
       }
     });
@@ -358,8 +393,6 @@ export default function App() {
           <div className="subtle">{view?.analysis.domain.name ?? "domain"} / {status.run_id ?? "no run"}</div>
         </div>
         <div className="controls">
-          <input value={workspace} onChange={(event) => setWorkspace(event.target.value)} placeholder="Workspace path" />
-          <input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="Goal" />
           <button className="primary" onClick={startAnalysis}>Start Analysis</button>
           <button className="success" onClick={continueAnalysis}>Continue</button>
           <button onClick={pauseAnalysis}>Pause</button>
@@ -399,7 +432,15 @@ export default function App() {
         </aside>
 
         <section className="column process-column">
-          <LiveProcessStage view={view} streamEvents={streamEvents} streamJobs={streamJobs} streamStatus={streamStatus} />
+          <AnalysisConsole
+            view={view}
+            workspace={workspace}
+            setWorkspace={setWorkspace}
+            goal={goal}
+            setGoal={setGoal}
+            onRefresh={refresh}
+          />
+          <LiveProcessStage view={view} streamEvents={streamEvents} productEvents={productEvents} streamJobs={streamJobs} streamStatus={streamStatus} />
           <LiveArtifactsStage view={view} />
           <Panel title="Derivation Lanes" fill badge={`${graph.nodes.length} / ${graph.edges.length}`}>
             <AttemptGraphSvg graph={graph} activeNodeId={view?.active.node_id ?? ""} selectedNode={selectedNode} onSelect={setSelectedNode} />
@@ -456,9 +497,155 @@ function Panel(props: { title: string; badge?: string; fill?: boolean; className
   );
 }
 
+function AnalysisConsole(props: {
+  view: WorkbenchView | null;
+  workspace: string;
+  setWorkspace: (value: string) => void;
+  goal: string;
+  setGoal: (value: string) => void;
+  onRefresh: () => Promise<void>;
+}) {
+  const actions = props.view?.analysis.candidate_actions ?? props.view?.execution_state?.candidate_actions ?? [];
+  const primary = actions.find((item) => item.primary) ?? actions[0];
+  const question = actions.find((item) => item.kind === "answer_question");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [localError, setLocalError] = useState("");
+
+  async function submit(action?: CandidateAction, messageOverride?: string, answerPayload?: Record<string, unknown>) {
+    const selected = action ?? primary;
+    setBusy(true);
+    setLocalError("");
+    try {
+      const endpoint = selected?.endpoint ?? "";
+      const shouldCallEndpoint = endpoint && endpoint !== "/api/console/turn" && selected?.kind !== "answer_question";
+      if (shouldCallEndpoint) {
+        const response = await fetch(endpoint, {
+          method: selected?.method ?? "POST",
+          headers: { "Content-Type": "application/json" },
+          body: (selected?.method ?? "POST").toUpperCase() === "GET" ? undefined : JSON.stringify(selected?.payload ?? {})
+        });
+        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      } else {
+        await consoleTurn({
+          message: messageOverride ?? props.goal,
+          workspace: props.workspace || "data",
+          action_id: selected?.id ?? "",
+          answers: answerPayload
+        });
+      }
+      if (selected?.kind !== "answer_question") {
+        props.setGoal("");
+      }
+      await props.onRefresh();
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function submitQuestionFields(action: CandidateAction) {
+    const payload: Record<string, unknown> = {};
+    for (const field of action.fields ?? []) {
+      payload[field.name] = answers[field.name] ?? "";
+    }
+    submit(action, "", payload);
+  }
+
+  return (
+    <Panel
+      title="Analysis Console"
+      badge={props.view?.execution_state?.mode ?? "not initialized"}
+      className="analysis-console-panel"
+    >
+      <div className="analysis-console">
+        <div className="console-input-grid">
+          <input
+            value={props.workspace}
+            onChange={(event) => props.setWorkspace(event.target.value)}
+            placeholder="Workspace or dataset folder"
+          />
+          <textarea
+            value={props.goal}
+            onChange={(event) => props.setGoal(event.target.value)}
+            placeholder="Ask for an analysis, answer a question, or describe the next objective"
+            rows={3}
+          />
+          <button className="primary console-submit" disabled={busy} onClick={() => submit(primary)}>
+            {busy ? "Working..." : primary?.label ?? "Start analysis"}
+          </button>
+        </div>
+        {localError && <div className="console-error">{localError}</div>}
+        {question && (
+          <div className="question-console">
+            <div>
+              <div className="console-kicker">Input needed</div>
+              <div className="question-text">{question.description}</div>
+            </div>
+            {question.options?.length ? (
+              <div className="action-strip">
+                {question.options.map((option) => (
+                  <button key={option} disabled={busy} onClick={() => submit(question, option)}>
+                    {option}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {question.fields?.length ? (
+              <div className="question-fields">
+                {question.fields.map((field) => (
+                  <label key={field.name}>
+                    <span>{field.label ?? field.name}</span>
+                    <input
+                      value={answers[field.name] ?? ""}
+                      onChange={(event) => setAnswers({ ...answers, [field.name]: event.target.value })}
+                      placeholder={field.name}
+                    />
+                  </label>
+                ))}
+                <button className="primary" disabled={busy} onClick={() => submitQuestionFields(question)}>
+                  Send answer
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
+        <ActionStrip actions={actions} busy={busy} onAction={(action) => submit(action)} />
+      </div>
+    </Panel>
+  );
+}
+
+function ActionStrip(props: {
+  actions: CandidateAction[];
+  busy: boolean;
+  onAction: (action: CandidateAction) => void;
+}) {
+  const actions = props.actions.filter((item) => item.kind !== "answer_question").slice(0, 6);
+  if (!actions.length) return <p className="small muted">Candidate actions will appear after the run starts.</p>;
+  return (
+    <div className="candidate-actions">
+      {actions.map((action) => (
+        <button
+          key={action.id}
+          className={`candidate-action ${action.primary ? "primary-action" : ""}`}
+          disabled={props.busy || Boolean(action.disabled_reason)}
+          onClick={() => props.onAction(action)}
+          title={action.disabled_reason || action.description || action.label}
+        >
+          <span>{action.label}</span>
+          <small>{truncate(action.description || action.kind, 96)}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function LiveProcessStage(props: {
   view: WorkbenchView | null;
   streamEvents: RuntimeEventCard[];
+  productEvents: ProductEventCard[];
   streamJobs: Array<Record<string, unknown>>;
   streamStatus: string;
 }) {
@@ -466,7 +653,7 @@ function LiveProcessStage(props: {
   const executionState = view?.execution_state;
   const workOrder = view?.analysis.active_work_order;
   const task = executionState?.current_task ?? {};
-  const events = buildProcessEvents(view, props.streamEvents, props.streamJobs);
+  const events = buildProcessEvents(view, props.streamEvents, props.productEvents, props.streamJobs);
   const lastDelta = workOrder?.last_attempt_delta ?? {};
   const execution = (lastDelta.execution ?? {}) as Record<string, unknown>;
   const jobs = props.streamJobs.length ? props.streamJobs : (view?.activity.jobs ?? []);

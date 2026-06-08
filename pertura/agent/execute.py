@@ -147,6 +147,14 @@ def _execute_attempt(wb, attempt: Attempt) -> str:
             "partial_stderr": (result.get("stderr", "") or "")[-2000:],
         })
 
+    if result.get("returncode") != 0:
+        from pertura.agent.auto_repair import maybe_auto_repair
+        repair = maybe_auto_repair(wb, attempt, result, obs_count)
+        if repair.get("status") == "applied":
+            return repair.get("action") or "retry_planned"
+        if repair.get("status") == "needs_review":
+            return "waiting_for_human"
+
     if wb._cancel_requested():
         wb._emit("run_paused", {"reason": "job_cancel_requested"})
         return "cancelled"

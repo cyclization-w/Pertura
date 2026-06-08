@@ -141,6 +141,39 @@ export type RuntimeIssue = {
   affected_ids?: string[];
   suggested_action?: string;
   answer_endpoint?: string;
+  options?: string[];
+  form?: {
+    fields?: Array<{
+      name: string;
+      label?: string;
+      type?: string;
+      required?: boolean;
+    }>;
+  };
+};
+
+export type CandidateAction = {
+  id: string;
+  kind: string;
+  label: string;
+  description?: string;
+  status?: string;
+  primary?: boolean;
+  risk_level?: string;
+  endpoint?: string;
+  method?: string;
+  payload?: Record<string, unknown>;
+  interrupt_id?: string;
+  options?: string[];
+  fields?: Array<{
+    name: string;
+    label?: string;
+    type?: string;
+    required?: boolean;
+  }>;
+  capability_id?: string;
+  evidence_refs?: string[];
+  disabled_reason?: string;
 };
 
 export type ExecutionState = {
@@ -159,6 +192,7 @@ export type ExecutionState = {
   question?: RuntimeIssue | Record<string, never>;
   issues: RuntimeIssue[];
   recommended_actions?: string[];
+  candidate_actions?: CandidateAction[];
   visible_capabilities?: string[];
   evidence_summary?: {
     attempts?: number;
@@ -245,6 +279,7 @@ export type WorkbenchView = {
     capabilities_by_node: Record<string, string[]>;
     capabilities_view?: CapabilitiesView;
     active_work_order?: ActiveWorkOrder;
+    candidate_actions?: CandidateAction[];
   };
   agent_context: Record<string, unknown>;
   review: {
@@ -336,6 +371,15 @@ export type RuntimeEventCard = {
   event_id?: string;
   event_type?: string;
   card_type?: string;
+  timestamp?: string;
+  title?: string;
+  summary?: string;
+};
+
+export type ProductEventCard = {
+  event_id?: string;
+  event_type?: string;
+  product_type?: string;
   timestamp?: string;
   title?: string;
   summary?: string;

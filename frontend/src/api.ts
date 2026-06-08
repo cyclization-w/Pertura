@@ -76,6 +76,18 @@ export function generateReport() {
   return json<Record<string, unknown>>("/api/report/generate", { method: "POST" });
 }
 
+export function consoleTurn(payload: {
+  message?: string;
+  workspace?: string;
+  action_id?: string;
+  answers?: Record<string, unknown>;
+}) {
+  return json<Record<string, unknown>>("/api/console/turn", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function answerInterrupt(interruptId: string, answer: string) {
   return json<Record<string, unknown>>(`/api/answer/${encodeURIComponent(interruptId)}`, {
     method: "POST",

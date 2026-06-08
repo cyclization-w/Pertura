@@ -21,6 +21,7 @@ def compile_runtime_issues(snap: Snapshot | None, *, limit: int = 20) -> list[di
     for item in getattr(snap, "interrupts", []) or []:
         if getattr(item, "status", "") != "open":
             continue
+        fields = _interrupt_form_fields(snap, item)
         issues.append({
             "issue_id": item.interrupt_id,
             "kind": "question",
@@ -33,6 +34,8 @@ def compile_runtime_issues(snap: Snapshot | None, *, limit: int = 20) -> list[di
             "affected_ids": [item.trigger_id] if item.trigger_id else [],
             "suggested_action": item.default_action or "answer",
             "answer_endpoint": f"/api/answer/{item.interrupt_id}",
+            "options": list(getattr(item, "options", []) or []),
+            "form": {"fields": fields},
         })
 
     for item in getattr(snap, "approvals", []) or []:
@@ -102,7 +105,7 @@ def compile_execution_state(
 ) -> dict[str, Any]:
     """Return the stable product-facing execution state for GUI/API use."""
     if snap is None:
-        return {
+        payload = {
             "view_type": "execution_state",
             "schema_version": "v1",
             "mode": "not_initialized",
@@ -117,6 +120,9 @@ def compile_execution_state(
             "activity": {"jobs": jobs or []},
             "debug_refs": {},
         }
+        from pertura.core.candidate_actions import compile_candidate_actions
+        payload["candidate_actions"] = compile_candidate_actions(None, execution_state=payload, jobs=jobs or [])
+        return payload
 
     runtime_jobs = list(jobs or [])
     issues = compile_runtime_issues(snap)
@@ -132,7 +138,7 @@ def compile_execution_state(
     node_id = selected_node_id or getattr(snap, "active_node_id", "") or ""
     node = _analysis_node(snap, node_id)
     mode = _execution_mode(snap, question=question, blocking_issues=blocking_issues, active_job=active_job)
-    return {
+    payload = {
         "view_type": "execution_state",
         "schema_version": "v1",
         "mode": mode,
@@ -169,6 +175,13 @@ def compile_execution_state(
             "open_issue_ids": [item.get("issue_id", "") for item in issues if item.get("issue_id")],
         },
     }
+    from pertura.core.candidate_actions import compile_candidate_actions
+    payload["candidate_actions"] = compile_candidate_actions(
+        snap,
+        execution_state=payload,
+        jobs=runtime_jobs,
+    )
+    return payload
 
 
 def _execution_mode(snap: Snapshot, *, question: dict, blocking_issues: list[dict], active_job: dict) -> str:
@@ -258,3 +271,20 @@ def _dedupe(values: list[str]) -> list[str]:
         seen.add(value)
         out.append(value)
     return out
+
+
+def _interrupt_form_fields(snap: Snapshot, interrupt) -> list[dict[str, Any]]:
+    try:
+        from pertura.spec.design_answer import expected_fields_from_interrupt
+        fields = expected_fields_from_interrupt(snap, interrupt)
+    except Exception:
+        fields = []
+    return [
+        {
+            "name": field,
+            "label": field.replace("_", " "),
+            "type": "text",
+            "required": True,
+        }
+        for field in fields
+    ]

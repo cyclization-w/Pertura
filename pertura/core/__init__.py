@@ -43,6 +43,7 @@ from .harness_manifest import (
 )
 from .work_order import build_active_work_order, render_active_work_order
 from .execution_state import compile_execution_state, compile_runtime_issues
+from .candidate_actions import compile_candidate_actions
 from pertura.spec.gating import GateEvaluator, GateDecision
 
 __all__ = [
@@ -71,6 +72,6 @@ __all__ = [
     "source_tree_claim_command", "claim_id_for_script",
     "build_harness_manifest", "harness_thesis", "harness_vocabulary",
     "build_active_work_order", "render_active_work_order",
-    "compile_execution_state", "compile_runtime_issues",
+    "compile_execution_state", "compile_runtime_issues", "compile_candidate_actions",
     "GateEvaluator", "GateDecision",
 ]

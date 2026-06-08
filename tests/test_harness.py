@@ -18,6 +18,7 @@ from pertura.core import (
     Behavior, BehaviorRegistry,
     build_context_view, build_view, build_observation_view, build_trace_view, build_impact_view,
     build_active_work_order, compile_execution_state,
+    compile_candidate_actions,
     ResponseCache, hash_tool_call,
     ReplayError, replay_store, fork_store, diff_stores,
     run_integrity, stable_json_sha256,
@@ -2158,7 +2159,18 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
                 "interrupt_id": "irq_projection",
                 "source": "node_gate",
                 "question": "Which control labels should be used?",
+                "options": ["NTC", "vehicle"],
                 "status": "open",
+            }},
+        ),
+        Event(
+            event_id="issue_state_gate",
+            event_type="gate_evaluated",
+            run_id="issue_state",
+            payload={"gate_evaluation": {
+                "evaluation_id": "gate_projection",
+                "decision": "human_interrupt",
+                "condition_results": [{"details": {"fields": ["control_labels"]}}],
             }},
         ),
         Event(
@@ -2192,6 +2204,53 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
     check("execution state maps interrupt to question", execution_state["mode"] == "needs_user" and issue_kinds.get("irq_projection") == "question")
     check("execution state maps trigger to repair issue", issue_kinds.get("trg_projection") == "repair_issue")
     check("execution state maps audit finding to audit issue", issue_kinds.get("find_projection") == "audit_issue")
+    question_issue = next(item for item in execution_state["issues"] if item["issue_id"] == "irq_projection")
+    check("execution state exposes interrupt options", question_issue.get("options") == ["NTC", "vehicle"])
+    check("execution state exposes interrupt form fields", (question_issue.get("form") or {}).get("fields", [{}])[0].get("name") == "control_labels")
+    no_run_actions = compile_candidate_actions(None)
+    check("candidate actions start without run", no_run_actions[0]["kind"] == "start_analysis" and no_run_actions[0]["primary"])
+    interrupt_actions = execution_state.get("candidate_actions", [])
+    check("candidate actions answer active question", interrupt_actions and interrupt_actions[0]["kind"] == "answer_question" and interrupt_actions[0]["options"] == ["NTC", "vehicle"])
+
+    import pertura.agent.auto_repair as auto_repair
+    repair_wb = Workbench(PERTURBSEQ_DOMAIN)
+    repair_ws = Path(td) / "repair_ws"
+    repair_ws.mkdir(exist_ok=True)
+    repair_wb._init(str(repair_ws), "auto repair smoke")
+    repair_snap = repair_wb._store.read_snapshot()
+    repair_attempt = Attempt(
+        attempt_id="att_repair_parent",
+        branch_id=repair_snap.active_branch,
+        analysis_node_id=repair_snap.active_node_id,
+        title="Broken cell",
+        objective="Trigger repair",
+        notebook_cells=[{"role": "execute", "title": "Broken", "source": "print(missing_name)"}],
+        capability_ids=["inspect_workspace"],
+    )
+    original_request_repair = auto_repair._request_repair
+    auto_repair._request_repair = lambda *args, **kwargs: {
+        "should_retry": True,
+        "change_magnitude": "small",
+        "risk_level": "low",
+        "confidence": 0.92,
+        "rationale": "Define missing_name before printing.",
+        "fixed_code": "missing_name = 'ok'\nprint(missing_name)",
+    }
+    try:
+        repair_result = auto_repair.maybe_auto_repair(
+            repair_wb,
+            repair_attempt,
+            {"returncode": 1, "stderr": "NameError: name 'missing_name' is not defined"},
+            0,
+        )
+    finally:
+        auto_repair._request_repair = original_request_repair
+    repaired_snap = repair_wb._store.read_snapshot()
+    def patch_get(item, key):
+        return item.get(key) if isinstance(item, dict) else getattr(item, key)
+    check("auto repair applies low-risk retry", repair_result.get("status") == "applied")
+    check("auto repair records repair patch", any(patch_get(p, "patch_type") == "attempt_retry" and patch_get(p, "status") == "applied" for p in repaired_snap.patch_proposals))
+    check("auto repair plans retry attempt", any(a.parent_intervention == "retry" for a in repaired_snap.attempts))
 
     perturb_spec = PERTURBSEQ_DOMAIN.analysis_graph
     check("perturbseq default spec present", bool(perturb_spec and perturb_spec.get("nodes")))
@@ -2531,6 +2590,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         check("api exposes workbench view", api_workbench_view["view_type"] == "workbench_view")
         check("api workbench view contains active node contract", "active_node_contract" in api_workbench_view["analysis"])
         check("api workbench view contains active work order", api_workbench_view["analysis"]["active_work_order"]["view_type"] == "active_work_order")
+        check("api workbench view exposes candidate actions", isinstance(api_workbench_view["analysis"].get("candidate_actions"), list))
         check("api workbench view contains analysis nodes", len(api_workbench_view["analysis"]["nodes"]) >= 1)
         check("api workbench view contains agent context", api_workbench_view["agent_context"].get("view_type") == "context_envelope")
         check("api workbench view exposes review summary", "run_audit_summary" in api_workbench_view["review"])
@@ -2541,6 +2601,9 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         check("api run accepts JSON body", api_run_response.status_code == 200)
         api_execution_state = client.get("/api/execution-state").json()
         check("api exposes execution state", api_execution_state["view_type"] == "execution_state")
+        check("api execution state exposes candidate actions", isinstance(api_execution_state.get("candidate_actions"), list))
+        api_console_turn = client.post("/api/console/turn", json={"workspace": str(ws_spec), "message": "api console route", "action_id": "continue_analysis"})
+        check("api console turn accepts JSON body", api_console_turn.status_code == 200 and "candidate_actions" in api_console_turn.json())
         api_agent_start = client.post("/api/agent/start", json={"workspace": str(ws_spec), "goal": "api agent body parse", "max_turns": 0})
         check("api agent start accepts JSON body", api_agent_start.status_code == 200)
         api_agent_pause = client.post("/api/agent/pause", json={})

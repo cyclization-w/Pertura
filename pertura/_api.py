@@ -50,6 +50,13 @@ class CapabilityToggleRequest(BaseModel):
     reason: str = "api_toggle"
 
 
+class ConsoleTurnRequest(BaseModel):
+    message: str = ""
+    workspace: str = ""
+    action_id: str = ""
+    answers: dict = {}
+
+
 def analysis_spec_audit_payload(workbench, *, run_id: str = "", strict: bool = False) -> dict:
     from pertura.spec.contracts import audit_analysis_graph
     spec = _analysis_spec_for_workbench(workbench, run_id=run_id)
@@ -247,6 +254,14 @@ def workbench_view_payload(
         jobs=queue_jobs,
         selected_node_id=active_node_id,
     )
+    from pertura.core import compile_candidate_actions
+    candidate_actions = compile_candidate_actions(
+        snap,
+        execution_state=execution_state,
+        work_order=active_work_order,
+        jobs=(runtime_jobs + queue_jobs)[:max_items],
+    )
+    execution_state["candidate_actions"] = candidate_actions
     return {
         "view_type": "workbench_view",
         "schema_version": "v1",
@@ -294,6 +309,7 @@ def workbench_view_payload(
             "capabilities_by_node": domain_payload.get("capabilities_by_node", {}),
             "capabilities_view": capability_view,
             "active_work_order": active_work_order,
+            "candidate_actions": candidate_actions,
         },
         "agent_context": context_review,
         "review": {
@@ -800,9 +816,84 @@ def _runtime_event_cards(events: list, *, max_items: int) -> list[dict]:
     return list(reversed(cards))
 
 
+def _product_event_cards(events: list, *, max_items: int) -> list[dict]:
+    interesting = {
+        "goal_recorded": "planning",
+        "node_transition_requested": "planning",
+        "node_entered": "planning",
+        "attempt_planned": "running_code",
+        "execution_output": "execution_output",
+        "outcome_recorded": "result_recorded",
+        "artifact_registered": "artifact_ready",
+        "interrupt_opened": "question_opened",
+        "finding_recorded": "blocked",
+        "patch_proposed": "repair_proposed",
+        "patch_applied": "repair_applied",
+        "patch_rejected": "blocked",
+        "run_complete": "complete",
+        "job_submitted": "running_code",
+        "job_completed": "result_recorded",
+    }
+    cards = []
+    for event in reversed(events or []):
+        kind = interesting.get(event.event_type)
+        if not kind:
+            continue
+        payload = event.payload or {}
+        cards.append({
+            "event_id": event.event_id,
+            "event_type": event.event_type,
+            "product_type": kind,
+            "timestamp": str(event.timestamp),
+            "title": _product_event_title(kind, event.event_type, payload),
+            "summary": _event_card_summary(event.event_type, payload),
+        })
+        if len(cards) >= max_items:
+            break
+    return list(reversed(cards))
+
+
 def _sse_event(event_type: str, payload: dict) -> str:
     import json
     return f"event: {event_type}\ndata: {json.dumps(payload, default=str)}\n\n"
+
+
+def _product_event_title(kind: str, event_type: str, payload: dict) -> str:
+    if kind == "planning":
+        return _event_card_title(event_type, payload) or "Planning"
+    if kind == "running_code":
+        return _event_card_title(event_type, payload) or "Running code"
+    if kind == "execution_output":
+        return _event_card_title(event_type, payload)
+    if kind == "artifact_ready":
+        return f"Artifact ready: {_event_card_title(event_type, payload)}"
+    if kind == "question_opened":
+        return "Question needs input"
+    if kind == "repair_proposed":
+        patch = payload.get("patch") or {}
+        return patch.get("rationale") or "Repair proposed"
+    if kind == "repair_applied":
+        return "Repair applied"
+    if kind == "complete":
+        return "Analysis complete"
+    if kind == "blocked":
+        return _event_card_title(event_type, payload) or "Blocked"
+    return kind.replace("_", " ")
+
+
+def _looks_like_report_request(message: str) -> bool:
+    text = (message or "").strip().lower()
+    if not text:
+        return False
+    return any(token in text for token in {
+        "report",
+        "generate report",
+        "final report",
+        "summary report",
+        "总结",
+        "报告",
+        "生成报告",
+    })
 
 
 def _event_card_title(event_type: str, payload: dict) -> str:
@@ -835,10 +926,10 @@ def _event_card_summary(event_type: str, payload: dict) -> str:
             return str(payload.get(key))
     if event_type == "execution_output":
         return str(payload.get("text") or "")[-500:]
-    for entity_key in ("finding", "interrupt", "artifact", "observation", "attempt", "outcome", "job"):
+    for entity_key in ("finding", "interrupt", "artifact", "observation", "attempt", "outcome", "job", "patch"):
         entity = payload.get(entity_key)
         if isinstance(entity, dict):
-            return str(entity.get("summary") or entity.get("question") or entity.get("status") or "")
+            return str(entity.get("summary") or entity.get("question") or entity.get("rationale") or entity.get("status") or "")
     return ""
 
 
@@ -988,6 +1079,12 @@ def create_app(workbench, *, ui: str = "auto"):
         )
         return {"job_id": job.job_id, "status": "queued", "already_running": False}
 
+    def _console_state_payload(extra: dict | None = None):
+        payload = dict(extra or {})
+        payload["execution_state"] = execution_state_payload(workbench, jobs=runner.list_jobs()[:8])
+        payload["candidate_actions"] = payload["execution_state"].get("candidate_actions", [])
+        return payload
+
     runner.register_handler("run", _run_with_cancel)
     runner.register_handler("step", _step_with_cancel)
     runner.register_handler("agent_run", _agent_with_cancel)
@@ -1033,6 +1130,7 @@ def create_app(workbench, *, ui: str = "auto"):
             import json
 
             seen_event_ids: set[str] = set()
+            seen_product_event_ids: set[str] = set()
             last_jobs_signature = ""
             interval = max(0.25, min(5.0, poll_ms / 1000))
             yield _sse_event("ready", {
@@ -1055,6 +1153,16 @@ def create_app(workbench, *, ui: str = "auto"):
                             continue
                         seen_event_ids.add(event_id)
                         yield _sse_event("runtime_event", card)
+                    product_cards = _product_event_cards(
+                        store.read_events()[-max_items * 4:],
+                        max_items=max_items,
+                    )
+                    for card in product_cards:
+                        event_id = str(card.get("event_id") or "")
+                        if not event_id or event_id in seen_product_event_ids:
+                            continue
+                        seen_product_event_ids.add(event_id)
+                        yield _sse_event("product_event", card)
 
                 jobs = runner.list_jobs()[:max_items]
                 jobs_signature = json.dumps(jobs, sort_keys=True, default=str)
@@ -1243,6 +1351,70 @@ def create_app(workbench, *, ui: str = "auto"):
     @app.post("/api/report/generate")
     def generate_report():
         return workbench.report()
+
+    @app.post("/api/console/turn")
+    def console_turn(req: ConsoleTurnRequest):
+        import json
+        from uuid import uuid4
+        from pertura.models import Goal, _model_dump
+
+        message = (req.message or "").strip()
+        action_id = (req.action_id or "").strip()
+        snap = _snapshot_for_run()
+        active = _active_agent_job()
+
+        if action_id == "pause":
+            return agent_pause()
+
+        if snap and (action_id == "generate_report" or _looks_like_report_request(message)):
+            report_payload = workbench.report()
+            return _console_state_payload({
+                "handled": "generate_report",
+                "report": report_payload,
+            })
+
+        open_interrupt = next((
+            item for item in ((snap.interrupts if snap else []) or [])
+            if item.status == "open"
+        ), None)
+        if open_interrupt and (action_id in {"", "answer_question"} or req.answers or message):
+            answer_text = (
+                json.dumps(req.answers, ensure_ascii=False)
+                if req.answers
+                else message
+            )
+            if not answer_text:
+                raise HTTPException(400, "Answer is required for the active question")
+            workbench.answer(open_interrupt.interrupt_id, answer_text)
+            return _console_state_payload({
+                "handled": "answer_question",
+                "interrupt_id": open_interrupt.interrupt_id,
+            })
+
+        if active:
+            return _console_state_payload({
+                "handled": "already_running",
+                "job_id": active.get("job_id", ""),
+                "status": active.get("status", "running"),
+                "already_running": True,
+            })
+
+        if snap is None:
+            payload = _submit_agent_job("agent_run", AgentRunRequest(
+                workspace=req.workspace or "data",
+                goal=message,
+            ))
+            return _console_state_payload({"handled": "start_analysis", **payload})
+
+        if message:
+            workbench._emit("goal_recorded", {"goal": _model_dump(Goal(
+                goal_id=f"goal_{uuid4().hex[:12]}",
+                text=message,
+                status="active",
+            ))})
+
+        payload = _submit_agent_job("agent_continue", AgentRunRequest())
+        return _console_state_payload({"handled": "continue_analysis", **payload})
 
     @app.post("/api/run")
     def run(req: RunRequest):
