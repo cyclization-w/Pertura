@@ -12,9 +12,12 @@
   --good:#15803d;--good-soft:#ecfdf3;--violet:#6d28d9;--blue:#2563eb;
 }
 *{box-sizing:border-box}
-body{margin:0;height:100vh;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;flex-direction:column}
-header{height:54px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+body{margin:0;height:100vh;background:linear-gradient(180deg,#f8fafb 0,#eef2f5 100%);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;flex-direction:column}
+header{height:58px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 18px;background:rgba(255,255,255,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(8px)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#1d4ed8);box-shadow:0 10px 24px rgba(15,118,110,.22)}
 h1{font-size:17px;margin:0;font-weight:760;white-space:nowrap}
+.brand-sub{font-size:12px;color:var(--muted);margin-top:2px}
 button,input,textarea{font:inherit}
 input,textarea{border:1px solid var(--line-strong);border-radius:6px;background:#fff;color:var(--ink);padding:8px 10px;font-size:13px}
 input{height:36px}
@@ -26,9 +29,9 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .toolbar{display:flex;gap:8px;align-items:center;min-width:0;flex-wrap:wrap}
 .chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:999px;background:#eef0f3;color:#344054;font-size:12px;font-weight:650}
 .chip.good{background:var(--good-soft);color:var(--good)}.chip.warn{background:var(--warn-soft);color:var(--warn)}.chip.bad{background:var(--bad-soft);color:var(--bad)}
-.shell{flex:1;min-height:0;overflow:hidden;display:grid;grid-template-columns:minmax(620px,1fr) 380px;gap:12px;padding:12px}
+.shell{flex:1;min-height:0;overflow:hidden;display:grid;grid-template-columns:minmax(640px,1fr) 392px;gap:14px;padding:14px}
 .column{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.panel{background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:8px;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 12px 28px rgba(16,24,40,.04)}
 .panel-head{min-height:40px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--panel-soft)}
 .panel-title{font-size:12px;font-weight:760;text-transform:uppercase;letter-spacing:0;color:#475467}
 .panel-body{padding:10px;overflow:auto;min-height:0}
@@ -36,8 +39,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .metric{border:1px solid var(--line);border-radius:6px;background:#fff;padding:8px}
 .metric b{display:block;font-size:18px}.metric span{font-size:11px;color:var(--muted)}
-.analysis-console{border-color:#bdd8d4;box-shadow:0 12px 32px rgba(15,118,110,.08)}
-.console-grid{display:grid;grid-template-columns:minmax(180px,.52fr) minmax(280px,1fr) auto;gap:10px;align-items:stretch}
+.analysis-console{border-color:#bdd8d4;box-shadow:0 18px 42px rgba(15,118,110,.11)}
+.console-grid{display:grid;grid-template-columns:minmax(210px,.5fr) minmax(320px,1fr) auto;gap:10px;align-items:stretch}
 .console-actions{display:flex;flex-direction:column;gap:8px;min-width:160px}
 .console-actions button{width:100%}
 .candidate-actions{display:flex;gap:8px;overflow:auto;padding-top:10px}
@@ -48,7 +51,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .question-console{display:none;margin-top:10px;border:1px solid #f5c2bf;border-left:4px solid var(--bad);border-radius:7px;background:var(--bad-soft);padding:10px}
 .question-options,.question-fields{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
 .question-fields input{min-width:190px;flex:1}
-.live-layout{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:10px}
+.live-layout{display:grid;grid-template-columns:minmax(0,1fr) 318px;gap:10px}
 .live-events{border:1px solid var(--line);border-radius:7px;background:#fff;min-height:190px;max-height:300px;overflow:auto;padding:8px}
 .event-row{display:grid;grid-template-columns:10px minmax(0,1fr);gap:8px;padding:8px;border-bottom:1px solid #eef1f4}
 .event-row:last-child{border-bottom:0}.event-dot{width:9px;height:9px;border-radius:50%;margin-top:5px;background:var(--line-strong)}
@@ -87,13 +90,29 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .trace-box{min-height:120px;max-height:260px;overflow:auto}
 .context-json{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.45;background:#101828;color:#f8fafc;border-radius:6px;padding:9px;max-height:220px;overflow:auto}
 .answer-row{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:8px}
+.inspector-panel{height:100%;min-height:0}
+.inspector-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:8px;border-bottom:1px solid var(--line);background:var(--panel-soft)}
+.inspector-tab-button{height:32px;padding:0 7px;border-color:transparent;background:transparent;color:#475467;font-size:12px}
+.inspector-tab-button.active{background:#fff;border-color:var(--line);color:var(--ink);box-shadow:0 1px 3px rgba(16,24,40,.06)}
+.tab-pane{display:none;min-height:0;overflow:auto;padding:10px;flex:1}
+.tab-pane.active{display:flex;flex-direction:column;gap:10px}
+.tab-section{border:1px solid var(--line);border-radius:7px;background:#fff;overflow:hidden}
+.tab-section-head{min-height:36px;padding:0 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);background:var(--panel-soft)}
+.tab-section-title{font-size:12px;font-weight:760;color:#475467;text-transform:uppercase;letter-spacing:0}
+.tab-section-body{padding:10px;overflow:auto}
 @media(max-width:1180px){.shell{grid-template-columns:1fr}.column{overflow:visible}.live-layout{grid-template-columns:1fr}.right{display:grid;grid-template-columns:1fr 1fr}.right .grow{min-height:280px}}
 @media(max-width:760px){header{height:auto;align-items:flex-start;flex-direction:column}.shell{overflow:auto}.console-grid{grid-template-columns:1fr}.right{display:flex}.metric-grid{grid-template-columns:repeat(2,1fr)}.split{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
-  <h1>Pertura Workbench - {domain_name}</h1>
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <div>
+      <h1>Pertura Workbench</h1>
+      <div class="brand-sub">{domain_name} analysis console</div>
+    </div>
+  </div>
   <div class="toolbar">
     <span id="phaseChip" class="chip">not initialized</span>
     <span id="actionStatus" class="chip" style="display:none"></span>
@@ -156,59 +175,80 @@ button:disabled{opacity:.55;cursor:not-allowed}
   </section>
 
   <section class="column right">
-    <div class="panel">
-      <div class="panel-head"><div class="panel-title">Run Summary</div><span id="nodeCount" class="chip">0 nodes</span></div>
-      <div class="panel-body">
-        <div class="metric-grid">
-          <div class="metric"><b id="attemptCount">0</b><span>attempts</span></div>
-          <div class="metric"><b id="obsCount">0</b><span>observations</span></div>
-          <div class="metric"><b id="artifactCount">0</b><span>artifacts</span></div>
-          <div class="metric"><b id="issueCount">0</b><span>issues</span></div>
-        </div>
-        <div id="runMeta" class="small muted" style="margin-top:8px">No run loaded.</div>
-        <details class="dev-details">
-          <summary>Developer Inspector</summary>
-          <div class="dev-controls">
-            <button onclick="initRun()">Init</button>
-            <button onclick="stepRun()">Step</button>
-            <button onclick="runSteps(5)">Run 5</button>
+    <div class="panel inspector-panel">
+      <div class="inspector-tabs">
+        <button id="tabButtonRun" class="inspector-tab-button active" onclick="setInspectorTab('run')">Run</button>
+        <button id="tabButtonAudit" class="inspector-tab-button" onclick="setInspectorTab('audit')">Audit</button>
+        <button id="tabButtonGraph" class="inspector-tab-button" onclick="setInspectorTab('graph')">Graph</button>
+        <button id="tabButtonTools" class="inspector-tab-button" onclick="setInspectorTab('tools')">Tools</button>
+        <button id="tabButtonDebug" class="inspector-tab-button" onclick="setInspectorTab('debug')">Debug</button>
+      </div>
+      <div id="tabPaneRun" class="tab-pane active">
+        <div class="tab-section">
+          <div class="tab-section-head"><div class="tab-section-title">Run Summary</div><span id="nodeCount" class="chip">0 nodes</span></div>
+          <div class="tab-section-body">
+            <div class="metric-grid">
+              <div class="metric"><b id="attemptCount">0</b><span>attempts</span></div>
+              <div class="metric"><b id="obsCount">0</b><span>observations</span></div>
+              <div class="metric"><b id="artifactCount">0</b><span>artifacts</span></div>
+              <div class="metric"><b id="issueCount">0</b><span>issues</span></div>
+            </div>
+            <div id="runMeta" class="small muted" style="margin-top:8px">No run loaded.</div>
           </div>
-        </details>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="panel-head"><div class="panel-title">Review And Interrupts</div><span id="reviewChip" class="chip">clear</span></div>
-      <div class="panel-body">
-        <div id="interruptBox" class="small"></div>
-        <div class="answer-row">
-          <input id="answerInput" placeholder="Answer active interrupt">
-          <button class="primary" onclick="answerInterrupt()">Send</button>
         </div>
-        <div id="reviewList" style="margin-top:8px"></div>
+        <div class="tab-section">
+          <div class="tab-section-head"><div class="tab-section-title">Report</div></div>
+          <div id="reportBox" class="tab-section-body small"></div>
+        </div>
       </div>
-    </div>
-    <div class="panel compact-panel">
-      <div class="panel-head"><div class="panel-title">Analysis Graph</div></div>
-      <div id="nodeList" class="panel-body node-list"></div>
-    </div>
-    <div class="panel compact-panel">
-      <div class="panel-head"><div class="panel-title">Capability Browser</div><span id="capabilityCount" class="chip">0 caps</span></div>
-      <div id="capabilityBrowser" class="panel-body small"></div>
-    </div>
-    <div class="panel">
-      <div class="panel-head"><div class="panel-title">Trace / Rethinking</div></div>
-      <div id="traceBox" class="panel-body small trace-box">Select a graph node.</div>
-    </div>
-    <div class="panel grow compact-panel">
-      <div class="panel-head"><div class="panel-title">LLM Context Surface</div><span id="budgetChip" class="chip">budget</span></div>
-      <div class="panel-body">
-        <div id="contextSummary" class="small"></div>
-        <pre id="contextJson" class="context-json"></pre>
+      <div id="tabPaneAudit" class="tab-pane">
+        <div class="tab-section">
+          <div class="tab-section-head"><div class="tab-section-title">Review And Interrupts</div><span id="reviewChip" class="chip">clear</span></div>
+          <div class="tab-section-body">
+            <div id="interruptBox" class="small"></div>
+            <div class="answer-row">
+              <input id="answerInput" placeholder="Answer active interrupt">
+              <button class="primary" onclick="answerInterrupt()">Send</button>
+            </div>
+            <div id="reviewList" style="margin-top:8px"></div>
+          </div>
+        </div>
+        <div class="tab-section">
+          <div class="tab-section-head"><div class="tab-section-title">Trace / Rethinking</div></div>
+          <div id="traceBox" class="tab-section-body small trace-box">Select a graph node.</div>
+        </div>
       </div>
-    </div>
-    <div class="panel">
-      <div class="panel-head"><div class="panel-title">Report</div></div>
-      <div id="reportBox" class="panel-body small"></div>
+      <div id="tabPaneGraph" class="tab-pane">
+        <div class="tab-section">
+          <div class="tab-section-head"><div class="tab-section-title">Analysis Graph</div></div>
+          <div id="nodeList" class="tab-section-body node-list"></div>
+        </div>
+      </div>
+      <div id="tabPaneTools" class="tab-pane">
+        <div class="tab-section">
+          <div class="tab-section-head"><div class="tab-section-title">Capability Browser</div><span id="capabilityCount" class="chip">0 caps</span></div>
+          <div id="capabilityBrowser" class="tab-section-body small"></div>
+        </div>
+      </div>
+      <div id="tabPaneDebug" class="tab-pane">
+        <div class="tab-section">
+          <div class="tab-section-head"><div class="tab-section-title">LLM Context Surface</div><span id="budgetChip" class="chip">budget</span></div>
+          <div class="tab-section-body">
+            <div id="contextSummary" class="small"></div>
+            <pre id="contextJson" class="context-json"></pre>
+          </div>
+        </div>
+        <div class="tab-section">
+          <div class="tab-section-head"><div class="tab-section-title">Developer Controls</div></div>
+          <div class="tab-section-body">
+            <div class="dev-controls">
+              <button onclick="initRun()">Init</button>
+              <button onclick="stepRun()">Step</button>
+              <button onclick="runSteps(5)">Run 5</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 </main>
@@ -222,6 +262,7 @@ let CANDIDATE_ACTIONS = [];
 let PRIMARY_ACTION_ID = "";
 let PRODUCT_EVENTS = [];
 let RUNTIME_STREAM_EVENTS = [];
+let INSPECTOR_TAB = "run";
 const TYPE_COLORS = {workspace:"#667085",analysis_node:"#6d28d9",branch:"#2563eb",attempt:"#15803d",job:"#0369a1",artifact:"#b45309",observation:"#0f766e",outcome:"#15803d",trigger:"#b42318",finding:"#b42318",conclusion:"#ca8a04",tool_call:"#667085",review_decision:"#0f766e",behavior_run:"#6d28d9"};
 
 function esc(value){return String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
@@ -245,6 +286,15 @@ function setActionStatus(message, kind=""){
   chip.style.display=message?"inline-flex":"none";
   chip.className=`chip ${kind||""}`.trim();
   chip.textContent=message||"";
+}
+function setInspectorTab(tab){
+  INSPECTOR_TAB=tab;
+  for(const name of ["run","audit","graph","tools","debug"]){
+    const pane=document.getElementById(`tabPane${name[0].toUpperCase()}${name.slice(1)}`);
+    const button=document.getElementById(`tabButton${name[0].toUpperCase()}${name.slice(1)}`);
+    if(pane)pane.classList.toggle("active", name===tab);
+    if(button)button.classList.toggle("active", name===tab);
+  }
 }
 async function postJson(url, payload={}, successMessage="Updated"){
   setBusy(true);
