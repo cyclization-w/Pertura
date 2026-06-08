@@ -57,6 +57,8 @@ def build_active_work_order(
         audit_preview = _snapshot_issue_preview(snap)
     rethink = trace_driven_rethinking or (context_envelope or {}).get("trace_driven_rethinking", {}) or {}
     runtime_issues = compile_runtime_issues(snap)
+    from .node_navigation import evaluate_node_navigation
+    navigation = evaluate_node_navigation(snap)
     mode = _work_order_mode(open_interrupts, open_triggers, recent_findings, audit_preview, rethink)
     missing = _missing_items(progress, audit_preview)
     recommended = _recommended_actions(
@@ -75,6 +77,7 @@ def build_active_work_order(
             "id": active_node_id,
             "title": analysis_node.get("title") or analysis_node.get("node_id", ""),
             "purpose": analysis_node.get("purpose", ""),
+            "next_nodes": analysis_node.get("next_nodes", []),
         },
         "branch_id": active_branch,
         "node_progress": {
@@ -91,6 +94,7 @@ def build_active_work_order(
         "available_capabilities": capabilities[:8],
         "selected_capability": _selected_capability(capabilities),
         "observation_memory": observation_memory,
+        "navigation": navigation,
         "open_interrupts": open_interrupts[:3],
         "open_issues": {
             "runtime_issues": runtime_issues[:8],
@@ -139,6 +143,23 @@ def render_active_work_order(work_order: dict[str, Any]) -> str:
         f"Current node: {node.get('id') or 'none'}",
         f"Purpose: {_line(node.get('purpose') or node.get('title') or 'No active analysis node')}",
         f"Branch: {work_order.get('branch_id') or 'main'}",
+    ]
+    navigation = work_order.get("navigation") or {}
+    roadmap = navigation.get("roadmap") or {}
+    if roadmap:
+        next_nodes = roadmap.get("next_node_ids") or node.get("next_nodes") or []
+        lines.extend([
+            "",
+            "## Analysis Roadmap",
+            f"- position: {roadmap.get('current_index', 0)}/{roadmap.get('total_nodes', 0)}",
+            f"- next candidates: {', '.join(str(item) for item in next_nodes[:5]) or 'none'}",
+            f"- navigation status: {navigation.get('status', 'stay')}",
+            f"- navigation reason: {_line(navigation.get('reason') or '')}",
+        ])
+        for item in (navigation.get("candidates") or [])[:3]:
+            marker = "ready" if item.get("can_enter") else item.get("decision", "blocked")
+            lines.append(f"- candidate {item.get('node_id')}: {marker} {_line(item.get('reason') or item.get('purpose') or '')}")
+    lines.extend([
         "",
         "## Node Progress",
         f"- attempts: {progress.get('attempts', 0)}",
@@ -147,7 +168,7 @@ def render_active_work_order(work_order: dict[str, Any]) -> str:
         f"- completed: {bool(progress.get('completed', False))}",
         "",
         "## Missing Before Completion",
-    ]
+    ])
     missing = progress.get("missing_completion") or []
     lines.extend([f"- [ ] {_line(item)}" for item in missing] or ["- none reported"])
     lines.extend(["", "## Workspace Summary"])
@@ -488,6 +509,7 @@ def _analysis_node_from_snapshot(snap: Snapshot) -> dict[str, Any]:
         "allowed_capabilities": list(current.allowed_capabilities or []),
         "recommended_actions": list(current.recommended_actions or []),
         "expected_outputs": list(current.expected_outputs or []),
+        "next_nodes": list(current.next_nodes or []),
     }
 
 

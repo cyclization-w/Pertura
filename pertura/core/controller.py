@@ -250,7 +250,8 @@ class GraphController:
                         "output_count": len(output_events),
                     },
                 )
-                recorded.extend([started, *output_events, completed])
+                if output_events:
+                    recorded.extend([started, *output_events, completed])
             except Exception as exc:
                 recorded.extend([started, Event(
                     event_id=f"evt_{uuid4().hex[:12]}",

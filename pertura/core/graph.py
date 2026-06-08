@@ -122,12 +122,9 @@ def build_graph(snap: Snapshot) -> dict:
                 "affected_ids": f.affected_ids})
         if f.attempt_id:
             e(f.attempt_id, f.finding_id, "informs")
-    for br in snap.behavior_runs:
-        n(br.behavior_run_id, "behavior_run", br.behavior_id,
-          summary=br.error or f"{br.output_count} output event(s)",
-          status=br.status,
-          meta={"trigger_event_ids": br.trigger_event_ids,
-                "output_event_ids": br.output_event_ids})
+    # Behavior runs are audit/debug lifecycle records. Keep them in the event
+    # log and snapshot, but do not include them in the default scientific
+    # derivation graph where they overwhelm attempts/observations.
     for c in snap.conclusions:
         n(c.conclusion_id, "conclusion", c.grade, summary=c.text)
         for sid in c.support_ids:

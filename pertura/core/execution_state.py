@@ -138,6 +138,8 @@ def compile_execution_state(
     node_id = selected_node_id or getattr(snap, "active_node_id", "") or ""
     node = _analysis_node(snap, node_id)
     mode = _execution_mode(snap, question=question, blocking_issues=blocking_issues, active_job=active_job)
+    from pertura.core.node_navigation import evaluate_node_navigation
+    navigation = evaluate_node_navigation(snap)
     payload = {
         "view_type": "execution_state",
         "schema_version": "v1",
@@ -155,6 +157,7 @@ def compile_execution_state(
         "issues": issues,
         "recommended_actions": _recommended_actions(mode, question, blocking_issues, node),
         "visible_capabilities": list(node.get("allowed_capabilities") or [])[:12],
+        "navigation": navigation,
         "evidence_summary": {
             "attempts": len(snap.attempts),
             "observations": len(snap.observations),

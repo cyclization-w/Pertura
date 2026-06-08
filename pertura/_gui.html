@@ -490,6 +490,8 @@ function renderConversation(view){
   const question=actions.find(a=>a.kind==="answer_question")||{};
   const attempts=(view.activity||{}).recent_attempts||[];
   const artifacts=(view.artifacts||{}).recent||[];
+  const navigation=exec.navigation||((view.analysis||{}).active_work_order||{}).navigation||{};
+  const roadmap=navigation.roadmap||{};
   const goal=s.goal||"";
   const workspace=s.workspace||"";
   const mode=exec.mode||s.phase||s.state||"not_initialized";
@@ -515,6 +517,16 @@ function renderConversation(view){
     ));
   }else{
     messages.push(...events.map(renderConversationEvent));
+  }
+
+  if(roadmap.current_node_id){
+    const next=(roadmap.next_node_ids||[]).slice(0,3).join(", ")||"none";
+    const body=[
+      `Current stage ${roadmap.current_index||0}/${roadmap.total_nodes||0}: ${roadmap.current_node_id}`,
+      `Next candidates: ${next}`,
+      `Navigation: ${navigation.status||"stay"} - ${navigation.reason||""}`
+    ].join("\n");
+    messages.push(messageHtml("agent", "Roadmap", body, navigation.target_node_id?`next: ${navigation.target_node_id}`:""));
   }
 
   if(question.id){
@@ -631,15 +643,17 @@ function renderThinkingPath(view){
   const issueText=issueRows.map(brief).find(Boolean)||"";
   const rethink=workOrder.rethinking||{};
   const activeNode=workOrder.active_node||exec.current_task||{};
+  const navigation=workOrder.navigation||exec.navigation||{};
+  const roadmap=navigation.roadmap||{};
   const capTitle=selected.title||selected.id||selected.capability_id||"No selected capability";
   const packageHint=selected.packages_hint||[...(selected.packages||[]),...(selected.functions||[])].slice(0,4).join(", ");
   const nextAction=(workOrder.recommended_actions||[])[0]||(exec.recommended_actions||[])[0]||selected.next_repair||"inspect current node contract";
   const stages=[
     {label:"Goal",title:workOrder.run_goal||(view.status||{}).goal||"No goal recorded",body:(view.status||{}).workspace||(workOrder.workspace||{}).path||"",badges:[workOrder.branch_id||(view.active||{}).branch_id||"main"]},
-    {label:"Focus",title:activeNode.title||activeNode.id||activeNode.node_id||"Run",body:activeNode.purpose||(exec.current_task||{}).purpose||"",badges:[`${progress.attempts||0} attempts`,`${progress.observations||0} obs`,`${progress.artifacts||0} artifacts`,progress.completed?"complete":"open"]},
+    {label:"Focus",title:activeNode.title||activeNode.id||activeNode.node_id||"Run",body:activeNode.purpose||(exec.current_task||{}).purpose||"",badges:[roadmap.current_index?`${roadmap.current_index}/${roadmap.total_nodes} nodes`:"",`${progress.attempts||0} attempts`,`${progress.observations||0} obs`,progress.completed?"complete":"open"].filter(Boolean)},
     {label:"Capability",title:capTitle,body:selected.next_repair||selected.description||"",badges:[selected.ready?"ready":missing.length?"needs inputs":"available",...missing.slice(0,2).map(i=>`missing: ${i}`),packageHint].filter(Boolean)},
     {label:"Evidence",title:rethink.summary||issueText||"Observation memory",body:Object.keys(coverage).length?Object.entries(coverage).slice(0,4).map(([k,v])=>`${k}: ${brief(v)}`).join(" / "):brief(((workOrder.observation_memory||{}).needs_review||[])[0]),badges:[`${num(memory.variables??memory.variable_count)} vars`,`${num(memory.strict_conflicts??memory.conflicts)} conflicts`,`${issueRows.length} issues`]},
-    {label:"Next",title:nextAction,body:(workOrder.allowed_tools||[]).slice(0,4).join(", "),badges:[workOrder.mode||exec.mode||"normal",`${(workOrder.allowed_tools||[]).length} tools`]}
+    {label:"Next",title:navigation.target_node_id||nextAction,body:(roadmap.next_node_ids||[]).slice(0,4).join(", ")||(workOrder.allowed_tools||[]).slice(0,4).join(", "),badges:[navigation.status||workOrder.mode||exec.mode||"normal",`${(workOrder.allowed_tools||[]).length} tools`]}
   ];
   document.getElementById("thinkingChip").textContent=workOrder.mode||exec.mode||"ready";
   document.getElementById("thinkingChip").className=`chip ${chipClass(workOrder.mode||exec.mode)}`;
@@ -674,6 +688,8 @@ function renderContract(view){
   const progress=(workOrder.node_progress||{});
   const missing=progress.missing_completion||[];
   const actions=workOrder.recommended_actions||[];
+  const navigation=workOrder.navigation||exec.navigation||{};
+  const roadmap=navigation.roadmap||{};
   const woCaps=workOrder.available_capabilities||[];
   document.getElementById("activeNodeChip").textContent=exec.mode||workOrder.mode||"ready";
   document.getElementById("nodeContract").innerHTML=`
@@ -692,6 +708,7 @@ function renderContract(view){
     <div class="evidence-row">${(evidence.recent_attempts||[]).slice(0,3).map(a=>`<span class="badge">${esc(a.title||a.attempt_id)}</span>`).join("")}${(evidence.recent_artifacts||[]).slice(0,3).map(a=>`<span class="badge good">${esc(a.kind||a.artifact_id)}</span>`).join("")}</div>
     <details class="advanced-details"><summary>Active Work Order</summary>
       <div style="margin-top:8px"><b>Mode:</b> <span class="badge ${chipClass(workOrder.mode)}">${esc(workOrder.mode||"normal")}</span></div>
+      ${roadmap.current_node_id?`<div style="margin-top:8px"><b>Roadmap:</b> <span class="badge">${esc(`${roadmap.current_index||0}/${roadmap.total_nodes||0}`)}</span> <span class="badge ${chipClass(navigation.status)}">${esc(navigation.status||"stay")}</span><div class="item-sub">${esc(navigation.reason||"")}</div><div class="evidence-row">${(roadmap.next_node_ids||[]).slice(0,4).map(i=>`<span class="badge good">${esc(i)}</span>`).join("")}</div></div>`:""}
       <div style="margin-top:8px"><b>Missing:</b> ${missing.length?missing.slice(0,6).map(i=>`<span class="badge warn">${esc(i)}</span>`).join(""):"<span class='muted'>none reported</span>"}</div>
       <div style="margin-top:7px"><b>Recommended:</b> ${actions.length?actions.slice(0,4).map(i=>`<div class="item-sub">- ${esc(i)}</div>`).join(""):"<span class='muted'>choose one allowed action</span>"}</div>
       <div style="margin-top:7px"><b>Available here:</b> ${woCaps.length?woCaps.slice(0,6).map(c=>`<span class="badge violet">${esc(c.id||c.capability_id)}</span>`).join(""):caps.slice(0,6).map(c=>`<span class="badge violet">${esc(c.id||c.capability_id)}</span>`).join("")||"<span class='muted'>No capabilities</span>"}</div>

@@ -206,6 +206,11 @@ class Workbench:
         for _ in range(steps):
             action = self._step()
             result["steps"] += 1
+            maintenance = self._post_step_maintenance(action)
+            terminal = next((item for item in maintenance if item in ("waiting_for_human", "complete", "blocked", "cancelled")), "")
+            if terminal:
+                result["stop_reason"] = terminal
+                break
             if action in ("waiting_for_human", "complete", "blocked", "cancelled"):
                 result["stop_reason"] = action
                 break
@@ -244,6 +249,7 @@ class Workbench:
             action = self._step()
             result["turns"] += 1
             result["actions"].append(action)
+            result["actions"].extend(self._post_step_maintenance(action))
             if self._cancel_requested() or action == "cancelled":
                 result["stop_reason"] = "cancelled"
                 return result
@@ -357,6 +363,107 @@ class Workbench:
                 self._emit("run_resumed", {})
                 return
         raise ValueError(f"No open interrupt found: {interrupt_id}")
+
+    def _post_step_maintenance(self, action: str) -> list[str]:
+        if self._store is None or action in {"waiting_for_human", "cancelled", "complete"}:
+            return []
+        snap = self._store.read_snapshot()
+        if snap is None:
+            return []
+        actions = self._resolve_stale_runtime_triggers(snap)
+        snap = self._store.read_snapshot()
+        if snap is None or action == "blocked":
+            return actions
+        if any(getattr(item, "status", "") == "open" for item in getattr(snap, "interrupts", []) or []):
+            return actions
+        if any(
+            getattr(item, "status", "") in {"planned", "running"}
+            for item in getattr(snap, "attempts", []) or []
+            if getattr(item, "attempt_id", "") == getattr(snap, "active_attempt", "")
+        ):
+            return actions
+        actions.extend(self._apply_auto_navigation(snap))
+        return actions
+
+    def _resolve_stale_runtime_triggers(self, snap) -> list[str]:
+        actions: list[str] = []
+        attempts = list(getattr(snap, "attempts", []) or [])
+        attempt_index = {getattr(item, "attempt_id", ""): idx for idx, item in enumerate(attempts)}
+        outcomes_by_attempt = {}
+        for outcome in getattr(snap, "outcomes", []) or []:
+            outcomes_by_attempt.setdefault(getattr(outcome, "attempt_id", ""), []).append(outcome)
+        for trigger in getattr(snap, "triggers", []) or []:
+            if getattr(trigger, "status", "") != "open":
+                continue
+            if getattr(trigger, "trigger_type", "") != "runtime_error":
+                continue
+            failed_attempt_id = getattr(trigger, "attempt_id", "")
+            failed_index = attempt_index.get(failed_attempt_id)
+            failed_attempt = attempts[failed_index] if failed_index is not None else None
+            if failed_index is None or failed_attempt is None:
+                continue
+            resolved_by = ""
+            for later in attempts[failed_index + 1:]:
+                if getattr(later, "analysis_node_id", "") != getattr(failed_attempt, "analysis_node_id", ""):
+                    continue
+                for outcome in outcomes_by_attempt.get(getattr(later, "attempt_id", ""), []):
+                    metrics = getattr(outcome, "metrics", {}) or {}
+                    material_output = (
+                        _positive_metric_count(metrics.get("observations_registered"))
+                        or _positive_metric_count(metrics.get("artifacts_registered"))
+                    )
+                    if getattr(outcome, "status", "") == "success" and metrics.get("returncode", 0) == 0 and material_output:
+                        resolved_by = getattr(later, "attempt_id", "")
+                        break
+                if resolved_by:
+                    break
+            if not resolved_by:
+                continue
+            self._emit("trigger_resolved", {
+                "trigger_id": getattr(trigger, "trigger_id", ""),
+                "reason": f"Superseded by successful attempt {resolved_by}.",
+                "resolved_by_attempt_id": resolved_by,
+            })
+            actions.append("trigger_resolved")
+        return actions
+
+    def _apply_auto_navigation(self, snap) -> list[str]:
+        from pertura.core.node_navigation import evaluate_node_navigation
+        from pertura.agent.gated_dispatch import gated_dispatch
+
+        nav = evaluate_node_navigation(snap)
+        status = nav.get("status", "")
+        if status not in {"complete", "advance"}:
+            return []
+        current_id = nav.get("current_id") or nav.get("current_node_id") or getattr(snap, "active_node_id", "")
+        if not current_id:
+            return []
+        actions: list[str] = []
+        if not _active_visit_completed(snap, current_id):
+            action = gated_dispatch(
+                self,
+                "complete_node",
+                "",
+                {"summary": nav.get("reason", "Auto node completion gate passed.")},
+                {"node_id": current_id, "reason": nav.get("reason", "")},
+                snap,
+            )
+            actions.append(action)
+            if action in {"waiting_for_human", "blocked"}:
+                return actions
+            snap = self._store.read_snapshot() if self._store else snap
+        target = nav.get("target_node_id", "")
+        if status == "advance" and target:
+            action = gated_dispatch(
+                self,
+                "request_node_transition",
+                "",
+                {"summary": nav.get("reason", "Auto navigation candidate selected.")},
+                {"target_node_id": target, "reason": nav.get("reason", "")},
+                snap,
+            )
+            actions.append(action)
+        return actions
 
     def update_design(self, design: dict, *, reason: str = "user_update",
                       source: str = "user_confirmed",
@@ -613,6 +720,22 @@ def _is_repair_state(snap) -> bool:
         return False
     from pertura.core.execution_state import compile_execution_state
     return compile_execution_state(snap).get("mode") == "repairing"
+
+
+def _active_visit_completed(snap, node_id: str) -> bool:
+    return any(
+        getattr(item, "node_id", "") == node_id
+        and getattr(item, "branch_id", "") == getattr(snap, "active_branch", "main")
+        and getattr(item, "status", "") == "completed"
+        for item in getattr(snap, "node_visits", []) or []
+    )
+
+
+def _positive_metric_count(value) -> bool:
+    try:
+        return int(value or 0) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 def _has_key(provider: str) -> bool:
