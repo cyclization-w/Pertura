@@ -1751,6 +1751,15 @@ def _scoped_tool_names(snap=None) -> set[str]:
                         "load_dataset",
                         "get_capability_template",
                     })
+                elif nav.get("status") == "ask_user":
+                    names.difference_update({
+                        "execute_code",
+                        "submit_job",
+                        "retry",
+                        "load_dataset",
+                        "get_capability_template",
+                    })
+                    names.update({"ask_user", "update_design"})
             except Exception:
                 pass
             try:

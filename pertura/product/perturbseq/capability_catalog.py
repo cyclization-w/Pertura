@@ -59,6 +59,49 @@ BIOLOGICAL_QUESTIONS = {
 }
 
 
+class CapabilityVerifier:
+    """Turn a raw capability contract into a runnable perturb-seq card."""
+
+    def __init__(self, design_ledger: dict[str, Any] | None = None):
+        self.design_ledger = design_ledger or {}
+
+    def validate(
+        self,
+        *,
+        required_design_fields: list[str],
+        required_materials: list[str],
+    ) -> dict[str, Any]:
+        missing_design = _missing_design_fields(self.design_ledger, required_design_fields)
+        missing_materials = _missing_materials(self.design_ledger, required_materials)
+        missing = missing_design + missing_materials
+        return {
+            "ok": not missing,
+            "missing": missing,
+            "missing_design_fields": missing_design,
+            "missing_materials": missing_materials,
+            "next_repair": _next_repair(missing),
+        }
+
+    def preview(self, cap_id: str, card: dict[str, Any]) -> dict[str, Any]:
+        outputs = []
+        outputs.extend(card.get("expected_observations") or [])
+        outputs.extend(card.get("expected_artifacts") or [])
+        outputs.extend(card.get("expected_plots") or [])
+        return {
+            "summary": _preview_summary(cap_id, card),
+            "expected_outputs": outputs[:10],
+            "branchable_parameters": list(card.get("branchable_parameters") or []),
+        }
+
+    def run_template(self, cap_id: str, ready: bool) -> dict[str, Any]:
+        return {
+            "tool": "get_capability_template",
+            "arguments": {"capability_id": cap_id},
+            "ready": bool(ready),
+            "use_when": "Call this before writing a long analysis cell from scratch.",
+        }
+
+
 def compile_capability_catalog(
     snap: Snapshot | None,
     design_ledger: dict[str, Any] | None = None,
@@ -179,11 +222,15 @@ def _card_for_capability(cap_id: str, raw: dict[str, Any], ledger: dict[str, Any
     )
     required_design = [item for item in required if item in FIELD_BY_ID]
     required_materials = [item for item in required if item not in FIELD_BY_ID]
-    missing_design = _missing_design_fields(ledger, required_design)
-    missing_materials = _missing_materials(ledger, required_materials)
-    missing = missing_design + missing_materials
-    ready = not missing
-    return {
+    verifier = CapabilityVerifier(ledger)
+    validation = verifier.validate(
+        required_design_fields=required_design,
+        required_materials=required_materials,
+    )
+    missing = validation["missing"]
+    ready = validation["ok"]
+    parameters = dict(product.get("parameters") or product.get("method_defaults") or _method_defaults(cap_id))
+    card = {
         "id": cap_id,
         "title": raw.get("title") or cap_id.replace("_", " "),
         "description": raw.get("description") or "",
@@ -194,8 +241,9 @@ def _card_for_capability(cap_id: str, raw: dict[str, Any], ledger: dict[str, Any
         "missing": missing,
         "missing_inputs": missing,
         "ready": ready,
+        "parameters": parameters,
         "prechecks": list(product.get("prechecks") or _prechecks(cap_id)),
-        "method_defaults": product.get("method_defaults") or _method_defaults(cap_id),
+        "method_defaults": parameters,
         "expected_observations": list(product.get("expected_observations") or raw.get("expected_observations") or []),
         "expected_artifacts": list(product.get("expected_artifacts") or raw.get("expected_artifacts") or _expected_artifacts(cap_id)),
         "expected_plots": list(product.get("expected_plots") or _expected_plots(cap_id)),
@@ -206,8 +254,12 @@ def _card_for_capability(cap_id: str, raw: dict[str, Any], ledger: dict[str, Any
         "packages": list(raw.get("packages") or []),
         "functions": list(raw.get("functions") or []),
         "tool_names": list(raw.get("tool_names") or []),
-        "next_repair": _next_repair(missing),
+        "validation": validation,
+        "next_repair": validation.get("next_repair", ""),
     }
+    card["preview"] = verifier.preview(cap_id, card)
+    card["run_template"] = verifier.run_template(cap_id, ready)
+    return card
 
 
 def _product_contract(raw: dict[str, Any]) -> dict[str, Any]:
@@ -297,6 +349,14 @@ def _expected_artifacts(cap_id: str) -> list[str]:
         "compare_methods": ["branch_comparison_table"],
         "report_assembly": ["report"],
     }.get(cap_id, [])
+
+
+def _preview_summary(cap_id: str, card: dict[str, Any]) -> str:
+    question = card.get("biological_question") or BIOLOGICAL_QUESTIONS.get(cap_id, "")
+    if card.get("ready"):
+        return f"Ready to run: {question}" if question else "Ready to run."
+    repair = card.get("next_repair") or "resolve missing inputs"
+    return f"Not ready: {repair}."
 
 
 def _next_repair(missing: list[str]) -> str:

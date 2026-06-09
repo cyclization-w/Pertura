@@ -342,6 +342,11 @@ def test_perturbseq_capability_card_prefers_product_contract(tmp_path: Path) -> 
     assert run_de["common_errors"] == ["contract common error"]
     assert run_de["repair_hints"] == ["contract repair hint"]
     assert run_de["expected_plots"] == ["contract plot"]
+    assert run_de["validation"]["ok"] is False
+    assert run_de["validation"]["missing_design_fields"] == ["target_column"]
+    assert run_de["parameters"]
+    assert run_de["preview"]["expected_outputs"]
+    assert run_de["run_template"]["tool"] == "get_capability_template"
 
 
 def test_perturbseq_work_order_prefers_turn_card_and_transition(tmp_path: Path) -> None:
@@ -446,7 +451,12 @@ def test_workflow_builder_projects_catalog_and_draft_events(tmp_path: Path) -> N
     view = workflow_builder_view(snap=snap)
 
     assert view["node_catalog"]
+    assert view["stage_cards"]
     assert view["check_catalog"]
+    first_stage = view["stage_cards"][0]
+    assert "what_you_need" in first_stage
+    assert "what_must_be_confirmed" in first_stage
+    assert "what_it_produces" in first_stage
     assert view["draft_spec"]["metadata"]["ui"]["positions"]["workspace_inspection"]["x"] == 12
     assert view["draft_meta"]["status"] == "draft"
 
@@ -658,6 +668,43 @@ def test_scoped_tools_hide_load_dataset_after_dataset_profile(tmp_path: Path) ->
     tool_names = {item["function"]["name"] for item in tool_schemas(snap=store.read_snapshot(), scoped=True)}
 
     assert "load_dataset" not in tool_names
+
+
+def test_scoped_tools_hide_execution_when_human_design_fact_is_required(tmp_path: Path) -> None:
+    from pertura.core import GraphController, Store
+    from pertura.domain.perturbseq import build_perturbseq_analysis_graph
+    from pertura.tools.registry import tool_schemas
+
+    store = Store(tmp_path / "run_tool_scope_human_fact")
+    controller = GraphController(store, "tool_scope_human_fact")
+    spec = build_perturbseq_analysis_graph().model_dump(mode="json")
+    controller.append_event("run_started", {"config": {
+        "run_id": "tool_scope_human_fact",
+        "workspace": str(tmp_path),
+        "goal": "ask for design before continuing",
+        "domain": "perturbseq",
+        "analysis_spec": spec,
+        "active_node_id": "experimental_design",
+        "budget": {"max_attempts": 8, "max_branches": 1, "max_repairs": 1},
+    }})
+    controller.append_event("node_entered", {
+        "node_id": "experimental_design",
+        "branch_id": "main",
+        "reason": "test",
+    })
+    controller.append_event("observation_registered", {"observation": {
+        "observation_id": "obs_dataset_shape",
+        "type": "schema",
+        "target": "dataset",
+        "metric": "shape",
+        "value": "100x20",
+    }})
+
+    tool_names = {item["function"]["name"] for item in tool_schemas(snap=store.read_snapshot(), scoped=True)}
+
+    assert "ask_user" in tool_names
+    assert "execute_code" not in tool_names
+    assert "submit_job" not in tool_names
 
 
 def test_product_documentation_matches_current_ui_contract() -> None:

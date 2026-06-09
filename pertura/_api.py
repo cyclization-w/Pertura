@@ -1246,6 +1246,112 @@ def create_app(workbench, *, ui: str = "auto"):
             **payload,
         })
 
+    class ConsoleTurnRouter:
+        """State router for the product Analysis Console.
+
+        The console is not a durable chat log. Each user turn becomes exactly
+        one audited runtime intent: start, answer, continue, pause, repair, or
+        report. Keeping that router explicit prevents the API layer from
+        becoming another hidden agent loop.
+        """
+
+        def route(self, req: ConsoleTurnRequest) -> dict:
+            import json
+            from uuid import uuid4
+            from pertura.models import Goal, _model_dump
+
+            message = (req.message or "").strip()
+            action_id = (req.action_id or "").strip()
+            snap = _snapshot_for_run()
+            active = _active_agent_job()
+
+            if action_id == "pause":
+                return agent_pause()
+            if action_id.startswith(("retry_repair:", "reject_repair:")):
+                return _handle_repair_action(action_id)
+
+            if snap and (action_id == "generate_report" or _looks_like_report_request(message)):
+                report_payload = workbench.report()
+                return _console_state_payload({
+                    "handled": "generate_report",
+                    "report": report_payload,
+                })
+
+            open_interrupt = next((
+                item for item in ((snap.interrupts if snap else []) or [])
+                if item.status == "open"
+            ), None)
+            if open_interrupt and (action_id in {"", "answer_question"} or req.answers or message):
+                answer_text = (
+                    json.dumps(req.answers, ensure_ascii=False)
+                    if req.answers
+                    else message
+                )
+                if not answer_text:
+                    raise HTTPException(400, "Answer is required for the active question")
+                workbench.answer(open_interrupt.interrupt_id, answer_text)
+                return _console_state_payload({
+                    "handled": "answer_question",
+                    "interrupt_id": open_interrupt.interrupt_id,
+                })
+
+            if snap and (action_id.startswith("answer_question") or req.answers):
+                design_patch = _console_design_patch(message, req.answers or {}, action_id)
+                if not design_patch:
+                    raise HTTPException(400, "A structured design answer is required for this question")
+                workbench.update_design(
+                    design_patch,
+                    reason=f"console_turn:{action_id or 'answer_question'}",
+                    source="user_confirmed",
+                    confidence="high",
+                )
+                if active:
+                    return _console_state_payload({
+                        "handled": "answer_question",
+                        "design": design_patch,
+                        "job_id": active.get("job_id", ""),
+                        "status": active.get("status", "running"),
+                        "already_running": True,
+                    })
+                if getattr(snap, "phase", "") in {"complete", "cancelled"}:
+                    return _console_state_payload({
+                        "handled": "answer_question",
+                        "design": design_patch,
+                    })
+                payload = _submit_agent_job("agent_continue", AgentRunRequest())
+                return _console_state_payload({
+                    "handled": "answer_question",
+                    "design": design_patch,
+                    **payload,
+                })
+
+            if active:
+                return _console_state_payload({
+                    "handled": "already_running",
+                    "job_id": active.get("job_id", ""),
+                    "status": active.get("status", "running"),
+                    "already_running": True,
+                })
+
+            if snap is None:
+                payload = _submit_agent_job("agent_run", AgentRunRequest(
+                    workspace=req.workspace or "data",
+                    goal=message,
+                ))
+                return _console_state_payload({"handled": "start_analysis", **payload})
+
+            if message:
+                workbench._emit("goal_recorded", {"goal": _model_dump(Goal(
+                    goal_id=f"goal_{uuid4().hex[:12]}",
+                    text=message,
+                    status="active",
+                ))})
+
+            payload = _submit_agent_job("agent_continue", AgentRunRequest())
+            return _console_state_payload({"handled": "continue_analysis", **payload})
+
+    console_turn_router = ConsoleTurnRouter()
+
     runner.register_handler("run", _run_with_cancel)
     runner.register_handler("step", _step_with_cancel)
     runner.register_handler("agent_run", _agent_with_cancel)
@@ -1591,99 +1697,7 @@ def create_app(workbench, *, ui: str = "auto"):
 
     @app.post("/api/console/turn")
     def console_turn(req: ConsoleTurnRequest):
-        import json
-        from uuid import uuid4
-        from pertura.models import Goal, _model_dump
-
-        message = (req.message or "").strip()
-        action_id = (req.action_id or "").strip()
-        snap = _snapshot_for_run()
-        active = _active_agent_job()
-
-        if action_id == "pause":
-            return agent_pause()
-        if action_id.startswith(("retry_repair:", "reject_repair:")):
-            return _handle_repair_action(action_id)
-
-        if snap and (action_id == "generate_report" or _looks_like_report_request(message)):
-            report_payload = workbench.report()
-            return _console_state_payload({
-                "handled": "generate_report",
-                "report": report_payload,
-            })
-
-        open_interrupt = next((
-            item for item in ((snap.interrupts if snap else []) or [])
-            if item.status == "open"
-        ), None)
-        if open_interrupt and (action_id in {"", "answer_question"} or req.answers or message):
-            answer_text = (
-                json.dumps(req.answers, ensure_ascii=False)
-                if req.answers
-                else message
-            )
-            if not answer_text:
-                raise HTTPException(400, "Answer is required for the active question")
-            workbench.answer(open_interrupt.interrupt_id, answer_text)
-            return _console_state_payload({
-                "handled": "answer_question",
-                "interrupt_id": open_interrupt.interrupt_id,
-            })
-
-        if snap and (action_id.startswith("answer_question") or req.answers):
-            design_patch = _console_design_patch(message, req.answers or {}, action_id)
-            if not design_patch:
-                raise HTTPException(400, "A structured design answer is required for this question")
-            workbench.update_design(
-                design_patch,
-                reason=f"console_turn:{action_id or 'answer_question'}",
-                source="user_confirmed",
-                confidence="high",
-            )
-            if active:
-                return _console_state_payload({
-                    "handled": "answer_question",
-                    "design": design_patch,
-                    "job_id": active.get("job_id", ""),
-                    "status": active.get("status", "running"),
-                    "already_running": True,
-                })
-            if getattr(snap, "phase", "") in {"complete", "cancelled"}:
-                return _console_state_payload({
-                    "handled": "answer_question",
-                    "design": design_patch,
-                })
-            payload = _submit_agent_job("agent_continue", AgentRunRequest())
-            return _console_state_payload({
-                "handled": "answer_question",
-                "design": design_patch,
-                **payload,
-            })
-
-        if active:
-            return _console_state_payload({
-                "handled": "already_running",
-                "job_id": active.get("job_id", ""),
-                "status": active.get("status", "running"),
-                "already_running": True,
-            })
-
-        if snap is None:
-            payload = _submit_agent_job("agent_run", AgentRunRequest(
-                workspace=req.workspace or "data",
-                goal=message,
-            ))
-            return _console_state_payload({"handled": "start_analysis", **payload})
-
-        if message:
-            workbench._emit("goal_recorded", {"goal": _model_dump(Goal(
-                goal_id=f"goal_{uuid4().hex[:12]}",
-                text=message,
-                status="active",
-            ))})
-
-        payload = _submit_agent_job("agent_continue", AgentRunRequest())
-        return _console_state_payload({"handled": "continue_analysis", **payload})
+        return console_turn_router.route(req)
 
     @app.post("/api/run")
     def run(req: RunRequest):

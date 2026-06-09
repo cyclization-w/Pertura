@@ -121,6 +121,7 @@ Minimum useful fields:
 Product-facing optional fields live under `contract.product`:
 
 - `required_design_fields`: design facts the GUI/LLM should resolve first
+- `parameters`: default method/config values shown before execution
 - `prechecks`: short checklist shown in capability cards and turn cards
 - `expected_plots`: user-visible plots that make the result inspectable
 - `common_errors`: domain-specific failure patterns for repair prompts
@@ -131,6 +132,19 @@ The Perturb-seq product layer reads `contract.product` first and falls back to
 its built-in defaults only for compatibility. Prefer putting product semantics
 on the capability contract so the GUI, LLM turn card, and terminal dashboard
 all agree.
+
+`CapabilityVerifier` turns those fields into a runnable analysis card:
+
+```text
+Capability contract + Design Ledger
+        -> validation: ready/missing/next_repair
+        -> preview: expected observations, artifacts, plots, branches
+        -> run_template: get_capability_template(capability_id=...)
+```
+
+Do not put full template code into the turn card. The LLM should see readiness,
+prechecks, expected outputs, and repair hints by default; it can call the
+template tool only when it is ready to run a longer cell.
 
 The harness blocks execution when a node allows capabilities but the LLM does
 not declare the selected capability.
@@ -187,7 +201,11 @@ The default product projection is compiled from runtime state, not stored as
 separate UI state:
 
 ```text
-Snapshot -> Design Ledger -> Capability Cards -> PerturbSeqView
+Snapshot
+  -> Design Ledger
+  -> CapabilityVerifier / Capability Cards
+  -> ProductEventCompiler
+  -> PerturbSeqView
 ```
 
 Use these endpoints while developing a domain pack:
@@ -202,6 +220,19 @@ curl http://127.0.0.1:8765/api/workflow-builder
 The LLM hot path receives a perturb-seq turn card compiled from this projection.
 Do not add new GUI-only state when a field can be derived from `Snapshot`,
 `AnalysisGraph`, `Design`, or `Capability.contract`.
+
+The main runtime loop should keep these concepts separated:
+
+| Concept | Responsibility |
+| --- | --- |
+| `ConsoleTurnRouter` | Convert a user console turn into start/answer/continue/pause/repair/report. |
+| `RuntimeAutopilot` | Advance obvious workflow control before/after LLM attempts. |
+| `CapabilityVerifier` | Decide whether a capability is ready and what it would produce. |
+| `ProductEventCompiler` | Translate raw event-store records into user-facing live-run events. |
+
+Workflow editing is likewise a projection. Store and execute
+`AnalysisGraphSpec`, but show users `WorkflowStageCard`-style language:
+biological question, needs, confirmations, expected outputs, and next stages.
 
 ## Validation
 

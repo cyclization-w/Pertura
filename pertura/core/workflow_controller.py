@@ -9,13 +9,44 @@ from __future__ import annotations
 
 from typing import Any
 
-from pertura.core.node_navigation import evaluate_node_navigation
 from pertura.models import Snapshot
 from pertura.spec.gating import GateEvaluator
 
 
+class RuntimeAutopilot:
+    """Read-only workflow controller used before and after LLM turns.
+
+    The LLM should decide scientific moves; the runtime should handle obvious
+    process moves such as completing a satisfied node or advancing along the
+    single ready forward edge. This class gives that policy a concrete name so
+    the main loop reads as product architecture instead of scattered helpers.
+    """
+
+    def before_llm(self, snap: Snapshot | None) -> dict[str, Any]:
+        """Return a control decision before spending an LLM turn."""
+        return self.evaluate(snap)
+
+    def after_attempt(self, snap: Snapshot | None) -> dict[str, Any]:
+        """Return a control decision after an attempt has changed state."""
+        return self.evaluate(snap)
+
+    def evaluate(self, snap: Snapshot | None) -> dict[str, Any]:
+        """Return the next workflow-control action for the runtime harness."""
+        return _evaluate_workflow_autopilot(snap)
+
+    def gap(self, snap: Snapshot | None) -> dict[str, Any]:
+        """Summarize why the current node cannot move yet."""
+        return _workflow_gap(snap)
+
+
 def evaluate_workflow_autopilot(snap: Snapshot | None) -> dict[str, Any]:
-    """Return the next workflow-control action for the runtime harness."""
+    """Compatibility wrapper for the runtime autopilot decision."""
+    return RuntimeAutopilot().evaluate(snap)
+
+
+def _evaluate_workflow_autopilot(snap: Snapshot | None) -> dict[str, Any]:
+    from pertura.core.node_navigation import evaluate_node_navigation
+
     nav = evaluate_node_navigation(snap)
     if snap is None:
         return _decision("none", "No run snapshot is available.", navigation=nav)
@@ -69,6 +100,10 @@ def evaluate_workflow_autopilot(snap: Snapshot | None) -> dict[str, Any]:
 
 def workflow_gap(snap: Snapshot | None) -> dict[str, Any]:
     """Summarize why the current node cannot move yet."""
+    return RuntimeAutopilot().gap(snap)
+
+
+def _workflow_gap(snap: Snapshot | None) -> dict[str, Any]:
     decision = evaluate_workflow_autopilot(snap)
     nav = decision.get("navigation") or {}
     status = nav.get("status", "")

@@ -1,7 +1,8 @@
 # Contributing
 
 Pertura is still an alpha research artifact. Contributions should keep the
-core harness small and put domain-specific science in domain packs.
+public product focused on the Perturb-seq workbench while keeping the audited
+runtime small and reusable underneath.
 
 ## Development Setup
 
@@ -24,8 +25,10 @@ python -m pip install -e ".[all]"         # all optional integrations
 
 - Prefer public APIs in `pertura.__init__`: `AnalysisGraph`, `Capability`, and
   `Domain`.
-- Add new scientific behavior as a domain capability, template, condition, or
-  rubric before changing the harness core.
+- Add new scientific behavior as a Perturb-seq capability card, template,
+  condition, stage card, or rubric before changing the runtime core.
+- Keep the first-screen UX in the built-in HTML workbench and terminal surface;
+  React is experimental and should not become the only current UI.
 - Keep LLM context bounded; do not feed complete event logs, full notebooks, or
   entire graphs into prompts.
 - Keep runtime writes behind `GraphController` and event validation.

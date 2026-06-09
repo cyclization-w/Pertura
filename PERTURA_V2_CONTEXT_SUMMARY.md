@@ -5,15 +5,19 @@
 > lightweight terminal surface. For canonical usage and architecture, prefer
 > `README.md`, `OPERATOR_GUIDE.md`, `DEVELOPER_GUIDE.md`, and `CLAIMS.md`.
 
-This document summarizes the current Pertura v2 direction, implementation state,
-architecture decisions, and comparisons with related systems. It is intended as
-a handoff note for continuing the project in a new conversation.
+This document summarizes an older Pertura v2 design phase. It is useful for
+historical context only. The current implementation has been narrowed into a
+Perturb-seq native product surface with an audited runtime underneath.
 
 ## 1. Core Positioning
 
-Pertura is not primarily a single-cell analysis agent. It is an autonomous
-scientific analysis harness. Perturb-seq is the first serious domain pack and
-stress-test domain.
+Archived position: Pertura was framed as a generic autonomous scientific
+analysis harness, with Perturb-seq as the first serious domain pack.
+
+Current position: Pertura is a Perturb-seq native analysis workbench. The
+generic harness capabilities remain inside the runtime/operator layer, but the
+default product, README, GUI, API projection, and LLM turn card are
+Perturb-seq-first.
 
 The central architecture claim is:
 

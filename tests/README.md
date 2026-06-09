@@ -12,9 +12,11 @@ It is organized into independent logical segments. When splitting into pytest
 files, keep the same segment boundaries so each paper claim remains separately
 auditable.
 
-Segments use common harness vocabulary where possible: analysis graph maps to a
-workflow/state graph, gates map to guardrails, observation memory maps to memory,
-and evidence review maps to tracing/audit.
+Segments now test the perturb-seq native product surface and the audited
+runtime separately. Product checks cover the HTML/API contract, candidate
+actions, stage cards, capability cards, product events, console turns, and
+workflow autopilot. Runtime checks cover the event store, gates, observation
+memory, evidence review, replay, fork, and repair.
 
 ```powershell
 # Run independent paper-claim smoke checks.
@@ -61,6 +63,7 @@ regression evidence while the rest of the suite is being split.
 | Claim | Harness segment | What it proves |
 | --- | --- | --- |
 | User-editable analysis graph spec + gate | `test_claim_analysis_graph.py`; 13. Pertura v2 analysis spec and gating | Public graph API, graph audit, node contracts, gate behavior, node transitions, allowed capabilities, CLI/API contract surfaces |
+| Perturb-seq product workbench | `test_pytest_wrapper.py`; operator/product segments in `test_harness.py` | Analysis Console contract, Workflow Builder stage cards, candidate actions, scoped tool surface, product event timeline |
 | Scientific observation memory | `test_claim_observation_memory.py`; 6. Observation memory; 10. Trace and impact graph semantics | Conflict/divergence, coverage labels, branch intent entries, provenance index, stale dependency propagation, observation/conclusion provenance |
 | Deliberative LLM exploration with commit-time audit | `test_claim_deliberative_audit.py`; 7. Real attempt execution chain; 12. Replay, fork, and scientific diff; 13. tool-loop checks | Free exploration can commit with warning, disallowed capabilities are blocked at commit, capability output contracts, finish-time audit gates, replay/integrity hashes, run capsule checks, local-read audit tools |
 | Evidence-chain integrity | 10. Trace and impact graph semantics; 12. Replay, fork, and scientific diff | `review_evidence_chain`, `audit_run`, `trace_upstream`, capsule integrity, deterministic replay |

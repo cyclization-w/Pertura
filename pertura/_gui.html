@@ -149,6 +149,12 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .workflow-check{display:grid;grid-template-columns:16px minmax(0,1fr);gap:6px;align-items:start;font-size:11px;line-height:1.35}
 .workflow-check input{width:14px;height:14px;margin-top:1px}
 .workflow-audit{font-size:11px;line-height:1.35;color:var(--muted)}
+.stage-card{border:1px solid #d7eee9;background:#f4fbf9;border-radius:7px;padding:9px;margin-bottom:10px}
+.stage-card-title{font-size:12px;font-weight:800;color:#18443f;margin-bottom:4px}
+.stage-card-question{font-size:11px;line-height:1.35;color:#49615d;margin-bottom:8px}
+.stage-card-section{font-size:10px;font-weight:800;text-transform:uppercase;color:#667085;margin-top:7px}
+.stage-card-list{margin:4px 0 0 0;padding-left:16px;font-size:11px;line-height:1.35;color:#344054}
+.stage-card-list li{margin-bottom:3px}
 @media(max-width:1180px){.workflow-builder{grid-template-columns:1fr}.workflow-canvas{min-height:460px}}
 @media(max-width:1180px){.shell{grid-template-columns:1fr}.column{overflow:visible}.live-layout{grid-template-columns:1fr}.right{display:grid;grid-template-columns:1fr 1fr}.right .grow{min-height:280px}}
 @media(max-width:760px){header{height:auto;align-items:flex-start;flex-direction:column}.shell{overflow:auto}.composer-grid{grid-template-columns:1fr}.composer-secondary{grid-template-columns:1fr}.right{display:flex}.metric-grid{grid-template-columns:repeat(2,1fr)}.split,.output-strip,.product-grid,.evidence-board-grid{grid-template-columns:1fr}.message{max-width:100%}}
@@ -1078,7 +1084,9 @@ function renderWorkflowEditor(node){
   const nodes=spec.nodes||[];
   const caps=[...new Set([...(WORKFLOW_BUILDER.node_catalog||[]).flatMap(n=>n.allowed_capabilities||[]),...(node.allowed_capabilities||[])])].filter(Boolean).sort();
   const checks=WORKFLOW_BUILDER.check_catalog||[];
+  const stage=workflowStageCard(node);
   box.innerHTML=`
+    ${renderWorkflowStageCard(stage)}
     <div class="workflow-field"><label>Title</label><input value="${esc(node.title||"")}" oninput="updateWorkflowNodeField('title', this.value)"></div>
     <div class="workflow-field"><label>Purpose</label><textarea oninput="updateWorkflowNodeField('purpose', this.value)">${esc(node.purpose||"")}</textarea></div>
     <div class="workflow-field"><label>Capabilities</label>
@@ -1093,6 +1101,34 @@ function renderWorkflowEditor(node){
       <button onclick="makeWorkflowStart('${arg(node.node_id)}')">Make start</button>
       <button onclick="removeWorkflowNode('${arg(node.node_id)}')">Delete</button>
     </div>`;
+}
+
+function workflowStageCard(node){
+  const existing=(WORKFLOW_BUILDER.stage_cards||[]).find(c=>c.node_id===node.node_id)||
+    ((WORKFLOW_BUILDER.node_catalog||[]).find(c=>c.node_id===node.node_id)||{}).stage_card||{};
+  const label=c=>c.description||c.message||c.condition_id||"check";
+  const confirmations=[...(node.must_confirm||[]),...(node.requires||[]).filter(c=>c.failure_mode==="human_interrupt"||c.tier==="C")];
+  return {
+    node_id:node.node_id,
+    stage_name:node.title||existing.stage_name||node.node_id,
+    biological_question:node.purpose||existing.biological_question||"",
+    what_you_need:(node.requires||[]).map(label),
+    what_must_be_confirmed:confirmations.map(c=>({label:label(c),authority:c.failure_mode==="human_interrupt"||c.tier==="C"?"user confirmation required":"runtime check"})),
+    what_it_produces:(node.expected_outputs&&node.expected_outputs.length?node.expected_outputs:(node.completion||[]).map(label)),
+    next_stages:node.next_nodes||[],
+  };
+}
+
+function renderWorkflowStageCard(stage){
+  const list=items=>`<ul class="stage-card-list">${(items||[]).map(item=>`<li>${esc(typeof item==="string"?item:(item.label||item.field||""))}${typeof item==="object"&&item.authority?` <span class="badge">${esc(item.authority)}</span>`:""}</li>`).join("")||"<li>None configured.</li>"}</ul>`;
+  return `<div class="stage-card">
+    <div class="stage-card-title">${esc(stage.stage_name||stage.node_id||"Workflow stage")}</div>
+    <div class="stage-card-question">${esc(stage.biological_question||"Configure what this stage should answer.")}</div>
+    <div class="stage-card-section">Before this stage</div>${list(stage.what_you_need)}
+    <div class="stage-card-section">Must confirm</div>${list(stage.what_must_be_confirmed)}
+    <div class="stage-card-section">Produces</div>${list(stage.what_it_produces)}
+    <div class="stage-card-section">Next stages</div>${list(stage.next_stages)}
+  </div>`;
 }
 
 function workflowCheckBoxes(group,node,checks){

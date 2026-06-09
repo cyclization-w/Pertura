@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from pertura.models import Event, Snapshot, _model_dump
+from pertura.models import Event, Snapshot
 
 from .capability_catalog import compile_capability_catalog, render_turn_card
 from .design_ledger import compile_design_ledger
+from .product_events import compile_product_timeline
 from .quality import compile_quality_flags
 from .sweeps import compile_branch_board
 
@@ -58,45 +59,6 @@ def compile_perturbseq_view(
         last_attempt_delta=last_attempt_delta,
     )
     return view
-
-
-def compile_product_timeline(events: list[Event], *, max_items: int = 30) -> list[dict[str, Any]]:
-    mapping = {
-        "goal_recorded": "planning",
-        "node_entered": "planning",
-        "node_transition_requested": "planning",
-        "attempt_planned": "running_code",
-        "execution_output": "execution_output",
-        "outcome_recorded": "result_recorded",
-        "artifact_registered": "artifact_ready",
-        "observation_registered": "observation_recorded",
-        "interrupt_opened": "question_opened",
-        "patch_proposed": "repair_proposed",
-        "patch_applied": "repair_applied",
-        "branch_opened": "branch_started",
-        "branch_activated": "branch_started",
-        "finding_recorded": "blocked",
-        "run_complete": "complete",
-        "job_submitted": "running_code",
-        "job_completed": "result_recorded",
-    }
-    out = []
-    for event in reversed(events or []):
-        kind = mapping.get(event.event_type)
-        if not kind:
-            continue
-        payload = event.payload or {}
-        out.append({
-            "event_id": event.event_id,
-            "event_type": event.event_type,
-            "product_type": kind,
-            "timestamp": str(event.timestamp),
-            "title": _timeline_title(kind, payload),
-            "summary": _timeline_summary(event.event_type, payload),
-        })
-        if len(out) >= max_items:
-            break
-    return list(reversed(out))
 
 
 def _active_stage(snap: Snapshot | None) -> dict[str, Any]:
@@ -191,36 +153,3 @@ def _goal(snap: Snapshot | None) -> str:
     if getattr(snap, "goals", None):
         return snap.goals[-1].text
     return getattr(snap, "goal", "")
-
-
-def _timeline_title(kind: str, payload: dict[str, Any]) -> str:
-    if kind == "planning":
-        return payload.get("reason") or payload.get("node_id") or "Planning"
-    if kind == "running_code":
-        attempt = payload.get("attempt") or {}
-        return attempt.get("title") or payload.get("job_type") or "Running code"
-    if kind == "artifact_ready":
-        artifact = payload.get("artifact") or {}
-        return artifact.get("summary") or artifact.get("kind") or "Artifact ready"
-    if kind == "observation_recorded":
-        obs = payload.get("observation") or {}
-        return f"{obs.get('target', 'observation')} {obs.get('metric', '')}".strip()
-    if kind == "repair_proposed":
-        patch = payload.get("patch") or {}
-        return patch.get("rationale") or "Repair proposed"
-    if kind == "complete":
-        return "Analysis complete"
-    return kind.replace("_", " ")
-
-
-def _timeline_summary(event_type: str, payload: dict[str, Any]) -> str:
-    if event_type == "execution_output":
-        output = payload.get("output") or payload
-        return str(output.get("stderr") or output.get("stdout") or output)[:500]
-    if event_type == "outcome_recorded":
-        outcome = payload.get("outcome") or {}
-        return outcome.get("summary") or outcome.get("status") or ""
-    if event_type == "finding_recorded":
-        finding = payload.get("finding") or {}
-        return finding.get("summary") or ""
-    return str(_model_dump(payload))[:500] if payload else ""

@@ -113,12 +113,14 @@ def workflow_builder_view(
     registry = _registry(capabilities or getattr(domain, "capabilities", []) or getattr(snap, "capabilities", []) or [])
     audit = _audit(effective, registry)
     active_node_id = getattr(snap, "active_node_id", "") if snap is not None else ""
+    stage_cards = compile_workflow_stage_cards(effective)
     return {
         "view_type": "workflow_builder",
         "schema_version": "v1",
         "run_id": getattr(snap, "run_id", run_id) if snap is not None else run_id,
         "active_node_id": active_node_id,
         "node_catalog": compile_node_catalog(domain=domain, capabilities=registry),
+        "stage_cards": stage_cards,
         "check_catalog": compile_check_catalog(),
         "current_spec": current,
         "draft_spec": draft,
@@ -134,10 +136,12 @@ def compile_node_catalog(*, domain=None, capabilities=None) -> list[dict[str, An
     registry = _registry(capabilities or getattr(domain, "capabilities", []) or [])
     nodes = []
     for node in spec.nodes:
+        stage_card = _workflow_stage_card(node.model_dump(mode="json"))
         nodes.append({
             "node_id": node.node_id,
             "title": node.title or node.node_id,
             "purpose": node.purpose,
+            "stage_card": stage_card,
             "node_spec": node.model_dump(mode="json"),
             "allowed_capabilities": list(node.allowed_capabilities),
             "requires": [_condition_card(item) for item in node.requires],
@@ -152,6 +156,13 @@ def compile_node_catalog(*, domain=None, capabilities=None) -> list[dict[str, An
             "default_position": _default_position(spec, node.node_id),
         })
     return nodes
+
+
+def compile_workflow_stage_cards(spec: dict[str, Any] | AnalysisGraphSpec) -> list[dict[str, Any]]:
+    graph = spec if isinstance(spec, AnalysisGraphSpec) else spec_from_dict(spec)
+    if graph is None:
+        return []
+    return [_workflow_stage_card(node.model_dump(mode="json")) for node in graph.nodes]
 
 
 def compile_check_catalog() -> list[dict[str, Any]]:
@@ -255,6 +266,69 @@ def _capability_card(cap_id: str, registry: CapabilityRegistry) -> dict[str, Any
         "expected_artifacts": data.get("expected_artifacts", []),
         "tools": data.get("tools", []),
     }
+
+
+def _workflow_stage_card(node: dict[str, Any]) -> dict[str, Any]:
+    requires = [_plain_condition(item) for item in node.get("requires", []) or []]
+    confirmations = [
+        _plain_condition(item)
+        for item in [*(node.get("must_confirm", []) or []), *(node.get("requires", []) or [])]
+        if (item.get("failure_mode") == "human_interrupt" or item.get("tier") == "C")
+    ]
+    done_when = [_plain_condition(item) for item in node.get("completion", []) or []]
+    outputs = list(node.get("expected_outputs") or [])
+    if not outputs:
+        outputs = [item["label"] for item in done_when if item.get("label")]
+    return {
+        "node_id": node.get("node_id", ""),
+        "stage_name": node.get("title") or node.get("node_id", ""),
+        "biological_question": _biological_question(node),
+        "what_you_need": [item["label"] for item in requires],
+        "what_must_be_confirmed": confirmations,
+        "what_it_produces": outputs,
+        "next_stages": list(node.get("next_nodes") or []),
+        "capability_ids": list(node.get("allowed_capabilities") or []),
+        "can_skip": _can_skip(node),
+        "is_optional": _is_optional(node),
+    }
+
+
+def _plain_condition(item: dict[str, Any]) -> dict[str, Any]:
+    field = (item.get("inputs") or {}).get("field", "")
+    return {
+        "condition_id": item.get("condition_id", ""),
+        "label": item.get("description") or item.get("message") or item.get("condition_id", "").replace("_", " "),
+        "authority": _authority_label(item),
+        "field": field,
+        "tier": item.get("tier", "A"),
+        "failure_mode": item.get("failure_mode", "warn"),
+        "hard": bool(item.get("hard", True)),
+    }
+
+
+def _authority_label(item: dict[str, Any]) -> str:
+    if item.get("failure_mode") == "human_interrupt" or item.get("tier") == "C":
+        return "user confirmation required"
+    if item.get("failure_mode") == "autonomous_recovery":
+        return "agent can repair"
+    return "runtime check"
+
+
+def _biological_question(node: dict[str, Any]) -> str:
+    title = (node.get("title") or node.get("node_id", "")).strip()
+    purpose = (node.get("purpose") or "").strip()
+    if purpose:
+        return purpose
+    return f"What evidence is needed for {title}?" if title else ""
+
+
+def _can_skip(node: dict[str, Any]) -> bool:
+    return not any(bool(item.get("hard", True)) for item in node.get("completion", []) or [])
+
+
+def _is_optional(node: dict[str, Any]) -> bool:
+    node_id = str(node.get("node_id", "")).lower()
+    return "optional" in node_id or "explor" in node_id or _can_skip(node)
 
 
 def _default_position(spec: AnalysisGraphSpec, node_id: str) -> dict[str, int]:

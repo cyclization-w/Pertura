@@ -31,7 +31,8 @@ the Perturb-seq workbench.
   and asks the user only when multiple ready next stages exist.
 - Typed capability contracts above raw tools. Capability cards carry required
   design fields, prechecks, expected observations/artifacts, common errors,
-  repair hints, packages, functions, and branchable parameters.
+  repair hints, parameters, validation status, preview output, run-template
+  entrypoints, packages, functions, and branchable parameters.
 - Event-sourced run state for replay, fork, diff, audit, and run capsules.
 - Observation memory for variable-level scientific provenance.
 - Audited auto-repair for low-risk code failures, with higher-risk repairs
@@ -185,11 +186,24 @@ same audited event log. Runtime autopilot handles ordinary forward progress:
 when one next node is ready, it advances; when several next nodes are ready, it
 opens a structured choice for the user.
 
+The GUI should present workflow editing as stage cards and checklists, not raw
+JSON. Each stage card answers:
+
+- what the stage is trying to resolve biologically
+- what must exist before the stage can run
+- which design facts require user/PI confirmation
+- what evidence, plots, or artifacts the stage should produce
+- which stages can run next
+
 ## Core Concepts
 
 | Concept | Meaning |
 | --- | --- |
 | `PerturbSeqView` | Product projection for the GUI and LLM turn card: design ledger, flow, evidence, capability cards, timeline. |
+| `ConsoleTurnRouter` | `/api/console/turn` state router: start, answer, continue, pause, repair, or report without durable chat history. |
+| `RuntimeAutopilot` | Read-only controller that completes/advances workflow nodes before the LLM spends another turn. |
+| `CapabilityVerifier` | Product-layer verifier that turns capability contracts into runnable cards with validation, preview, and template entrypoints. |
+| `ProductEventCompiler` | Event-store projection that converts raw runtime events into Live Agent Run timeline cards. |
 | `AnalysisGraph` | User-editable workflow nodes, transitions, and gates. |
 | `Capability` | Domain action contract exposed to the LLM, such as `run_de`. |
 | `Tool` | Runtime primitive below capabilities, such as `execute_code`. |
