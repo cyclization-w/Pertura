@@ -6,7 +6,7 @@ environment. Run it on a server or clean machine with network access.
 ## Build Artifacts
 
 ```bash
-cd pertura_v2
+cd Pertura
 python -m pip install -U pip build
 python -m build
 ```
@@ -54,7 +54,9 @@ Expected:
 Expected:
 
 - `server` reports OK.
-- `pertura --GUI --domain perturbseq` can start a FastAPI/GUI process for a prepared run.
+- `pertura --GUI --domain perturbseq` starts the built-in HTML workbench.
+- `pertura --GUI --domain perturbseq --ui react` is optional and only for an
+  explicitly built experimental React frontend.
 
 ## Perturb-seq Install
 
@@ -93,11 +95,11 @@ that the harness can:
 
 ## Current Local Status
 
-Local source-tree validation on 2026-06-04:
+Local source-tree validation on 2026-06-09:
 
-- Wheel build: passed via `python -m pip wheel . -w dist`.
-- Source-tree harness: `459/459 passed`.
-- Pytest wrapper: `3 passed`.
-- Claim runner: `18/18 passed`.
+- Source-tree pytest wrapper: `17 passed`.
+- Analysis-spec harness segment: `239/239 passed`.
+- Analysis graph claim runner: `3/3 passed`.
+- Compile smoke: `python -m compileall pertura` passed.
 - Clean dependency install: pending server validation because local network
   install was not allowed in the current sandbox.

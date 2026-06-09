@@ -516,7 +516,7 @@ function renderQuestionConsole(action){
     <div class="item-sub">${esc(action.description||"Please answer the open question before continuing.")}</div>
     ${options.length?`<div class="question-options">${options.map(opt=>`<button onclick="submitQuestionOption('${arg(action.id)}','${arg(opt)}')">${esc(opt)}</button>`).join("")}</div>`:""}
     ${fields.length?`<div class="question-fields">${fields.map(f=>{
-      const name=f.name||f.id||f.key||"answer";
+      const name=f.field_id||f.name||f.id||f.key||"answer";
       const label=f.label||name;
       return `<input data-question-field="${esc(name)}" placeholder="${esc(label)}">`;
     }).join("")}<button class="primary" onclick="submitQuestionFields('${arg(action.id)}')">Submit</button></div>`:""}

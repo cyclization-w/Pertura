@@ -375,6 +375,22 @@ class Workbench:
                     from pertura.agent.gated_dispatch import gated_dispatch
 
                     fresh = self._store.read_snapshot()
+                    current_id = getattr(fresh, "active_node_id", "")
+                    if current_id and not _active_visit_completed(fresh, current_id):
+                        complete_action = gated_dispatch(
+                            self,
+                            "complete_node",
+                            "",
+                            {"summary": f"User chose next workflow stage {target_node_id}; completing {current_id} first."},
+                            {
+                                "node_id": current_id,
+                                "reason": f"workflow_autopilot_choice:{interrupt_id}",
+                            },
+                            fresh,
+                        )
+                        if complete_action in {"waiting_for_human", "blocked"}:
+                            return
+                        fresh = self._store.read_snapshot()
                     action = gated_dispatch(
                         self,
                         "request_node_transition",
@@ -470,8 +486,22 @@ class Workbench:
             candidates = decision.get("candidates") or []
             if not candidates:
                 return []
+            actions: list[str] = []
+            if not _active_visit_completed(snap, current_id):
+                action = gated_dispatch(
+                    self,
+                    "complete_node",
+                    "",
+                    {"summary": decision.get("reason", "Workflow autopilot completion gate passed before choosing next stage.")},
+                    {"node_id": current_id, "reason": decision.get("reason", "")},
+                    snap,
+                )
+                actions.append(action)
+                if action in {"waiting_for_human", "blocked"}:
+                    return actions
+                snap = self._store.read_snapshot() if self._store else snap
             if _has_open_workflow_choice(snap, current_id):
-                return ["waiting_for_human"]
+                return actions + ["waiting_for_human"]
             self._emit("interrupt_opened", {"interrupt": _model_dump(Interrupt(
                 interrupt_id=f"irq_{uuid4().hex[:12]}",
                 source="workflow_autopilot",
@@ -479,7 +509,7 @@ class Workbench:
                 options=[item.get("node_id", "") for item in candidates if item.get("node_id")],
                 default_action="choose_next_node",
             ))})
-            return ["waiting_for_human"]
+            return actions + ["waiting_for_human"]
         actions: list[str] = []
         if not _active_visit_completed(snap, current_id):
             action = gated_dispatch(

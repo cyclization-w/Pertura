@@ -48,9 +48,17 @@ Use detail endpoints such as `/api/graph`, `/api/node-contract`,
 `/api/context-review`, `/api/artifacts/{artifact_id}/preview`, and
 `/api/rethink/{node_id}` only when the user expands a panel.
 
-The built-in `pertura --GUI` page is a dependency-free HTML workbench. The
-React/Vite frontend under `frontend/` consumes the same contract and is intended
-for the longer-lived product UI.
+The built-in `pertura --GUI` page is the canonical, dependency-free HTML
+workbench. It is the default for `--ui builtin` and `--ui auto`, and it should
+be treated as the product UI for server deployments.
+
+The terminal surface is the lightweight companion for SSH and CI smoke checks:
+`pertura chat`, `pertura inspect`, `pertura context`, and `pertura audit` read
+the same run projections as the GUI without requiring a browser.
+
+The React/Vite frontend under `frontend/` is experimental source code. It is
+not kept in lock step with the HTML workbench and only runs when explicitly
+requested with `--ui react`.
 
 ## Trace And Rethink
 

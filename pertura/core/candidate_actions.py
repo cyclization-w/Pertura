@@ -135,7 +135,7 @@ def compile_candidate_actions(
             risk_level="low",
             endpoint="/api/console/turn",
             method="POST",
-            payload={"action_id": "answer_question", "field_id": field_id},
+            payload={"action_id": f"answer_question:{field_id}", "field_id": field_id},
             options=question.get("options") or [],
             fields=[{
                 "field_id": field_id,

@@ -58,8 +58,8 @@ def main():
     s.add_argument("--domain", default=None)
     s.add_argument("--host", default="127.0.0.1", help="Bind host. Use 0.0.0.0 on a server.")
     s.add_argument("--port", type=int, default=8765)
-    s.add_argument("--ui", choices=["auto", "builtin", "react"], default="auto",
-                   help="Serve built React UI when available, or the built-in HTML fallback.")
+    s.add_argument("--ui", choices=["auto", "builtin", "react"], default="builtin",
+                   help="Serve the built-in HTML workbench. Use --ui react only for the experimental React build.")
     s.add_argument("--analysis-graph", default=None, help="Path to AnalysisGraphSpec JSON.")
     s.add_argument("--provider", choices=["openai", "anthropic"], default=None,
                    help="LLM provider. Use openai for OpenAI-compatible endpoints.")

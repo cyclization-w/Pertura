@@ -303,6 +303,47 @@ def test_perturbseq_catalog_hides_redundant_dataset_tools(tmp_path: Path) -> Non
     assert "load_dataset" in catalog["hidden_tool_ids"]
 
 
+def test_perturbseq_capability_card_prefers_product_contract(tmp_path: Path) -> None:
+    from pertura.capabilities import capability
+    from pertura.core import GraphController, Store
+    from pertura.domain.perturbseq import build_perturbseq_analysis_graph
+    from pertura.product.perturbseq import compile_capability_catalog, compile_design_ledger
+
+    store = Store(tmp_path / "run_product_catalog_contract")
+    controller = GraphController(store, "product_catalog_contract")
+    controller.append_event("run_started", {"config": {
+        "run_id": "product_catalog_contract",
+        "workspace": str(tmp_path),
+        "goal": "prefer contract fields",
+        "domain": "perturbseq",
+        "analysis_spec": build_perturbseq_analysis_graph().model_dump(mode="json"),
+        "active_node_id": "effect_exploration",
+        "capabilities": [capability(
+            "run_de",
+            stage="effect_exploration",
+            required_inputs=["control_labels"],
+            contract={"product": {
+                "required_design_fields": ["target_column"],
+                "prechecks": ["contract precheck"],
+                "common_errors": ["contract common error"],
+                "repair_hints": ["contract repair hint"],
+                "expected_plots": ["contract plot"],
+            }},
+        ).model_dump(mode="json")],
+        "budget": {"max_attempts": 8, "max_branches": 1, "max_repairs": 1},
+    }})
+
+    snap = store.read_snapshot()
+    catalog = compile_capability_catalog(snap, compile_design_ledger(snap), active_node_id="effect_exploration")
+    run_de = next(item for item in catalog["cards"] if item["id"] == "run_de")
+
+    assert run_de["required_design_fields"] == ["target_column"]
+    assert run_de["prechecks"] == ["contract precheck"]
+    assert run_de["common_errors"] == ["contract common error"]
+    assert run_de["repair_hints"] == ["contract repair hint"]
+    assert run_de["expected_plots"] == ["contract plot"]
+
+
 def test_perturbseq_work_order_prefers_turn_card_and_transition(tmp_path: Path) -> None:
     from pertura.core import GraphController, Store, build_active_work_order
     from pertura.domain.perturbseq import build_perturbseq_analysis_graph
@@ -493,6 +534,88 @@ def test_workflow_autopilot_asks_user_for_multiple_ready_successors(tmp_path: Pa
 
     assert decision["action"] == "choose_next"
     assert {item["node_id"] for item in decision["candidates"]} == {"experimental_design", "scrna_qc"}
+
+
+def test_workflow_autopilot_completes_before_choose_next_interrupt(tmp_path: Path) -> None:
+    from pertura.agent.loop import Workbench
+    from pertura.core import GraphController, Store
+    from pertura.domain import perturbseq
+    from pertura.domain.perturbseq import build_perturbseq_analysis_graph
+
+    store = Store(tmp_path / "run_workflow_autopilot_choice_apply")
+    controller = GraphController(store, "workflow_autopilot_choice_apply")
+    spec = build_perturbseq_analysis_graph().model_dump(mode="json")
+    for node in spec["nodes"]:
+        if node["node_id"] == "workspace_inspection":
+            node["next_nodes"] = ["experimental_design", "scrna_qc"]
+        if node["node_id"] in {"experimental_design", "scrna_qc"}:
+            node["requires"] = []
+    controller.append_event("run_started", {"config": {
+        "run_id": "workflow_autopilot_choice_apply",
+        "workspace": str(tmp_path),
+        "goal": "choose next stage",
+        "domain": "perturbseq",
+        "analysis_spec": spec,
+        "budget": {"max_attempts": 8, "max_branches": 1, "max_repairs": 1},
+    }})
+    controller.append_event("node_entered", {
+        "node_id": "workspace_inspection",
+        "branch_id": "main",
+        "reason": "test",
+    })
+    controller.append_event("observation_registered", {"observation": {
+        "observation_id": "obs_dataset_shape",
+        "type": "schema",
+        "target": "dataset",
+        "metric": "shape",
+        "value": "100x20",
+    }})
+
+    wb = Workbench(domain=perturbseq.DOMAIN.model_copy(deep=True))
+    wb._store = store
+    wb._run_id = "workflow_autopilot_choice_apply"
+    wb._controller = controller
+
+    actions = wb._apply_auto_navigation(store.read_snapshot())
+    snap = store.read_snapshot()
+
+    assert "node_completed" in actions
+    assert "waiting_for_human" in actions
+    assert any(
+        visit.node_id == "workspace_inspection" and visit.status == "completed"
+        for visit in snap.node_visits
+    )
+    assert any(
+        intr.status == "open" and intr.default_action == "choose_next_node"
+        for intr in snap.interrupts
+    )
+
+
+def test_console_turn_design_question_updates_design_without_interrupt(tmp_path: Path) -> None:
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from pertura._api import create_app
+    from pertura.agent.loop import Workbench
+    from pertura.domain import perturbseq
+
+    wb = Workbench(domain=perturbseq.DOMAIN.model_copy(deep=True))
+    wb.run(str(tmp_path), goal="", steps=0)
+    wb._emit("run_complete", {})
+    auto_client = TestClient(create_app(wb, ui="auto"))
+    assert "Analysis Session" in auto_client.get("/").text
+    client = TestClient(create_app(wb, ui="builtin"))
+
+    response = client.post("/api/console/turn", json={
+        "action_id": "answer_question:control_labels",
+        "answers": {"control_labels": "NTC, vehicle"},
+    })
+    snap = wb._store.read_snapshot()
+
+    assert response.status_code == 200, response.text
+    assert response.json()["handled"] == "answer_question"
+    assert snap.design["control_labels"] == ["NTC", "vehicle"]
+    assert snap.design_meta["control_labels"]["source"] == "user_confirmed"
 
 
 def test_scoped_tools_hide_load_dataset_after_dataset_profile(tmp_path: Path) -> None:

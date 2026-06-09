@@ -66,6 +66,65 @@ class WorkflowApplyRequest(BaseModel):
     reason: str = "workflow_builder_apply"
 
 
+def _field_from_answer_action(action_id: str) -> str:
+    if not action_id.startswith("answer_question:"):
+        return ""
+    return action_id.split(":", 1)[1].strip()
+
+
+def _console_design_patch(message: str, answers: dict, action_id: str) -> dict:
+    """Compile Analysis Console question answers into a design update."""
+    import json
+
+    from pertura.product.perturbseq.ontology import FIELD_BY_ID, normalize_design_key
+    from pertura.spec.design_answer import compile_design_answer
+
+    field_id = normalize_design_key(_field_from_answer_action(action_id))
+    if field_id not in FIELD_BY_ID:
+        field_id = ""
+
+    normalized_answers = {}
+    for key, value in (answers or {}).items():
+        if value in ("", None, []):
+            continue
+        norm_key = normalize_design_key(key)
+        if norm_key == "answer" and field_id:
+            norm_key = field_id
+        if norm_key in FIELD_BY_ID:
+            normalized_answers[norm_key] = value
+
+    expected = [field_id] if field_id else sorted(normalized_answers)
+    patch = {}
+    if normalized_answers:
+        patch = compile_design_answer(
+            json.dumps(normalized_answers, ensure_ascii=False),
+            expected_fields=expected,
+        )
+        for key, value in normalized_answers.items():
+            if key not in patch or key == "control_labels":
+                patch[key] = _coerce_console_design_value(key, value)
+    elif message and field_id:
+        patch = compile_design_answer(message, expected_fields=[field_id])
+        patch.setdefault(field_id, _coerce_console_design_value(field_id, message))
+    elif message:
+        patch = compile_design_answer(message)
+    return {key: value for key, value in patch.items() if key in FIELD_BY_ID and value not in ("", None, [])}
+
+
+def _coerce_console_design_value(field_id: str, value):
+    if isinstance(value, (list, tuple, set)):
+        return [item for item in value if item not in ("", None)]
+    if not isinstance(value, str):
+        return value
+    text = str(value or "").strip()
+    if field_id == "control_labels":
+        import re
+
+        labels = [item.strip() for item in re.split(r"[,;/]|\band\b", text, flags=re.IGNORECASE) if item.strip()]
+        return labels or text
+    return text
+
+
 def analysis_spec_audit_payload(workbench, *, run_id: str = "", strict: bool = False) -> dict:
     from pertura.spec.contracts import audit_analysis_graph
     spec = _analysis_spec_for_workbench(workbench, run_id=run_id)
@@ -990,9 +1049,9 @@ def create_app(workbench, *, ui: str = "auto"):
 
     app = FastAPI(title="Pertura Workbench", version="1.0.0")
     runner = JobRunner(max_workers=1)
-    ui_mode = ui if ui in {"auto", "builtin", "react"} else "auto"
+    ui_mode = ui if ui in {"auto", "builtin", "react"} else "builtin"
     react_dist = _react_dist_dir()
-    use_react = ui_mode in {"auto", "react"} and (react_dist / "index.html").exists()
+    use_react = ui_mode == "react" and (react_dist / "index.html").exists()
     if use_react and (react_dist / "assets").exists():
         app.mount("/assets", StaticFiles(directory=str(react_dist / "assets")), name="assets")
 
@@ -1308,18 +1367,27 @@ def create_app(workbench, *, ui: str = "auto"):
         audit = audit_analysis_graph(spec, capabilities=_capability_registry_for_workbench(workbench))
         if audit.get("errors"):
             raise HTTPException(400, {"message": "Workflow draft has errors.", "audit": audit})
+        old_active = getattr(snap, "active_node_id", "")
+        old_active_exists = any(
+            item.get("node_id") == old_active
+            for item in (spec or {}).get("nodes", [])
+        )
+        start = (spec or {}).get("start_node_id", "")
+        should_enter_start = bool(start and (not old_active or not old_active_exists))
+
         workbench.domain.analysis_graph = spec
         workbench._emit("analysis_spec_draft_applied", {
             "analysis_spec": spec,
             "reason": req.reason,
         })
         fresh = workbench._store.read_snapshot()
-        active_exists = any(
-            item.get("node_id") == getattr(fresh, "active_node_id", "")
-            for item in (getattr(fresh, "analysis_spec", {}) or {}).get("nodes", [])
+        has_active_start_visit = any(
+            getattr(item, "node_id", "") == start
+            and getattr(item, "branch_id", "") == getattr(fresh, "active_branch", "main")
+            and getattr(item, "status", "") == "active"
+            for item in getattr(fresh, "node_visits", []) or []
         )
-        start = (getattr(fresh, "analysis_spec", {}) or {}).get("start_node_id", "")
-        if start and not active_exists:
+        if should_enter_start and not has_active_start_visit:
             workbench._emit("node_entered", {
                 "node_id": start,
                 "branch_id": getattr(fresh, "active_branch", "main"),
@@ -1511,6 +1579,36 @@ def create_app(workbench, *, ui: str = "auto"):
             return _console_state_payload({
                 "handled": "answer_question",
                 "interrupt_id": open_interrupt.interrupt_id,
+            })
+
+        if snap and (action_id.startswith("answer_question") or req.answers):
+            design_patch = _console_design_patch(message, req.answers or {}, action_id)
+            if not design_patch:
+                raise HTTPException(400, "A structured design answer is required for this question")
+            workbench.update_design(
+                design_patch,
+                reason=f"console_turn:{action_id or 'answer_question'}",
+                source="user_confirmed",
+                confidence="high",
+            )
+            if active:
+                return _console_state_payload({
+                    "handled": "answer_question",
+                    "design": design_patch,
+                    "job_id": active.get("job_id", ""),
+                    "status": active.get("status", "running"),
+                    "already_running": True,
+                })
+            if getattr(snap, "phase", "") in {"complete", "cancelled"}:
+                return _console_state_payload({
+                    "handled": "answer_question",
+                    "design": design_patch,
+                })
+            payload = _submit_agent_job("agent_continue", AgentRunRequest())
+            return _console_state_payload({
+                "handled": "answer_question",
+                "design": design_patch,
+                **payload,
             })
 
         if active:

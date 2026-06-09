@@ -113,20 +113,27 @@ board, branch board, and product timeline. Runtime/debug projections remain
 available under `execution_state`, `analysis`, `review`, and `agent_context`,
 but they are no longer the default first-screen model.
 
-The repository also includes an experimental React/Vite frontend in
-`frontend/`. Run it against the FastAPI backend:
+The built-in HTML workbench is the canonical GUI. It is served by default for
+`pertura --GUI`, `pertura serve`, and `--ui auto`, so a stale local
+`frontend/dist` build cannot replace the product UI.
+
+For SSH and CI smoke checks, use the terminal surface. It renders the same
+bounded workbench projection as the HTML UI, so it is easy to test without a
+browser:
 
 ```bash
-# terminal A
-pertura --GUI --domain perturbseq --ui auto
-
-# terminal B
-cd frontend
-npm install
-npm run dev
+pertura chat ./data --domain perturbseq
+pertura inspect runs/run_YYYYMMDD_HHMMSS_xxxxxx
 ```
 
-Vite proxies `/api/*` to `http://127.0.0.1:8765`.
+The repository still contains an experimental React/Vite source tree in
+`frontend/`, but it is not the default product surface and is not kept in lock
+step with the HTML workbench. To test it explicitly, start the backend and pass
+`--ui react` only when a current build exists.
+
+```bash
+pertura --GUI --domain perturbseq --ui react
+```
 
 The built-in Perturb-seq pack includes nodes for workspace inspection,
 experimental design, scRNA-seq QC, guide assignment, perturbation validation,

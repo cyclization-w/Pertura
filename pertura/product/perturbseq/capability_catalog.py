@@ -170,7 +170,13 @@ def render_turn_card(view: dict[str, Any], *, outcome_text: str = "", last_attem
 
 
 def _card_for_capability(cap_id: str, raw: dict[str, Any], ledger: dict[str, Any], node: dict[str, Any]) -> dict[str, Any]:
-    required = list(raw.get("required_inputs") or REQUIRED_DESIGN_FIELDS.get(cap_id, []))
+    product = _product_contract(raw)
+    required = list(
+        product.get("required_design_fields")
+        or product.get("required_inputs")
+        or raw.get("required_inputs")
+        or REQUIRED_DESIGN_FIELDS.get(cap_id, [])
+    )
     required_design = [item for item in required if item in FIELD_BY_ID]
     required_materials = [item for item in required if item not in FIELD_BY_ID]
     missing_design = _missing_design_fields(ledger, required_design)
@@ -182,26 +188,34 @@ def _card_for_capability(cap_id: str, raw: dict[str, Any], ledger: dict[str, Any
         "title": raw.get("title") or cap_id.replace("_", " "),
         "description": raw.get("description") or "",
         "stage": raw.get("stage") or node.get("node_id", ""),
-        "biological_question": BIOLOGICAL_QUESTIONS.get(cap_id, raw.get("description") or cap_id.replace("_", " ")),
+        "biological_question": product.get("biological_question") or BIOLOGICAL_QUESTIONS.get(cap_id, raw.get("description") or cap_id.replace("_", " ")),
         "required_design_fields": required_design,
         "required_materials": required_materials,
         "missing": missing,
         "missing_inputs": missing,
         "ready": ready,
-        "prechecks": _prechecks(cap_id),
-        "method_defaults": _method_defaults(cap_id),
-        "expected_observations": list(raw.get("expected_observations") or []),
-        "expected_artifacts": list(raw.get("expected_artifacts") or _expected_artifacts(cap_id)),
-        "expected_plots": _expected_plots(cap_id),
-        "common_errors": COMMON_ERRORS.get(cap_id, []),
-        "repair_hints": REPAIR_HINTS.get(cap_id, []),
+        "prechecks": list(product.get("prechecks") or _prechecks(cap_id)),
+        "method_defaults": product.get("method_defaults") or _method_defaults(cap_id),
+        "expected_observations": list(product.get("expected_observations") or raw.get("expected_observations") or []),
+        "expected_artifacts": list(product.get("expected_artifacts") or raw.get("expected_artifacts") or _expected_artifacts(cap_id)),
+        "expected_plots": list(product.get("expected_plots") or _expected_plots(cap_id)),
+        "common_errors": list(product.get("common_errors") or COMMON_ERRORS.get(cap_id, [])),
+        "repair_hints": list(product.get("repair_hints") or REPAIR_HINTS.get(cap_id, [])),
         "risk_level": raw.get("risk") or "low",
-        "branchable_parameters": BRANCHABLE_BY_CAPABILITY.get(cap_id, []),
+        "branchable_parameters": list(product.get("branchable_parameters") or BRANCHABLE_BY_CAPABILITY.get(cap_id, [])),
         "packages": list(raw.get("packages") or []),
         "functions": list(raw.get("functions") or []),
         "tool_names": list(raw.get("tool_names") or []),
         "next_repair": _next_repair(missing),
     }
+
+
+def _product_contract(raw: dict[str, Any]) -> dict[str, Any]:
+    contract = raw.get("contract") or {}
+    if not isinstance(contract, dict):
+        return {}
+    product = contract.get("product") or contract.get("perturbseq") or {}
+    return product if isinstance(product, dict) else {}
 
 
 def _raw_capabilities_by_id(snap: Snapshot) -> dict[str, dict[str, Any]]:

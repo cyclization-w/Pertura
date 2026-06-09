@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pertura-agent"
 version = "0.2.0"
-description = "Scientific analysis harness for LLM-driven notebooks"
+description = "Perturb-seq native analysis agent with audited notebook execution"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -67,4 +67,4 @@ Issues = "https://github.com/cyclization-w/Pertura/issues"
 include = ["pertura*"]
 
 [tool.setuptools.package-data]
-pertura = ["_gui.html", "frontend_dist/*", "frontend_dist/assets/*"]
+pertura = ["_gui.html"]

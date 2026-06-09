@@ -1,5 +1,10 @@
 # Pertura v2 Context Summary
 
+> Historical note: this file is an archived development context summary. The
+> current product direction is the Perturb-seq native HTML workbench plus a
+> lightweight terminal surface. For canonical usage and architecture, prefer
+> `README.md`, `OPERATOR_GUIDE.md`, `DEVELOPER_GUIDE.md`, and `CLAIMS.md`.
+
 This document summarizes the current Pertura v2 direction, implementation state,
 architecture decisions, and comparisons with related systems. It is intended as
 a handoff note for continuing the project in a new conversation.
