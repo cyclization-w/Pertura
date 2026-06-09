@@ -1,6 +1,7 @@
 # Pertura Claim Verification
 
-Pertura v2 exposes three reviewer-facing claims:
+Pertura's public product is a Perturb-seq native analysis agent. Its reviewer
+surface still exposes three runtime claims that make that product auditable:
 
 ```text
 analysis_graph       user-editable analysis graph + gate
@@ -31,13 +32,16 @@ python -m pertura.claim_tests --json
 
 - `analysis_graph`: editable graph specs audit cleanly, C-tier gates block
   missing design authority, and interrupts are opened instead of silently
-  crossing blocked nodes.
+  crossing blocked nodes. In the product UI, this backs the Perturb-seq Flow
+  and structured clarification actions.
 - `observation_memory`: repeated scientific observations are grouped by
   variable and expose conflict, coverage, divergence, method, branch, and
-  intent context.
+  intent context. In the product UI, this backs the Evidence Board and report
+  preview.
 - `deliberative_audit`: missing capability declarations are blocked, evidence
   chain review verifies successful support, and `plan_rethinking` exposes a
-  trace/repair action menu for questionable results.
+  trace/repair action menu for questionable results. In the product UI, this
+  backs audited repair and live agent status.
 
 ## Capsule Verification
 

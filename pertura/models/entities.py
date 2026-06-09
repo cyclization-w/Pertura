@@ -319,6 +319,8 @@ class Snapshot(BaseModel):
     capabilities: list[dict] = Field(default_factory=list)
     disabled_capabilities: list[str] = Field(default_factory=list)
     analysis_spec: dict[str, Any] = Field(default_factory=dict)
+    analysis_spec_draft: dict[str, Any] = Field(default_factory=dict)
+    workflow_draft_meta: dict[str, Any] = Field(default_factory=dict)
     active_node_id: str = ""
     design: dict[str, Any] = Field(default_factory=dict)
     design_meta: dict[str, Any] = Field(default_factory=dict)

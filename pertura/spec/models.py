@@ -53,6 +53,7 @@ class AnalysisEdgeSpec(BaseModel):
     source: str
     target: str
     edge_type: str = "next"
+    auto: bool = True
     condition_ids: list[str] = Field(default_factory=list)
     description: str = ""
 

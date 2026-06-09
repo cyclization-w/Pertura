@@ -57,6 +57,15 @@ class ConsoleTurnRequest(BaseModel):
     answers: dict = {}
 
 
+class WorkflowDraftRequest(BaseModel):
+    analysis_spec: dict
+    reason: str = "workflow_builder"
+
+
+class WorkflowApplyRequest(BaseModel):
+    reason: str = "workflow_builder_apply"
+
+
 def analysis_spec_audit_payload(workbench, *, run_id: str = "", strict: bool = False) -> dict:
     from pertura.spec.contracts import audit_analysis_graph
     spec = _analysis_spec_for_workbench(workbench, run_id=run_id)
@@ -159,6 +168,18 @@ def domain_browser_payload(workbench, *, include_core_tools: bool = True) -> dic
     return workbench.domain.describe(include_core_tools=include_core_tools)
 
 
+def workflow_builder_payload(workbench, *, run_id: str = "") -> dict:
+    from pertura.product.perturbseq import workflow_builder_view
+
+    snap = _snapshot_for_workbench(workbench, run_id=run_id)
+    return workflow_builder_view(
+        snap=snap,
+        domain=workbench.domain,
+        run_id=run_id or getattr(workbench, "_run_id", ""),
+        capabilities=_capability_registry_for_workbench(workbench, run_id=run_id),
+    )
+
+
 def workbench_view_payload(
     workbench,
     *,
@@ -229,7 +250,8 @@ def workbench_view_payload(
     ][-max_items:]
     recent_attempts = [_attempt_card(item, snap=snap) for item in ((snap.attempts if snap else []) or [])[-max_items:]]
     artifact_summary = [_artifact_card(item) for item in ((snap.artifacts if snap else []) or [])[-max_items:]]
-    runtime_events = _runtime_event_cards(store.read_events()[-max_items * 4:] if store else [], max_items=max_items)
+    recent_events = store.read_events()[-max_items * 6:] if store else []
+    runtime_events = _runtime_event_cards(recent_events, max_items=max_items)
     capability_view = capabilities_view_payload(workbench, run_id=run_id, node_id=active_node_id, max_items=100)
     active_work_order = {}
     if snap:
@@ -244,6 +266,19 @@ def workbench_view_payload(
             trace_driven_rethinking=(context_review or {}).get("trace_driven_rethinking", {}),
             tool_names=visible_tools,
         )
+    perturbseq_view = {}
+    if snap and getattr(snap, "domain", "") == "perturbseq":
+        from pertura.product.perturbseq import compile_perturbseq_view
+
+        perturbseq_view = compile_perturbseq_view(
+            snap,
+            events=recent_events,
+            navigation=(active_work_order.get("navigation") or {}),
+        )
+        if active_work_order:
+            active_work_order["perturbseq"] = perturbseq_view
+            if perturbseq_view.get("turn_card_markdown"):
+                active_work_order["markdown"] = perturbseq_view["turn_card_markdown"]
 
     domain_payload = domain_browser_payload(workbench, include_core_tools=False)
     runtime_jobs = [_model_dump(item) for item in ((snap.jobs if snap else []) or [])]
@@ -311,6 +346,7 @@ def workbench_view_payload(
             "active_work_order": active_work_order,
             "candidate_actions": candidate_actions,
         },
+        "perturbseq": perturbseq_view,
         "agent_context": context_review,
         "review": {
             "open_interrupts": open_interrupts,
@@ -323,6 +359,7 @@ def workbench_view_payload(
             "recent_attempts": recent_attempts,
             "jobs": (runtime_jobs + queue_jobs)[:max_items],
             "runtime_events": runtime_events,
+            "product_events": (perturbseq_view.get("product_timeline") or [])[:max_items],
         },
         "artifacts": {
             "recent": artifact_summary,
@@ -388,6 +425,12 @@ def capabilities_view_payload(workbench, *, run_id: str = "", node_id: str = "",
         item["function"]["name"]
         for item in tool_schemas(snap=snap, scoped=True)
     }
+    if snap and getattr(snap, "domain", "") == "perturbseq":
+        from pertura.product.perturbseq import compile_design_ledger, compile_capability_catalog
+
+        ledger = compile_design_ledger(snap)
+        catalog = compile_capability_catalog(snap, ledger, active_node_id=active_node_id)
+        visible_tool_names -= set(catalog.get("hidden_tool_ids") or [])
     tool_surface = _llm_tool_surface(
         snap=snap,
         visible_tool_names=visible_tool_names,
@@ -817,68 +860,17 @@ def _runtime_event_cards(events: list, *, max_items: int) -> list[dict]:
 
 
 def _product_event_cards(events: list, *, max_items: int) -> list[dict]:
-    interesting = {
-        "goal_recorded": "planning",
-        "node_transition_requested": "planning",
-        "node_entered": "planning",
-        "attempt_planned": "running_code",
-        "execution_output": "execution_output",
-        "outcome_recorded": "result_recorded",
-        "artifact_registered": "artifact_ready",
-        "interrupt_opened": "question_opened",
-        "finding_recorded": "blocked",
-        "patch_proposed": "repair_proposed",
-        "patch_applied": "repair_applied",
-        "patch_rejected": "blocked",
-        "run_complete": "complete",
-        "job_submitted": "running_code",
-        "job_completed": "result_recorded",
-    }
-    cards = []
-    for event in reversed(events or []):
-        kind = interesting.get(event.event_type)
-        if not kind:
-            continue
-        payload = event.payload or {}
-        cards.append({
-            "event_id": event.event_id,
-            "event_type": event.event_type,
-            "product_type": kind,
-            "timestamp": str(event.timestamp),
-            "title": _product_event_title(kind, event.event_type, payload),
-            "summary": _event_card_summary(event.event_type, payload),
-        })
-        if len(cards) >= max_items:
-            break
-    return list(reversed(cards))
+    try:
+        from pertura.product.perturbseq import compile_product_timeline
+
+        return compile_product_timeline(events or [], max_items=max_items)
+    except Exception:
+        return []
 
 
 def _sse_event(event_type: str, payload: dict) -> str:
     import json
     return f"event: {event_type}\ndata: {json.dumps(payload, default=str)}\n\n"
-
-
-def _product_event_title(kind: str, event_type: str, payload: dict) -> str:
-    if kind == "planning":
-        return _event_card_title(event_type, payload) or "Planning"
-    if kind == "running_code":
-        return _event_card_title(event_type, payload) or "Running code"
-    if kind == "execution_output":
-        return _event_card_title(event_type, payload)
-    if kind == "artifact_ready":
-        return f"Artifact ready: {_event_card_title(event_type, payload)}"
-    if kind == "question_opened":
-        return "Question needs input"
-    if kind == "repair_proposed":
-        patch = payload.get("patch") or {}
-        return patch.get("rationale") or "Repair proposed"
-    if kind == "repair_applied":
-        return "Repair applied"
-    if kind == "complete":
-        return "Analysis complete"
-    if kind == "blocked":
-        return _event_card_title(event_type, payload) or "Blocked"
-    return kind.replace("_", " ")
 
 
 def _looks_like_report_request(message: str) -> bool:
@@ -1085,6 +1077,76 @@ def create_app(workbench, *, ui: str = "auto"):
         payload["candidate_actions"] = payload["execution_state"].get("candidate_actions", [])
         return payload
 
+    def _patch_get(patch, key: str):
+        if isinstance(patch, dict):
+            return patch.get(key)
+        return getattr(patch, key, None)
+
+    def _handle_repair_action(action_id: str):
+        snap = _snapshot_for_run()
+        if snap is None:
+            raise HTTPException(400, "No active run")
+        if ":" not in action_id:
+            raise HTTPException(400, "Repair action requires a patch id")
+        action, patch_id = action_id.split(":", 1)
+        patch = next(
+            (item for item in reversed(list(getattr(snap, "patch_proposals", []) or []))
+             if _patch_get(item, "patch_id") == patch_id),
+            None,
+        )
+        if patch is None:
+            raise HTTPException(404, f"Unknown repair patch: {patch_id}")
+        if _patch_get(patch, "status") != "proposed":
+            raise HTTPException(400, f"Repair patch is already {_patch_get(patch, 'status')}")
+        if workbench._controller is None:
+            from pertura.core import GraphController
+
+            store = _store_for_run()
+            if store is None:
+                raise HTTPException(400, "No event store is available")
+            workbench._controller = GraphController(store, getattr(workbench, "_run_id", "") or snap.run_id)
+        if action == "reject_repair":
+            workbench._controller.reject_patch(patch_id, "Rejected from analysis console.")
+            return _console_state_payload({"handled": "reject_repair", "patch_id": patch_id})
+        if action != "retry_repair":
+            raise HTTPException(400, f"Unknown repair action: {action}")
+
+        payload = _patch_get(patch, "payload") or {}
+        fixed_code = str(payload.get("fixed_code") or "").strip()
+        parent_attempt_id = str(payload.get("parent_attempt_id") or "")
+        if not fixed_code or not parent_attempt_id:
+            raise HTTPException(400, "Repair patch is missing fixed_code or parent_attempt_id")
+        parent_attempt = next(
+            (item for item in getattr(snap, "attempts", []) or [] if item.attempt_id == parent_attempt_id),
+            None,
+        )
+        if parent_attempt is None:
+            raise HTTPException(404, f"Unknown parent attempt: {parent_attempt_id}")
+        from pertura.agent.gated_dispatch import gated_dispatch
+
+        assessment = {"status": "user_approved_repair", "summary": _patch_get(patch, "rationale") or "User approved repair"}
+        decision = {
+            "reason": _patch_get(patch, "rationale") or "User approved repair",
+            "capability_ids": list(getattr(parent_attempt, "capability_ids", []) or []),
+            "parent_attempt_id": parent_attempt_id,
+            "repair_patch_id": patch_id,
+        }
+        dispatch_action = gated_dispatch(workbench, "retry", fixed_code, assessment, decision, snap, parent_attempt=parent_attempt)
+        if dispatch_action != "planned_attempt":
+            return _console_state_payload({
+                "handled": "retry_repair_blocked",
+                "patch_id": patch_id,
+                "dispatch_action": dispatch_action,
+            })
+        workbench._emit("patch_applied", {"patch_id": patch_id, "event_ids": []})
+        payload = _submit_agent_job("agent_continue", AgentRunRequest())
+        return _console_state_payload({
+            "handled": "retry_repair",
+            "patch_id": patch_id,
+            "dispatch_action": dispatch_action,
+            **payload,
+        })
+
     runner.register_handler("run", _run_with_cancel)
     runner.register_handler("step", _step_with_cancel)
     runner.register_handler("agent_run", _agent_with_cancel)
@@ -1213,6 +1275,64 @@ def create_app(workbench, *, ui: str = "auto"):
     @app.get("/api/analysis-spec")
     def analysis_spec(run_id: str = ""):
         return _analysis_spec_for_run(run_id)
+
+    @app.get("/api/workflow-builder")
+    def workflow_builder(run_id: str = ""):
+        return workflow_builder_payload(workbench, run_id=run_id)
+
+    @app.post("/api/workflow-builder/draft")
+    def workflow_builder_draft(req: WorkflowDraftRequest):
+        if workbench._store is None:
+            raise HTTPException(409, "Start or initialize a run before saving a workflow draft.")
+        from pertura.product.perturbseq.workflow_builder import normalize_workflow_spec
+
+        spec = normalize_workflow_spec(req.analysis_spec)
+        workbench._emit("analysis_spec_draft_saved", {
+            "analysis_spec": spec,
+            "reason": req.reason,
+        })
+        return workflow_builder_payload(workbench)
+
+    @app.post("/api/workflow-builder/apply")
+    def workflow_builder_apply(req: WorkflowApplyRequest):
+        if workbench._store is None:
+            raise HTTPException(409, "Start or initialize a run before applying a workflow draft.")
+        snap = workbench._store.read_snapshot()
+        draft = getattr(snap, "analysis_spec_draft", {}) or {}
+        if not draft:
+            raise HTTPException(400, "No workflow draft to apply.")
+        from pertura.product.perturbseq.workflow_builder import normalize_workflow_spec
+        from pertura.spec.contracts import audit_analysis_graph
+
+        spec = normalize_workflow_spec(draft)
+        audit = audit_analysis_graph(spec, capabilities=_capability_registry_for_workbench(workbench))
+        if audit.get("errors"):
+            raise HTTPException(400, {"message": "Workflow draft has errors.", "audit": audit})
+        workbench.domain.analysis_graph = spec
+        workbench._emit("analysis_spec_draft_applied", {
+            "analysis_spec": spec,
+            "reason": req.reason,
+        })
+        fresh = workbench._store.read_snapshot()
+        active_exists = any(
+            item.get("node_id") == getattr(fresh, "active_node_id", "")
+            for item in (getattr(fresh, "analysis_spec", {}) or {}).get("nodes", [])
+        )
+        start = (getattr(fresh, "analysis_spec", {}) or {}).get("start_node_id", "")
+        if start and not active_exists:
+            workbench._emit("node_entered", {
+                "node_id": start,
+                "branch_id": getattr(fresh, "active_branch", "main"),
+                "reason": "workflow_builder_apply",
+            })
+        return workbench_view_payload(workbench, max_items=8, include_debug=False)
+
+    @app.post("/api/workflow-builder/reset")
+    def workflow_builder_reset(req: WorkflowApplyRequest):
+        if workbench._store is None:
+            raise HTTPException(409, "Start or initialize a run before clearing a workflow draft.")
+        workbench._emit("analysis_spec_draft_cleared", {"reason": req.reason})
+        return workflow_builder_payload(workbench)
 
     @app.get("/api/domain")
     def domain_browser(include_core_tools: bool = True):
@@ -1365,6 +1485,8 @@ def create_app(workbench, *, ui: str = "auto"):
 
         if action_id == "pause":
             return agent_pause()
+        if action_id.startswith(("retry_repair:", "reject_repair:")):
+            return _handle_repair_action(action_id)
 
         if snap and (action_id == "generate_report" or _looks_like_report_request(message)):
             report_payload = workbench.report()

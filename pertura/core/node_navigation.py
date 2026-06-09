@@ -87,6 +87,14 @@ def evaluate_node_navigation(snap: Snapshot | None) -> dict[str, Any]:
         )
 
     selected = _select_next_candidate(candidates)
+    if not selected:
+        return _decision(
+            "stay",
+            "Current node completion gate passed, but no configured next node is ready to enter.",
+            current_id=current_id,
+            roadmap=roadmap,
+            candidates=candidates,
+        )
     return _decision(
         "advance",
         f"Current node completion gate passed; next node candidate is {selected['node_id']}.",
@@ -110,9 +118,7 @@ def _roadmap(spec, current_id: str) -> dict[str, Any]:
     ids = [node.node_id for node in nodes]
     current_index = ids.index(current_id) if current_id in ids else -1
     current = spec.node(current_id)
-    next_ids = list(getattr(current, "next_nodes", []) or []) if current else []
-    if not next_ids and current:
-        next_ids = [node.node_id for node in spec.reachable_from(current_id) if node.node_id != current_id]
+    next_ids = _explicit_next_node_ids(spec, current_id)
     return {
         "current_index": current_index + 1 if current_index >= 0 else 0,
         "total_nodes": len(nodes),
@@ -126,15 +132,11 @@ def _next_candidates(evaluator: GateEvaluator, snap: Snapshot, current_id: str) 
     spec = evaluator.spec
     if spec is None:
         return []
-    current = spec.node(current_id)
-    candidate_nodes = spec.reachable_from(current_id)
-    if current and current.next_nodes:
-        ordered = []
-        for node_id in current.next_nodes:
-            node = spec.node(node_id)
-            if node is not None:
-                ordered.append(node)
-        candidate_nodes = ordered
+    candidate_nodes = []
+    for node_id in _explicit_next_node_ids(spec, current_id):
+        node = spec.node(node_id)
+        if node is not None:
+            candidate_nodes.append(node)
     out: list[dict[str, Any]] = []
     for node in candidate_nodes:
         if node.node_id == current_id:
@@ -155,7 +157,23 @@ def _select_next_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any]:
     for item in candidates:
         if item.get("can_enter"):
             return item
-    return candidates[0]
+    return {}
+
+
+def _explicit_next_node_ids(spec, current_id: str) -> list[str]:
+    current = spec.node(current_id)
+    if current is None:
+        return []
+    out: list[str] = []
+    for node_id in list(getattr(current, "next_nodes", []) or []):
+        if node_id and node_id not in out:
+            out.append(node_id)
+    for edge in getattr(spec, "edges", []) or []:
+        if getattr(edge, "source", "") == current_id:
+            target = getattr(edge, "target", "")
+            if target and target not in out:
+                out.append(target)
+    return out
 
 
 def _blocking_runtime_triggers(snap: Snapshot) -> list[dict[str, Any]]:

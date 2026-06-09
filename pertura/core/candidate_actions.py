@@ -121,11 +121,61 @@ def compile_candidate_actions(
         ])
         return _dedupe_actions(actions)
 
+    perturbseq = work_order.get("perturbseq") or {}
+    design_questions = perturbseq.get("suggested_questions") or []
+    if design_questions:
+        question = design_questions[0]
+        field_id = question.get("field_id", "")
+        actions.append(_action(
+            f"answer_question:{field_id}",
+            "answer_question",
+            f"Confirm {field_id.replace('_', ' ')}",
+            question.get("question") or "Confirm the missing perturb-seq design field.",
+            primary=not any(item.get("primary") for item in actions),
+            risk_level="low",
+            endpoint="/api/console/turn",
+            method="POST",
+            payload={"action_id": "answer_question", "field_id": field_id},
+            options=question.get("options") or [],
+            fields=[{
+                "field_id": field_id,
+                "label": field_id.replace("_", " "),
+                "required": True,
+                "kind": "text",
+            }],
+        ))
+
     repair_issues = [
         item for item in (execution_state.get("issues") or [])
         if item.get("kind") in {"repair_issue", "audit_issue"}
     ]
-    if mode == "repairing" or repair_issues:
+    pending_repair = _pending_repair_patch(snap)
+    if pending_repair:
+        patch_id = pending_repair.get("patch_id", "")
+        actions.append(_action(
+            f"retry_repair:{patch_id}",
+            "retry_repair",
+            "Apply repair",
+            pending_repair.get("rationale") or "Apply the proposed retry through the audited gate.",
+            primary=True,
+            risk_level=pending_repair.get("risk_level") or "medium",
+            endpoint="/api/console/turn",
+            method="POST",
+            payload={"action_id": f"retry_repair:{patch_id}"},
+            evidence_refs=[pending_repair.get("parent_attempt_id", "")],
+        ))
+        actions.append(_action(
+            f"reject_repair:{patch_id}",
+            "review_repair",
+            "Reject repair",
+            "Reject this repair proposal and continue planning.",
+            risk_level="low",
+            endpoint="/api/console/turn",
+            method="POST",
+            payload={"action_id": f"reject_repair:{patch_id}"},
+            evidence_refs=[pending_repair.get("parent_attempt_id", "")],
+        ))
+    elif mode == "repairing" or repair_issues:
         issue = repair_issues[0] if repair_issues else {}
         actions.append(_action(
             "review_repair",
@@ -218,6 +268,28 @@ def _question_action(question: dict[str, Any]) -> dict[str, Any]:
         fields=(question.get("form") or {}).get("fields") or [],
         evidence_refs=question.get("affected_ids") or [],
     )
+
+
+def _pending_repair_patch(snap) -> dict[str, Any]:
+    for patch in reversed(list(getattr(snap, "patch_proposals", []) or [])):
+        patch_type = _patch_get(patch, "patch_type")
+        status = _patch_get(patch, "status")
+        payload = _patch_get(patch, "payload") or {}
+        if patch_type != "attempt_retry" or status != "proposed":
+            continue
+        return {
+            "patch_id": _patch_get(patch, "patch_id") or "",
+            "rationale": _patch_get(patch, "rationale") or payload.get("rationale", ""),
+            "parent_attempt_id": payload.get("parent_attempt_id", ""),
+            "risk_level": payload.get("risk_level", "medium"),
+        }
+    return {}
+
+
+def _patch_get(patch, key: str):
+    if isinstance(patch, dict):
+        return patch.get(key)
+    return getattr(patch, key, None)
 
 
 def _mode_from_snapshot(snap, jobs: list[dict[str, Any]]) -> str:

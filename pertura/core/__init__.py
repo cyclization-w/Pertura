@@ -45,6 +45,7 @@ from .work_order import build_active_work_order, render_active_work_order
 from .execution_state import compile_execution_state, compile_runtime_issues
 from .candidate_actions import compile_candidate_actions
 from .node_navigation import evaluate_node_navigation
+from .workflow_controller import evaluate_workflow_autopilot, workflow_gap
 from pertura.spec.gating import GateEvaluator, GateDecision
 
 __all__ = [
@@ -74,6 +75,6 @@ __all__ = [
     "build_harness_manifest", "harness_thesis", "harness_vocabulary",
     "build_active_work_order", "render_active_work_order",
     "compile_execution_state", "compile_runtime_issues", "compile_candidate_actions",
-    "evaluate_node_navigation",
+    "evaluate_node_navigation", "evaluate_workflow_autopilot", "workflow_gap",
     "GateEvaluator", "GateDecision",
 ]

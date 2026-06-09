@@ -59,6 +59,14 @@ def build_active_work_order(
     runtime_issues = compile_runtime_issues(snap)
     from .node_navigation import evaluate_node_navigation
     navigation = evaluate_node_navigation(snap)
+    from .workflow_controller import workflow_gap
+    gap = workflow_gap(snap)
+    perturbseq_view = _perturbseq_projection(
+        snap,
+        navigation=navigation,
+        outcome_text=outcome_text,
+        last_attempt_delta=last_attempt_delta,
+    )
     mode = _work_order_mode(open_interrupts, open_triggers, recent_findings, audit_preview, rethink)
     missing = _missing_items(progress, audit_preview)
     recommended = _recommended_actions(
@@ -95,6 +103,13 @@ def build_active_work_order(
         "selected_capability": _selected_capability(capabilities),
         "observation_memory": observation_memory,
         "navigation": navigation,
+        "workflow_gap": gap,
+        "perturbseq": perturbseq_view,
+        "node_execution_guidance": _node_execution_guidance(
+            navigation=navigation,
+            progress=progress,
+            capabilities=capabilities,
+        ),
         "open_interrupts": open_interrupts[:3],
         "open_issues": {
             "runtime_issues": runtime_issues[:8],
@@ -113,8 +128,26 @@ def build_active_work_order(
             "raw_state_mutation_allowed": False,
         },
     }
+    if perturbseq_view:
+        catalog = perturbseq_view.get("capability_catalog") or {}
+        product_caps = catalog.get("cards") or []
+        selected = catalog.get("selected_capability") or {}
+        product_guidance = perturbseq_view.get("node_execution_guidance") or {}
+        if product_caps:
+            payload["available_capabilities"] = product_caps[:8]
+        if selected:
+            payload["selected_capability"] = selected
+        if product_guidance.get("primary_instruction"):
+            payload["node_execution_guidance"] = product_guidance
+        payload["recommended_actions"] = _perturbseq_recommended_actions(
+            perturbseq_view,
+            fallback=payload.get("recommended_actions", []),
+        )
     candidate_path = _dataset_candidate_path(payload["workspace"]["files"], snap.workspace)
-    if candidate_path:
+    dataset_loaded = bool(
+        ((perturbseq_view.get("design_ledger") or {}).get("dataset_profile") or {}).get("loaded")
+    ) if perturbseq_view else False
+    if candidate_path and not dataset_loaded:
         payload["dataset_load_plan"] = {
             "path": candidate_path,
             "instruction": "Call load_dataset(path=...) first, then execute the returned code with capability_ids=['load_dataset'].",
@@ -123,7 +156,10 @@ def build_active_work_order(
             payload.get("recommended_actions", []),
             candidate_path,
         )
-    payload["markdown"] = render_active_work_order(payload)
+    if perturbseq_view:
+        payload["markdown"] = perturbseq_view.get("turn_card_markdown") or render_active_work_order(payload)
+    else:
+        payload["markdown"] = render_active_work_order(payload)
     return payload
 
 
@@ -159,6 +195,26 @@ def render_active_work_order(work_order: dict[str, Any]) -> str:
         for item in (navigation.get("candidates") or [])[:3]:
             marker = "ready" if item.get("can_enter") else item.get("decision", "blocked")
             lines.append(f"- candidate {item.get('node_id')}: {marker} {_line(item.get('reason') or item.get('purpose') or '')}")
+    gap = work_order.get("workflow_gap") or {}
+    if gap:
+        lines.extend([
+            "",
+            "## Workflow Gap",
+            f"- gap type: {gap.get('gap_type', 'none')}",
+            f"- next runtime action: {gap.get('next_runtime_action', 'continue')}",
+            f"- reason: {_line(gap.get('reason') or '')}",
+        ])
+        for item in (gap.get("missing") or [])[:5]:
+            lines.append(f"- missing: {_line(item)}")
+    guidance = work_order.get("node_execution_guidance") or {}
+    if guidance:
+        lines.extend(["", "## Execution Guidance"])
+        if guidance.get("primary_instruction"):
+            lines.append(f"- primary: {_line(guidance.get('primary_instruction'))}")
+        for item in (guidance.get("avoid_actions") or [])[:5]:
+            lines.append(f"- avoid: {_line(item)}")
+        for item in (guidance.get("preferred_tools") or [])[:5]:
+            lines.append(f"- prefer tool: {_line(item)}")
     lines.extend([
         "",
         "## Node Progress",
@@ -380,6 +436,54 @@ def _compact_rethinking(payload: dict[str, Any]) -> dict[str, Any]:
         "suspected_roots": (payload.get("suspected_roots") or [])[:5],
         "recommended_actions": (payload.get("recommended_actions") or [])[:5],
     }
+
+
+def _perturbseq_projection(
+    snap: Snapshot,
+    *,
+    navigation: dict[str, Any],
+    outcome_text: str = "",
+    last_attempt_delta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if getattr(snap, "domain", "") != "perturbseq":
+        return {}
+    try:
+        from pertura.product.perturbseq import compile_perturbseq_view
+
+        return compile_perturbseq_view(
+            snap,
+            navigation=navigation,
+            outcome_text=outcome_text,
+            last_attempt_delta=last_attempt_delta,
+        )
+    except Exception as exc:
+        return {
+            "view_type": "perturbseq_workbench",
+            "error": str(exc),
+        }
+
+
+def _perturbseq_recommended_actions(perturbseq_view: dict[str, Any], *, fallback: list[str]) -> list[str]:
+    navigation = perturbseq_view.get("navigation") or {}
+    if navigation.get("status") == "advance":
+        target = navigation.get("target_node_id") or "next node"
+        return [f"complete current stage, then request_node_transition(target_node_id={target!r})"]
+    if navigation.get("status") == "complete":
+        return ["complete_node or finish/report; do not run another inspection cell"]
+    questions = perturbseq_view.get("suggested_questions") or []
+    if questions:
+        first = questions[0]
+        return [f"ask_user to confirm {first.get('field_id')}: {first.get('question')}"]
+    ready = perturbseq_view.get("ready_capabilities") or []
+    if ready:
+        cap_id = ready[0].get("id")
+        return [f"execute_code with capability_ids=['{cap_id}']"]
+    blocked = perturbseq_view.get("blocked_capabilities") or []
+    if blocked:
+        missing = blocked[0].get("missing") or []
+        if missing:
+            return [f"resolve missing input: {missing[0]}"]
+    return list(fallback or [])[:5]
 
 
 def _dedupe(values: list[str]) -> list[str]:
@@ -673,6 +777,66 @@ def _selected_capability(capabilities: list[dict[str, Any]]) -> dict[str, Any]:
         if cap.get("ready") and not cap.get("missing"):
             return cap
     return capabilities[0]
+
+
+def _node_execution_guidance(
+    *,
+    navigation: dict[str, Any],
+    progress: dict[str, Any],
+    capabilities: list[dict[str, Any]],
+) -> dict[str, Any]:
+    status = str((navigation or {}).get("status") or "")
+    observations = int(progress.get("observations") or 0)
+    artifacts = int(progress.get("artifacts") or 0)
+    attempts = int(progress.get("attempts") or 0)
+    completed = bool(progress.get("completed"))
+    material_output = observations > 0 or artifacts > 0
+    selected_id = str((capabilities[0] if capabilities else {}).get("id") or "")
+    guidance: dict[str, Any] = {
+        "material_output": material_output,
+        "preferred_tools": [],
+        "avoid_actions": [],
+    }
+    if status == "advance":
+        target = navigation.get("target_node_id") or "the ready next node"
+        guidance["primary_instruction"] = (
+            f"Current node has passed completion. Do not run another inspection cell; call "
+            f"complete_node if needed, then request_node_transition to {target}."
+        )
+        guidance["preferred_tools"] = ["complete_node", "request_node_transition"]
+        guidance["avoid_actions"] = ["Do not repeat inspect/load code for this completed node."]
+    elif status == "complete":
+        guidance["primary_instruction"] = (
+            "Current node has passed completion and has no configured next node. "
+            "Complete the node or finish/report instead of running more code."
+        )
+        guidance["preferred_tools"] = ["complete_node", "finish"]
+        guidance["avoid_actions"] = ["Do not execute another cell unless the user asks for extra evidence."]
+    elif completed:
+        guidance["primary_instruction"] = (
+            "This node visit is already completed. Request a transition, finish, or ask the user."
+        )
+        guidance["preferred_tools"] = ["request_node_transition", "finish", "ask_user"]
+        guidance["avoid_actions"] = ["Do not execute code in a completed node."]
+    elif material_output and attempts:
+        guidance["primary_instruction"] = (
+            "This node already has registered output. Inspect missing completion gates first; "
+            "complete or transition if the gates are satisfied."
+        )
+        guidance["preferred_tools"] = ["evaluate_node_conditions", "complete_node", "request_node_transition"]
+        guidance["avoid_actions"] = [
+            "Do not repeat the same workspace/data inspection unless a specific missing gate requires it."
+        ]
+    elif selected_id:
+        guidance["primary_instruction"] = (
+            f"Use the selected capability `{selected_id}` once to create registered evidence, "
+            "then reassess completion before rerunning."
+        )
+        guidance["preferred_tools"] = ["get_capability_template", "load_dataset", "execute_code"]
+    else:
+        guidance["primary_instruction"] = "Choose one meaningful scientific action, then reassess."
+        guidance["preferred_tools"] = ["execute_code", "ask_user"]
+    return guidance
 
 
 def _input_available(snap: Snapshot, item: str) -> bool:

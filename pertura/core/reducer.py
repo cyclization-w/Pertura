@@ -155,6 +155,40 @@ def _apply(snap: Snapshot, e: Event):
                 break
     elif e.event_type == "analysis_spec_loaded":
         snap.analysis_spec = p.get("analysis_spec", {})
+    elif e.event_type == "analysis_spec_draft_saved":
+        snap.analysis_spec_draft = p.get("analysis_spec", {}) or {}
+        snap.workflow_draft_meta = {
+            "status": "draft",
+            "event_id": e.event_id,
+            "actor": e.actor,
+            "reason": p.get("reason", ""),
+            "updated_at": e.timestamp,
+        }
+    elif e.event_type == "analysis_spec_draft_applied":
+        snap.analysis_spec = p.get("analysis_spec", {}) or {}
+        snap.analysis_spec_draft = {}
+        snap.workflow_draft_meta = {
+            "status": "applied",
+            "event_id": e.event_id,
+            "actor": e.actor,
+            "reason": p.get("reason", ""),
+            "updated_at": e.timestamp,
+        }
+        active_exists = any(
+            item.get("node_id") == snap.active_node_id
+            for item in (snap.analysis_spec or {}).get("nodes", [])
+        )
+        if not active_exists:
+            snap.active_node_id = (snap.analysis_spec or {}).get("start_node_id", "")
+    elif e.event_type == "analysis_spec_draft_cleared":
+        snap.analysis_spec_draft = {}
+        snap.workflow_draft_meta = {
+            "status": "cleared",
+            "event_id": e.event_id,
+            "actor": e.actor,
+            "reason": p.get("reason", ""),
+            "updated_at": e.timestamp,
+        }
     elif e.event_type == "capabilities_loaded":
         snap.capabilities = p.get("capabilities", snap.capabilities)
     elif e.event_type == "capability_toggled":

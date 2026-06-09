@@ -113,6 +113,10 @@ PROTOCOL:
 
 NODE NAVIGATION:
 - Treat the Active Work Order's active_node/node_progress as your current contract.
+- Follow the Active Work Order's Execution Guidance before choosing tools. When
+  it says the current node has material output or is ready to advance, do not
+  repeat the same inspect/load cell. Complete the node or request the ready
+  transition first.
 - If the current node is suitable, do useful analysis rather than managing the
   graph. If the scientific task clearly belongs to another stage, request a
   transition and let the harness gate it.
@@ -122,6 +126,8 @@ NODE NAVIGATION:
 - Before calling complete_node, check current_node_progress.completion and missing_completion.
 - If a condition is missing and computable, run code or validators. If it requires human authority, ask_user.
 - Use recommended_actions as suggestions, not a fixed script. Use allowed_capabilities as your action menu.
+- Register observations/artifacts as soon as code finds useful evidence; node
+  navigation depends on registered evidence, not just printed stdout.
 """
 
 
@@ -249,8 +255,9 @@ class Workbench:
             action = self._step()
             result["turns"] += 1
             result["actions"].append(action)
-            result["actions"].extend(self._post_step_maintenance(action))
-            if self._cancel_requested() or action == "cancelled":
+            maintenance_actions = self._post_step_maintenance(action)
+            result["actions"].extend(maintenance_actions)
+            if self._cancel_requested() or action == "cancelled" or "cancelled" in maintenance_actions:
                 result["stop_reason"] = "cancelled"
                 return result
 
@@ -259,7 +266,7 @@ class Workbench:
             if interrupt_reason:
                 result["stop_reason"] = interrupt_reason
                 return result
-            if action == "complete" or (snap is not None and snap.phase == "complete"):
+            if action == "complete" or "complete" in maintenance_actions or (snap is not None and snap.phase == "complete"):
                 result["stop_reason"] = "complete"
                 return result
 
@@ -339,6 +346,10 @@ class Workbench:
         snap = self._store.read_snapshot()
         for intr in snap.interrupts:
             if intr.interrupt_id == interrupt_id and intr.status == "open":
+                choose_next = getattr(intr, "default_action", "") == "choose_next_node"
+                target_node_id = ""
+                if choose_next:
+                    target_node_id = _resolve_interrupt_option(response, getattr(intr, "options", []) or [])
                 self._emit("interrupt_resolved",
                           {"interrupt_id": interrupt_id, "answer": response})
                 from pertura.spec.design_answer import (
@@ -360,6 +371,23 @@ class Workbench:
                 if intr.trigger_id:
                     self._emit("trigger_resolved",
                               {"trigger_id": intr.trigger_id, "answer": response})
+                if choose_next and target_node_id:
+                    from pertura.agent.gated_dispatch import gated_dispatch
+
+                    fresh = self._store.read_snapshot()
+                    action = gated_dispatch(
+                        self,
+                        "request_node_transition",
+                        "",
+                        {"summary": f"User chose next workflow stage {target_node_id}."},
+                        {
+                            "target_node_id": target_node_id,
+                            "reason": f"workflow_autopilot_choice:{interrupt_id}",
+                        },
+                        fresh,
+                    )
+                    if action in {"waiting_for_human", "blocked"}:
+                        return
                 self._emit("run_resumed", {})
                 return
         raise ValueError(f"No open interrupt found: {interrupt_id}")
@@ -428,38 +456,52 @@ class Workbench:
         return actions
 
     def _apply_auto_navigation(self, snap) -> list[str]:
-        from pertura.core.node_navigation import evaluate_node_navigation
+        from pertura.core.workflow_controller import evaluate_workflow_autopilot
         from pertura.agent.gated_dispatch import gated_dispatch
 
-        nav = evaluate_node_navigation(snap)
-        status = nav.get("status", "")
-        if status not in {"complete", "advance"}:
+        decision = evaluate_workflow_autopilot(snap)
+        action_name = decision.get("action", "")
+        if action_name not in {"auto_complete", "auto_advance", "choose_next"}:
             return []
-        current_id = nav.get("current_id") or nav.get("current_node_id") or getattr(snap, "active_node_id", "")
+        current_id = decision.get("current_node_id") or getattr(snap, "active_node_id", "")
         if not current_id:
             return []
+        if action_name == "choose_next":
+            candidates = decision.get("candidates") or []
+            if not candidates:
+                return []
+            if _has_open_workflow_choice(snap, current_id):
+                return ["waiting_for_human"]
+            self._emit("interrupt_opened", {"interrupt": _model_dump(Interrupt(
+                interrupt_id=f"irq_{uuid4().hex[:12]}",
+                source="workflow_autopilot",
+                question="Multiple next workflow stages are ready. Choose which stage should run next.",
+                options=[item.get("node_id", "") for item in candidates if item.get("node_id")],
+                default_action="choose_next_node",
+            ))})
+            return ["waiting_for_human"]
         actions: list[str] = []
         if not _active_visit_completed(snap, current_id):
             action = gated_dispatch(
                 self,
                 "complete_node",
                 "",
-                {"summary": nav.get("reason", "Auto node completion gate passed.")},
-                {"node_id": current_id, "reason": nav.get("reason", "")},
+                {"summary": decision.get("reason", "Workflow autopilot completion gate passed.")},
+                {"node_id": current_id, "reason": decision.get("reason", "")},
                 snap,
             )
             actions.append(action)
             if action in {"waiting_for_human", "blocked"}:
                 return actions
             snap = self._store.read_snapshot() if self._store else snap
-        target = nav.get("target_node_id", "")
-        if status == "advance" and target:
+        target = decision.get("target_node_id", "")
+        if action_name == "auto_advance" and target:
             action = gated_dispatch(
                 self,
                 "request_node_transition",
                 "",
-                {"summary": nav.get("reason", "Auto navigation candidate selected.")},
-                {"target_node_id": target, "reason": nav.get("reason", "")},
+                {"summary": decision.get("reason", "Workflow autopilot selected the single ready next stage.")},
+                {"target_node_id": target, "reason": decision.get("reason", "")},
                 snap,
             )
             actions.append(action)
@@ -632,6 +674,10 @@ class Workbench:
             from pertura.agent.execute import _execute_attempt
             return _execute_attempt(self, active)
 
+        auto_actions = self._apply_auto_navigation(snap)
+        if auto_actions:
+            return auto_actions[-1]
+
         if not _has_key(self.provider):
             self._emit("interrupt_opened", {"interrupt": _model_dump(Interrupt(
                 interrupt_id=f"irq_{uuid4().hex[:12]}",
@@ -720,6 +766,48 @@ def _is_repair_state(snap) -> bool:
         return False
     from pertura.core.execution_state import compile_execution_state
     return compile_execution_state(snap).get("mode") == "repairing"
+
+
+def _resolve_interrupt_option(response: str, options: list[str]) -> str:
+    text = str(response or "").strip()
+    if not text:
+        return ""
+    if text in options:
+        return text
+    lowered = text.lower()
+    for option in options:
+        if lowered == str(option).lower():
+            return option
+    try:
+        import json
+
+        payload = json.loads(text)
+        if isinstance(payload, dict):
+            for key in ("target_node_id", "node_id", "answer", "choice"):
+                value = str(payload.get(key) or "").strip()
+                if value in options:
+                    return value
+                if value:
+                    for option in options:
+                        if value.lower() == str(option).lower():
+                            return option
+    except Exception:
+        pass
+    return text if text in options else ""
+
+
+def _has_open_workflow_choice(snap, current_id: str) -> bool:
+    for intr in getattr(snap, "interrupts", []) or []:
+        if getattr(intr, "status", "") != "open":
+            continue
+        if getattr(intr, "source", "") != "workflow_autopilot":
+            continue
+        if getattr(intr, "default_action", "") != "choose_next_node":
+            continue
+        if current_id and current_id in (getattr(intr, "question", "") or ""):
+            return True
+        return True
+    return False
 
 
 def _active_visit_completed(snap, node_id: str) -> bool:

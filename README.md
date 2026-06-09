@@ -1,12 +1,18 @@
 # Pertura
 
-Pertura is an event-sourced scientific harness for LLM-driven notebook
-analysis.
+Pertura is a Perturb-seq native analysis agent and workbench for LLM-driven
+notebook analysis.
 
-It is designed for autonomous scientific analysis agents that need to explore
-data, run code, keep track of attempts, review weak or suspicious results, and
-trace conclusions back to the code, parameters, artifacts, and observations
-that produced them.
+It is designed for real Perturb-seq analysis sessions: users provide a
+workspace and a scientific goal, then watch the agent resolve design facts,
+run audited code, surface plots/artifacts, ask targeted questions, and trace
+each claim back to the code, parameters, observations, and evidence that
+produced it.
+
+Under that product surface, Pertura still uses an event-sourced runtime with
+gated commits, replayable state, branchable analysis, observation memory, and
+auditable repair. The runtime is the safety layer; the default user experience
+is the Perturb-seq analysis console.
 
 > Status: alpha research software. The core harness and reviewer checks run
 > locally. Real Perturb-seq deployments should validate server dependencies,
@@ -14,19 +20,25 @@ that produced them.
 
 ## What It Provides
 
-- Editable analysis graphs instead of a hard-coded pipeline.
+- A Perturb-seq Analysis Console with a live agent run, Design Ledger,
+  Perturb-seq Flow, Evidence Board, plots, artifacts, and report preview.
+- Candidate actions and structured questions compiled from the current run
+  state, instead of a free-form chat transcript as durable state.
+- Editable Perturb-seq analysis graphs instead of a fixed five-step pipeline.
 - Typed capability contracts instead of exposing raw tools as the scientific
-  API.
+  API; capability cards carry required design fields, prechecks, expected
+  observations/artifacts, common errors, and repair hints.
 - Event-sourced run state for replay, fork, diff, and audit.
 - Observation memory for variable-level scientific provenance.
 - Trace-driven rethinking for failed, stale, weak, negative, or suspicious
   results.
-- A Perturb-seq reference domain pack that starts from matrix-level data.
+- Audited auto-repair for low-risk code failures, with higher-risk repairs
+  routed back to user confirmation.
 
-Pertura is not an agent framework or a workflow engine. It sits below an LLM
-agent and gives it a durable scientific workbench: what stage it is in, what it
-is allowed to do, what evidence it has produced, what remains unresolved, and
-where to trace when something looks wrong.
+Pertura is not a general chat app and not a hidden fixed pipeline. The LLM can
+still reason and choose actions, but the workbench makes those actions
+scientific: every run step is tied to a Perturb-seq stage, capability contract,
+gate, artifact, observation, or interrupt.
 
 ## Install
 
@@ -94,10 +106,12 @@ The GUI shell reads a compact UI contract from:
 GET /api/workbench-view
 ```
 
-Use this as the stable first-screen payload for custom frontends. It combines
-run status, active analysis node, node contract, compact LLM context, review
-state, recent attempts, jobs, artifacts, and report summary without exposing
-the full event log or notebook history.
+Use this as the stable first-screen payload for custom frontends. The primary
+field is `perturbseq`, which contains the Design Ledger, active stage,
+Perturb-seq Flow, ready/blocked capability cards, quality flags, evidence
+board, branch board, and product timeline. Runtime/debug projections remain
+available under `execution_state`, `analysis`, `review`, and `agent_context`,
+but they are no longer the default first-screen model.
 
 The repository also includes an experimental React/Vite frontend in
 `frontend/`. Run it against the FastAPI backend:
@@ -123,6 +137,7 @@ story, and reporting.
 
 | Concept | Meaning |
 | --- | --- |
+| `PerturbSeqView` | Product projection for the GUI and LLM turn card: design ledger, flow, evidence, capability cards, timeline. |
 | `AnalysisGraph` | User-editable analysis nodes, transitions, and gates. |
 | `Capability` | Domain action contract exposed to the LLM, such as `run_de`. |
 | `Tool` | Runtime primitive below capabilities, such as `execute_code`. |
@@ -132,11 +147,12 @@ story, and reporting.
 
 ## What Is Fixed vs User-Authored
 
-Pertura separates the runtime kernel from the domain surface:
+Pertura separates the runtime kernel from the Perturb-seq product surface:
 
 | Layer | Who defines it? | Examples | Notes |
 | --- | --- | --- | --- |
 | Core tools | Pertura core | `execute_code`, `get_context_review`, `trace_upstream`, `audit_run` | Runtime primitives. Domain authors usually do not create these. |
+| Perturb-seq product projection | Pertura product layer | Design Ledger, Flow, Evidence Board, product timeline | The default GUI/API/LLM surface. It is compiled from the event-sourced snapshot. |
 | Capabilities | Domain pack / user | `run_de`, `audit_controls`, `assign_guides` | The action menu shown to the LLM. A capability can use one or more core tools. |
 | Conditions | Core + domain/user | `control_labels_defined`, `workspace_files_available` | Evaluators are provided by core/domain code; users attach them to nodes. Natural-language conditions can remain rubric-only or be compiled. |
 | Design fields | Domain/user + run state | `control_labels`, `guide_column`, `perturbation_modality` | Experimental facts for one run. They should carry a source such as `pi_confirmed`, `api_confirmed`, `data_observed`, or `llm_inferred`. |

@@ -1738,6 +1738,34 @@ def _scoped_tool_names(snap=None) -> set[str]:
         if has_analysis_graph and not getattr(snap, "active_node_id", ""):
             names.difference_update({"execute_code", "submit_job", "retry", "complete_node"})
             names.update({"list_analysis_nodes"})
+        elif has_analysis_graph:
+            try:
+                from pertura.core.node_navigation import evaluate_node_navigation
+
+                nav = evaluate_node_navigation(snap)
+                if nav.get("status") in {"advance", "complete"}:
+                    names.difference_update({
+                        "execute_code",
+                        "submit_job",
+                        "retry",
+                        "load_dataset",
+                        "get_capability_template",
+                    })
+            except Exception:
+                pass
+            try:
+                if getattr(snap, "domain", "") == "perturbseq":
+                    from pertura.product.perturbseq import compile_capability_catalog, compile_design_ledger
+
+                    ledger = compile_design_ledger(snap)
+                    catalog = compile_capability_catalog(
+                        snap,
+                        ledger,
+                        active_node_id=getattr(snap, "active_node_id", ""),
+                    )
+                    names.difference_update(set(catalog.get("hidden_tool_ids") or []))
+            except Exception:
+                pass
 
         try:
             budget = getattr(snap, "budget", None)

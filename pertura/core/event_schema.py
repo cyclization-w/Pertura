@@ -69,6 +69,8 @@ _REQUIRED_KEYS = {
     "behavior_completed": {"behavior_run_id": str},
     "behavior_failed": {"behavior_run_id": str, "error": str},
     "analysis_spec_loaded": {"analysis_spec": dict},
+    "analysis_spec_draft_saved": {"analysis_spec": dict},
+    "analysis_spec_draft_applied": {"analysis_spec": dict},
     "capabilities_loaded": {"capabilities": list},
     "capability_toggled": {"capability_id": str, "enabled": bool},
     "node_entered": {"node_id": str},
@@ -92,6 +94,7 @@ _EMPTY_OR_OPTIONAL_PAYLOADS = {
     "run_paused",
     "run_resumed",
     "run_complete",
+    "analysis_spec_draft_cleared",
 }
 
 
