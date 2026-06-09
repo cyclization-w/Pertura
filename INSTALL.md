@@ -97,7 +97,7 @@ that the harness can:
 
 Local source-tree validation on 2026-06-09:
 
-- Source-tree pytest wrapper: `17 passed`.
+- Source-tree pytest wrapper: `20 passed, 1 skipped`.
 - Analysis-spec harness segment: `239/239 passed`.
 - Analysis graph claim runner: `3/3 passed`.
 - Compile smoke: `python -m compileall pertura` passed.

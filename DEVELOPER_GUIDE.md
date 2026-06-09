@@ -99,6 +99,14 @@ domain.add_capability(
     expected_artifacts=["de_result"],
     expected_observations=["logFC", "p_value"],
     required_inputs=["adata", "control_labels", "target_column"],
+    contract={"product": {
+        "required_design_fields": ["control_labels", "target_column"],
+        "prechecks": ["controls confirmed", "target coverage checked"],
+        "expected_plots": ["volcano_or_ranked_effects"],
+        "common_errors": ["target column missing", "empty contrast"],
+        "repair_hints": ["confirm control labels and target column before retry"],
+        "branchable_parameters": ["de_method", "covariates"],
+    }},
 )
 ```
 
@@ -109,6 +117,20 @@ Minimum useful fields:
 - `expected_artifacts`
 - `expected_observations`
 - optional `packages`, `functions`, `analysis_modes`, `risk`, `backend`
+
+Product-facing optional fields live under `contract.product`:
+
+- `required_design_fields`: design facts the GUI/LLM should resolve first
+- `prechecks`: short checklist shown in capability cards and turn cards
+- `expected_plots`: user-visible plots that make the result inspectable
+- `common_errors`: domain-specific failure patterns for repair prompts
+- `repair_hints`: small fix suggestions for audited retry
+- `branchable_parameters`: knobs suitable for branch/sweep comparison
+
+The Perturb-seq product layer reads `contract.product` first and falls back to
+its built-in defaults only for compatibility. Prefer putting product semantics
+on the capability contract so the GUI, LLM turn card, and terminal dashboard
+all agree.
 
 The harness blocks execution when a node allows capabilities but the LLM does
 not declare the selected capability.
@@ -158,6 +180,28 @@ Useful methods:
 Legacy fields such as `protocol`, `tools`, and `coding_guidelines` are still
 loaded for compatibility, but new domains should prefer graph, capabilities,
 rubrics, and condition context.
+
+## Product Projection
+
+The default product projection is compiled from runtime state, not stored as
+separate UI state:
+
+```text
+Snapshot -> Design Ledger -> Capability Cards -> PerturbSeqView
+```
+
+Use these endpoints while developing a domain pack:
+
+```bash
+pertura --GUI --domain perturbseq
+curl http://127.0.0.1:8765/api/ui-info
+curl http://127.0.0.1:8765/api/workbench-view
+curl http://127.0.0.1:8765/api/workflow-builder
+```
+
+The LLM hot path receives a perturb-seq turn card compiled from this projection.
+Do not add new GUI-only state when a field can be derived from `Snapshot`,
+`AnalysisGraph`, `Design`, or `Capability.contract`.
 
 ## Validation
 

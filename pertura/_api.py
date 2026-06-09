@@ -426,6 +426,10 @@ def workbench_view_payload(
         },
         "report": _report_summary_for_snapshot(snap),
         "links": {
+            "ui_info": "/api/ui-info",
+            "workbench_view": "/api/workbench-view",
+            "console_turn": "/api/console/turn",
+            "workflow_builder": "/api/workflow-builder",
             "graph": "/api/graph",
             "domain": "/api/domain",
             "node_contract": "/api/node-contract",
@@ -1037,6 +1041,41 @@ def _react_dist_dir() -> Path:
     return repo_dist
 
 
+def _ui_info_payload(workbench, *, requested_ui: str, effective_ui: str, react_dist: Path) -> dict:
+    react_available = (react_dist / "index.html").exists()
+    return {
+        "view_type": "ui_info",
+        "product": "perturbseq_workbench",
+        "domain": getattr(getattr(workbench, "domain", None), "name", ""),
+        "requested_ui": requested_ui,
+        "effective_ui": effective_ui,
+        "canonical_ui": "builtin_html",
+        "react": {
+            "available": react_available,
+            "path": str(react_dist) if react_available else "",
+            "status": "experimental_explicit_only",
+        },
+        "surfaces": {
+            "html": "/",
+            "terminal": "pertura chat | pertura inspect | pertura context",
+            "react": "--ui react",
+        },
+        "primary_projection": "/api/workbench-view",
+        "console_turn": "/api/console/turn",
+        "event_stream": "/api/events/stream",
+        "workflow_builder": "/api/workflow-builder",
+        "debug_projection": "/api/context-review",
+        "stable_fields": [
+            "perturbseq",
+            "execution_state",
+            "candidate_actions",
+            "activity.product_events",
+            "artifacts",
+            "report",
+        ],
+    }
+
+
 def create_app(workbench, *, ui: str = "auto"):
     from fastapi import FastAPI, HTTPException, Request
     from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
@@ -1052,6 +1091,7 @@ def create_app(workbench, *, ui: str = "auto"):
     ui_mode = ui if ui in {"auto", "builtin", "react"} else "builtin"
     react_dist = _react_dist_dir()
     use_react = ui_mode == "react" and (react_dist / "index.html").exists()
+    effective_ui = "react" if use_react else "builtin_html"
     if use_react and (react_dist / "assets").exists():
         app.mount("/assets", StaticFiles(directory=str(react_dist / "assets")), name="assets")
 
@@ -1221,6 +1261,15 @@ def create_app(workbench, *, ui: str = "auto"):
     @app.get("/api/status")
     def status():
         return workbench.status
+
+    @app.get("/api/ui-info")
+    def ui_info():
+        return _ui_info_payload(
+            workbench,
+            requested_ui=ui_mode,
+            effective_ui=effective_ui,
+            react_dist=react_dist,
+        )
 
     @app.get("/api/runtime-status")
     def runtime_status(recent: int = 20):

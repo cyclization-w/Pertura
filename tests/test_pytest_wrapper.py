@@ -604,6 +604,19 @@ def test_console_turn_design_question_updates_design_without_interrupt(tmp_path:
     wb._emit("run_complete", {})
     auto_client = TestClient(create_app(wb, ui="auto"))
     assert "Analysis Session" in auto_client.get("/").text
+    ui_info = auto_client.get("/api/ui-info").json()
+    assert ui_info["canonical_ui"] == "builtin_html"
+    assert ui_info["requested_ui"] == "auto"
+    assert ui_info["effective_ui"] == "builtin_html"
+    assert ui_info["primary_projection"] == "/api/workbench-view"
+    assert ui_info["console_turn"] == "/api/console/turn"
+    assert ui_info["workflow_builder"] == "/api/workflow-builder"
+    assert "perturbseq" in ui_info["stable_fields"]
+    assert ui_info["react"]["status"] == "experimental_explicit_only"
+    workbench_view = auto_client.get("/api/workbench-view", params={"include_debug": "false"}).json()
+    assert workbench_view["links"]["ui_info"] == "/api/ui-info"
+    assert workbench_view["links"]["console_turn"] == "/api/console/turn"
+    assert workbench_view["links"]["workflow_builder"] == "/api/workflow-builder"
     client = TestClient(create_app(wb, ui="builtin"))
 
     response = client.post("/api/console/turn", json={
@@ -645,3 +658,25 @@ def test_scoped_tools_hide_load_dataset_after_dataset_profile(tmp_path: Path) ->
     tool_names = {item["function"]["name"] for item in tool_schemas(snap=store.read_snapshot(), scoped=True)}
 
     assert "load_dataset" not in tool_names
+
+
+def test_product_documentation_matches_current_ui_contract() -> None:
+    root = Path(__file__).resolve().parent.parent
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    operator = (root / "OPERATOR_GUIDE.md").read_text(encoding="utf-8")
+    developer = (root / "DEVELOPER_GUIDE.md").read_text(encoding="utf-8")
+    install = (root / "INSTALL.md").read_text(encoding="utf-8")
+
+    combined = "\n".join([readme, operator, developer, install])
+
+    assert "canonical GUI" in readme
+    assert "GET /api/workbench-view" in readme
+    assert "POST /api/console/turn" in readme
+    assert "GET /api/ui-info" in operator
+    assert "contract.product" in developer
+    assert "built-in HTML workbench" in install
+    assert "20 passed, 1 skipped" in install
+    assert "pertura_v2" not in install
+    assert "frontend_dist" not in combined
+    assert "鈥" not in combined
+    assert "渦" not in combined
