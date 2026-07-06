@@ -789,6 +789,277 @@ class EvidenceRegistry:
         )
         self.append(artifact)
         return artifact
+    def register_scope_artifact(
+        self,
+        *,
+        path: str | Path,
+        artifact_subtype: str = "scope_artifact",
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+    ) -> EvidenceArtifact:
+        return self._register_family_artifact(
+            artifact_id=artifact_id or f"scope_artifact_{uuid4().hex[:12]}",
+            kind=ArtifactKind.scope_artifact,
+            evidence_class=EvidenceClass.observed_metadata,
+            roles=[ArtifactRole.scope_definition],
+            created_by_tool="register_scope_artifact",
+            path=path,
+            artifact_subtype=artifact_subtype,
+            scope=scope,
+            predicate=predicate,
+            quality=quality,
+            metadata=metadata,
+            notes=notes,
+        )
+
+    def register_eligibility_artifact(
+        self,
+        *,
+        path: str | Path,
+        artifact_subtype: str = "eligibility_artifact",
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        eligibility: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+    ) -> EvidenceArtifact:
+        return self._register_family_artifact(
+            artifact_id=artifact_id or f"eligibility_artifact_{uuid4().hex[:12]}",
+            kind=ArtifactKind.qc_summary,
+            evidence_class=EvidenceClass.observed_metadata,
+            roles=[ArtifactRole.analysis_eligibility],
+            created_by_tool="register_eligibility_artifact",
+            path=path,
+            artifact_subtype=artifact_subtype,
+            scope=scope,
+            quality=quality,
+            eligibility=eligibility,
+            metadata=metadata,
+            notes=notes,
+        )
+
+    def register_measured_effect_artifact(
+        self,
+        *,
+        path: str | Path,
+        artifact_subtype: str = "measured_effect",
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+        **kwargs,
+    ) -> EvidenceArtifact:
+        subtype = str(artifact_subtype or "measured_effect")
+        measured_de_required = {"contrast_left", "contrast_baseline", "method", "n_left", "n_baseline", "multiple_testing", "has_padj"}
+        if subtype == "measured_de" and measured_de_required.issubset(kwargs):
+            return self.register_measured_de(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        if subtype == "module_effect":
+            return self.register_module_effect(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        if subtype == "global_effect":
+            return self.register_global_effect(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        if subtype == "perturbation_efficiency":
+            return self.register_perturbation_efficiency(path=path, artifact_id=artifact_id, scope=scope, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        return self._register_family_artifact(
+            artifact_id=artifact_id or f"measured_effect_{uuid4().hex[:12]}",
+            kind=ArtifactKind.measured_effect,
+            evidence_class=EvidenceClass.measured,
+            roles=[ArtifactRole.effect_evidence],
+            created_by_tool="register_measured_effect_artifact",
+            path=path,
+            artifact_subtype=subtype,
+            scope=scope,
+            predicate=predicate,
+            quality=quality,
+            metadata=metadata,
+            notes=notes,
+        )
+
+    def register_prior_artifact(
+        self,
+        *,
+        path: str | Path,
+        artifact_subtype: str = "curated_prior_lookup",
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+        **kwargs,
+    ) -> EvidenceArtifact:
+        subtype = str(artifact_subtype or "curated_prior_lookup")
+        enrichment_required = {"input_measured_artifact_id", "database", "database_version", "term_id", "method"}
+        if subtype == "curated_enrichment_result" and enrichment_required.issubset(kwargs):
+            return self.register_curated_enrichment(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        if subtype == "curated_prior_lookup" and "database" in kwargs:
+            return self.register_curated_prior(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        return self._register_family_artifact(
+            artifact_id=artifact_id or f"prior_artifact_{uuid4().hex[:12]}",
+            kind=ArtifactKind.curated_prior_lookup,
+            evidence_class=EvidenceClass.curated_prior,
+            roles=[ArtifactRole.prior_context],
+            created_by_tool="register_prior_artifact",
+            path=path,
+            artifact_subtype=subtype,
+            scope=scope,
+            predicate=predicate,
+            quality=quality,
+            metadata=metadata,
+            notes=notes,
+        )
+
+    def register_prediction_artifact(
+        self,
+        *,
+        path: str | Path,
+        artifact_subtype: str = "predicted_effect",
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+        **kwargs,
+    ) -> EvidenceArtifact:
+        subtype = str(artifact_subtype or "predicted_effect")
+        if subtype == "predicted_effect" and "model_name" in kwargs:
+            return self.register_predicted_effect(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        return self._register_family_artifact(
+            artifact_id=artifact_id or f"prediction_artifact_{uuid4().hex[:12]}",
+            kind=ArtifactKind.prediction_artifact,
+            evidence_class=EvidenceClass.predicted,
+            roles=[ArtifactRole.prediction_evidence],
+            created_by_tool="register_prediction_artifact",
+            path=path,
+            artifact_subtype=subtype,
+            scope=scope,
+            predicate=predicate,
+            quality=quality,
+            metadata=metadata,
+            notes=notes,
+        )
+
+    def register_inferred_structure_artifact(
+        self,
+        *,
+        path: str | Path,
+        artifact_subtype: str = "inferred_structure",
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+    ) -> EvidenceArtifact:
+        return self._register_family_artifact(
+            artifact_id=artifact_id or f"inferred_structure_{uuid4().hex[:12]}",
+            kind=ArtifactKind.inferred_structure,
+            evidence_class=EvidenceClass.measured_inferred,
+            roles=[ArtifactRole.effect_evidence],
+            created_by_tool="register_inferred_structure_artifact",
+            path=path,
+            artifact_subtype=artifact_subtype,
+            scope=scope,
+            predicate=predicate,
+            quality=quality,
+            metadata=metadata,
+            notes=notes,
+        )
+
+    def register_ranking_artifact(
+        self,
+        *,
+        path: str | Path,
+        artifact_subtype: str = "ranking_artifact",
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+    ) -> EvidenceArtifact:
+        return self._register_family_artifact(
+            artifact_id=artifact_id or f"ranking_artifact_{uuid4().hex[:12]}",
+            kind=ArtifactKind.ranking_artifact,
+            evidence_class=EvidenceClass.composite_summary,
+            roles=[ArtifactRole.ranking_summary],
+            created_by_tool="register_ranking_artifact",
+            path=path,
+            artifact_subtype=artifact_subtype,
+            scope=scope,
+            predicate=predicate,
+            quality=quality,
+            metadata=metadata,
+            notes=notes,
+        )
+
+    def register_dataset_metadata_artifact(
+        self,
+        *,
+        path: str | Path,
+        artifact_subtype: str = "dataset_metadata",
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+    ) -> EvidenceArtifact:
+        return self._register_family_artifact(
+            artifact_id=artifact_id or f"dataset_metadata_{uuid4().hex[:12]}",
+            kind=ArtifactKind.scope_artifact,
+            evidence_class=EvidenceClass.observed_metadata,
+            roles=[ArtifactRole.scope_definition],
+            created_by_tool="register_dataset_metadata_artifact",
+            path=path,
+            artifact_subtype=artifact_subtype,
+            scope=scope,
+            quality=quality,
+            metadata=metadata,
+            notes=notes,
+        )
+
+    def _register_family_artifact(
+        self,
+        *,
+        artifact_id: str,
+        kind: ArtifactKind,
+        evidence_class: EvidenceClass,
+        roles: list[ArtifactRole],
+        created_by_tool: str,
+        path: str | Path,
+        artifact_subtype: str,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        eligibility: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+    ) -> EvidenceArtifact:
+        path_text = str(path)
+        artifact = EvidenceArtifact(
+            artifact_id=artifact_id,
+            kind=kind,
+            evidence_class=evidence_class,
+            artifact_roles=roles,
+            path=path_text,
+            notes=notes,
+            scope=self.resolve_manifest_scope(dict(scope or {})),
+            predicate=dict(predicate or {}),
+            quality={key: value for key, value in {"artifact_subtype": artifact_subtype, **dict(quality or {})}.items() if value not in (None, "")},
+            eligibility=dict(eligibility or {}),
+            provenance={"created_by_tool": created_by_tool},
+            source_sha256=self._hash_for_path(path_text),
+            metadata={"artifact_subtype": artifact_subtype, **dict(metadata or {})},
+        )
+        self.append(artifact)
+        return artifact
     def source_hash_status(self, artifact: EvidenceArtifact) -> str:
         if not artifact.source_sha256:
             return "not_recorded"

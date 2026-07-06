@@ -6,7 +6,7 @@ from pathlib import Path
 
 def test_gate_does_not_import_runtime_or_benchmark() -> None:
     gate_root = Path(__file__).resolve().parents[2] / "src" / "pertura_gate"
-    forbidden = ("pertura_runtime", "pertura_bench")
+    forbidden = ("pertura_runtime", "pertura_bench", "pertura_workflow")
     offenders: list[str] = []
     for path in gate_root.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

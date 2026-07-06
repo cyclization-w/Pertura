@@ -18,6 +18,8 @@ docs/
   07_runtime_surfaces.md
   08_smoke_and_benchmark_results.md
   09_roadmap_and_boundaries.md
+  10_p2_workflow_implementation_plan.md
+  11_stage_skill_system.md
   appendix/
     source_map.md
 ```
@@ -28,16 +30,21 @@ docs/
 2. Read `02_architecture.md` and `03_evidence_lattice.md` for the system model.
 3. Read `04_scope_and_eligibility.md` before reviewing measured evidence decisions.
 4. Read `05_p1_evidence_paths.md` for the completed P1 capability set.
-5. Read `08_smoke_and_benchmark_results.md` for what has actually been validated.`r`n6. Read `results/p0_p1_experiment_summary.md` for the compact saved result table.
+5. Read `08_smoke_and_benchmark_results.md` for what has actually been validated.
+6. Read `09_roadmap_and_boundaries.md` for the current stage boundaries.
+7. Read `10_p2_workflow_implementation_plan.md` before implementing P2 workflow changes.
+8. Read `11_stage_skill_system.md` for the fixed soft-stage / hard-gate design.
+9. Read `results/p0_p1_experiment_summary.md` for the compact saved result table.
+10. Read `results/p1_freeze_summary.md` for the frozen paper-facing P1 table.
 
 ## Current Status
 
 P0.6, P0.7, P1.1, P1.2, and P1.3 are implemented for the current submission-oriented evidence lattice.
 
-Latest full test result recorded after the repo cleanup:
+Latest full test result recorded after P2.1 workflow freeze:
 
 ```text
-110 passed
+139 passed
 ```
 
-P1 should be treated as implementation-complete for the current lattice. The next phase is benchmark/evaluation consolidation and paper-ready result tables, not adding another evidence kind.
+P1 should be treated as implementation-complete for the current lattice. P2.0 workflow substrate and P2.1 classic guide-based workflow are implemented and frozen with deterministic GateBench fixtures. The next phase is P2.2 modality expansion.

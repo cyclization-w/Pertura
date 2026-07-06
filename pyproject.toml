@@ -14,6 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
+pertura = "pertura_workflow.cli:main"
 pertura-claude = "pertura_runtime.claude.cli:main"
 
 [project.optional-dependencies]
@@ -55,5 +56,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
 
 

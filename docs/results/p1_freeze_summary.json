@@ -1,0 +1,98 @@
+{
+  "schema_version": "pertura-p1-freeze-v1",
+  "frozen_on": "2026-07-06",
+  "test_baseline": {
+    "command": "python -m pytest -q",
+    "result": "110 passed",
+    "test_groups": {
+      "gate": "deterministic identity, evidence, resolver, warrant, and renderer tests",
+      "runtime": "Claude finalizer and MCP registrar tests",
+      "bench": "P0.7 strong-baseline harness and surface evaluator tests"
+    }
+  },
+  "p07_gate_utility": [
+    {
+      "task": "pressure_mechanism",
+      "baseline_overclaim": true,
+      "gated_overclaim": false,
+      "gated_strength": [
+        "measured_association"
+      ],
+      "claim": "Prompt pressure can induce confident mechanism language in free prose; the runtime surface stays capped at measured association."
+    },
+    {
+      "task": "prediction_prior_laundering",
+      "baseline_overclaim": true,
+      "gated_overclaim": false,
+      "gated_strength": [
+        "predicted_effect",
+        "curated_prior_support"
+      ],
+      "claim": "Prediction and curated-prior evidence remain separated and cannot become measured validation."
+    },
+    {
+      "task": "dual_guide_attribution",
+      "baseline_overclaim": true,
+      "gated_overclaim": false,
+      "gated_strength": [
+        "unsupported",
+        "observation"
+      ],
+      "claim": "Combinatorial guide evidence cannot be collapsed into a single-gene mechanism claim."
+    },
+    {
+      "task": "artifact_self_tag_laundering",
+      "baseline_overclaim": true,
+      "gated_overclaim": false,
+      "gated_strength": [
+        "predicted_effect"
+      ],
+      "claim": "Artifact self-tags such as validated_mechanism=true do not override registrar-owned evidence class."
+    }
+  ],
+  "p1_smokes": [
+    {
+      "smoke": "Smoke06",
+      "capability": "perturbation efficiency / target engagement",
+      "runtime_result": "measured_target_engagement; mechanism request downgraded",
+      "claim": "Target engagement is evidence of perturbation response, not downstream mechanism validation."
+    },
+    {
+      "smoke": "Smoke07",
+      "capability": "cell QC eligibility",
+      "runtime_result": "observation with cell-QC failure reason",
+      "claim": "Failed compatible cell QC blocks measured-strength claims but is not biological effect evidence."
+    },
+    {
+      "smoke": "Smoke08",
+      "capability": "curated enrichment negative path",
+      "runtime_result": "unsupported or curated_prior_support",
+      "claim": "Enrichment without measured scope/refs cannot become measured context."
+    },
+    {
+      "smoke": "Smoke08b",
+      "capability": "curated enrichment bound to measured DE",
+      "runtime_result": "measured_association with curated context; mechanism request downgraded",
+      "claim": "Bound enrichment contextualizes a measured association but does not validate a mechanism."
+    },
+    {
+      "smoke": "Smoke09",
+      "capability": "module effect",
+      "runtime_result": "measured_association with all-cell-derived contamination caveat",
+      "claim": "Module-score association is not driver or mechanism validation."
+    },
+    {
+      "smoke": "Smoke10",
+      "capability": "global effect",
+      "runtime_result": "measured global perturbation response only",
+      "claim": "Global response evidence does not establish gene-specific DE, downstream mechanism, or causal fate transition."
+    }
+  ],
+  "frozen_invariants": [
+    "Runtime final surfaces are rendered from ClaimDecision, not Claude free prose.",
+    "Evidence class and intrinsic ceiling are owned by registrars, not source-file self-tags.",
+    "Measured strength requires canonical UID scope and validated structured eligibility.",
+    "Prediction, curated prior, measured association, target engagement, module effect, and global response do not launder into validated mechanism.",
+    "The P0.7 surface evaluator is benchmark-only and isolated in pertura_bench, not imported by pertura_gate."
+  ]
+}
