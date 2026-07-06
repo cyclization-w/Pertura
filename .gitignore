@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local runtime state
+.claude_runs/
+.p07_runs/
+.smoke_runs/
+.pertura_workspace/
+.tmp/
+outputs/
+reports/
+artifacts/
+*.log
+
+# Local data and notebooks
+*.h5ad
+*.h5
+*.loom
+*.mtx
+*.rds
+*.rda
+*.ipynb_checkpoints/
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

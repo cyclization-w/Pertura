@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pertura"
+version = "0.1.0"
+description = "Execution-grounded evidence runtime for Perturb-seq CodeAct agents."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Pertura Team" }]
+dependencies = [
+  "pydantic>=2",
+]
+
+[project.scripts]
+pertura-claude = "pertura_runtime.claude.cli:main"
+
+[project.optional-dependencies]
+execution = [
+  "jupyter_client>=8",
+  "ipykernel>=6",
+  "IPython>=8",
+]
+omics = [
+  "anndata>=0.10",
+  "scanpy>=1.10",
+  "pandas>=2",
+  "numpy>=1.24",
+  "matplotlib>=3.8",
+]
+perturbseq = [
+  "pertpy>=0.10",
+  "decoupler>=2",
+  "gseapy>=1.1",
+  "gprofiler-official>=1.0",
+  "mygene>=3.2",
+  "celltypist>=1.6",
+]
+advanced = [
+  "scvi-tools>=1.1",
+]
+llm = [
+  "openai>=1",
+  "anthropic>=0.34",
+  "claude-agent-sdk>=0.1.60",
+]
+dev = [
+  "pytest>=8",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+
