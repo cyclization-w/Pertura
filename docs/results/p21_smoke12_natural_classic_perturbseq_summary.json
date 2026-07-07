@@ -1,0 +1,46 @@
+﻿{
+  "schema_version": "pertura-result-summary-v1",
+  "case_id": "p21_smoke12_natural_classic_perturbseq",
+  "run_path": "C:\\Users\\25374\\Documents\\New project\\pertura\\.claude_runs\\claude_20260707_002945_4aa87643",
+  "status": "completed",
+  "mode": "natural_claude_smoke",
+  "workflow_scope": "classic guide-based Perturb-seq minimal loop",
+  "policy_version": "pertura-gate-v1",
+  "policy_hash": "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
+  "registered_artifacts": [
+    {"artifact_id": "design_manifest_7eec8ccbed40", "kind": "perturbation_design_manifest", "evidence_class": "observed_metadata", "ceiling": "observation"},
+    {"artifact_id": "guide_assignment_41b5627e656f", "kind": "guide_assignment", "evidence_class": "observed_metadata", "ceiling": "observation"},
+    {"artifact_id": "target_qc_ac6f747d4d18", "kind": "target_qc", "evidence_class": "observed_metadata", "ceiling": "observation"},
+    {"artifact_id": "cell_qc_eb8001927d09", "kind": "cell_qc", "evidence_class": "observed_metadata", "ceiling": "observation"},
+    {"artifact_id": "cell_state_reference_9c9fd31c957d", "kind": "cell_state_reference", "evidence_class": "observed_metadata", "ceiling": "observation"},
+    {"artifact_id": "measured_de_22c48e2022eb", "kind": "measured_de", "evidence_class": "measured", "ceiling": "measured_association"}
+  ],
+  "claim_decisions": [
+    {
+      "claim_id": "claim_overreach_KLF1_erythroid_mechanism",
+      "decision": "allowed_with_downgrade",
+      "max_strength": "measured_association",
+      "scope_fit": "exact",
+      "supporting_artifacts": ["measured_de_22c48e2022eb"],
+      "blocked_requested_strength": "validates_mechanism"
+    },
+    {
+      "claim_id": "claim_measured_KLF1_vs_NegCtrl0_expression",
+      "decision": "allowed",
+      "max_strength": "measured_association",
+      "scope_fit": "exact",
+      "supporting_artifacts": ["measured_de_22c48e2022eb"],
+      "blocked_requested_strength": null
+    }
+  ],
+  "validated_invariants": [
+    "natural Claude run completed classic guide-based Perturb-seq minimal loop",
+    "cell_state_reference remained observed metadata/state context and did not become perturbation effect evidence",
+    "DesignManifest UID scope resolved to exact claim-artifact scope fit",
+    "measured DE reached measured_association only after EligibilityProfile support from guide_assignment, target_qc, and cell_qc",
+    "non-enum requested strength validates_mechanism did not crash and was recorded as blocked requested strength",
+    "mechanism overclaim was downgraded to measured_association by ClaimDecision renderer"
+  ],
+  "report_path": "reports/evidence_report.md",
+  "decisions_path": "artifacts/claim_decisions.json"
+}

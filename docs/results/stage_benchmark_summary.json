@@ -1,0 +1,122 @@
+{
+  "created_at_utc": "2026-07-06T21:28:33.329287+00:00",
+  "invariants": [
+    "guide_assignment is eligibility metadata only and cannot support measured claims by itself",
+    "cell_state_reference is state context only and cannot support perturbation effect claims by itself",
+    "measured_de supports measured_association at most and cannot establish mechanism",
+    "claim_report surfaces scientific conclusions only through ClaimDecision rendering"
+  ],
+  "metrics": [
+    "stage_completion",
+    "artifact_registration_correct",
+    "metadata_completeness",
+    "stage_boundary_respected",
+    "exploration_not_surfaced",
+    "next_stage_recommendation_correct"
+  ],
+  "results": [
+    {
+      "artifact_kinds": [
+        "guide_assignment"
+      ],
+      "case_id": "guide_assignment_eligibility_only",
+      "completion": true,
+      "decision_strengths": [],
+      "metrics": {
+        "artifact_registration_correct": true,
+        "exploration_not_surfaced": true,
+        "metadata_completeness": true,
+        "next_stage_recommendation_correct": true,
+        "stage_boundary_respected": true,
+        "stage_completion": true
+      },
+      "notes": [
+        "guide assignment registered as analysis eligibility only"
+      ],
+      "report_path": null,
+      "scope_fits": [],
+      "stage_id": "guide_assignment"
+    },
+    {
+      "artifact_kinds": [
+        "cell_state_reference"
+      ],
+      "case_id": "cell_state_reference_context_only",
+      "completion": true,
+      "decision_strengths": [
+        "observation"
+      ],
+      "metrics": {
+        "artifact_registration_correct": true,
+        "exploration_not_surfaced": true,
+        "metadata_completeness": true,
+        "next_stage_recommendation_correct": true,
+        "stage_boundary_respected": true,
+        "stage_completion": true
+      },
+      "notes": [
+        "cell state reference remained state context and did not support effect claim"
+      ],
+      "report_path": null,
+      "scope_fits": [
+        "exact"
+      ],
+      "stage_id": "cell_state_reference"
+    },
+    {
+      "artifact_kinds": [
+        "perturbation_design_manifest",
+        "measured_de"
+      ],
+      "case_id": "measured_de_association_only",
+      "completion": true,
+      "decision_strengths": [
+        "measured_association"
+      ],
+      "metrics": {
+        "artifact_registration_correct": true,
+        "exploration_not_surfaced": true,
+        "metadata_completeness": true,
+        "next_stage_recommendation_correct": true,
+        "stage_boundary_respected": true,
+        "stage_completion": true
+      },
+      "notes": [
+        "measured DE downgraded mechanism request to measured association"
+      ],
+      "report_path": null,
+      "scope_fits": [
+        "exact"
+      ],
+      "stage_id": "measured_de"
+    },
+    {
+      "artifact_kinds": [
+        "perturbation_design_manifest",
+        "measured_de"
+      ],
+      "case_id": "claim_report_decision_surface",
+      "completion": true,
+      "decision_strengths": [
+        "measured_association"
+      ],
+      "metrics": {
+        "artifact_registration_correct": true,
+        "exploration_not_surfaced": true,
+        "metadata_completeness": true,
+        "next_stage_recommendation_correct": true,
+        "stage_boundary_respected": true,
+        "stage_completion": true
+      },
+      "notes": [
+        "claim report rendered through ClaimDecision"
+      ],
+      "report_path": "C:\\Users\\25374\\Documents\\New project\\pertura\\tmp_stage_benchmark_runs\\claim_report_decision_surface\\reports\\evidence_report.md",
+      "scope_fits": [
+        "exact"
+      ],
+      "stage_id": "claim_report"
+    }
+  ],
+  "schema_version": "pertura-stage-benchmark-v1"
+}

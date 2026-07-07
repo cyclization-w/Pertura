@@ -58,6 +58,26 @@ class EvidenceRegistry:
             return basename_matches[0]
         return None
 
+
+    def resolve_design_manifest_ref(self, ref: str | Path | None) -> EvidenceArtifact | None:
+        """Resolve a manifest artifact by ID or exact registered source path.
+
+        This normalizes registry references only. It is not scientific scope matching
+        and must not be used to bind arbitrary evidence artifacts by basename.
+        """
+        if ref in (None, ""):
+            return None
+        ref_text = str(ref)
+        direct = self.get(ref_text)
+        if direct is not None and direct.kind == ArtifactKind.perturbation_design_manifest:
+            return direct
+        needle = _normalize_ref(ref_text)
+        for artifact in reversed(self.list()):
+            if artifact.kind != ArtifactKind.perturbation_design_manifest:
+                continue
+            if _normalize_ref(artifact.path) == needle:
+                return artifact
+        return None
     def register_perturbation_design_manifest(
         self,
         *,
@@ -117,7 +137,7 @@ class EvidenceRegistry:
         return artifact
 
     def get_design_manifest(self, manifest_id: str) -> dict | None:
-        artifact = self.get(manifest_id)
+        artifact = self.resolve_design_manifest_ref(manifest_id)
         if artifact is None or artifact.kind != ArtifactKind.perturbation_design_manifest:
             return None
         manifest = artifact.metadata.get("manifest")
@@ -125,19 +145,21 @@ class EvidenceRegistry:
 
     def resolve_manifest_scope(self, scope: dict | None) -> dict:
         data = _canonicalize_scope_aliases(dict(scope or {}))
-        manifest_id = data.get("design_manifest_id")
-        if not manifest_id:
+        manifest_ref = data.get("design_manifest_id")
+        if not manifest_ref:
             return data
-        manifest = self.get_design_manifest(str(manifest_id))
+        manifest_artifact = self.resolve_design_manifest_ref(str(manifest_ref))
+        if manifest_artifact is None:
+            return data
+        data["design_manifest_id"] = manifest_artifact.artifact_id
+        manifest = self.get_design_manifest(manifest_artifact.artifact_id)
         if not manifest:
             return data
-        if data.get("perturbation_uid") or data.get("contrast_uid"):
-            return data
         raw = data.get("raw_label") or data.get("raw_perturbation_label") or data.get("raw_condition_label")
-        if raw is None:
-            return data
-        mapped = scope_for_raw_label(manifest, str(raw))
-        return _canonicalize_scope_aliases({**data, **mapped})
+        if raw is not None:
+            mapped = scope_for_raw_label(manifest, str(raw))
+            return _canonicalize_scope_aliases({**data, **mapped})
+        return _validate_manifest_uid_scope(data, manifest)
     def register_experiment_design(
         self,
         *,
@@ -338,6 +360,18 @@ class EvidenceRegistry:
             **_scope_identity_from_eligibility(eligibility),
             **dict(scope or {}),
         }
+        if merged_scope.get("design_manifest_id") and not any(
+            merged_scope.get(key)
+            for key in [
+                "perturbation_uid",
+                "control_uid",
+                "contrast_uid",
+                "raw_label",
+                "raw_perturbation_label",
+                "raw_condition_label",
+            ]
+        ) and contrast_left:
+            merged_scope["raw_label"] = contrast_left
         merged_quality = {
             "n_treated": n_left,
             "n_control": n_baseline,
@@ -539,6 +573,7 @@ class EvidenceRegistry:
             "target": target_gene,
             **dict(scope or {}),
         }
+
         merged_quality = {
             "modality": modality,
             "expected_direction": expected_direction,
@@ -659,6 +694,7 @@ class EvidenceRegistry:
             "module_name": module_name,
             **dict(predicate or {}),
         }
+
         merged_quality = {
             "module_source": module_source,
             "module_gene_set_hash": module_gene_set_hash,
@@ -717,6 +753,7 @@ class EvidenceRegistry:
             "metric": metric,
             **dict(predicate or {}),
         }
+
         merged_quality = {
             "metric": metric,
             "feature_space": feature_space,
@@ -748,6 +785,46 @@ class EvidenceRegistry:
         )
         self.append(artifact)
         return artifact
+    def register_cell_state_reference(
+        self,
+        *,
+        path: str | Path,
+        assignment_column: str | None = None,
+        embedding_methods: list | None = None,
+        clustering_method: str | None = None,
+        annotation_method: str | None = None,
+        marker_summary_path: str | None = None,
+        source_data_path: str | None = None,
+        source_data_sha256: str | None = None,
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+    ) -> EvidenceArtifact:
+        state_metadata = {
+            "assignment_column": assignment_column,
+            "embedding_methods": list(embedding_methods or []),
+            "clustering_method": clustering_method,
+            "annotation_method": annotation_method,
+            "marker_summary_path": marker_summary_path,
+            "source_data_path": source_data_path,
+            "source_data_sha256": source_data_sha256,
+        }
+        return self._register_family_artifact(
+            artifact_id=artifact_id or f"cell_state_reference_{uuid4().hex[:12]}",
+            kind=ArtifactKind.cell_state_reference,
+            evidence_class=EvidenceClass.observed_metadata,
+            roles=[ArtifactRole.scope_definition, ArtifactRole.state_context],
+            created_by_tool="register_cell_state_reference_artifact",
+            path=path,
+            artifact_subtype="cell_state_reference",
+            scope=scope,
+            predicate={"state_context": True},
+            quality={key: value for key, value in {**state_metadata, **dict(quality or {})}.items() if value not in (None, "", [])},
+            metadata={"state_reference": _clean_nested(state_metadata), **dict(metadata or {})},
+            notes=notes,
+        )
     def register_cell_qc(
         self,
         *,
@@ -1090,11 +1167,32 @@ class EvidenceRegistry:
 
 
 
+
+def _validate_manifest_uid_scope(scope: dict, manifest: dict) -> dict:
+    data = dict(scope or {})
+    perturbations = dict(manifest.get("perturbations") or {})
+    contrasts = dict(manifest.get("contrasts") or {})
+    invalid: list[str] = []
+    if data.get("contrast_uid") and data["contrast_uid"] not in contrasts:
+        data["unresolved_contrast_uid"] = data["contrast_uid"]
+        invalid.append("contrast_uid")
+    if data.get("perturbation_uid") and data["perturbation_uid"] not in perturbations:
+        data["unresolved_perturbation_uid"] = data["perturbation_uid"]
+        invalid.append("perturbation_uid")
+    if data.get("control_uid") and data["control_uid"] not in perturbations:
+        data["unresolved_control_uid"] = data["control_uid"]
+        invalid.append("control_uid")
+    if invalid:
+        data["manifest_uid_validation_error"] = sorted(set(invalid))
+    return _canonicalize_scope_aliases(data)
 def _scope_identity_from_eligibility(eligibility: dict | None) -> dict:
     if not isinstance(eligibility, dict):
         return {}
     scope: dict = {}
-    for key in ["design_manifest_id", "perturbation_uid", "control_uid", "contrast_uid", "estimand"]:
+    manifest_ref = eligibility.get("design_manifest_id") or eligibility.get("design_manifest") or eligibility.get("design_manifest_path")
+    if manifest_ref not in (None, ""):
+        scope["design_manifest_id"] = manifest_ref
+    for key in ["perturbation_uid", "control_uid", "contrast_uid", "estimand"]:
         value = eligibility.get(key)
         if value not in (None, ""):
             scope[key] = value

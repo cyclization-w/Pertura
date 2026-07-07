@@ -8,6 +8,8 @@ __pycache__/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+*.egg-info/
+src/*.egg-info/
 
 # Virtual environments
 .venv/

@@ -1,87 +1,109 @@
-{
-  "created_at_utc": "2026-07-06T06:06:29.752840+00:00",
-  "invariants": [
-    "classic workflow reports are rendered through ClaimDecision when linked claims exist",
-    "candidate claims without DesignManifest UID scope remain gaps, not scientific findings",
-    "basic runners produce structured tables/summaries only and do not write biological conclusions",
-    "partial-success workspaces report missing evidence instead of upgrading claim strength"
-  ],
-  "results": [
-    {
-      "case_id": "strict_measured_association",
-      "completion": true,
-      "decision_ids": [
-        "decision_40a397c9c60c"
-      ],
-      "decision_strengths": [
-        "measured_association"
-      ],
-      "linked_claims": 1,
-      "notes": [
-        "strict structured classic recipe produced measured association and downgraded mechanism request"
-      ],
-      "policy_hash": "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
-      "report_path": "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\strict_measured_association\\reports\\evidence_report.md",
-      "runner_steps": [],
-      "unlinked_claims": 0,
-      "workspace": "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\strict_measured_association"
-    },
-    {
-      "case_id": "basic_runners_measured_association",
-      "completion": true,
-      "decision_ids": [
-        "decision_4e1a893714d7"
-      ],
-      "decision_strengths": [
-        "measured_association"
-      ],
-      "linked_claims": 1,
-      "notes": [
-        "basic target QC and basic DE runners produced structured outputs before gate evaluation"
-      ],
-      "policy_hash": "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
-      "report_path": "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\basic_runners_measured_association\\reports\\evidence_report.md",
-      "runner_steps": [
-        "run_basic_target_qc",
-        "run_basic_de_for_registered_contrast"
-      ],
-      "unlinked_claims": 0,
-      "workspace": "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\basic_runners_measured_association"
-    },
-    {
-      "case_id": "candidate_claim_gap",
-      "completion": true,
-      "decision_ids": [
-        "decision_fb239ec37b09"
-      ],
-      "decision_strengths": [
-        "measured_association"
-      ],
-      "linked_claims": 1,
-      "notes": [
-        "linked candidate evaluated; unlinked candidate remained a gap"
-      ],
-      "policy_hash": "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
-      "report_path": "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\candidate_claim_gap\\reports\\evidence_report.md",
-      "runner_steps": [],
-      "unlinked_claims": 1,
-      "workspace": "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\candidate_claim_gap"
-    },
-    {
-      "case_id": "partial_success_missing_manifest",
-      "completion": true,
-      "decision_ids": [],
-      "decision_strengths": [],
-      "linked_claims": 0,
-      "notes": [
-        "incomplete workspace produced partial-success evidence-gap report"
-      ],
-      "policy_hash": "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
-      "report_path": null,
-      "runner_steps": [],
-      "unlinked_claims": 0,
-      "workspace": "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\partial_success_missing_manifest"
-    }
-  ],
-  "schema_version": "pertura-p21-classic-workflow-v1"
+﻿{
+    "created_at_utc":  "2026-07-06T06:06:29.752840+00:00",
+    "invariants":  [
+                       "classic workflow reports are rendered through ClaimDecision when linked claims exist",
+                       "candidate claims without DesignManifest UID scope remain gaps, not scientific findings",
+                       "basic runners produce structured tables/summaries only and do not write biological conclusions",
+                       "partial-success workspaces report missing evidence instead of upgrading claim strength"
+                   ],
+    "results":  [
+                    {
+                        "case_id":  "strict_measured_association",
+                        "completion":  true,
+                        "decision_ids":  [
+                                             "decision_40a397c9c60c"
+                                         ],
+                        "decision_strengths":  [
+                                                   "measured_association"
+                                               ],
+                        "linked_claims":  1,
+                        "notes":  [
+                                      "strict structured classic recipe produced measured association and downgraded mechanism request"
+                                  ],
+                        "policy_hash":  "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
+                        "report_path":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\strict_measured_association\\reports\\evidence_report.md",
+                        "runner_steps":  [
+
+                                         ],
+                        "unlinked_claims":  0,
+                        "workspace":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\strict_measured_association"
+                    },
+                    {
+                        "case_id":  "basic_runners_measured_association",
+                        "completion":  true,
+                        "decision_ids":  [
+                                             "decision_4e1a893714d7"
+                                         ],
+                        "decision_strengths":  [
+                                                   "measured_association"
+                                               ],
+                        "linked_claims":  1,
+                        "notes":  [
+                                      "basic target QC and basic DE runners produced structured outputs before gate evaluation"
+                                  ],
+                        "policy_hash":  "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
+                        "report_path":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\basic_runners_measured_association\\reports\\evidence_report.md",
+                        "runner_steps":  [
+                                             "run_basic_target_qc",
+                                             "run_basic_de_for_registered_contrast"
+                                         ],
+                        "unlinked_claims":  0,
+                        "workspace":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\basic_runners_measured_association"
+                    },
+                    {
+                        "case_id":  "candidate_claim_gap",
+                        "completion":  true,
+                        "decision_ids":  [
+                                             "decision_fb239ec37b09"
+                                         ],
+                        "decision_strengths":  [
+                                                   "measured_association"
+                                               ],
+                        "linked_claims":  1,
+                        "notes":  [
+                                      "linked candidate evaluated; unlinked candidate remained a gap"
+                                  ],
+                        "policy_hash":  "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
+                        "report_path":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\candidate_claim_gap\\reports\\evidence_report.md",
+                        "runner_steps":  [
+
+                                         ],
+                        "unlinked_claims":  1,
+                        "workspace":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\candidate_claim_gap"
+                    },
+                    {
+                        "case_id":  "partial_success_missing_manifest",
+                        "completion":  true,
+                        "decision_ids":  [
+
+                                         ],
+                        "decision_strengths":  [
+
+                                               ],
+                        "linked_claims":  0,
+                        "notes":  [
+                                      "incomplete workspace produced partial-success evidence-gap report"
+                                  ],
+                        "policy_hash":  "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
+                        "report_path":  null,
+                        "runner_steps":  [
+
+                                         ],
+                        "unlinked_claims":  0,
+                        "workspace":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\partial_success_missing_manifest"
+                    }
+                ],
+    "schema_version":  "pertura-p21-classic-workflow-v1",
+    "natural_claude_smoke":  {
+                                 "case_id":  "smoke12_natural_classic_perturbseq",
+                                 "run_path":  "C:\\Users\\25374\\Documents\\New project\\pertura\\.claude_runs\\claude_20260707_002945_4aa87643",
+                                 "completion":  true,
+                                 "strengths":  [
+                                                   "measured_association"
+                                               ],
+                                 "linked_claims":  2,
+                                 "overclaim_handling":  "validates_mechanism downgraded to measured_association",
+                                 "report_path":  "reports/evidence_report.md",
+                                 "decisions_path":  "artifacts/claim_decisions.json"
+                             }
 }

@@ -1,0 +1,55 @@
+﻿{
+    "must_not_support":  [
+                             "measured perturbation effect",
+                             "validated mechanism",
+                             "causal fate decision",
+                             "driver validation"
+                         ],
+    "stage_role":  "scope_definition",
+    "next_stage_recommendations":  [
+                                       "measured_de",
+                                       "module_effect",
+                                       "global_effect"
+                                   ],
+    "evidence_role":  "state_context",
+    "can_support":  [
+                        "scope definition",
+                        "cell-state context",
+                        "downstream stratification for measured_de/module/global/trajectory stages"
+                    ],
+    "stage_id":  "cell_state_reference",
+    "allowed_mcp_tools":  [
+                              "mcp__pertura_evidence__register_cell_state_reference_artifact"
+                          ],
+    "evidence_producing":  false,
+    "failure_modes":  [
+                          "missing_required_metadata",
+                          "ambiguous_uid_or_scope",
+                          "no_supported_artifact_registered",
+                          "tool_or_code_error"
+                      ],
+    "optional_outputs":  [
+                             "outputs/plots/umap.png",
+                             "outputs/plots/pca.png",
+                             "outputs/annotated.h5ad",
+                             "outputs/cluster_markers.csv",
+                             "annotation confidence summary"
+                         ],
+    "turn_final_surface_type":  "evidence_summary",
+    "required_outputs":  [
+                             "outputs/state_reference_summary.json",
+                             "cluster/state assignment column name",
+                             "embedding and clustering method metadata",
+                             "annotation method metadata",
+                             "marker summary path or inline marker summary",
+                             "source h5ad/table path and source hash"
+                         ],
+    "benchmark_expectations":  [
+                                   "stage_completion",
+                                   "artifact_registration_correct",
+                                   "metadata_completeness",
+                                   "stage_boundary_respected",
+                                   "exploration_not_surfaced",
+                                   "next_stage_recommendation_correct"
+                               ]
+}

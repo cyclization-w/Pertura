@@ -1,4 +1,4 @@
-# P2.1 Classic Workflow Freeze Summary
+﻿# P2.1 Classic Workflow Freeze Summary
 
 This table freezes deterministic P2.1 classic guide-based Perturb-seq workflow behavior.
 
@@ -15,3 +15,11 @@ This table freezes deterministic P2.1 classic guide-based Perturb-seq workflow b
 - candidate claims without DesignManifest UID scope remain gaps, not scientific findings
 - basic runners produce structured tables/summaries only and do not write biological conclusions
 - partial-success workspaces report missing evidence instead of upgrading claim strength
+## Natural Claude Smoke
+
+| case | completion | strengths | linked claims | overclaim handling | notes |
+| --- | --- | --- | --- | --- | --- |
+| `smoke12_natural_classic_perturbseq` | `true` | `measured_association` | `2` | `validates_mechanism` downgraded to `measured_association` | natural Claude run completed design manifest, guide assignment, target QC, cell QC, cell-state context, measured DE, explicit claims, and controlled report |
+
+Smoke12 is a natural agent smoke, not the deterministic benchmark baseline. It is retained as evidence that the P2.1 stage/catalog handoff works in a real Claude CodeAct run while the final scientific surface still comes from ClaimDecision.
+

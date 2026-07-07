@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from uuid import NAMESPACE_URL, uuid5
 from typing import Any
 
@@ -97,6 +97,10 @@ def resolve_claim(claim: Claim | dict, registry, policy: GatePolicy = DEFAULT_PO
     """Resolve a claim-specific ceiling from runtime-registered artifacts."""
 
     claim_obj = Claim.from_dict(claim) if isinstance(claim, dict) else claim
+    if hasattr(registry, "resolve_manifest_scope"):
+        normalized_scope = registry.resolve_manifest_scope(claim_obj.scope)
+        if normalized_scope != claim_obj.scope:
+            claim_obj = replace(claim_obj, scope=normalized_scope)
     artifacts: list[EvidenceArtifact] = []
     missing_refs: list[str] = []
     for ref in claim_obj.evidence_refs:

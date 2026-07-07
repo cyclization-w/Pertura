@@ -1,0 +1,33 @@
+{
+  "fixture_name": "synthetic_state_reference",
+  "h5ad": "synthetic_state_reference.h5ad",
+  "marker_genes": {
+    "state_a": [
+      "GATA1",
+      "KLF1",
+      "HBB",
+      "ALAS2"
+    ],
+    "state_b": [
+      "SPI1",
+      "LYZ",
+      "MPO",
+      "ELANE"
+    ],
+    "state_c": [
+      "IRF8",
+      "CTSS",
+      "LST1",
+      "TYROBP"
+    ]
+  },
+  "n_cells": 90,
+  "n_genes": 36,
+  "purpose": "Pertura cell_state_reference stage capability smoke fixture",
+  "state_column": "synthetic_state",
+  "states": [
+    "state_a",
+    "state_b",
+    "state_c"
+  ]
+}

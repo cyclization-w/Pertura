@@ -9,6 +9,7 @@ from typing import Any
 
 class ArtifactKind(str, Enum):
     perturbation_design_manifest = "perturbation_design_manifest"
+    cell_state_reference = "cell_state_reference"
     experiment_design = "experiment_design"
     guide_assignment = "guide_assignment"
     target_qc = "target_qc"
@@ -44,6 +45,7 @@ class EvidenceClass(str, Enum):
 
 class ArtifactRole(str, Enum):
     scope_definition = "scope_definition"
+    state_context = "state_context"
     analysis_eligibility = "analysis_eligibility"
     effect_evidence = "effect_evidence"
     prior_context = "prior_context"
@@ -140,6 +142,16 @@ class EligibilityProfile:
 
 def _dict_field(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
+
+
+def _claim_dict_field(value: Any, *, fallback_key: str) -> dict[str, Any]:
+    """Accept natural claim fields without letting free text become scope authority."""
+
+    if isinstance(value, dict):
+        return dict(value)
+    if value in (None, ""):
+        return {}
+    return {fallback_key: str(value)}
 
 
 @dataclass(frozen=True)
@@ -242,7 +254,7 @@ class EvidenceArtifact:
             columns=[str(item) for item in payload.get("columns") or []],
             source_data=payload.get("source_data"),
             notes=payload.get("notes"),
-            scope=dict(payload.get("scope") or {}),
+            scope=_dict_field(payload.get("scope")),
             predicate=dict(payload.get("predicate") or {}),
             quality=dict(payload.get("quality") or {}),
             eligibility=dict(payload.get("eligibility") or {}),
@@ -307,10 +319,10 @@ class Claim:
         return cls(
             claim_id=str(payload.get("claim_id") or "claim"),
             text=str(payload.get("text") or ""),
-            subject=dict(payload.get("subject") or {}),
+            subject=_claim_dict_field(payload.get("subject"), fallback_key="label"),
             relation=payload.get("relation"),
-            object=dict(payload.get("object") or {}),
-            scope=dict(payload.get("scope") or {}),
+            object=_claim_dict_field(payload.get("object"), fallback_key="label"),
+            scope=_claim_dict_field(payload.get("scope"), fallback_key="raw_scope"),
             requested_strength=requested_value,
             evidence_refs=[str(item) for item in payload.get("evidence_refs") or []],
         )
@@ -397,6 +409,8 @@ def _optional_int(value: Any) -> int | None:
     if value is None or value == "":
         return None
     return int(value)
+
+
 
 
 

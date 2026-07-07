@@ -1,0 +1,40 @@
+{
+  "schema_version": "pertura-smoke-result-v1",
+  "smoke_id": "smoke11_cell_state_reference_capability",
+  "status": "passed",
+  "run_path": ".claude_runs/claude_20260706_211214_350df677",
+  "artifact_id": "cell_state_reference_384949db1765",
+  "artifact_kind": "cell_state_reference",
+  "evidence_class": "observed_metadata",
+  "artifact_roles": [
+    "scope_definition",
+    "state_context"
+  ],
+  "artifact_intrinsic_ceiling": "observation",
+  "decision_ids": [],
+  "generated_outputs": [
+    "outputs/processed_state_reference.h5ad",
+    "outputs/run_state_reference.py",
+    "outputs/state_markers.csv",
+    "outputs/state_reference_summary.json",
+    "artifacts/evidence_artifacts.jsonl",
+    "artifacts/analysis_state_manifest.json",
+    "reports/evidence_report.md"
+  ],
+  "capability_covered": [
+    "preprocessing_summary",
+    "hvg_metadata",
+    "pca",
+    "neighbors",
+    "umap",
+    "leiden_clustering",
+    "marker_analysis",
+    "annotation_mapping",
+    "processed_h5ad_handoff"
+  ],
+  "boundary_result": "state context only; no claim decisions; no measured perturbation-effect artifact",
+  "follow_ups": [
+    "Preserve structured embedding metadata rather than stringifying dicts in the MCP registrar result.",
+    "For real datasets, require annotation provenance and avoid expanding biological state names from model memory."
+  ]
+}

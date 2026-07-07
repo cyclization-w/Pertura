@@ -8,7 +8,7 @@ from pertura_gate.core.schema import ScopeFit
 
 
 MANIFEST_SCOPE_KEYS = {"design_manifest_id", "perturbation_uid", "control_uid", "contrast_uid", "estimand"}
-CONTROL_TOKENS = {"ntc", "non_targeting", "nontargeting", "non-targeting", "mock", "vehicle", "dmso", "untreated"}
+CONTROL_TOKENS = {"ntc", "non_targeting", "nontargeting", "non-targeting", "negative_control", "negativecontrol", "safe_targeting", "safe-targeting", "mock", "vehicle", "dmso", "untreated"}
 
 
 @dataclass(frozen=True)
@@ -341,10 +341,14 @@ def compare_manifest_scope(claim_scope: dict[str, Any] | None, artifact_scope: d
     artifact_has_manifest = _has_manifest_scope(artifact)
     if not claim_has_manifest and not artifact_has_manifest:
         return None
-    if claim.get("design_manifest_id") and artifact.get("design_manifest_id") and claim["design_manifest_id"] != artifact["design_manifest_id"]:
+    if not claim.get("design_manifest_id") or not artifact.get("design_manifest_id"):
+        return ScopeFit.unknown
+    if claim["design_manifest_id"] != artifact["design_manifest_id"]:
         return ScopeFit.mismatch
     if claim_has_manifest != artifact_has_manifest:
         return ScopeFit.unknown
+    if claim.get("manifest_uid_validation_error") or artifact.get("manifest_uid_validation_error"):
+        return ScopeFit.mismatch
 
     compared = False
     compatible = False
@@ -363,7 +367,7 @@ def compare_manifest_scope(claim_scope: dict[str, Any] | None, artifact_scope: d
             return ScopeFit.mismatch
         if not artifact.get("control_uid"):
             compatible = True
-    if claim.get("estimand"):
+    if claim.get("estimand") and (claim.get("perturbation_uid") or claim.get("control_uid") or claim.get("contrast_uid")):
         compared = True
         if artifact.get("estimand") and claim.get("estimand") != artifact.get("estimand"):
             return ScopeFit.mismatch

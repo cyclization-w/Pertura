@@ -1,0 +1,44 @@
+﻿{
+    "must_not_support":  [
+                             "validated_mechanism",
+                             "causal_mechanism",
+                             "driver_validation"
+                         ],
+    "stage_role":  "scope_definition",
+    "next_stage_recommendations":  [
+                                       "experiment_design",
+                                       "perturbation_design_manifest",
+                                       "cell_qc"
+                                   ],
+    "evidence_role":  "workspace_readiness",
+    "can_support":  [
+                        "progress_summary"
+                    ],
+    "stage_id":  "preflight",
+    "allowed_mcp_tools":  [
+
+                          ],
+    "evidence_producing":  false,
+    "failure_modes":  [
+                          "missing_required_metadata",
+                          "ambiguous_uid_or_scope",
+                          "no_supported_artifact_registered",
+                          "tool_or_code_error"
+                      ],
+    "optional_outputs":  [
+                             "outputs/plots/*",
+                             "outputs/tables/*"
+                         ],
+    "turn_final_surface_type":  "progress_only",
+    "required_outputs":  [
+                             "outputs/_summary.json"
+                         ],
+    "benchmark_expectations":  [
+                                   "stage_completion",
+                                   "artifact_registration_correct",
+                                   "metadata_completeness",
+                                   "stage_boundary_respected",
+                                   "exploration_not_surfaced",
+                                   "next_stage_recommendation_correct"
+                               ]
+}

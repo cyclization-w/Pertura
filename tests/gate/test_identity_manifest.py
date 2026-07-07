@@ -81,6 +81,19 @@ def test_whole_genome_guide_map_can_aggregate_guides_to_target() -> None:
     assert scope_for_raw_label(manifest.to_dict(), "sgKLF1_2")["perturbation_uid"] == "target:KLF1"
 
 
+def test_guide_map_negative_control_target_is_control_not_combo() -> None:
+    manifest = build_guide_label_manifest(
+        manifest_id="manifest_1",
+        raw_labels=["KLF1_NegCtrl0__KLF1_NegCtrl0", "NegCtrl0_NegCtrl0__NegCtrl0_NegCtrl0"],
+        guide_to_target_map={"NegCtrl0": "negative_control"},
+    )
+
+    scope = scope_for_raw_label(manifest.to_dict(), "KLF1_NegCtrl0__KLF1_NegCtrl0")
+
+    assert scope["perturbation_uid"] == "target:KLF1"
+    assert scope["control_uid"] == "control:negative_control_pool"
+    assert scope["perturbation_kind"] == "single"
+
 def test_treatment_adapter_builds_vehicle_contrast_and_requires_vehicle() -> None:
     manifest = build_treatment_condition_manifest(
         manifest_id="drug_manifest",
@@ -132,6 +145,158 @@ def test_manifest_uid_scope_supports_measured_association(tmp_path: Path) -> Non
     assert decision.max_strength == StrengthCeiling.measured_association
     assert decision.scope_fit == ScopeFit.exact
 
+
+def test_manifest_path_ref_resolves_to_registered_manifest_uid_scope(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    manifest = registry.register_perturbation_design_manifest(
+        path=_write(tmp_path, "perturbation_design_manifest.json"),
+        dataset_id="GSE133344",
+        raw_labels=["KLF1_NegCtrl0__KLF1_NegCtrl0", "NegCtrl0_NegCtrl0__NegCtrl0_NegCtrl0"],
+        guide_to_target_map={"NegCtrl0": "negative_control"},
+    )
+
+    scope = registry.resolve_manifest_scope(
+        {
+            "design_manifest_id": "outputs/perturbation_design_manifest.json",
+            "raw_label": "KLF1_NegCtrl0__KLF1_NegCtrl0",
+            "estimand": "single_target_marginal",
+        }
+    )
+
+    assert scope["design_manifest_id"] == manifest.artifact_id
+    assert scope["perturbation_uid"] == "target:KLF1"
+    assert scope["control_uid"] == "control:negative_control_pool"
+    assert scope["contrast_uid"] == "contrast:target:KLF1:vs:control:negative_control_pool"
+
+
+def test_manifest_basename_ref_does_not_resolve_to_uid_scope(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    registry.register_perturbation_design_manifest(
+        path=_write(tmp_path, "perturbation_design_manifest.json"),
+        dataset_id="GSE133344",
+        raw_labels=["KLF1_NegCtrl0__KLF1_NegCtrl0"],
+    )
+
+    scope = registry.resolve_manifest_scope(
+        {
+            "design_manifest_id": "perturbation_design_manifest.json",
+            "raw_label": "KLF1_NegCtrl0__KLF1_NegCtrl0",
+        }
+    )
+
+    assert scope["design_manifest_id"] == "perturbation_design_manifest.json"
+    assert "perturbation_uid" not in scope
+    assert "contrast_uid" not in scope
+
+def test_register_measured_de_autolinks_manifest_path_and_contrast_label(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    manifest = registry.register_perturbation_design_manifest(
+        path=_write(tmp_path, "perturbation_design_manifest.json"),
+        dataset_id="GSE133344",
+        raw_labels=["KLF1_NegCtrl0__KLF1_NegCtrl0", "NegCtrl0_NegCtrl0__NegCtrl0_NegCtrl0"],
+        guide_to_target_map={"NegCtrl0": "negative_control"},
+    )
+    artifact = registry.register_measured_de(
+        path=_write(tmp_path, "de.csv"),
+        contrast_left="KLF1_NegCtrl0__KLF1_NegCtrl0",
+        contrast_baseline="NegCtrl pool",
+        method="wilcoxon",
+        n_left=120,
+        n_baseline=150,
+        multiple_testing="BH",
+        has_padj=True,
+        scope={"design_manifest_id": "outputs/perturbation_design_manifest.json"},
+        eligibility=_eligible(),
+    )
+    claim = Claim(
+        claim_id="autolinked_claim",
+        text="KLF1 has a measured association.",
+        subject={"id": "KLF1"},
+        scope=artifact.scope,
+        requested_strength=StrengthCeiling.measured_association,
+        evidence_refs=[artifact.artifact_id],
+    )
+
+    decision = resolve_claim(claim, registry)
+
+    assert artifact.scope["design_manifest_id"] == manifest.artifact_id
+    assert artifact.scope["perturbation_uid"] == "target:KLF1"
+    assert artifact.scope["control_uid"] == "control:negative_control_pool"
+    assert decision.max_strength == StrengthCeiling.measured_association
+    assert decision.scope_fit == ScopeFit.exact
+
+
+def test_raw_contrast_uid_with_manifest_cannot_upgrade_scope(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    manifest = registry.register_perturbation_design_manifest(
+        path=_write(tmp_path, "perturbation_design_manifest.json"),
+        dataset_id="GSE133344",
+        raw_labels=["KLF1_NegCtrl0__KLF1_NegCtrl0"],
+    )
+    raw_scope = {
+        "design_manifest_id": manifest.artifact_id,
+        "contrast_uid": "KLF1_NegCtrl0__KLF1_NegCtrl0_vs_NegCtrl0_NegCtrl0__NegCtrl0_NegCtrl0",
+        "estimand": "single_target_marginal",
+    }
+    artifact = registry.register_measured_de(
+        path=_write(tmp_path, "de.csv"),
+        contrast_left="KLF1_NegCtrl0__KLF1_NegCtrl0",
+        contrast_baseline="NegCtrl pool",
+        method="wilcoxon",
+        n_left=120,
+        n_baseline=150,
+        multiple_testing="BH",
+        has_padj=True,
+        scope=raw_scope,
+        eligibility=_eligible(),
+    )
+    claim = Claim(
+        claim_id="raw_contrast_uid",
+        text="KLF1 has a measured association.",
+        subject={"id": "KLF1"},
+        scope=raw_scope,
+        requested_strength=StrengthCeiling.measured_association,
+        evidence_refs=[artifact.artifact_id],
+    )
+
+    decision = resolve_claim(claim, registry)
+
+    assert artifact.scope["manifest_uid_validation_error"] == ["contrast_uid"]
+    assert decision.max_strength != StrengthCeiling.measured_association
+    assert decision.scope_fit == ScopeFit.mismatch
+
+def test_manifest_path_without_uid_or_raw_label_cannot_upgrade_scope(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    registry.register_perturbation_design_manifest(
+        path=_write(tmp_path, "perturbation_design_manifest.json"),
+        dataset_id="GSE133344",
+        raw_labels=["KLF1_NegCtrl0__KLF1_NegCtrl0"],
+    )
+    artifact = registry.register_measured_de(
+        path=_write(tmp_path, "de.csv"),
+        contrast_left="KLF1_NegCtrl0__KLF1_NegCtrl0",
+        contrast_baseline="NegCtrl pool",
+        method="wilcoxon",
+        n_left=120,
+        n_baseline=150,
+        multiple_testing="BH",
+        has_padj=True,
+        scope={"design_manifest_id": "outputs/perturbation_design_manifest.json"},
+        eligibility=_eligible(),
+    )
+    claim = Claim(
+        claim_id="manifest_path_only",
+        text="KLF1 has a measured association.",
+        subject={"id": "KLF1"},
+        scope={"design_manifest_id": "outputs/perturbation_design_manifest.json", "estimand": "single_target_marginal"},
+        requested_strength=StrengthCeiling.measured_association,
+        evidence_refs=[artifact.artifact_id],
+    )
+
+    decision = resolve_claim(claim, registry)
+
+    assert decision.max_strength != StrengthCeiling.measured_association
+    assert decision.scope_fit == ScopeFit.unknown
 
 def test_raw_string_scope_no_longer_upgrades_to_measured_association(tmp_path: Path) -> None:
     registry = _registry(tmp_path)

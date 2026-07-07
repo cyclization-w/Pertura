@@ -1,0 +1,44 @@
+﻿{
+    "must_not_support":  [
+                             "validated_mechanism",
+                             "causal_mechanism",
+                             "driver_validation"
+                         ],
+    "stage_role":  "scope_definition",
+    "next_stage_recommendations":  [
+                                       "perturbation_design_manifest",
+                                       "guide_assignment",
+                                       "cell_qc"
+                                   ],
+    "evidence_role":  "experiment_context",
+    "can_support":  [
+                        "progress_summary"
+                    ],
+    "stage_id":  "experiment_design",
+    "allowed_mcp_tools":  [
+                              "mcp__pertura_evidence__register_experiment_design_artifact"
+                          ],
+    "evidence_producing":  false,
+    "failure_modes":  [
+                          "missing_required_metadata",
+                          "ambiguous_uid_or_scope",
+                          "no_supported_artifact_registered",
+                          "tool_or_code_error"
+                      ],
+    "optional_outputs":  [
+                             "outputs/plots/*",
+                             "outputs/tables/*"
+                         ],
+    "turn_final_surface_type":  "evidence_summary",
+    "required_outputs":  [
+                             "outputs/_summary.json"
+                         ],
+    "benchmark_expectations":  [
+                                   "stage_completion",
+                                   "artifact_registration_correct",
+                                   "metadata_completeness",
+                                   "stage_boundary_respected",
+                                   "exploration_not_surfaced",
+                                   "next_stage_recommendation_correct"
+                               ]
+}

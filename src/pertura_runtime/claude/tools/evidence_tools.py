@@ -51,7 +51,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
     @tool(
         "register_experiment_design_artifact",
         "Register structured experiment-design metadata used to build an EligibilityProfile.",
@@ -88,7 +88,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
 
     @tool(
         "register_guide_assignment_artifact",
@@ -128,7 +128,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
 
     @tool(
         "register_target_qc_artifact",
@@ -176,7 +176,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
 
     @tool(
         "register_measured_de_artifact",
@@ -218,7 +218,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             quality=_optional_dict(args.get("quality")),
             eligibility=_optional_dict(args.get("eligibility")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
 
     @tool(
         "register_predicted_effect_artifact",
@@ -254,7 +254,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             predicate=_optional_dict(args.get("predicate")),
             quality=_optional_dict(args.get("quality")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
 
     @tool(
         "register_curated_prior_artifact",
@@ -286,7 +286,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             predicate=_optional_dict(args.get("predicate")),
             quality=_optional_dict(args.get("quality")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
 
     @tool(
         "register_perturbation_efficiency_artifact",
@@ -330,7 +330,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
 
     @tool(
         "register_curated_enrichment_artifact",
@@ -372,7 +372,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
 
     @tool(
         "register_module_effect_artifact",
@@ -418,7 +418,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
 
     @tool(
         "register_global_effect_artifact",
@@ -466,7 +466,42 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
+    @tool(
+        "register_cell_state_reference_artifact",
+        "Register transcriptomic state-space, clustering, marker, and annotation context. This is scope/state context, not perturbation effect evidence.",
+        {
+            "path": str,
+            "assignment_column": str,
+            "embedding_methods": list,
+            "clustering_method": str,
+            "annotation_method": str,
+            "marker_summary_path": str,
+            "source_data_path": str,
+            "source_data_sha256": str,
+            "scope": dict,
+            "quality": dict,
+            "metadata": dict,
+            "notes": str,
+        },
+    )
+    async def register_cell_state_reference_artifact(args: dict[str, Any]) -> dict[str, Any]:
+        path = _resolve_evidence_source_path(workspace, str(args.get("path") or ""))
+        artifact = registry.register_cell_state_reference(
+            path=str(path.relative_to(workspace.root)),
+            assignment_column=_optional_text(args.get("assignment_column")),
+            embedding_methods=_optional_list(args.get("embedding_methods")),
+            clustering_method=_optional_text(args.get("clustering_method")),
+            annotation_method=_optional_text(args.get("annotation_method")),
+            marker_summary_path=_optional_text(args.get("marker_summary_path")),
+            source_data_path=_optional_text(args.get("source_data_path")),
+            source_data_sha256=_optional_text(args.get("source_data_sha256")),
+            scope=_optional_dict(args.get("scope")),
+            quality=_optional_dict(args.get("quality")),
+            metadata=_optional_dict(args.get("metadata")),
+            notes=_optional_text(args.get("notes")),
+        )
+        return _registration_result(workspace, registry, artifact)
     @tool(
         "register_cell_qc_artifact",
         "Register cell-level QC metadata. This is eligibility evidence, not effect evidence.",
@@ -499,7 +534,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
     @tool(
         "register_replication_artifact",
         "Register a conservative replication summary from already-registered measured artifact IDs only.",
@@ -515,7 +550,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             replication_type=_optional_text(args.get("replication_type")),
             notes=_optional_text(args.get("notes")),
         )
-        return _registration_result(registry, artifact)
+        return _registration_result(workspace, registry, artifact)
 
     @tool(
         "evaluate_claims",
@@ -531,10 +566,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
         decisions = resolve_claims(claims, registry)
         decisions_payload = [decision.to_dict() for decision in decisions]
         decisions_filename = _optional_text(args.get("decisions_filename"))
-        output_path = None
-        if decisions_filename:
-            output_path = _resolve_artifact_output_path(workspace, decisions_filename)
-            output_path.write_text(json.dumps({"decisions": decisions_payload}, ensure_ascii=False, indent=2), encoding="utf-8")
+        output_path = _write_claim_decisions(workspace, decisions_payload, decisions_filename or "claim_decisions.json")
         return {
             "success": True,
             "decisions": decisions_payload,
@@ -565,12 +597,16 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             title=str(args.get("title") or "Pertura Evidence Report"),
             write_path=report_path,
         )
+        decisions_payload = [decision.to_dict() for decision in report.decisions]
+        decisions_path = _write_claim_decisions(workspace, decisions_payload, "claim_decisions.json") if decisions_payload else None
         return {
             "success": True,
             "report_path": str(report_path.relative_to(workspace.root)),
+            "decisions_path": str(decisions_path.relative_to(workspace.root)) if decisions_path else None,
             "resolutions": [resolution.to_dict() for resolution in report.resolutions],
-            "decisions": [decision.to_dict() for decision in report.decisions],
+            "decisions": decisions_payload,
             "markdown_preview": report.markdown[:2000],
+            "next_step": "Use reports/evidence_report.md as the scientific surface. Do not re-evaluate claims unless the claims or registry change.",
         }
 
     return create_sdk_mcp_server(
@@ -588,6 +624,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             register_curated_enrichment_artifact,
             register_module_effect_artifact,
             register_global_effect_artifact,
+            register_cell_state_reference_artifact,
             register_cell_qc_artifact,
             register_replication_artifact,
             evaluate_claims,
@@ -596,14 +633,44 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
     )
 
 
-def _registration_result(registry: EvidenceRegistry, artifact) -> dict[str, Any]:
+
+def _write_registration_handoff(workspace: ClaudeRunWorkspace, payload: dict[str, Any]) -> None:
+    workspace.artifacts_dir.mkdir(parents=True, exist_ok=True)
+    latest_path = workspace.artifacts_dir / "latest_registration.json"
+    latest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    log_path = workspace.artifacts_dir / "registration_handoffs.jsonl"
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    if payload.get("next_claim_template") is not None:
+        claimable_path = workspace.artifacts_dir / "claimable_artifacts.json"
+        existing: list[dict[str, Any]] = []
+        if claimable_path.exists():
+            loaded = json.loads(claimable_path.read_text(encoding="utf-8"))
+            existing = list(loaded.get("artifacts") or []) if isinstance(loaded, dict) else []
+        compact = {
+            "artifact_id": payload.get("artifact_id"),
+            "artifact_path": payload.get("artifact_path"),
+            "evidence_class": payload.get("evidence_class"),
+            "artifact_intrinsic_ceiling": payload.get("artifact_intrinsic_ceiling"),
+            "next_claim_template": payload.get("next_claim_template"),
+        }
+        updated = [item for item in existing if item.get("artifact_id") != compact["artifact_id"]]
+        updated.append(compact)
+        claimable_path.write_text(json.dumps({"artifacts": updated}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _write_claim_decisions(workspace: ClaudeRunWorkspace, decisions_payload: list[dict[str, Any]], filename: str = "claim_decisions.json") -> Path:
+    output_path = _resolve_artifact_output_path(workspace, filename)
+    output_path.write_text(json.dumps({"decisions": decisions_payload}, ensure_ascii=False, indent=2), encoding="utf-8")
+    return output_path
+def _registration_result(workspace: ClaudeRunWorkspace, registry: EvidenceRegistry, artifact) -> dict[str, Any]:
     intrinsic = resolve_artifact_strength(artifact)
     claim_template = _next_claim_template(artifact)
     claim_usage = (
         "direct_evidence_ref" if claim_template is not None
         else "scope_or_eligibility_only; do not put this artifact_id in evidence_refs for effect claims"
     )
-    return {
+    payload = {
         "success": True,
         "artifact_id": artifact.artifact_id,
         "artifact_path": artifact.path,
@@ -615,8 +682,13 @@ def _registration_result(registry: EvidenceRegistry, artifact) -> dict[str, Any]
         "claim_template_policy": "Bookkeeping only: copy scope and evidence_refs; fill claim_id/text/subject/object/requested_strength yourself. This template does not suggest claim strength.",
         "claim_usage": claim_usage,
         "registry_path": str(registry.path.relative_to(registry.run_root)),
-        "next_step": "Copy next_claim_template.scope and next_claim_template.evidence_refs into explicit claims when present, then call evaluate_claims and render_evidence_report.",
+        "handoff_path": "artifacts/latest_registration.json",
+        "handoff_log_path": "artifacts/registration_handoffs.jsonl",
+        "claimable_artifacts_path": "artifacts/claimable_artifacts.json" if claim_template is not None else None,
+        "next_step": "If this tool result is visible, copy next_claim_template.scope and next_claim_template.evidence_refs into explicit claims when present. If the tool result is not visible, read artifacts/claimable_artifacts.json for claimable evidence or artifacts/latest_registration.json for the most recent registration. Then call render_evidence_report with explicit claims; it will write artifacts/claim_decisions.json.",
     }
+    _write_registration_handoff(workspace, payload)
+    return payload
 
 
 def _next_claim_template(artifact) -> dict[str, Any] | None:
@@ -640,18 +712,43 @@ def _next_claim_template(artifact) -> dict[str, Any] | None:
 
 
 def _load_claims(workspace: ClaudeRunWorkspace, args: dict[str, Any], *, required: bool = True) -> list[dict[str, Any]]:
-    inline_claims = args.get("claims") or []
-    claims: list[dict[str, Any]] = [dict(item) for item in inline_claims]
+    claims: list[dict[str, Any]] = _coerce_claim_items(args.get("claims"), field_name="claims")
     raw_path = _optional_text(args.get("claims_json_path"))
     if raw_path:
         path = _resolve_claims_source_path(workspace, raw_path)
         payload = json.loads(path.read_text(encoding="utf-8"))
-        loaded = payload.get("claims") if isinstance(payload, dict) else payload
-        claims.extend(dict(item) for item in (loaded or []))
+        loaded = payload.get("claims") if isinstance(payload, dict) and "claims" in payload else payload
+        claims.extend(_coerce_claim_items(loaded, field_name="claims_json_path"))
     if required and not claims:
         raise ValueError("claims or claims_json_path is required")
     return _dedupe_claims(claims)
 
+
+def _coerce_claim_items(value: Any, *, field_name: str) -> list[dict[str, Any]]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, dict):
+        if "claims" in value and isinstance(value.get("claims"), list):
+            return _coerce_claim_items(value.get("claims"), field_name=field_name)
+        return [dict(value)]
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{field_name} must be a JSON object or an array of JSON objects") from exc
+        return _coerce_claim_items(parsed, field_name=field_name)
+    if isinstance(value, list):
+        claims: list[dict[str, Any]] = []
+        for index, item in enumerate(value):
+            if isinstance(item, dict):
+                claims.append(dict(item))
+                continue
+            if isinstance(item, str):
+                claims.extend(_coerce_claim_items(item, field_name=f"{field_name}[{index}]"))
+                continue
+            raise ValueError(f"{field_name}[{index}] must be a JSON object, not {type(item).__name__}")
+        return claims
+    raise ValueError(f"{field_name} must be a JSON object or an array of JSON objects, not {type(value).__name__}")
 
 
 def _dedupe_claims(claims: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -742,6 +839,11 @@ def _optional_float(value: Any) -> float | None:
     return float(value)
 def _optional_dict(value: Any) -> dict:
     return dict(value or {}) if isinstance(value, dict) else {}
+
+
+def _optional_list(value: Any) -> list:
+    return list(value or []) if isinstance(value, list) else []
+
 
 
 

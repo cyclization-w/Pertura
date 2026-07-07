@@ -31,6 +31,7 @@ DEFAULT_CODEACT_ALLOWED_TOOLS = [
     "mcp__pertura_evidence__register_curated_enrichment_artifact",
     "mcp__pertura_evidence__register_module_effect_artifact",
     "mcp__pertura_evidence__register_global_effect_artifact",
+    "mcp__pertura_evidence__register_cell_state_reference_artifact",
     "mcp__pertura_evidence__register_cell_qc_artifact",
     "mcp__pertura_evidence__register_replication_artifact",
     "mcp__pertura_evidence__evaluate_claims",
@@ -53,6 +54,7 @@ class ClaudeRuntimeOptions:
     python_exe: str | None = None
     python_preflight_timeout_s: float = 240.0
     interaction_mode: str = "benchmark"
+    stage_id: str | None = None
 
 
 def build_agent_options(
@@ -123,6 +125,7 @@ def describe_options(config: ClaudeRuntimeOptions) -> dict[str, Any]:
         "python_exe": config.python_exe,
         "python_preflight_timeout_s": config.python_preflight_timeout_s,
         "interaction_mode": config.interaction_mode,
+        "stage_id": config.stage_id,
         "env_keys": sorted(config.env),
     }
 

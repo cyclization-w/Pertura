@@ -7,6 +7,7 @@ from pathlib import Path
 from pertura_runtime.claude.agent import ClaudePerturaAgent
 from pertura_runtime.claude.options import ClaudeRuntimeOptions
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
+from pertura_runtime.stages import StageCatalogError, validate_stage_id
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,6 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--max-turns", type=int, default=20, help="Maximum Claude agent turns.")
     parser.add_argument("--interaction-mode", choices=["benchmark", "interactive"], default="benchmark", help="Benchmark mode never asks the user; interactive mode may collect metadata as user-supplied metadata only.")
+    parser.add_argument("--stage", type=str, default=None, help="Run exactly one Evidence-Aware Stage Catalog stage by id.")
     parser.add_argument("--max-budget-usd", type=float, default=None, help="Optional budget cap.")
     parser.add_argument("--task", type=str, default=None, help="Task prompt. Defaults to Norman smoke task.")
     parser.add_argument("--task-file", type=Path, default=None, help="Read task prompt from file.")
@@ -39,6 +41,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Do not disallow WebFetch/WebSearch. Default blocks web tools for local smoke tests.",
     )
     args = parser.parse_args(argv)
+    try:
+        stage_id = validate_stage_id(args.stage)
+    except StageCatalogError as exc:
+        parser.error(str(exc))
+
 
     task = args.task
     if args.task_file is not None:
@@ -59,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         python_exe=args.python_exe,
         python_preflight_timeout_s=args.python_preflight_timeout_s,
         interaction_mode=args.interaction_mode,
+        stage_id=stage_id,
     )
     agent = ClaudePerturaAgent(
         workspace=workspace,

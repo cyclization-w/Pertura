@@ -1,0 +1,48 @@
+{
+  "stage_id": "measured_de",
+  "stage_role": "effect_evidence",
+  "evidence_role": "measured_differential_expression",
+  "evidence_producing": true,
+  "turn_final_surface_type": "evidence_summary",
+  "allowed_mcp_tools": [
+    "mcp__pertura_evidence__register_measured_de_artifact"
+  ],
+  "required_outputs": [
+    "outputs/measured_de_summary.json",
+    "outputs/<contrast>_de.csv or equivalent DE table"
+  ],
+  "optional_outputs": [
+    "outputs/plots/*",
+    "outputs/tables/*",
+    "outputs/candidate_claims.json"
+  ],
+  "can_support": [
+    "registered measured_de artifact",
+    "measured_association with manifest UID scope and validated EligibilityProfile",
+    "candidate claim handoff to claim_report"
+  ],
+  "must_not_support": [
+    "validated_mechanism",
+    "causal_mechanism",
+    "driver_validation"
+  ],
+  "failure_modes": [
+    "missing_required_metadata",
+    "ambiguous_uid_or_scope",
+    "no_supported_artifact_registered",
+    "tool_or_code_error"
+  ],
+  "next_stage_recommendations": [
+    "curated_enrichment",
+    "module_effect",
+    "claim_report"
+  ],
+  "benchmark_expectations": [
+    "stage_completion",
+    "artifact_registration_correct",
+    "metadata_completeness",
+    "stage_boundary_respected",
+    "exploration_not_surfaced",
+    "next_stage_recommendation_correct"
+  ]
+}

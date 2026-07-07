@@ -1,0 +1,44 @@
+{
+  "stage_id": "claim_report",
+  "stage_role": "synthesis",
+  "evidence_role": "claim_decision_surface",
+  "evidence_producing": false,
+  "turn_final_surface_type": "claim_decision_surface",
+  "allowed_mcp_tools": [
+    "mcp__pertura_evidence__evaluate_claims",
+    "mcp__pertura_evidence__render_evidence_report"
+  ],
+  "required_outputs": [
+    "outputs/claims.json or explicit claims",
+    "artifacts/claim_decisions.json",
+    "reports/evidence_report.md"
+  ],
+  "optional_outputs": [
+    "outputs/evidence_gap_summary.json",
+    "outputs/recommended_next_evidence.json"
+  ],
+  "can_support": [
+    "controlled scientific surface from ClaimDecision"
+  ],
+  "must_not_support": [
+    "validated_mechanism",
+    "causal_mechanism",
+    "driver_validation",
+    "free_prose_scientific_surface"
+  ],
+  "failure_modes": [
+    "missing_explicit_claims",
+    "claim_without_registered_evidence_refs",
+    "ambiguous_uid_or_scope",
+    "tool_or_code_error"
+  ],
+  "next_stage_recommendations": [],
+  "benchmark_expectations": [
+    "stage_completion",
+    "artifact_registration_correct",
+    "metadata_completeness",
+    "stage_boundary_respected",
+    "exploration_not_surfaced",
+    "next_stage_recommendation_correct"
+  ]
+}

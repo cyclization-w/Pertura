@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
+from pertura_runtime.stages import build_stage_prompt_section
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TASK_HELPERS = {
@@ -14,6 +15,11 @@ TASK_HELPERS = {
 OUTPUT_CONTRACT = """# Pertura output contract
 
 Write generated files only under `outputs/`.
+
+Language and encoding discipline:
+
+- Write runtime artifacts, registered metadata, reports, and stage summaries in English.
+- Prefer ASCII punctuation in JSON and Markdown fields; avoid smart quotes, non-ASCII dashes, and decorative symbols.
 
 For this evidence-gated v0 run, create these files when possible:
 
@@ -62,6 +68,9 @@ Evidence-gated report discipline:
   If those are not separate files, provide structured inline `eligibility` fields in the
   measured artifact. Prose such as "guide assignment passed" or "QC passed" is not
   sufficient for claim-level evidence.
+- If you produce a transcriptomic state reference, clustering, marker, or annotation summary,
+  call `mcp__pertura_evidence__register_cell_state_reference_artifact`.
+  Cell state references define scope/context and downstream stratification only; do not present them as perturbation effect evidence.
 - If you produce a cell-level QC summary, call `mcp__pertura_evidence__register_cell_qc_artifact`.
   Cell QC is analysis-eligibility evidence only; do not present it as biological effect evidence.
 - If you produce a measured DE table or similar scientific evidence, call
@@ -74,11 +83,16 @@ Evidence-gated report discipline:
   and target/control cell counts. Target engagement does not establish downstream mechanism.
 - After every evidence registration, inspect the registrar response. If it includes
   `next_claim_template`, copy only its `scope` and `evidence_refs` into the claim.
+  If the MCP tool result is not visible, read `artifacts/claimable_artifacts.json`
+  for effect evidence handoffs, or `artifacts/latest_registration.json` for the most recent registration,
+  and copy `next_claim_template.scope` and `next_claim_template.evidence_refs` from there.
   Do not copy or invent claim strength from the template; choose `requested_strength`
   only from the scientific statement being tested. If the response says the artifact
   is scope/eligibility-only, do not put that artifact id in effect-claim `evidence_refs`.
-- For explicit scientific conclusions, call `mcp__pertura_evidence__evaluate_claims`
-  or pass explicit `claims` into `mcp__pertura_evidence__render_evidence_report`.
+- For explicit scientific conclusions, pass explicit `claims` into
+  `mcp__pertura_evidence__render_evidence_report`; it writes both `reports/evidence_report.md`
+  and the final `artifacts/claim_decisions.json`. Do not separately re-evaluate or re-render
+  unless the claims or registry changed.
 - If you produce a curated enrichment result from measured DE genes, register it with
   `mcp__pertura_evidence__register_curated_enrichment_artifact` and bind it to the
   measured artifact id. Enrichment provides curated context only, not validation.
@@ -120,10 +134,11 @@ Use only local evidence; do not inject public dataset knowledge or memorized bio
 """
 
 
-def build_system_prompt(workspace: ClaudeRunWorkspace, *, python_environment: Any | None = None, interaction_mode: str = "benchmark") -> str:
+def build_system_prompt(workspace: ClaudeRunWorkspace, *, python_environment: Any | None = None, interaction_mode: str = "benchmark", stage_id: str | None = None) -> str:
     python_section = ""
     if python_environment is not None:
         python_section = "\n" + python_environment.prompt_section()
+    stage_section = build_stage_prompt_section(stage_id) if stage_id else ""
     return f"""You are Pertura, a Perturb-seq analysis coding agent.
 
 This is an evidence-gated Claude Agent SDK runtime v0 smoke test.
@@ -162,14 +177,18 @@ Operating rules:
 12. Register prediction artifacts and curated-prior artifacts with their dedicated evidence tools; never describe them as measured validation.
 13. User-visible scientific report sections must come from `mcp__pertura_evidence__render_evidence_report`, which renders conclusion strength from registered execution artifacts, manifest UID scope, eligibility profiles, policy, and optional explicit claims.
 14. Treat your final response as working notes that point to generated files, not as a free-form scientific report.
+15. Use English for runtime artifacts, registered metadata, reports, and stage summaries. Prefer ASCII punctuation in JSON and Markdown fields.
 
+{stage_section}
 The output contract is also written at `task/PERTURA_OUTPUT_CONTRACT.md`.
 """
 
 
-def write_prompt_files(workspace: ClaudeRunWorkspace, *, task: str, python_environment: Any | None = None, interaction_mode: str = "benchmark") -> str:
-    system_prompt = build_system_prompt(workspace, python_environment=python_environment, interaction_mode=interaction_mode)
+def write_prompt_files(workspace: ClaudeRunWorkspace, *, task: str, python_environment: Any | None = None, interaction_mode: str = "benchmark", stage_id: str | None = None) -> str:
+    system_prompt = build_system_prompt(workspace, python_environment=python_environment, interaction_mode=interaction_mode, stage_id=stage_id)
     workspace.write_task_files(task=task, system_prompt=system_prompt, output_contract=OUTPUT_CONTRACT)
+    if stage_id:
+        workspace.write_text(workspace.task_dir / "PERTURA_STAGE_PROMPT.md", build_stage_prompt_section(stage_id))
     _write_task_helpers(workspace)
     return system_prompt
 

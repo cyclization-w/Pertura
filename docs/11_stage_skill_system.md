@@ -1,4 +1,4 @@
-# 11. Stage Skill System
+# 11. Evidence-Aware Stage Catalog
 
 ## Purpose
 
@@ -22,7 +22,7 @@ hard evidence gate layer
   Produces the user-visible scientific surface from ClaimDecision.
 ```
 
-The stage skill system is not a replacement for the evidence gate. It is also not a full pipeline runner or a heavy workflow planner. It is a stage-native contract system that gives Claude domain structure without taking away exploratory freedom.
+The Evidence-Aware Stage Catalog is not a replacement for the evidence gate. It is also not a full pipeline runner or a heavy workflow planner. It is a stage-native contract system that gives Claude domain structure without taking away exploratory freedom.
 
 ## Relationship To SP-Mind
 
@@ -79,14 +79,16 @@ ranking workflow
 ...
 ```
 
-It should instead implement a finite catalog of native Perturb-seq stages:
+It should instead implement a finite catalog of native Perturb-seq stages. The implemented catalog lives at `docs/stages/index.yaml`, with Claude-readable cards under `docs/stages/cards/` and runtime/benchmark contracts under `docs/stages/contracts/`:
 
 ```text
+preflight
 experiment_design
 perturbation_design_manifest
 guide_assignment
 cell_qc
 target_qc
+cell_state_reference
 measured_de
 target_engagement
 curated_enrichment
@@ -99,7 +101,6 @@ claim_report
 Future P2 stages may include:
 
 ```text
-cell_state_reference
 composition_effect
 trajectory_effect
 cofunctional_targets
@@ -594,3 +595,8 @@ These design invariants are now fixed:
 9. ask_user is runtime-owned and disabled in benchmark mode.
 10. Workflow substrate records stage/run state but does not replace the evidence gate.
 ```
+## Language And Encoding
+
+Runtime artifacts, registered metadata, reports, stage summaries, and benchmark fixtures should be written in English. JSON and Markdown fields should prefer ASCII punctuation. Avoid smart quotes, non-ASCII dashes, and decorative symbols in registered metadata because those strings may pass through SDK logs, JSONL registries, Markdown reports, and shell output on different platforms.
+
+This is a portability rule, not a scientific constraint. Claude remains free to analyze local data and write code, but the artifacts handed to Pertura should be English and ASCII-safe.

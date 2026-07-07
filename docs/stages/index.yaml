@@ -1,0 +1,192 @@
+﻿{
+    "statuses":  [
+                     "completed",
+                     "partial",
+                     "blocked",
+                     "skipped",
+                     "exploratory_only",
+                     "no_evidence_registered",
+                     "failed"
+                 ],
+    "stages":  [
+                   {
+                       "stage_role":  "scope_definition",
+                       "next_stage_recommendations":  [
+                                                          "experiment_design",
+                                                          "perturbation_design_manifest",
+                                                          "cell_qc"
+                                                      ],
+                       "contract":  "contracts/preflight.yaml",
+                       "card":  "cards/preflight.md",
+                       "evidence_role":  "workspace_readiness",
+                       "stage_id":  "preflight",
+                       "turn_final_surface_type":  "progress_only"
+                   },
+                   {
+                       "stage_role":  "scope_definition",
+                       "next_stage_recommendations":  [
+                                                          "perturbation_design_manifest",
+                                                          "guide_assignment",
+                                                          "cell_qc"
+                                                      ],
+                       "contract":  "contracts/experiment_design.yaml",
+                       "card":  "cards/experiment_design.md",
+                       "evidence_role":  "experiment_context",
+                       "stage_id":  "experiment_design",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "scope_definition",
+                       "next_stage_recommendations":  [
+                                                          "guide_assignment",
+                                                          "target_qc",
+                                                          "measured_de"
+                                                      ],
+                       "contract":  "contracts/perturbation_design_manifest.yaml",
+                       "card":  "cards/perturbation_design_manifest.md",
+                       "evidence_role":  "identity_authority",
+                       "stage_id":  "perturbation_design_manifest",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "analysis_eligibility",
+                       "next_stage_recommendations":  [
+                                                          "target_qc",
+                                                          "measured_de",
+                                                          "target_engagement"
+                                                      ],
+                       "contract":  "contracts/guide_assignment.yaml",
+                       "card":  "cards/guide_assignment.md",
+                       "evidence_role":  "perturbation_cell_mapping",
+                       "stage_id":  "guide_assignment",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "analysis_eligibility",
+                       "next_stage_recommendations":  [
+                                                          "target_qc",
+                                                          "cell_state_reference",
+                                                          "measured_de"
+                                                      ],
+                       "contract":  "contracts/cell_qc.yaml",
+                       "card":  "cards/cell_qc.md",
+                       "evidence_role":  "cell_quality_context",
+                       "stage_id":  "cell_qc",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "analysis_eligibility",
+                       "next_stage_recommendations":  [
+                                                          "cell_state_reference",
+                                                          "measured_de",
+                                                          "target_engagement"
+                                                      ],
+                       "contract":  "contracts/target_qc.yaml",
+                       "card":  "cards/target_qc.md",
+                       "evidence_role":  "target_control_quality",
+                       "stage_id":  "target_qc",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "scope_definition",
+                       "next_stage_recommendations":  [
+                                                          "measured_de",
+                                                          "module_effect",
+                                                          "global_effect"
+                                                      ],
+                       "contract":  "contracts/cell_state_reference.yaml",
+                       "card":  "cards/cell_state_reference.md",
+                       "evidence_role":  "state_context",
+                       "stage_id":  "cell_state_reference",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "effect_evidence",
+                       "next_stage_recommendations":  [
+                                                          "curated_enrichment",
+                                                          "module_effect",
+                                                          "claim_report"
+                                                      ],
+                       "contract":  "contracts/measured_de.yaml",
+                       "card":  "cards/measured_de.md",
+                       "evidence_role":  "measured_differential_expression",
+                       "stage_id":  "measured_de",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "effect_evidence",
+                       "next_stage_recommendations":  [
+                                                          "measured_de",
+                                                          "claim_report"
+                                                      ],
+                       "contract":  "contracts/target_engagement.yaml",
+                       "card":  "cards/target_engagement.md",
+                       "evidence_role":  "measured_target_engagement",
+                       "stage_id":  "target_engagement",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "prior_context",
+                       "next_stage_recommendations":  [
+                                                          "claim_report"
+                                                      ],
+                       "contract":  "contracts/curated_enrichment.yaml",
+                       "card":  "cards/curated_enrichment.md",
+                       "evidence_role":  "curated_context",
+                       "stage_id":  "curated_enrichment",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "effect_evidence",
+                       "next_stage_recommendations":  [
+                                                          "claim_report"
+                                                      ],
+                       "contract":  "contracts/module_effect.yaml",
+                       "card":  "cards/module_effect.md",
+                       "evidence_role":  "module_score_association",
+                       "stage_id":  "module_effect",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "effect_evidence",
+                       "next_stage_recommendations":  [
+                                                          "claim_report"
+                                                      ],
+                       "contract":  "contracts/global_effect.yaml",
+                       "card":  "cards/global_effect.md",
+                       "evidence_role":  "global_response_association",
+                       "stage_id":  "global_effect",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "prediction_evidence",
+                       "next_stage_recommendations":  [
+                                                          "claim_report"
+                                                      ],
+                       "contract":  "contracts/prediction_artifact.yaml",
+                       "card":  "cards/prediction_artifact.md",
+                       "evidence_role":  "prediction_context",
+                       "stage_id":  "prediction_artifact",
+                       "turn_final_surface_type":  "evidence_summary"
+                   },
+                   {
+                       "stage_role":  "synthesis",
+                       "next_stage_recommendations":  [
+
+                                                      ],
+                       "contract":  "contracts/claim_report.yaml",
+                       "card":  "cards/claim_report.md",
+                       "evidence_role":  "claim_decision_surface",
+                       "stage_id":  "claim_report",
+                       "turn_final_surface_type":  "claim_decision_surface"
+                   }
+               ],
+    "lifecycle":  [
+                      "scratch outputs",
+                      "EvidenceCandidate",
+                      "EvidenceArtifact",
+                      "ClaimDecision",
+                      "controlled surface"
+                  ],
+    "catalog_name":  "Evidence-Aware Stage Catalog"
+}

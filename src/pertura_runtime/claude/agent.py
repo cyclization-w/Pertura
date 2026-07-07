@@ -77,6 +77,7 @@ class ClaudePerturaAgent:
             task=task_text,
             python_environment=python_environment,
             interaction_mode=self.config.interaction_mode,
+            stage_id=self.config.stage_id,
         )
         self.workspace.update_manifest(
             {
@@ -84,6 +85,7 @@ class ClaudePerturaAgent:
                 "task": task_text,
                 "python_environment": python_environment.to_manifest(),
                 "interaction_mode": runtime_config.interaction_mode,
+                "stage_id": runtime_config.stage_id,
             }
         )
 

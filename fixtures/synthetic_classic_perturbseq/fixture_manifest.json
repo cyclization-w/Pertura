@@ -1,0 +1,24 @@
+{
+  "expected_signal": "KLF1 and erythroid marker genes are lower in KLF1 perturbation cells than in negative controls.",
+  "fixture_name": "synthetic_classic_perturbseq",
+  "guide_identity_column": "guide_identity",
+  "guide_to_target_map": {
+    "KLF1": "KLF1",
+    "NegCtrl0": "negative_control"
+  },
+  "h5ad": "synthetic_classic_perturbseq.h5ad",
+  "n_cells": 144,
+  "n_genes": 39,
+  "purpose": "Pertura natural classic Perturb-seq smoke fixture for cell_state_reference -> measured_de -> claim_report.",
+  "raw_control_label": "NegCtrl0_NegCtrl0__NegCtrl0_NegCtrl0",
+  "raw_klf1_label": "KLF1_NegCtrl0__KLF1_NegCtrl0",
+  "raw_labels": [
+    "KLF1_NegCtrl0__KLF1_NegCtrl0",
+    "NegCtrl0_NegCtrl0__NegCtrl0_NegCtrl0"
+  ],
+  "recommended_contrast": {
+    "baseline": "NegCtrl0_NegCtrl0__NegCtrl0_NegCtrl0",
+    "estimand": "single_target_marginal",
+    "left": "KLF1_NegCtrl0__KLF1_NegCtrl0"
+  }
+}
