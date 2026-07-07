@@ -20,7 +20,12 @@ from pertura_gate.core.schema import (
     StrengthCeiling,
 )
 from pertura_gate.identity.scope import compare_scope
-from pertura_gate.resolver.warrant import best_resolution as choose_best_resolution
+from pertura_gate.resolver.binding import resolve_bound_measured_artifact, resolve_prediction_measured_binding
+from pertura_gate.resolver.warrant import (
+    best_resolution as choose_best_resolution,
+    intrinsic_warrant,
+    surface_for_claim,
+)
 
 
 
@@ -40,58 +45,62 @@ class EligibilityValidation:
     sources: list[str]
 
 
-def resolve_artifact_strength(artifact: EvidenceArtifact | None, *, policy: GatePolicy = DEFAULT_POLICY) -> ResolvedStrength:
-    """Resolve the artifact-intrinsic ceiling supported by execution facts.
 
-    This is intentionally artifact-local. Claim-conditioned resolution happens in
-    resolve_claim(), where a measured artifact must also satisfy an EligibilityProfile.
-    """
 
-    if artifact is None:
-        return ResolvedStrength(
-            artifact_id="missing",
-            tier=EvidenceTier.unsupported,
-            ceiling=StrengthCeiling.unsupported,
-            reasons=["no registered evidence artifact was found"],
-        )
-    if artifact.kind == ArtifactKind.measured_de:
-        return _resolve_measured_de_intrinsic(artifact, policy=policy)
-    if artifact.kind == ArtifactKind.perturbation_efficiency:
-        return _resolve_perturbation_efficiency(artifact, policy=policy)
-    if artifact.kind == ArtifactKind.module_effect:
-        return _resolve_module_effect(artifact, policy=policy)
-    if artifact.kind == ArtifactKind.global_effect:
-        return _resolve_global_effect(artifact, policy=policy)
-    if artifact.kind == ArtifactKind.predicted_effect:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.predicted,
-            ceiling=StrengthCeiling.predicted_effect,
-            reasons=["registered prediction artifact supports prediction evidence only"],
-        )
-    if artifact.kind == ArtifactKind.curated_enrichment_result:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.curated_prior,
-            ceiling=StrengthCeiling.curated_prior_support,
-            reasons=["registered curated enrichment artifact provides curated context only unless bound to measured evidence"],
-        )
-    if artifact.kind == ArtifactKind.curated_prior_lookup:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.curated_prior,
-            ceiling=StrengthCeiling.curated_prior_support,
-            reasons=["registered curated prior artifact supports prior context only"],
-        )
-    if artifact.kind == ArtifactKind.replication_summary:
-        return _resolve_replication(artifact, policy=policy)
-    return ResolvedStrength(
-        artifact_id=artifact.artifact_id,
-        tier=_tier_for_evidence_class(artifact.effective_evidence_class),
-        ceiling=StrengthCeiling.observation,
-        reasons=[f"artifact kind {artifact.kind.value} defines scope or eligibility only in v1"],
+@dataclass(frozen=True)
+class MeasuredPredicateSpec:
+    kind: ArtifactKind
+    expected_ceiling: StrengthCeiling
+    scope_reason: str
+    success_reasons: tuple[str, ...] = ()
+    full_eligibility: bool = False
+    safety_checks: tuple[str, ...] = (
+        "cell_qc",
+        "trusted_method",
+        "replicate",
+        "confound",
+        "control_calibration",
     )
+    claim_guards: tuple[str, ...] = ()
 
+
+_MEASURED_PREDICATE_SPECS: dict[ArtifactKind, MeasuredPredicateSpec] = {
+    ArtifactKind.measured_de: MeasuredPredicateSpec(
+        kind=ArtifactKind.measured_de,
+        expected_ceiling=StrengthCeiling.measured_association,
+        scope_reason="measured association requires claim and artifact scope to resolve through a PerturbationDesignManifest UID",
+        success_reasons=("measured DE artifact has resolved contrast, sample counts, method, and multiple-testing metadata",),
+        full_eligibility=True,
+        safety_checks=("cell_qc", "trusted_method", "replicate", "confound", "control_calibration", "guide_power"),
+    ),
+    ArtifactKind.perturbation_efficiency: MeasuredPredicateSpec(
+        kind=ArtifactKind.perturbation_efficiency,
+        expected_ceiling=StrengthCeiling.measured_target_engagement,
+        scope_reason="target engagement requires claim and artifact scope to resolve through a PerturbationDesignManifest UID",
+        safety_checks=("cell_qc", "trusted_method", "replicate", "confound", "control_calibration", "guide_power"),
+    ),
+    ArtifactKind.module_effect: MeasuredPredicateSpec(
+        kind=ArtifactKind.module_effect,
+        expected_ceiling=StrengthCeiling.measured_association,
+        scope_reason="module_effect requires claim and artifact scope to resolve through a PerturbationDesignManifest UID",
+    ),
+    ArtifactKind.global_effect: MeasuredPredicateSpec(
+        kind=ArtifactKind.global_effect,
+        expected_ceiling=StrengthCeiling.measured_association,
+        scope_reason="global_effect requires claim and artifact scope to resolve through a PerturbationDesignManifest UID",
+        claim_guards=("not_gene_specific_de",),
+    ),
+    ArtifactKind.composition_effect: MeasuredPredicateSpec(
+        kind=ArtifactKind.composition_effect,
+        expected_ceiling=StrengthCeiling.measured_association,
+        scope_reason="composition_effect requires claim and artifact scope to resolve through a PerturbationDesignManifest UID",
+        claim_guards=("not_gene_specific_de", "not_target_engagement"),
+    ),
+}
+def resolve_artifact_strength(artifact: EvidenceArtifact | None, *, policy: GatePolicy = DEFAULT_POLICY) -> ResolvedStrength:
+    """Resolve the artifact-intrinsic ceiling supported by execution facts."""
+
+    return intrinsic_warrant(artifact, policy=policy)
 
 def resolve_claim(claim: Claim | dict, registry, policy: GatePolicy = DEFAULT_POLICY) -> ClaimDecision:
     """Resolve a claim-specific ceiling from runtime-registered artifacts."""
@@ -180,7 +189,7 @@ def resolve_claim(claim: Claim | dict, registry, policy: GatePolicy = DEFAULT_PO
         supporting_artifacts=supporting,
         missing_artifacts=missing_refs,
         blocked_requested_strength=blocked,
-        allowed_surface=_render_allowed_surface(claim_obj, best_resolution.ceiling, candidate_artifacts, evidence_classes),
+        allowed_surface=surface_for_claim(claim_obj, best_resolution.ceiling, candidate_artifacts, evidence_classes),
         reasons=_dedupe(decision_reasons),
         policy_version=policy.version,
         policy_hash=policy.policy_hash,
@@ -193,20 +202,46 @@ def resolve_claims(claims: list[Claim | dict], registry, policy: GatePolicy = DE
 
 
 def _resolve_claim_artifact(claim: Claim, artifact: EvidenceArtifact, registry, *, policy: GatePolicy) -> ResolvedStrength:
-    if artifact.kind == ArtifactKind.measured_de:
-        intrinsic = _resolve_measured_de_intrinsic(artifact, policy=policy)
-        if intrinsic.ceiling != StrengthCeiling.measured_association:
-            return intrinsic
-        manifest_scope_fit = compare_manifest_scope(claim.scope, artifact.scope)
-        if not manifest_scope_is_strong(manifest_scope_fit):
-            return ResolvedStrength(
-                artifact_id=artifact.artifact_id,
-                tier=EvidenceTier.measured,
-                ceiling=StrengthCeiling.observation,
-                reasons=[
-                    "measured association requires claim and artifact scope to resolve through a PerturbationDesignManifest UID",
-                ],
-            )
+    if artifact.kind in _MEASURED_PREDICATE_SPECS:
+        return _resolve_measured_predicate_claim(claim, artifact, _MEASURED_PREDICATE_SPECS[artifact.kind], registry, policy=policy)
+    if artifact.kind == ArtifactKind.prediction_measured_concordance:
+        return _resolve_prediction_measured_concordance(claim, artifact, registry, policy=policy)
+    if artifact.kind == ArtifactKind.curated_enrichment_result:
+        return _resolve_curated_enrichment(claim, artifact, registry, policy=policy)
+    if artifact.kind == ArtifactKind.replication_summary:
+        return _resolve_replication_summary(claim, artifact, registry, policy=policy)
+    return resolve_artifact_strength(artifact, policy=policy)
+
+
+
+def _resolve_measured_predicate_claim(
+    claim: Claim,
+    artifact: EvidenceArtifact,
+    spec: MeasuredPredicateSpec,
+    registry,
+    *,
+    policy: GatePolicy,
+) -> ResolvedStrength:
+    intrinsic = resolve_artifact_strength(artifact, policy=policy)
+    if intrinsic.ceiling != spec.expected_ceiling:
+        return intrinsic
+    manifest_scope_fit = compare_manifest_scope(claim.scope, artifact.scope)
+    if not manifest_scope_is_strong(manifest_scope_fit):
+        return ResolvedStrength(
+            artifact_id=artifact.artifact_id,
+            tier=EvidenceTier.measured,
+            ceiling=StrengthCeiling.observation,
+            reasons=[spec.scope_reason],
+        )
+    guard_reasons = _measured_predicate_guard_reasons(claim, artifact, spec)
+    if guard_reasons:
+        return ResolvedStrength(
+            artifact_id=artifact.artifact_id,
+            tier=EvidenceTier.measured,
+            ceiling=StrengthCeiling.observation,
+            reasons=guard_reasons,
+        )
+    if spec.full_eligibility:
         if not policy.require_measured_eligibility_for_claims:
             return intrinsic
         eligibility = validate_measured_association_eligibility(claim, artifact, registry, policy=policy)
@@ -223,79 +258,164 @@ def _resolve_claim_artifact(claim: Claim, artifact: EvidenceArtifact, registry, 
         return ResolvedStrength(
             artifact_id=artifact.artifact_id,
             tier=EvidenceTier.measured,
-            ceiling=StrengthCeiling.measured_association,
+            ceiling=spec.expected_ceiling,
             reasons=[
-                "measured DE artifact has resolved contrast, sample counts, method, and multiple-testing metadata",
+                *spec.success_reasons,
                 "EligibilityProfile satisfied: " + ", ".join(eligibility.sources),
             ],
         )
-    if artifact.kind == ArtifactKind.perturbation_efficiency:
-        intrinsic = _resolve_perturbation_efficiency(artifact, policy=policy)
-        if intrinsic.ceiling != StrengthCeiling.measured_target_engagement:
-            return intrinsic
-        manifest_scope_fit = compare_manifest_scope(claim.scope, artifact.scope)
-        if not manifest_scope_is_strong(manifest_scope_fit):
-            return ResolvedStrength(
-                artifact_id=artifact.artifact_id,
-                tier=EvidenceTier.measured,
-                ceiling=StrengthCeiling.observation,
-                reasons=[
-                    "target engagement requires claim and artifact scope to resolve through a PerturbationDesignManifest UID",
-                ],
-            )
-        cell_qc_reasons = _cell_qc_reasons_for_claim_artifact(claim, artifact, registry, policy=policy)
-        if cell_qc_reasons:
-            return ResolvedStrength(
-                artifact_id=artifact.artifact_id,
-                tier=EvidenceTier.measured,
-                ceiling=StrengthCeiling.observation,
-                reasons=cell_qc_reasons,
-            )
-        return intrinsic
-    if artifact.kind == ArtifactKind.curated_enrichment_result:
-        return _resolve_curated_enrichment(claim, artifact, registry, policy=policy)
-    if artifact.kind in {ArtifactKind.module_effect, ArtifactKind.global_effect}:
-        intrinsic = resolve_artifact_strength(artifact, policy=policy)
-        if intrinsic.ceiling != StrengthCeiling.measured_association:
-            return intrinsic
-        manifest_scope_fit = compare_manifest_scope(claim.scope, artifact.scope)
-        if not manifest_scope_is_strong(manifest_scope_fit):
-            return ResolvedStrength(
-                artifact_id=artifact.artifact_id,
-                tier=EvidenceTier.measured,
-                ceiling=StrengthCeiling.observation,
-                reasons=[
-                    f"{artifact.kind.value} requires claim and artifact scope to resolve through a PerturbationDesignManifest UID",
-                ],
-            )
-        if artifact.kind == ArtifactKind.global_effect and _claim_requests_gene_specific_effect(claim):
-            return ResolvedStrength(
-                artifact_id=artifact.artifact_id,
-                tier=EvidenceTier.measured,
-                ceiling=StrengthCeiling.observation,
-                reasons=["global-effect artifact does not support gene-specific differential-expression claims"],
-            )
-        if policy.require_measured_eligibility_for_claims:
-            eligibility = validate_measured_association_eligibility(claim, artifact, registry, policy=policy)
-            if not eligibility.passed:
-                return ResolvedStrength(
-                    artifact_id=artifact.artifact_id,
-                    tier=EvidenceTier.measured,
-                    ceiling=StrengthCeiling.observation,
-                    reasons=[
-                        f"{artifact.kind.value} lacks a validated EligibilityProfile for this claim",
-                        *eligibility.reasons,
-                    ],
-                )
-            return ResolvedStrength(
-                artifact_id=artifact.artifact_id,
-                tier=EvidenceTier.measured,
-                ceiling=StrengthCeiling.measured_association,
-                reasons=[*intrinsic.reasons, "EligibilityProfile satisfied: " + ", ".join(eligibility.sources)],
-            )
-        return intrinsic
-    return resolve_artifact_strength(artifact, policy=policy)
+    safety_reasons = _statistical_safety_reasons_for_claim_artifact(claim, artifact, registry, policy=policy, checks=spec.safety_checks)
+    if safety_reasons:
+        return ResolvedStrength(
+            artifact_id=artifact.artifact_id,
+            tier=EvidenceTier.measured,
+            ceiling=StrengthCeiling.observation,
+            reasons=safety_reasons,
+        )
+    return intrinsic
 
+
+def _measured_predicate_guard_reasons(claim: Claim, artifact: EvidenceArtifact, spec: MeasuredPredicateSpec) -> list[str]:
+    reasons: list[str] = []
+    if "not_gene_specific_de" in spec.claim_guards and _claim_requests_gene_specific_effect(claim):
+        if artifact.kind == ArtifactKind.global_effect:
+            reasons.append("global-effect artifact does not support gene-specific differential-expression claims")
+        elif artifact.kind == ArtifactKind.composition_effect:
+            reasons.append("composition-effect artifact does not support gene-specific differential-expression claims")
+        else:
+            reasons.append(f"{artifact.kind.value} artifact does not support gene-specific differential-expression claims")
+    if "not_target_engagement" in spec.claim_guards and _claim_requests_target_engagement(claim):
+        reasons.append(f"{artifact.kind.value.replace('_', '-')} artifact does not support target-engagement claims")
+    return reasons
+
+
+def _resolve_replication_summary(
+    claim: Claim,
+    artifact: EvidenceArtifact,
+    registry,
+    *,
+    policy: GatePolicy,
+) -> ResolvedStrength:
+    intrinsic = resolve_artifact_strength(artifact, policy=policy)
+    if intrinsic.ceiling != StrengthCeiling.replicated_measured_association:
+        return intrinsic
+    resolved_ids = [str(item) for item in artifact.quality.get("resolved_artifact_ids") or artifact.quality.get("measured_artifact_ids") or []]
+    valid_ids: list[str] = []
+    reasons = list(intrinsic.reasons)
+    for artifact_id in resolved_ids:
+        measured = registry.get(artifact_id)
+        if measured is None:
+            reasons.append(f"replication summary references missing measured artifact {artifact_id}")
+            continue
+        if measured.artifact_id == artifact.artifact_id:
+            continue
+        measured_claim = claim if claim.scope else replace(claim, scope=dict(measured.scope))
+        measured_resolution = _resolve_claim_artifact(measured_claim, measured, registry, policy=policy)
+        if measured_resolution.ceiling == StrengthCeiling.measured_association:
+            valid_ids.append(measured.artifact_id)
+        else:
+            reasons.append(f"replicated artifact {measured.artifact_id} does not independently support this claim under policy")
+            reasons.extend(measured_resolution.reasons)
+    if len(set(valid_ids)) < policy.replication_min_artifacts:
+        return ResolvedStrength(
+            artifact_id=artifact.artifact_id,
+            tier=EvidenceTier.composite,
+            ceiling=StrengthCeiling.observation,
+            reasons=reasons or ["replication summary does not resolve enough claim-compatible measured artifacts"],
+        )
+    return ResolvedStrength(
+        artifact_id=artifact.artifact_id,
+        tier=EvidenceTier.composite,
+        ceiling=StrengthCeiling.replicated_measured_association,
+        reasons=["replication summary references measured artifacts that independently support this claim under policy"],
+    )
+
+
+def _resolve_prediction_measured_concordance(
+    claim: Claim,
+    artifact: EvidenceArtifact,
+    registry,
+    *,
+    policy: GatePolicy,
+) -> ResolvedStrength:
+    intrinsic = resolve_artifact_strength(artifact, policy=policy)
+    if intrinsic.ceiling != StrengthCeiling.predicted_effect:
+        return intrinsic
+    binding = resolve_prediction_measured_binding(claim, artifact, registry)
+    reasons = [*intrinsic.reasons, *binding.reasons]
+    if binding.reported_scope_match:
+        reasons.append(f"reported scope_match {binding.reported_scope_match!r} was recorded as diagnostic only")
+    if not binding.resolved or binding.measured_artifact is None:
+        return ResolvedStrength(
+            artifact_id=artifact.artifact_id,
+            tier=EvidenceTier.predicted,
+            ceiling=StrengthCeiling.observation,
+            reasons=reasons,
+        )
+    measured_resolution = _resolve_claim_artifact(claim, binding.measured_artifact, registry, policy=policy)
+    if measured_resolution.ceiling in {StrengthCeiling.measured_association, StrengthCeiling.measured_target_engagement}:
+        reasons.append("bound measured artifact independently supports the measured claim; concordance remains prediction-level context")
+        return ResolvedStrength(
+            artifact_id=artifact.artifact_id,
+            tier=EvidenceTier.predicted,
+            ceiling=StrengthCeiling.predicted_effect,
+            reasons=reasons,
+        )
+    reasons.append("bound measured artifact does not independently support measured strength for this claim; concordance remains observational context")
+    reasons.extend(measured_resolution.reasons)
+    return ResolvedStrength(
+        artifact_id=artifact.artifact_id,
+        tier=EvidenceTier.predicted,
+        ceiling=StrengthCeiling.observation,
+        reasons=reasons,
+    )
+
+def _resolve_curated_enrichment(
+    claim: Claim,
+    artifact: EvidenceArtifact,
+    registry,
+    *,
+    policy: GatePolicy,
+) -> ResolvedStrength:
+    input_id = artifact.quality.get("input_measured_artifact_id") or artifact.predicate.get("input_measured_artifact_id")
+    required = ["input_gene_set_hash", "background_universe", "database", "database_version", "term_id", "method", "padj"]
+    missing = [field for field in required if not artifact.quality.get(field) and not artifact.predicate.get(field)]
+    if not input_id:
+        return ResolvedStrength(
+            artifact_id=artifact.artifact_id,
+            tier=EvidenceTier.curated_prior,
+            ceiling=StrengthCeiling.curated_prior_support,
+            reasons=["curated enrichment is not bound to a registered measured artifact"],
+        )
+    binding = resolve_bound_measured_artifact(claim, artifact, str(input_id), registry)
+    if not binding.resolved or binding.measured_artifact is None:
+        return ResolvedStrength(
+            artifact_id=artifact.artifact_id,
+            tier=EvidenceTier.curated_prior,
+            ceiling=StrengthCeiling.curated_prior_support,
+            reasons=binding.reasons or ["curated enrichment could not resolve a UID-compatible measured binding"],
+        )
+    measured_resolution = _resolve_claim_artifact(claim, binding.measured_artifact, registry, policy=policy)
+    if measured_resolution.ceiling != StrengthCeiling.measured_association:
+        return ResolvedStrength(
+            artifact_id=artifact.artifact_id,
+            tier=EvidenceTier.curated_prior,
+            ceiling=StrengthCeiling.curated_prior_support,
+            reasons=["bound measured artifact does not support a measured association for this claim", *measured_resolution.reasons],
+        )
+    if missing:
+        return ResolvedStrength(
+            artifact_id=artifact.artifact_id,
+            tier=EvidenceTier.curated_prior,
+            ceiling=StrengthCeiling.curated_prior_support,
+            reasons=["curated enrichment lacks required enrichment metadata: " + ", ".join(missing)],
+        )
+    return ResolvedStrength(
+        artifact_id=artifact.artifact_id,
+        tier=EvidenceTier.curated_prior,
+        ceiling=StrengthCeiling.measured_association,
+        reasons=["curated enrichment is bound to a runtime-validated measured association and provides curated-prior context only"],
+    )
 
 def validate_measured_association_eligibility(
     claim: Claim,
@@ -346,6 +466,7 @@ def validate_measured_association_eligibility(
             reasons.append(f"estimand {estimand!r} is not allowed by policy")
 
     reasons.extend(_validate_cell_qc(cell_qc, policy))
+    reasons.extend(_validate_statistical_safety(profile, artifact, policy))
 
     if _truthy(_first(target_qc, "eligibility_passed", "guide_assignment_passed", "target_qc_passed")) and len(_structured_keys(profile)) < 3:
         reasons.append("boolean/prose eligibility flags are ignored without structured, hashable fields")
@@ -483,6 +604,12 @@ def _normalize_eligibility(payload: dict[str, Any]) -> dict[str, Any]:
     for key in cell_qc_aliases:
         if key in data:
             normalized["cell_qc"][key] = data[key]
+    for key in ["replicate_axis", "replicate_unit", "n_replicates", "replicate_count", "n_replicate_units", "replicate_handling", "confound_flag", "confound_status", "batch_perturbation_confounding", "batch_confounding_status"]:
+        if key in data:
+            normalized["replicate_scope"][key] = data[key]
+    for key in ["negative_control_status", "control_status", "ntc_vs_ntc_check", "label_permutation_check"]:
+        if key in data:
+            normalized["control_calibration"][key] = data[key]
     for key in ["assay_modality", "perturbation_modality", "moi", "moi_compatibility", "estimand"]:
         if key in data:
             normalized[key] = data[key]
@@ -523,6 +650,133 @@ def _build_cell_qc_profile_for_claim_artifact(claim: Claim, artifact: EvidenceAr
         merge_from(candidate.eligibility)
 
     return EligibilityProfile.from_dict(merged)
+
+
+def _statistical_safety_reasons_for_claim_artifact(
+    claim: Claim,
+    artifact: EvidenceArtifact,
+    registry,
+    *,
+    policy: GatePolicy,
+    checks: tuple[str, ...] = ("cell_qc", "trusted_method", "replicate", "confound", "control_calibration", "guide_power"),
+) -> list[str]:
+    profile = _build_eligibility_profile(claim, artifact, registry)
+    reasons: list[str] = []
+    if "cell_qc" in checks:
+        reasons.extend(_validate_cell_qc(_merged_cell_qc(profile), policy))
+    reasons.extend(_validate_statistical_safety(profile, artifact, policy, checks=checks))
+    return reasons
+
+
+def is_trusted_execution(artifact: EvidenceArtifact, policy: GatePolicy) -> bool:
+    method = _norm(_first(artifact.quality, "method", "runner_method", "comparison_method", "scoring_method") or artifact.method or "")
+    trusted_methods = {_norm(item) for item in policy.trusted_runner_methods}
+    if not method or method not in trusted_methods:
+        return False
+    if policy.trusted_runner_requires_execution_hash and not artifact.execution_hash:
+        return False
+    return True
+
+
+def _validate_statistical_safety(
+    profile: EligibilityProfile,
+    artifact: EvidenceArtifact,
+    policy: GatePolicy,
+    *,
+    checks: tuple[str, ...] = ("trusted_method", "replicate", "confound", "control_calibration", "guide_power"),
+) -> list[str]:
+    reasons: list[str] = []
+    trusted = is_trusted_execution(artifact, policy)
+    if "trusted_method" in checks and policy.require_trusted_method_for_measured_claims and not trusted:
+        reasons.append("strict policy requires trusted runner provenance with an allowed method and execution hash")
+    if "replicate" in checks:
+        reasons.extend(_validate_replicate_scope(profile.replicate_scope, policy, trusted))
+    if "confound" in checks:
+        reasons.extend(_validate_confounding(profile.replicate_scope, policy))
+    if "control_calibration" in checks:
+        reasons.extend(_validate_control_calibration(profile.control_calibration, policy))
+    if "guide_power" in checks:
+        reasons.extend(_validate_guide_power(profile.target_qc, policy))
+    return reasons
+
+
+def _validate_replicate_scope(replicate_scope: dict[str, Any], policy: GatePolicy, trusted_execution: bool) -> list[str]:
+    if not policy.require_replicate_scope_for_measured_claims:
+        return []
+    handling = _norm(_first(replicate_scope, "replicate_handling", "handling") or "")
+    if handling == "method_internal":
+        if policy.allow_method_internal_replicate_handling and trusted_execution:
+            return []
+        return ["method-internal replicate handling requires trusted runner provenance"]
+    axis = _first(replicate_scope, "replicate_axis", "replicate_unit", "axis", "unit")
+    n_replicates = _optional_int(_first(replicate_scope, "n_replicates", "replicate_count", "n_replicate_units"))
+    if axis and (n_replicates is None or n_replicates >= 2):
+        return []
+    return ["strict policy requires an explicit independent replicate axis or trusted method-internal replicate handling"]
+
+
+def _validate_confounding(replicate_scope: dict[str, Any], policy: GatePolicy) -> list[str]:
+    if not policy.batch_confounding_fail_blocks_measured:
+        return []
+    values = [
+        _first(replicate_scope, "confound_flag", "batch_perturbation_confounding"),
+        _first(replicate_scope, "confound_status", "batch_confounding_status"),
+    ]
+    for value in values:
+        if _falsey(value):
+            continue
+        status = _norm(value)
+        if _truthy(value) or status in {"possible_batch_perturbation_confounding", "batch_perturbation_confounding", "nested", "perfectly_nested", "failed", "fail"}:
+            return ["registered eligibility reports batch-perturbation confounding for this claim scope"]
+    return []
+
+
+def _validate_control_calibration(control_calibration: dict[str, Any], policy: GatePolicy) -> list[str]:
+    reasons: list[str] = []
+    structured = any(value not in (None, "", {}, []) for value in control_calibration.values())
+    if policy.require_control_calibration_for_measured_claims and not structured:
+        reasons.append("policy requires structured control calibration metadata for measured claims")
+    negative_status = _norm(_first(control_calibration, "negative_control_status", "control_status") or "")
+    if policy.control_calibration_fail_blocks_measured and negative_status in {"failed", "fail", "invalid", "unavailable", "missing"}:
+        reasons.append("registered control calibration reports failed negative-control status")
+    reasons.extend(_validate_named_calibration_check(control_calibration, policy, "ntc_vs_ntc_check", policy.require_ntc_vs_ntc_check_for_measured_claims))
+    reasons.extend(_validate_named_calibration_check(control_calibration, policy, "label_permutation_check", policy.require_label_permutation_check_for_measured_claims))
+    return reasons
+
+
+def _validate_named_calibration_check(control_calibration: dict[str, Any], policy: GatePolicy, key: str, required: bool) -> list[str]:
+    value = control_calibration.get(key)
+    if not isinstance(value, dict):
+        if required:
+            return [f"policy requires {key} for measured claims"]
+        return []
+    status = _norm(_first(value, "status", "result", "passed") or "")
+    if _falsey(_first(value, "passed")) or status in {"failed", "fail", "invalid", "not_calibrated"}:
+        return [f"registered control calibration reports failed {key}"]
+    return []
+
+
+def _validate_guide_power(target_qc: dict[str, Any], policy: GatePolicy) -> list[str]:
+    reasons: list[str] = []
+    if policy.minimum_guides_per_target is not None:
+        guides = _optional_int(_first(target_qc, "guides_per_target", "n_guides", "guide_count"))
+        if guides is None:
+            reasons.append(f"guide count is missing under policy minimum {policy.minimum_guides_per_target}")
+        elif guides < policy.minimum_guides_per_target:
+            reasons.append(f"guide count {guides} is below policy minimum {policy.minimum_guides_per_target}")
+    if policy.minimum_cells_per_guide is not None:
+        cells_per_guide = target_qc.get("cells_per_guide")
+        if isinstance(cells_per_guide, dict) and cells_per_guide:
+            low = [str(guide) for guide, count in cells_per_guide.items() if (_optional_int(count) or 0) < policy.minimum_cells_per_guide]
+            if low:
+                reasons.append(f"cells per guide below policy minimum {policy.minimum_cells_per_guide}: {', '.join(low)}")
+        else:
+            reasons.append(f"cells-per-guide metadata is missing under policy minimum {policy.minimum_cells_per_guide}")
+    if policy.guide_consistency_fail_blocks_measured:
+        consistency = _norm(_first(target_qc, "guide_consistency", "guide_consistency_status") or "")
+        if consistency in {"failed", "fail", "discordant", "inconsistent", "weak"}:
+            reasons.append("registered target QC reports failed guide consistency")
+    return reasons
 
 
 def _merged_cell_qc(profile: EligibilityProfile) -> dict[str, Any]:
@@ -569,266 +823,6 @@ def _cell_qc_structured_keys(cell_qc: dict[str, Any]) -> set[str]:
             keys.add(key)
     return keys
 
-def _resolve_measured_de_intrinsic(artifact: EvidenceArtifact, *, policy: GatePolicy) -> ResolvedStrength:
-    missing: list[str] = []
-    insufficient: list[str] = []
-    if not artifact.contrast_left:
-        missing.append("contrast.left")
-    if not artifact.contrast_baseline:
-        missing.append("contrast.baseline")
-    if artifact.n_left is None:
-        missing.append("n_left")
-    elif artifact.n_left < policy.minimum_measured_n:
-        insufficient.append(f"n_left {artifact.n_left} is below policy minimum {policy.minimum_measured_n}")
-    if artifact.n_baseline is None:
-        missing.append("n_baseline")
-    elif artifact.n_baseline < policy.minimum_measured_n:
-        insufficient.append(f"n_baseline {artifact.n_baseline} is below policy minimum {policy.minimum_measured_n}")
-    if not artifact.method:
-        missing.append("method")
-    if not artifact.multiple_testing:
-        missing.append("multiple_testing")
-    if not artifact.has_padj:
-        missing.append("adjusted p-values")
-
-    if missing or insufficient:
-        reasons: list[str] = []
-        if missing:
-            reasons.append(f"missing execution metadata: {', '.join(missing)}")
-        reasons.extend(insufficient)
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.measured,
-            ceiling=StrengthCeiling.observation,
-            reasons=reasons,
-        )
-    return ResolvedStrength(
-        artifact_id=artifact.artifact_id,
-        tier=EvidenceTier.measured,
-        ceiling=StrengthCeiling.measured_association,
-        reasons=["measured DE artifact has resolved contrast, sample counts, method, and multiple-testing metadata"],
-    )
-
-
-
-def _resolve_perturbation_efficiency(artifact: EvidenceArtifact, *, policy: GatePolicy) -> ResolvedStrength:
-    quality = artifact.quality
-    modality = _norm(quality.get("modality") or artifact.scope.get("modality") or "")
-    observed = _direction(quality.get("observed_direction") or artifact.predicate.get("direction"))
-    expected = _direction(quality.get("expected_direction")) or _expected_direction_for_modality(modality)
-    method = quality.get("method")
-    target = artifact.predicate.get("target") or artifact.scope.get("target")
-    n_target = _optional_int(_first(quality, "n_target_cells", "n_treated", "n_left"))
-    n_control = _optional_int(_first(quality, "n_control_cells", "n_control", "n_baseline"))
-    has_effect = _first(quality, "effect_size", "pvalue", "padj") is not None
-    reasons: list[str] = []
-
-    if not target:
-        reasons.append("target-engagement artifact lacks a target gene")
-    if not method:
-        reasons.append("target-engagement artifact lacks a measurement method")
-    if not observed:
-        reasons.append("target-engagement artifact lacks observed direction")
-    if n_target is not None and n_target < policy.minimum_measured_n:
-        reasons.append(f"target cell count is below policy minimum {policy.minimum_measured_n}")
-    if n_control is not None and n_control < policy.minimum_measured_n:
-        reasons.append(f"control cell count is below policy minimum {policy.minimum_measured_n}")
-    if not has_effect:
-        reasons.append("target-engagement artifact lacks effect or statistical metadata")
-
-    if modality in {"crispr_ko", "ko", "knockout"} and observed == "unchanged":
-        reasons.append("CRISPR-KO target mRNA unchanged is not automatic perturbation-efficiency failure")
-    elif expected and observed and expected != observed:
-        reasons.append(f"observed target direction {observed!r} conflicts with expected {expected!r}")
-
-    if reasons:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.measured,
-            ceiling=StrengthCeiling.observation,
-            reasons=reasons,
-        )
-    return ResolvedStrength(
-        artifact_id=artifact.artifact_id,
-        tier=EvidenceTier.measured,
-        ceiling=StrengthCeiling.measured_target_engagement,
-        reasons=["registered perturbation-efficiency artifact supports measured target engagement only"],
-    )
-
-
-def _resolve_curated_enrichment(
-    claim: Claim,
-    artifact: EvidenceArtifact,
-    registry,
-    *,
-    policy: GatePolicy,
-) -> ResolvedStrength:
-    input_id = artifact.quality.get("input_measured_artifact_id")
-    required = ["input_gene_set_hash", "background_universe", "database", "database_version", "term_id", "method", "padj"]
-    missing = [field for field in required if not artifact.quality.get(field) and not artifact.predicate.get(field)]
-    if not input_id:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.curated_prior,
-            ceiling=StrengthCeiling.curated_prior_support,
-            reasons=["curated enrichment is not bound to a registered measured artifact"],
-        )
-    measured = registry.get(str(input_id))
-    if measured is None:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.curated_prior,
-            ceiling=StrengthCeiling.curated_prior_support,
-            reasons=[f"bound measured artifact {input_id!r} could not be resolved"],
-        )
-    measured_resolution = _resolve_claim_artifact(claim, measured, registry, policy=policy)
-    if measured_resolution.ceiling != StrengthCeiling.measured_association:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.curated_prior,
-            ceiling=StrengthCeiling.curated_prior_support,
-            reasons=["bound measured artifact does not support a measured association for this claim", *measured_resolution.reasons],
-        )
-    if missing:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.curated_prior,
-            ceiling=StrengthCeiling.curated_prior_support,
-            reasons=["curated enrichment lacks required enrichment metadata: " + ", ".join(missing)],
-        )
-    return ResolvedStrength(
-        artifact_id=artifact.artifact_id,
-        tier=EvidenceTier.curated_prior,
-        ceiling=StrengthCeiling.measured_association,
-        reasons=["curated enrichment is bound to a runtime-validated measured association and provides curated-prior context only"],
-    )
-
-def _resolve_module_effect(artifact: EvidenceArtifact, *, policy: GatePolicy) -> ResolvedStrength:
-    quality = artifact.quality
-    predicate = artifact.predicate
-    missing: list[str] = []
-    reasons: list[str] = []
-
-    if not _first(predicate, "module_id", "module_name") and not _first(quality, "module_id", "module_name"):
-        missing.append("module_id/module_name")
-    for field in ["module_source", "module_gene_set_hash", "scoring_method", "method"]:
-        if not quality.get(field):
-            missing.append(field)
-    if _first(quality, "effect_size") is None:
-        missing.append("effect_size")
-    if _first(quality, "pvalue", "padj") is None:
-        missing.append("pvalue/padj")
-
-    n_target = _optional_int(_first(quality, "n_target_cells", "n_treated", "n_left"))
-    n_control = _optional_int(_first(quality, "n_control_cells", "n_control", "n_baseline"))
-    if n_target is None:
-        missing.append("n_target_cells")
-    elif n_target < policy.minimum_measured_n:
-        reasons.append(f"target cell count is below policy minimum {policy.minimum_measured_n}")
-    if n_control is None:
-        missing.append("n_control_cells")
-    elif n_control < policy.minimum_measured_n:
-        reasons.append(f"control cell count is below policy minimum {policy.minimum_measured_n}")
-
-    if missing:
-        reasons.append("module-effect artifact lacks required execution metadata: " + ", ".join(_dedupe(missing)))
-    if reasons:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.measured,
-            ceiling=StrengthCeiling.observation,
-            reasons=reasons,
-        )
-
-    source = _norm(quality.get("module_source"))
-    support_reason = "registered module-effect artifact supports measured module-score association only"
-    if source == "all_cell_derived":
-        support_reason += "; all-cell-derived module has perturbation-contamination caveat"
-    elif source == "prediction_derived":
-        support_reason += "; prediction-derived module source does not validate the prediction or mechanism"
-    return ResolvedStrength(
-        artifact_id=artifact.artifact_id,
-        tier=EvidenceTier.measured,
-        ceiling=StrengthCeiling.measured_association,
-        reasons=[support_reason],
-    )
-
-
-def _resolve_global_effect(artifact: EvidenceArtifact, *, policy: GatePolicy) -> ResolvedStrength:
-    quality = artifact.quality
-    missing: list[str] = []
-    reasons: list[str] = []
-
-    if not _first(quality, "metric") and not _first(artifact.predicate, "metric"):
-        missing.append("metric")
-    if not _first(quality, "feature_space", "embedding"):
-        missing.append("feature_space/embedding")
-    if not quality.get("comparison_method"):
-        missing.append("comparison_method")
-    if _first(quality, "effect_size", "distance") is None:
-        missing.append("effect_size/distance")
-    if not _first(quality, "null_model", "permutation_or_test"):
-        missing.append("null_model/permutation_or_test")
-    if _first(quality, "pvalue", "padj") is None:
-        missing.append("pvalue/padj")
-
-    n_target = _optional_int(_first(quality, "n_target_cells", "n_treated", "n_left"))
-    n_control = _optional_int(_first(quality, "n_control_cells", "n_control", "n_baseline"))
-    if n_target is None:
-        missing.append("n_target_cells")
-    elif n_target < policy.minimum_measured_n:
-        reasons.append(f"target cell count is below policy minimum {policy.minimum_measured_n}")
-    if n_control is None:
-        missing.append("n_control_cells")
-    elif n_control < policy.minimum_measured_n:
-        reasons.append(f"control cell count is below policy minimum {policy.minimum_measured_n}")
-
-    if missing:
-        reasons.append("global-effect artifact lacks required execution metadata: " + ", ".join(_dedupe(missing)))
-    if reasons:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.measured,
-            ceiling=StrengthCeiling.observation,
-            reasons=reasons,
-        )
-    return ResolvedStrength(
-        artifact_id=artifact.artifact_id,
-        tier=EvidenceTier.measured,
-        ceiling=StrengthCeiling.measured_association,
-        reasons=["registered global-effect artifact supports measured global perturbation response only"],
-    )
-
-def _resolve_replication(artifact: EvidenceArtifact, *, policy: GatePolicy) -> ResolvedStrength:
-    replication_type = artifact.quality.get("replication_type")
-    resolved_ids = artifact.quality.get("resolved_artifact_ids") or []
-    missing_ids = artifact.quality.get("missing_artifact_ids") or []
-    allowed_types = set(policy.allowed_replication_types)
-    if policy.upgrade_guide_consistency_to_replication:
-        allowed_types.add("guide_level_replication")
-        allowed_types.add("guide_consistency")
-    if replication_type not in allowed_types:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.composite,
-            ceiling=StrengthCeiling.observation,
-            reasons=[f"replication_type {replication_type!r} is not an allowed independent replication axis"],
-        )
-    if len(resolved_ids) < policy.replication_min_artifacts or missing_ids:
-        return ResolvedStrength(
-            artifact_id=artifact.artifact_id,
-            tier=EvidenceTier.composite,
-            ceiling=StrengthCeiling.observation,
-            reasons=["replication summary does not resolve enough measured artifacts"],
-        )
-    return ResolvedStrength(
-        artifact_id=artifact.artifact_id,
-        tier=EvidenceTier.composite,
-        ceiling=StrengthCeiling.replicated_measured_association,
-        reasons=["registered independent measured artifacts support replicated measured association"],
-    )
-
-
 def _decision(
     claim: Claim,
     strength: StrengthCeiling,
@@ -848,7 +842,7 @@ def _decision(
         supporting_artifacts=supporting,
         missing_artifacts=missing,
         blocked_requested_strength=_blocked_strength(claim, strength),
-        allowed_surface=_render_allowed_surface(claim, strength, [], []),
+        allowed_surface=surface_for_claim(claim, strength, [], []),
         reasons=reasons,
         policy_version=policy.version,
         policy_hash=policy.policy_hash,
@@ -883,74 +877,6 @@ def _requested_strength(claim: Claim) -> StrengthCeiling | str | None:
         return str(claim.requested_strength)
 
 
-def _render_allowed_surface(
-    claim: Claim,
-    strength: StrengthCeiling,
-    artifacts: list[EvidenceArtifact],
-    evidence_classes: list[EvidenceClass],
-) -> str:
-    subject = _subject_text(claim, artifacts)
-    target = _target_text(claim, artifacts)
-    curated_enrichment = next((artifact for artifact in artifacts if artifact.kind == ArtifactKind.curated_enrichment_result), None)
-    module_effect = next((artifact for artifact in artifacts if artifact.kind == ArtifactKind.module_effect), None)
-    global_effect = next((artifact for artifact in artifacts if artifact.kind == ArtifactKind.global_effect), None)
-    measured = next((artifact for artifact in artifacts if artifact.effective_evidence_class == EvidenceClass.measured), None)
-
-    if strength == StrengthCeiling.measured_association and curated_enrichment is not None:
-        return (
-            f"A registered curated enrichment result is bound to runtime-validated measured evidence for {subject}{target}. "
-            "This provides curated context for a measured association only; it is not a validation or mechanism claim."
-        )
-    if strength == StrengthCeiling.measured_association and module_effect is not None:
-        source = _norm(module_effect.quality.get("module_source"))
-        caveat = ""
-        if source == "all_cell_derived":
-            caveat = " The module was derived from all cells, so perturbation-contamination risk should be considered."
-        elif source == "prediction_derived":
-            caveat = " The module source is prediction-derived, so the measured score does not validate that prediction."
-        return (
-            f"Registered module-score evidence supports a measured module association for {subject}{target}. "
-            "This does not establish a downstream mechanism or regulatory validation." + caveat
-        )
-    if strength == StrengthCeiling.measured_association and global_effect is not None:
-        return (
-            f"Registered global-response evidence supports a measured global perturbation response for {subject}. "
-            "This does not establish a gene-specific effect, downstream mechanism, or causal cell-state transition."
-        )
-    if strength == StrengthCeiling.measured_association and measured is not None:
-        contrast = _contrast_text(measured)
-        return (
-            f"In the registered {contrast} Perturb-seq contrast, {subject} is associated with measured "
-            f"expression differences{target}. This supports a measured association only; no registered "
-            "replication, orthogonal validation, or rescue-assay artifact supports a validated mechanism."
-        )
-    if strength == StrengthCeiling.replicated_measured_association:
-        return (
-            f"Registered independent measured artifacts support a replicated measured association for {subject}{target}. "
-            "This still does not by itself establish a validated mechanism."
-        )
-    if strength == StrengthCeiling.measured_target_engagement:
-        return (
-            f"Registered target-engagement evidence supports measured target engagement for {subject}{target}. "
-            "This does not establish a downstream mechanism."
-        )
-    if strength == StrengthCeiling.predicted_effect:
-        return (
-            f"A registered prediction artifact predicts an effect for {subject}{target}. This is prediction evidence, "
-            "and must not be reported as an experimental result."
-        )
-    if strength == StrengthCeiling.curated_prior_support:
-        return (
-            f"A curated prior artifact provides prior support related to {subject}{target}. This is curated prior "
-            "context, not an experimental confirmation."
-        )
-    if strength == StrengthCeiling.observation:
-        return (
-            "A registered artifact exists, but runtime-validated metadata and eligibility support only a file-level "
-            "observation and not an effect-level scientific conclusion for this claim."
-        )
-    return "No registered artifact with compatible scope and runtime-validated metadata supports this claim."
-
 def _unique_classes(artifacts: list[EvidenceArtifact]) -> list[EvidenceClass]:
     seen: set[EvidenceClass] = set()
     result: list[EvidenceClass] = []
@@ -976,17 +902,6 @@ def _merge_scope_fits(scope_fits: list[ScopeFit]) -> ScopeFit:
     return ScopeFit.mismatch
 
 
-def _tier_for_evidence_class(evidence_class: EvidenceClass) -> EvidenceTier:
-    if evidence_class == EvidenceClass.measured:
-        return EvidenceTier.measured
-    if evidence_class == EvidenceClass.predicted:
-        return EvidenceTier.predicted
-    if evidence_class == EvidenceClass.curated_prior:
-        return EvidenceTier.curated_prior
-    if evidence_class in {EvidenceClass.composite_summary, EvidenceClass.composite}:
-        return EvidenceTier.composite
-    return EvidenceTier.observation
-
 
 def _decision_id(claim_id: str, artifact_ids: list[str], policy_hash: str) -> str:
     text = "|".join([claim_id, *artifact_ids, policy_hash])
@@ -1003,6 +918,17 @@ def _claim_requests_gene_specific_effect(claim: Claim) -> bool:
     if relation in {"changes_expression", "differential_expression", "gene_expression", "de_gene"}:
         return True
     return "gene_specific" in text or "differential_expression" in text or "differential_expression" in relation
+
+def _claim_requests_target_engagement(claim: Claim) -> bool:
+    relation = _norm(claim.relation or "")
+    object_type = _norm(claim.object.get("type") or claim.object.get("object_type") or "")
+    text = _norm(claim.text)
+    if relation in {"target_engagement", "perturbation_efficiency", "target_expression", "target_knockdown"}:
+        return True
+    if object_type in {"target_engagement", "perturbation_efficiency"}:
+        return True
+    return "target_engagement" in text or "perturbation_efficiency" in text
+
 
 def _subject_text(claim: Claim, artifacts: list[EvidenceArtifact]) -> str:
     for source in [claim.subject, claim.scope]:
@@ -1132,6 +1058,9 @@ def _dedupe(items: list[str]) -> list[str]:
             result.append(item)
             seen.add(item)
     return result
+
+
+
 
 
 

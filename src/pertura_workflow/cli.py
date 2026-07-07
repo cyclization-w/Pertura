@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-from pertura_gate.core.policy import DEFAULT_POLICY
+from pertura_gate.core.policy import DEFAULT_POLICY, policy_for_profile
 from pertura_workflow.harvest import harvest_artifacts_from_workspace
 from pertura_workflow.models import HarvestMode, WorkflowRunManifest, WorkflowRunStep
 from pertura_workflow.preflight import preflight_workspace
@@ -45,23 +45,27 @@ def main(argv: list[str] | None = None) -> int:
     explain.add_argument("--format", choices=["json", "markdown"], default="markdown")
     explain.add_argument("--out", type=Path, default=None)
     explain.add_argument("--run-manifest", type=Path, default=None)
+    explain.add_argument("--policy-profile", choices=["smoke", "strict", "paper"], default="smoke")
 
     args = parser.parse_args(argv)
     if args.command == "preflight":
+        policy = policy_for_profile(args.policy_profile)
         report = preflight_workspace(args.workspace, mode=args.interaction_mode)
         payload = report.to_dict()
         output_text = json.dumps(payload, indent=2, sort_keys=True) if args.format == "json" else report.to_markdown()
         _write_or_print(output_text, args.out)
-        _maybe_write_run_manifest(args, [WorkflowRunStep("preflight", "passed", output_paths=_paths(args.out))])
+        _maybe_write_run_manifest(args, [WorkflowRunStep("preflight", "passed", output_paths=_paths(args.out))], policy=policy)
         return 0
     if args.command == "harvest":
+        policy = policy_for_profile(args.policy_profile)
         report = harvest_artifacts_from_workspace(args.workspace, mode=args.mode, registry_path=args.registry)
         payload = report.to_dict()
         output_text = json.dumps(payload, indent=2, sort_keys=True) if args.format == "json" else report.to_markdown()
         _write_or_print(output_text, args.out)
-        _maybe_write_run_manifest(args, [WorkflowRunStep("harvest", "passed", output_paths=_paths(args.out), notes=report.reasons)])
+        _maybe_write_run_manifest(args, [WorkflowRunStep("harvest", "passed", output_paths=_paths(args.out), notes=report.reasons)], policy=policy)
         return 0
     if args.command == "recommend-next":
+        policy = policy_for_profile(args.policy_profile)
         preflight_report = preflight_workspace(args.workspace, mode=args.interaction_mode)
         goals = recommend_next_evidence(preflight_report)
         payload = {"workspace": preflight_report.workspace, "evidence_goals": [goal.to_dict() for goal in goals]}
@@ -70,10 +74,11 @@ def main(argv: list[str] | None = None) -> int:
         else:
             output_text = _goals_markdown(preflight_report.workspace, goals)
         _write_or_print(output_text, args.out)
-        _maybe_write_run_manifest(args, [WorkflowRunStep("recommend_next", "passed", output_paths=_paths(args.out))])
+        _maybe_write_run_manifest(args, [WorkflowRunStep("recommend_next", "passed", output_paths=_paths(args.out))], policy=policy)
         return 0
     if args.command == "recipe" and args.recipe_name == "classic":
-        result = run_classic_perturbseq(args.workspace, mode=args.interaction_mode, harvest_mode=args.harvest_mode)
+        policy = policy_for_profile(args.policy_profile)
+        result = run_classic_perturbseq(args.workspace, mode=args.interaction_mode, harvest_mode=args.harvest_mode, policy=policy)
         payload = result.to_dict()
         output_text = json.dumps(payload, indent=2, sort_keys=True) if args.format == "json" else result.report_markdown
         _write_or_print(output_text, args.out)
@@ -84,7 +89,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "explain":
         text = _explain_decision(args.decision_id, args.decisions, args.format)
         _write_or_print(text, args.out)
-        _maybe_write_run_manifest(args, [WorkflowRunStep("explain", "passed", output_paths=_paths(args.out))])
+        policy = policy_for_profile(args.policy_profile)
+        _maybe_write_run_manifest(args, [WorkflowRunStep("explain", "passed", output_paths=_paths(args.out))], policy=policy)
         return 0
     return 2
 
@@ -95,6 +101,7 @@ def _add_workspace_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--format", choices=["json", "markdown"], default="json")
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--run-manifest", type=Path, default=None)
+    parser.add_argument("--policy-profile", choices=["smoke", "strict", "paper"], default="smoke")
 
 
 def _write_or_print(text: str, path: Path | None) -> None:
@@ -109,7 +116,7 @@ def _paths(path: Path | None) -> list[str]:
     return [str(path)] if path is not None else []
 
 
-def _maybe_write_run_manifest(args: argparse.Namespace, steps: list[WorkflowRunStep]) -> None:
+def _maybe_write_run_manifest(args: argparse.Namespace, steps: list[WorkflowRunStep], *, policy=DEFAULT_POLICY) -> None:
     path = getattr(args, "run_manifest", None)
     if path is None:
         return
@@ -120,7 +127,7 @@ def _maybe_write_run_manifest(args: argparse.Namespace, steps: list[WorkflowRunS
         command=str(args.command),
         workspace=workspace,
         mode=mode,
-        policy_hash=DEFAULT_POLICY.policy_hash,
+        policy_hash=policy.policy_hash,
         inputs={key: str(value) for key, value in vars(args).items() if key not in {"out", "run_manifest"} and value is not None},
         steps=steps,
         output_paths=[path for step in steps for path in step.output_paths],

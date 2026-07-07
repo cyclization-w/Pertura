@@ -465,6 +465,191 @@ class EvidenceRegistry:
         self.append(artifact)
         return artifact
 
+
+    def register_virtual_perturbation_prediction(
+        self,
+        *,
+        path: str | Path,
+        tool_name: str | None = None,
+        tool_version: str | None = None,
+        model_name: str | None = None,
+        model_version: str | None = None,
+        model_checkpoint_hash: str | None = None,
+        prediction_method: str | None = None,
+        prediction_type: str | None = None,
+        perturbation_query: dict | str | None = None,
+        output_schema: dict | str | None = None,
+        n_predicted_genes: int | None = None,
+        n_predicted_cells: int | None = None,
+        notes: str | None = None,
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+    ) -> EvidenceArtifact:
+        path_text = str(path)
+        query_payload = _clean_nested(perturbation_query) if isinstance(perturbation_query, (dict, list)) else perturbation_query
+        schema_payload = _clean_nested(output_schema) if isinstance(output_schema, (dict, list)) else output_schema
+        merged_scope = {
+            "perturbation_query": query_payload,
+            **dict(scope or {}),
+        }
+        merged_predicate = {
+            "relation": "predicts_virtual_perturbation_response",
+            "prediction_type": prediction_type,
+            "perturbation_query": query_payload,
+            "output_schema": schema_payload,
+            **dict(predicate or {}),
+        }
+        merged_quality = {
+            "tool_name": tool_name,
+            "tool_version": tool_version,
+            "model_name": model_name,
+            "model_version": model_version,
+            "model_checkpoint_hash": model_checkpoint_hash,
+            "prediction_method": prediction_method,
+            "prediction_type": prediction_type,
+            "perturbation_query": query_payload,
+            "output_schema": schema_payload,
+            "n_predicted_genes": n_predicted_genes,
+            "n_predicted_cells": n_predicted_cells,
+            **dict(quality or {}),
+        }
+        artifact = EvidenceArtifact(
+            artifact_id=artifact_id or f"virtual_perturbation_prediction_{uuid4().hex[:12]}",
+            kind=ArtifactKind.virtual_perturbation_prediction,
+            evidence_class=EvidenceClass.predicted,
+            artifact_roles=[ArtifactRole.prediction_evidence],
+            path=path_text,
+            notes=notes,
+            scope=self.resolve_manifest_scope({key: value for key, value in merged_scope.items() if value not in (None, "", [], {})}),
+            predicate={key: value for key, value in merged_predicate.items() if value not in (None, "", [], {})},
+            quality={key: value for key, value in merged_quality.items() if value not in (None, "", [], {})},
+            provenance={"created_by_tool": "register_virtual_perturbation_prediction_artifact"},
+            source_sha256=self._hash_for_path(path_text),
+            metadata={
+                "artifact_subtype": "virtual_perturbation_prediction",
+                "tool_name": tool_name,
+                "model_name": model_name,
+                "output_schema": schema_payload,
+                **dict(metadata or {}),
+            },
+        )
+        self.append(artifact)
+        return artifact
+
+    def register_prediction_measured_concordance(
+        self,
+        *,
+        path: str | Path,
+        prediction_artifact_id: str | None = None,
+        measured_artifact_id: str | None = None,
+        metric: str | None = None,
+        metric_value: float | None = None,
+        denominator: int | None = None,
+        scope_match: str | None = None,
+        comparison_method: str | None = None,
+        notes: str | None = None,
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+    ) -> EvidenceArtifact:
+        path_text = str(path)
+        merged_predicate = {
+            "relation": "prediction_measured_concordance",
+            "prediction_artifact_id": prediction_artifact_id,
+            "measured_artifact_id": measured_artifact_id,
+            "metric": metric,
+            **dict(predicate or {}),
+        }
+        merged_quality = {
+            "prediction_artifact_id": prediction_artifact_id,
+            "measured_artifact_id": measured_artifact_id,
+            "metric": metric,
+            "metric_value": metric_value,
+            "denominator": denominator,
+            "reported_scope_match": scope_match,
+            "comparison_method": comparison_method,
+            **dict(quality or {}),
+        }
+        artifact = EvidenceArtifact(
+            artifact_id=artifact_id or f"prediction_measured_concordance_{uuid4().hex[:12]}",
+            kind=ArtifactKind.prediction_measured_concordance,
+            evidence_class=EvidenceClass.predicted,
+            artifact_roles=[ArtifactRole.prediction_evidence],
+            path=path_text,
+            notes=notes,
+            scope=self.resolve_manifest_scope(dict(scope or {})),
+            predicate={key: value for key, value in merged_predicate.items() if value not in (None, "", [], {})},
+            quality={key: value for key, value in merged_quality.items() if value not in (None, "", [], {})},
+            provenance={"created_by_tool": "register_prediction_measured_concordance_artifact"},
+            source_sha256=self._hash_for_path(path_text),
+            metadata={"artifact_subtype": "prediction_measured_concordance", **dict(metadata or {})},
+        )
+        self.append(artifact)
+        return artifact
+
+    def register_virtual_cell_state_transition(
+        self,
+        *,
+        path: str | Path,
+        tool_name: str | None = None,
+        tool_version: str | None = None,
+        model_or_network_provenance: dict | str | None = None,
+        transition_type: str | None = None,
+        perturbation_query: dict | str | None = None,
+        state_space_reference: dict | str | None = None,
+        notes: str | None = None,
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+    ) -> EvidenceArtifact:
+        path_text = str(path)
+        provenance_payload = _clean_nested(model_or_network_provenance) if isinstance(model_or_network_provenance, (dict, list)) else model_or_network_provenance
+        query_payload = _clean_nested(perturbation_query) if isinstance(perturbation_query, (dict, list)) else perturbation_query
+        state_payload = _clean_nested(state_space_reference) if isinstance(state_space_reference, (dict, list)) else state_space_reference
+        merged_scope = {
+            "perturbation_query": query_payload,
+            "state_space_reference": state_payload,
+            **dict(scope or {}),
+        }
+        merged_predicate = {
+            "relation": "predicts_cell_state_transition",
+            "transition_type": transition_type,
+            "perturbation_query": query_payload,
+            **dict(predicate or {}),
+        }
+        merged_quality = {
+            "tool_name": tool_name,
+            "tool_version": tool_version,
+            "model_or_network_provenance": provenance_payload,
+            "transition_type": transition_type,
+            "perturbation_query": query_payload,
+            "state_space_reference": state_payload,
+            **dict(quality or {}),
+        }
+        artifact = EvidenceArtifact(
+            artifact_id=artifact_id or f"virtual_cell_state_transition_{uuid4().hex[:12]}",
+            kind=ArtifactKind.virtual_cell_state_transition,
+            evidence_class=EvidenceClass.predicted,
+            artifact_roles=[ArtifactRole.prediction_evidence],
+            path=path_text,
+            notes=notes,
+            scope=self.resolve_manifest_scope({key: value for key, value in merged_scope.items() if value not in (None, "", [], {})}),
+            predicate={key: value for key, value in merged_predicate.items() if value not in (None, "", [], {})},
+            quality={key: value for key, value in merged_quality.items() if value not in (None, "", [], {})},
+            provenance={"created_by_tool": "register_virtual_cell_state_transition_artifact"},
+            source_sha256=self._hash_for_path(path_text),
+            metadata={"artifact_subtype": "virtual_cell_state_transition", **dict(metadata or {})},
+        )
+        self.append(artifact)
+        return artifact
+
     def register_curated_prior(
         self,
         *,
@@ -566,6 +751,8 @@ class EvidenceRegistry:
         quality: dict | None = None,
         metadata: dict | None = None,
         notes: str | None = None,
+        code_sha256: str | None = None,
+        execution_hash: str | None = None,
     ) -> EvidenceArtifact:
         path_text = str(path)
         merged_scope = {
@@ -604,6 +791,8 @@ class EvidenceRegistry:
             quality={key: value for key, value in merged_quality.items() if value not in (None, "")},
             provenance={"created_by_tool": "register_perturbation_efficiency_artifact"},
             source_sha256=self._hash_for_path(path_text),
+            code_sha256=code_sha256,
+            execution_hash=execution_hash,
             metadata=dict(metadata or {}),
         )
         self.append(artifact)
@@ -686,6 +875,8 @@ class EvidenceRegistry:
         quality: dict | None = None,
         metadata: dict | None = None,
         notes: str | None = None,
+        code_sha256: str | None = None,
+        execution_hash: str | None = None,
     ) -> EvidenceArtifact:
         path_text = str(path)
         merged_predicate = {
@@ -719,6 +910,8 @@ class EvidenceRegistry:
             quality={key: value for key, value in merged_quality.items() if value not in (None, "")},
             provenance={"created_by_tool": "register_module_effect_artifact"},
             source_sha256=self._hash_for_path(path_text),
+            code_sha256=code_sha256,
+            execution_hash=execution_hash,
             metadata=dict(metadata or {}),
         )
         self.append(artifact)
@@ -746,6 +939,8 @@ class EvidenceRegistry:
         quality: dict | None = None,
         metadata: dict | None = None,
         notes: str | None = None,
+        code_sha256: str | None = None,
+        execution_hash: str | None = None,
     ) -> EvidenceArtifact:
         path_text = str(path)
         merged_predicate = {
@@ -781,6 +976,72 @@ class EvidenceRegistry:
             quality={key: value for key, value in merged_quality.items() if value not in (None, "")},
             provenance={"created_by_tool": "register_global_effect_artifact"},
             source_sha256=self._hash_for_path(path_text),
+            code_sha256=code_sha256,
+            execution_hash=execution_hash,
+            metadata=dict(metadata or {}),
+        )
+        self.append(artifact)
+        return artifact
+    def register_composition_effect(
+        self,
+        *,
+        path: str | Path,
+        state_source: str | None = None,
+        state_assignment_column: str | None = None,
+        comparison_method: str | None = None,
+        state_counts_by_condition: dict | None = None,
+        counts_by_state: dict | None = None,
+        state_level_deltas: dict | None = None,
+        effect_size: float | None = None,
+        pvalue: float | None = None,
+        padj: float | None = None,
+        n_target_cells: int | None = None,
+        n_control_cells: int | None = None,
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+        code_sha256: str | None = None,
+        execution_hash: str | None = None,
+    ) -> EvidenceArtifact:
+        path_text = str(path)
+        merged_predicate = {
+            "relation": "cell_state_composition_effect",
+            "state_source": state_source,
+            "state_assignment_column": state_assignment_column,
+            **dict(predicate or {}),
+        }
+
+        merged_quality = {
+            "state_source": state_source,
+            "state_assignment_column": state_assignment_column,
+            "comparison_method": comparison_method,
+            "state_counts_by_condition": dict(state_counts_by_condition or {}),
+            "counts_by_state": dict(counts_by_state or {}),
+            "state_level_deltas": dict(state_level_deltas or {}),
+            "effect_size": effect_size,
+            "pvalue": pvalue,
+            "padj": padj,
+            "n_target_cells": n_target_cells,
+            "n_control_cells": n_control_cells,
+            **dict(quality or {}),
+        }
+        artifact = EvidenceArtifact(
+            artifact_id=artifact_id or f"composition_effect_{uuid4().hex[:12]}",
+            kind=ArtifactKind.composition_effect,
+            evidence_class=EvidenceClass.measured,
+            artifact_roles=[ArtifactRole.effect_evidence],
+            path=path_text,
+            notes=notes,
+            scope=self.resolve_manifest_scope(dict(scope or {})),
+            predicate={key: value for key, value in merged_predicate.items() if value not in (None, "")},
+            quality={key: value for key, value in merged_quality.items() if value not in (None, "")},
+            provenance={"created_by_tool": "register_composition_effect_artifact"},
+            source_sha256=self._hash_for_path(path_text),
+            code_sha256=code_sha256,
+            execution_hash=execution_hash,
             metadata=dict(metadata or {}),
         )
         self.append(artifact)
@@ -941,6 +1202,8 @@ class EvidenceRegistry:
             return self.register_module_effect(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
         if subtype == "global_effect":
             return self.register_global_effect(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        if subtype == "composition_effect":
+            return self.register_composition_effect(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
         if subtype == "perturbation_efficiency":
             return self.register_perturbation_efficiency(path=path, artifact_id=artifact_id, scope=scope, quality=quality, metadata=metadata, notes=notes, **kwargs)
         return self._register_family_artifact(
@@ -1008,6 +1271,12 @@ class EvidenceRegistry:
         subtype = str(artifact_subtype or "predicted_effect")
         if subtype == "predicted_effect" and "model_name" in kwargs:
             return self.register_predicted_effect(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        if subtype == "virtual_perturbation_prediction":
+            return self.register_virtual_perturbation_prediction(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        if subtype == "prediction_measured_concordance":
+            return self.register_prediction_measured_concordance(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        if subtype == "virtual_cell_state_transition":
+            return self.register_virtual_cell_state_transition(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
         return self._register_family_artifact(
             artifact_id=artifact_id or f"prediction_artifact_{uuid4().hex[:12]}",
             kind=ArtifactKind.prediction_artifact,
@@ -1259,6 +1528,9 @@ def _clean_nested(value):
     if isinstance(value, list):
         return [_clean_nested(item) for item in value if item not in (None, "", {}, [])]
     return value
+
+
+
 
 
 

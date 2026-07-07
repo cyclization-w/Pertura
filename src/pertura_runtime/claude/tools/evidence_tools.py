@@ -6,6 +6,7 @@ from typing import Any
 
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
 from pertura_gate.evidence.registry import EvidenceRegistry
+from pertura_gate.core.policy import policy_for_profile
 from pertura_gate.render.renderer import render_evidence_report
 from pertura_gate.resolver.resolver import resolve_artifact_strength, resolve_claims
 
@@ -256,6 +257,128 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
         )
         return _registration_result(workspace, registry, artifact)
 
+
+
+    @tool(
+        "register_virtual_perturbation_prediction_artifact",
+        "Register virtual perturbation model output from GEARS, scGPT, CPA/scGen, Geneformer, or custom predictors. This is prediction evidence, not measured evidence.",
+        {
+            "path": str,
+            "tool_name": str,
+            "tool_version": str,
+            "model_name": str,
+            "model_version": str,
+            "model_checkpoint_hash": str,
+            "prediction_method": str,
+            "prediction_type": str,
+            "perturbation_query": dict,
+            "output_schema": dict,
+            "n_predicted_genes": int,
+            "n_predicted_cells": int,
+            "notes": str,
+            "scope": dict,
+            "predicate": dict,
+            "quality": dict,
+            "metadata": dict,
+        },
+    )
+    async def register_virtual_perturbation_prediction_artifact(args: dict[str, Any]) -> dict[str, Any]:
+        path = _resolve_evidence_source_path(workspace, str(args.get("path") or ""))
+        artifact = registry.register_virtual_perturbation_prediction(
+            path=str(path.relative_to(workspace.root)),
+            tool_name=_optional_text(args.get("tool_name")),
+            tool_version=_optional_text(args.get("tool_version")),
+            model_name=_optional_text(args.get("model_name")),
+            model_version=_optional_text(args.get("model_version")),
+            model_checkpoint_hash=_optional_text(args.get("model_checkpoint_hash")),
+            prediction_method=_optional_text(args.get("prediction_method")),
+            prediction_type=_optional_text(args.get("prediction_type")),
+            perturbation_query=_optional_dict(args.get("perturbation_query")),
+            output_schema=_optional_dict(args.get("output_schema")),
+            n_predicted_genes=_optional_int(args.get("n_predicted_genes")),
+            n_predicted_cells=_optional_int(args.get("n_predicted_cells")),
+            notes=_optional_text(args.get("notes")),
+            scope=_optional_dict(args.get("scope")),
+            predicate=_optional_dict(args.get("predicate")),
+            quality=_optional_dict(args.get("quality")),
+            metadata=_optional_dict(args.get("metadata")),
+        )
+        return _registration_result(workspace, registry, artifact)
+
+    @tool(
+        "register_prediction_measured_concordance_artifact",
+        "Register metric-bound concordance between a virtual perturbation prediction and a registered measured artifact. Concordance is not mechanism validation and does not create measured evidence. Any scope_match input is recorded only as a diagnostic; Pertura computes UID scope compatibility from registered artifacts.",
+        {
+            "path": str,
+            "prediction_artifact_id": str,
+            "measured_artifact_id": str,
+            "metric": str,
+            "metric_value": float,
+            "denominator": int,
+            "scope_match": str,
+            "comparison_method": str,
+            "notes": str,
+            "scope": dict,
+            "predicate": dict,
+            "quality": dict,
+            "metadata": dict,
+        },
+    )
+    async def register_prediction_measured_concordance_artifact(args: dict[str, Any]) -> dict[str, Any]:
+        path = _resolve_evidence_source_path(workspace, str(args.get("path") or ""))
+        artifact = registry.register_prediction_measured_concordance(
+            path=str(path.relative_to(workspace.root)),
+            prediction_artifact_id=_optional_text(args.get("prediction_artifact_id")),
+            measured_artifact_id=_optional_text(args.get("measured_artifact_id")),
+            metric=_optional_text(args.get("metric")),
+            metric_value=_optional_float(args.get("metric_value")),
+            denominator=_optional_int(args.get("denominator")),
+            scope_match=_optional_text(args.get("scope_match")),
+            comparison_method=_optional_text(args.get("comparison_method")),
+            notes=_optional_text(args.get("notes")),
+            scope=_optional_dict(args.get("scope")),
+            predicate=_optional_dict(args.get("predicate")),
+            quality=_optional_dict(args.get("quality")),
+            metadata=_optional_dict(args.get("metadata")),
+        )
+        return _registration_result(workspace, registry, artifact)
+
+    @tool(
+        "register_virtual_cell_state_transition_artifact",
+        "Register CellOracle-style or related virtual cell-state transition output. This is predicted transition evidence, not causal fate conversion.",
+        {
+            "path": str,
+            "tool_name": str,
+            "tool_version": str,
+            "model_or_network_provenance": dict,
+            "transition_type": str,
+            "perturbation_query": dict,
+            "state_space_reference": dict,
+            "notes": str,
+            "scope": dict,
+            "predicate": dict,
+            "quality": dict,
+            "metadata": dict,
+        },
+    )
+    async def register_virtual_cell_state_transition_artifact(args: dict[str, Any]) -> dict[str, Any]:
+        path = _resolve_evidence_source_path(workspace, str(args.get("path") or ""))
+        artifact = registry.register_virtual_cell_state_transition(
+            path=str(path.relative_to(workspace.root)),
+            tool_name=_optional_text(args.get("tool_name")),
+            tool_version=_optional_text(args.get("tool_version")),
+            model_or_network_provenance=_optional_dict(args.get("model_or_network_provenance")),
+            transition_type=_optional_text(args.get("transition_type")),
+            perturbation_query=_optional_dict(args.get("perturbation_query")),
+            state_space_reference=_optional_dict(args.get("state_space_reference")),
+            notes=_optional_text(args.get("notes")),
+            scope=_optional_dict(args.get("scope")),
+            predicate=_optional_dict(args.get("predicate")),
+            quality=_optional_dict(args.get("quality")),
+            metadata=_optional_dict(args.get("metadata")),
+        )
+        return _registration_result(workspace, registry, artifact)
+
     @tool(
         "register_curated_prior_artifact",
         "Register a curated prior lookup artifact. This does not register measured pathway activation.",
@@ -308,6 +431,8 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             "quality": dict,
             "metadata": dict,
             "notes": str,
+            "code_sha256": str,
+            "execution_hash": str,
         },
     )
     async def register_perturbation_efficiency_artifact(args: dict[str, Any]) -> dict[str, Any]:
@@ -329,6 +454,8 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             quality=_optional_dict(args.get("quality")),
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
+            code_sha256=_optional_text(args.get("code_sha256")),
+            execution_hash=_optional_text(args.get("execution_hash")),
         )
         return _registration_result(workspace, registry, artifact)
 
@@ -395,6 +522,8 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             "quality": dict,
             "metadata": dict,
             "notes": str,
+            "code_sha256": str,
+            "execution_hash": str,
         },
     )
     async def register_module_effect_artifact(args: dict[str, Any]) -> dict[str, Any]:
@@ -417,6 +546,8 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             quality=_optional_dict(args.get("quality")),
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
+            code_sha256=_optional_text(args.get("code_sha256")),
+            execution_hash=_optional_text(args.get("execution_hash")),
         )
         return _registration_result(workspace, registry, artifact)
 
@@ -442,6 +573,8 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             "quality": dict,
             "metadata": dict,
             "notes": str,
+            "code_sha256": str,
+            "execution_hash": str,
         },
     )
     async def register_global_effect_artifact(args: dict[str, Any]) -> dict[str, Any]:
@@ -465,8 +598,60 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             quality=_optional_dict(args.get("quality")),
             metadata=_optional_dict(args.get("metadata")),
             notes=_optional_text(args.get("notes")),
+            code_sha256=_optional_text(args.get("code_sha256")),
+            execution_hash=_optional_text(args.get("execution_hash")),
         )
         return _registration_result(workspace, registry, artifact)
+    @tool(
+        "register_composition_effect_artifact",
+        "Register measured cell-state composition evidence. This records composition or abundance association, not causal fate conversion, target engagement, or mechanism validation.",
+        {
+            "path": str,
+            "state_source": str,
+            "state_assignment_column": str,
+            "comparison_method": str,
+            "state_counts_by_condition": dict,
+            "counts_by_state": dict,
+            "state_level_deltas": dict,
+            "effect_size": float,
+            "pvalue": float,
+            "padj": float,
+            "n_target_cells": int,
+            "n_control_cells": int,
+            "scope": dict,
+            "predicate": dict,
+            "quality": dict,
+            "metadata": dict,
+            "notes": str,
+            "code_sha256": str,
+            "execution_hash": str,
+        },
+    )
+    async def register_composition_effect_artifact(args: dict[str, Any]) -> dict[str, Any]:
+        path = _resolve_evidence_source_path(workspace, str(args.get("path") or ""))
+        artifact = registry.register_composition_effect(
+            path=str(path.relative_to(workspace.root)),
+            state_source=_optional_text(args.get("state_source")),
+            state_assignment_column=_optional_text(args.get("state_assignment_column")),
+            comparison_method=_optional_text(args.get("comparison_method")),
+            state_counts_by_condition=_optional_dict(args.get("state_counts_by_condition")),
+            counts_by_state=_optional_dict(args.get("counts_by_state")),
+            state_level_deltas=_optional_dict(args.get("state_level_deltas")),
+            effect_size=_optional_float(args.get("effect_size")),
+            pvalue=_optional_float(args.get("pvalue")),
+            padj=_optional_float(args.get("padj")),
+            n_target_cells=_optional_int(args.get("n_target_cells")),
+            n_control_cells=_optional_int(args.get("n_control_cells")),
+            scope=_optional_dict(args.get("scope")),
+            predicate=_optional_dict(args.get("predicate")),
+            quality=_optional_dict(args.get("quality")),
+            metadata=_optional_dict(args.get("metadata")),
+            notes=_optional_text(args.get("notes")),
+            code_sha256=_optional_text(args.get("code_sha256")),
+            execution_hash=_optional_text(args.get("execution_hash")),
+        )
+        return _registration_result(workspace, registry, artifact)
+
     @tool(
         "register_cell_state_reference_artifact",
         "Register transcriptomic state-space, clustering, marker, and annotation context. This is scope/state context, not perturbation effect evidence.",
@@ -559,11 +744,13 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             "claims": list,
             "claims_json_path": str,
             "decisions_filename": str,
+            "policy_profile": str,
         },
     )
     async def evaluate_claims(args: dict[str, Any]) -> dict[str, Any]:
         claims = _load_claims(workspace, args)
-        decisions = resolve_claims(claims, registry)
+        policy = policy_for_profile(str(args.get("policy_profile") or "smoke"))
+        decisions = resolve_claims(claims, registry, policy=policy)
         decisions_payload = [decision.to_dict() for decision in decisions]
         decisions_filename = _optional_text(args.get("decisions_filename"))
         output_path = _write_claim_decisions(workspace, decisions_payload, decisions_filename or "claim_decisions.json")
@@ -583,6 +770,7 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             "claims_json_path": str,
             "title": str,
             "report_filename": str,
+            "policy_profile": str,
         },
     )
     async def render_report(args: dict[str, Any]) -> dict[str, Any]:
@@ -590,12 +778,14 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
         report_path = _resolve_report_path(workspace, report_filename)
         artifact_ids = [str(item) for item in args.get("artifact_ids") or []]
         claims = _load_claims(workspace, args, required=False)
+        policy = policy_for_profile(str(args.get("policy_profile") or "smoke"))
         report = render_evidence_report(
             registry=registry,
             artifact_ids=artifact_ids or None,
             claims=claims or None,
             title=str(args.get("title") or "Pertura Evidence Report"),
             write_path=report_path,
+            policy=policy,
         )
         decisions_payload = [decision.to_dict() for decision in report.decisions]
         decisions_path = _write_claim_decisions(workspace, decisions_payload, "claim_decisions.json") if decisions_payload else None
@@ -619,11 +809,15 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             register_target_qc_artifact,
             register_measured_de_artifact,
             register_predicted_effect_artifact,
+            register_virtual_perturbation_prediction_artifact,
+            register_prediction_measured_concordance_artifact,
+            register_virtual_cell_state_transition_artifact,
             register_curated_prior_artifact,
             register_perturbation_efficiency_artifact,
             register_curated_enrichment_artifact,
             register_module_effect_artifact,
             register_global_effect_artifact,
+            register_composition_effect_artifact,
             register_cell_state_reference_artifact,
             register_cell_qc_artifact,
             register_replication_artifact,
@@ -651,6 +845,7 @@ def _write_registration_handoff(workspace: ClaudeRunWorkspace, payload: dict[str
             "artifact_id": payload.get("artifact_id"),
             "artifact_path": payload.get("artifact_path"),
             "evidence_class": payload.get("evidence_class"),
+            "evidence_predicate": payload.get("evidence_predicate"),
             "artifact_intrinsic_ceiling": payload.get("artifact_intrinsic_ceiling"),
             "next_claim_template": payload.get("next_claim_template"),
         }
@@ -675,6 +870,7 @@ def _registration_result(workspace: ClaudeRunWorkspace, registry: EvidenceRegist
         "artifact_id": artifact.artifact_id,
         "artifact_path": artifact.path,
         "evidence_class": artifact.effective_evidence_class.value,
+        "evidence_predicate": artifact.effective_evidence_predicate.value,
         "artifact_roles": [item.value if hasattr(item, "value") else str(item) for item in artifact.artifact_roles],
         "artifact_intrinsic_ceiling": intrinsic.ceiling.value,
         "artifact": artifact.to_dict(),
@@ -696,10 +892,14 @@ def _next_claim_template(artifact) -> dict[str, Any] | None:
         "measured_de",
         "perturbation_efficiency",
         "predicted_effect",
+        "virtual_perturbation_prediction",
+        "prediction_measured_concordance",
+        "virtual_cell_state_transition",
         "curated_prior_lookup",
         "curated_enrichment_result",
         "module_effect",
         "global_effect",
+        "composition_effect",
         "replication_summary",
     }
     kind = artifact.kind.value if hasattr(artifact.kind, "value") else str(artifact.kind)

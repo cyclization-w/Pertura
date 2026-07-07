@@ -6,10 +6,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+PolicyProfile = str
+
+
 @dataclass(frozen=True)
 class GatePolicy:
     """Deterministic PerturaGate policy used for claim decisions."""
 
+    profile: PolicyProfile = "smoke"
     version: str = "pertura-gate-v1"
     resolver_version: str = "pertura-gate-resolver-v1"
     validated_mechanism_enabled: bool = False
@@ -54,10 +58,37 @@ class GatePolicy:
         "donor_replication",
     )
     upgrade_guide_consistency_to_replication: bool = False
+    require_trusted_method_for_measured_claims: bool = False
+    trusted_runner_methods: tuple[str, ...] = (
+        "sceptre",
+        "pseudobulk",
+        "pseudobulk_de",
+        "wilcoxon",
+        "scanpy_wilcoxon",
+        "mixscape",
+        "milo",
+        "sccoda",
+        "fisher_exact",
+        "chi_square",
+        "permutation_test",
+        "logistic_regression",
+    )
+    trusted_runner_requires_execution_hash: bool = True
+    require_replicate_scope_for_measured_claims: bool = False
+    allow_method_internal_replicate_handling: bool = True
+    batch_confounding_fail_blocks_measured: bool = False
+    require_control_calibration_for_measured_claims: bool = False
+    control_calibration_fail_blocks_measured: bool = True
+    require_ntc_vs_ntc_check_for_measured_claims: bool = False
+    require_label_permutation_check_for_measured_claims: bool = False
+    minimum_guides_per_target: int | None = None
+    minimum_cells_per_guide: int | None = None
+    guide_consistency_fail_blocks_measured: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_canonical_dict(self) -> dict[str, Any]:
         return {
+            "profile": self.profile,
             "version": self.version,
             "resolver_version": self.resolver_version,
             "validated_mechanism_enabled": self.validated_mechanism_enabled,
@@ -74,6 +105,19 @@ class GatePolicy:
             "replication_min_artifacts": self.replication_min_artifacts,
             "allowed_replication_types": list(self.allowed_replication_types),
             "upgrade_guide_consistency_to_replication": self.upgrade_guide_consistency_to_replication,
+            "require_trusted_method_for_measured_claims": self.require_trusted_method_for_measured_claims,
+            "trusted_runner_methods": list(self.trusted_runner_methods),
+            "trusted_runner_requires_execution_hash": self.trusted_runner_requires_execution_hash,
+            "require_replicate_scope_for_measured_claims": self.require_replicate_scope_for_measured_claims,
+            "allow_method_internal_replicate_handling": self.allow_method_internal_replicate_handling,
+            "batch_confounding_fail_blocks_measured": self.batch_confounding_fail_blocks_measured,
+            "require_control_calibration_for_measured_claims": self.require_control_calibration_for_measured_claims,
+            "control_calibration_fail_blocks_measured": self.control_calibration_fail_blocks_measured,
+            "require_ntc_vs_ntc_check_for_measured_claims": self.require_ntc_vs_ntc_check_for_measured_claims,
+            "require_label_permutation_check_for_measured_claims": self.require_label_permutation_check_for_measured_claims,
+            "minimum_guides_per_target": self.minimum_guides_per_target,
+            "minimum_cells_per_guide": self.minimum_cells_per_guide,
+            "guide_consistency_fail_blocks_measured": self.guide_consistency_fail_blocks_measured,
             "metadata": _canonicalize(self.metadata),
         }
 
@@ -83,7 +127,41 @@ class GatePolicy:
         return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-DEFAULT_POLICY = GatePolicy()
+def policy_for_profile(profile: PolicyProfile) -> GatePolicy:
+    normalized = str(profile).strip().lower().replace("-", "_")
+    if normalized == "smoke":
+        return GatePolicy(profile="smoke")
+    if normalized == "strict":
+        return GatePolicy(
+            profile="strict",
+            require_trusted_method_for_measured_claims=True,
+            require_replicate_scope_for_measured_claims=True,
+            batch_confounding_fail_blocks_measured=True,
+            require_control_calibration_for_measured_claims=False,
+            control_calibration_fail_blocks_measured=True,
+            guide_consistency_fail_blocks_measured=True,
+        )
+    if normalized == "paper":
+        return GatePolicy(
+            profile="paper",
+            minimum_measured_n=20,
+            require_cell_qc_for_measured_claims=True,
+            minimum_qc_cells=20,
+            require_trusted_method_for_measured_claims=True,
+            require_replicate_scope_for_measured_claims=True,
+            batch_confounding_fail_blocks_measured=True,
+            require_control_calibration_for_measured_claims=True,
+            control_calibration_fail_blocks_measured=True,
+            require_ntc_vs_ntc_check_for_measured_claims=True,
+            require_label_permutation_check_for_measured_claims=True,
+            minimum_guides_per_target=2,
+            minimum_cells_per_guide=10,
+            guide_consistency_fail_blocks_measured=True,
+        )
+    raise ValueError(f"unknown policy profile: {profile}")
+
+
+DEFAULT_POLICY = policy_for_profile("smoke")
 
 
 def _canonicalize(value: Any) -> Any:
