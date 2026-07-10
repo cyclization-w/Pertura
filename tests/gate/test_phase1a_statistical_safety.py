@@ -1,12 +1,15 @@
 ﻿from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from pertura_gate.core.policy import DEFAULT_POLICY, GatePolicy, policy_for_profile
 from pertura_gate.core.schema import Claim, StrengthCeiling
+from pertura_gate.evidence.execution_ledger import TRUSTED_RUN_WRITER_ID, file_sha256
 from pertura_gate.evidence.registry import EvidenceRegistry
 from pertura_gate.identity.design_manifest import scope_for_raw_label
 from pertura_gate.resolver.resolver import resolve_claim
+from pertura_workflow.trusted_run import record_trusted_run
 
 
 def _registry(tmp_path: Path) -> EvidenceRegistry:
@@ -64,6 +67,25 @@ def _eligible(**overrides):
     return payload
 
 
+
+
+def _trusted_metadata(tmp_path: Path, execution_hash: str | None, method: str | None, artifact_path: str | Path | None = None) -> dict:
+    if not execution_hash or not method or artifact_path is None:
+        return {}
+    output_path = Path(artifact_path)
+    if not output_path.is_absolute():
+        output_path = tmp_path / output_path
+    record = record_trusted_run(
+        tmp_path,
+        execution_hash=execution_hash,
+        runner_name="test_runner",
+        runner_version="test_runner_v1",
+        method=method,
+        input_hashes={"input": "sha256:test-input"},
+        output_hashes={"artifact": file_sha256(output_path)},
+    )
+    return {"execution_ledger_path": record["execution_ledger_path"]}
+
 def _artifact(registry: EvidenceRegistry, tmp_path: Path, **kwargs):
     params = {
         "path": _write(tmp_path, kwargs.pop("filename", "de.csv")),
@@ -79,6 +101,10 @@ def _artifact(registry: EvidenceRegistry, tmp_path: Path, **kwargs):
         "eligibility": _eligible(),
     }
     params.update(kwargs)
+    metadata = dict(params.get("metadata") or {})
+    metadata.update(_trusted_metadata(tmp_path, params.get("execution_hash"), params.get("method"), params.get("path")))
+    if metadata:
+        params["metadata"] = metadata
     return registry.register_measured_de(**params)
 
 
@@ -129,6 +155,104 @@ def test_trusted_method_with_execution_hash_and_replicates_passes_strict(tmp_pat
     artifact = _artifact(registry, tmp_path, method="sceptre", execution_hash="sha256:runner-execution")
     decision = resolve_claim(_claim(artifact), registry, policy=policy_for_profile("strict"))
     assert decision.max_strength == StrengthCeiling.measured_association
+
+
+
+def test_fake_execution_hash_without_ledger_does_not_create_trusted_execution(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    artifact = registry.register_measured_de(
+        path=_write(tmp_path, "fake_hash_de.csv"),
+        contrast_left="KLF1",
+        contrast_baseline="NegCtrl",
+        method="sceptre",
+        n_left=120,
+        n_baseline=150,
+        multiple_testing="BH",
+        has_padj=True,
+        source_data="fixture",
+        scope=_scope(registry, tmp_path),
+        eligibility=_eligible(),
+        execution_hash="sha256:hand-written",
+    )
+
+    decision = resolve_claim(_claim(artifact), registry, policy=policy_for_profile("strict"))
+
+    assert decision.max_strength == StrengthCeiling.observation
+    assert any("trusted runner provenance" in reason for reason in decision.reasons)
+
+
+def test_artifact_reported_ledger_path_is_diagnostic_only(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    artifact_path = _write(tmp_path, "self_reported_ledger_de.csv")
+    external_root = tmp_path / "external"
+    external_ledger = external_root / "artifacts" / "execution_ledger.jsonl"
+    external_ledger.parent.mkdir(parents=True)
+    external_ledger.write_text(json.dumps({
+        "schema_version": "pertura-execution-ledger-v1",
+        "execution_hash": "sha256:self-reported-ledger",
+        "runner_name": "test_runner",
+        "runner_version": "test_runner_v1",
+        "method": "sceptre",
+        "writer_id": TRUSTED_RUN_WRITER_ID,
+        "input_hashes": {"input": "sha256:test-input"},
+        "output_hashes": {"artifact": file_sha256(tmp_path / artifact_path)},
+    }) + "\n", encoding="utf-8")
+    artifact = registry.register_measured_de(
+        path=artifact_path,
+        contrast_left="KLF1",
+        contrast_baseline="NegCtrl",
+        method="sceptre",
+        n_left=120,
+        n_baseline=150,
+        multiple_testing="BH",
+        has_padj=True,
+        source_data="fixture",
+        scope=_scope(registry, tmp_path),
+        eligibility=_eligible(),
+        execution_hash="sha256:self-reported-ledger",
+        metadata={"execution_ledger_path": str(external_ledger)},
+    )
+
+    decision = resolve_claim(_claim(artifact), registry, policy=policy_for_profile("strict"))
+
+    assert decision.max_strength == StrengthCeiling.observation
+    assert any("trusted runner provenance" in reason for reason in decision.reasons)
+
+
+def test_canonical_ledger_record_must_bind_artifact_output_hash(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    artifact_path = _write(tmp_path, "unbound_ledger_de.csv")
+    canonical_ledger = tmp_path / "artifacts" / "execution_ledger.jsonl"
+    canonical_ledger.parent.mkdir(parents=True, exist_ok=True)
+    canonical_ledger.write_text(json.dumps({
+        "schema_version": "pertura-execution-ledger-v1",
+        "execution_hash": "sha256:unbound-ledger",
+        "runner_name": "test_runner",
+        "runner_version": "test_runner_v1",
+        "method": "sceptre",
+        "writer_id": TRUSTED_RUN_WRITER_ID,
+        "input_hashes": {"input": "sha256:test-input"},
+        "output_hashes": {"other": "sha256:not-this-artifact"},
+    }) + "\n", encoding="utf-8")
+    artifact = registry.register_measured_de(
+        path=artifact_path,
+        contrast_left="KLF1",
+        contrast_baseline="NegCtrl",
+        method="sceptre",
+        n_left=120,
+        n_baseline=150,
+        multiple_testing="BH",
+        has_padj=True,
+        source_data="fixture",
+        scope=_scope(registry, tmp_path),
+        eligibility=_eligible(),
+        execution_hash="sha256:unbound-ledger",
+    )
+
+    decision = resolve_claim(_claim(artifact), registry, policy=policy_for_profile("strict"))
+
+    assert decision.max_strength == StrengthCeiling.observation
+    assert any("trusted runner provenance" in reason for reason in decision.reasons)
 
 
 def test_method_internal_replicate_handling_requires_trusted_execution(tmp_path: Path) -> None:
@@ -213,6 +337,21 @@ def test_composition_paper_profile_does_not_require_de_guide_power_metadata(tmp_
             "label_permutation_check": {"passed": True, "status": "passed"},
         },
     }
+    calibration_path = _write(tmp_path, "composition_calibration.json", "{}\n")
+    registry.register_control_calibration(
+        path=calibration_path,
+        calibration_type="control_null_checks",
+        scope=scope,
+        ntc_vs_ntc_check={"passed": True, "status": "passed"},
+        label_permutation_check={"passed": True, "status": "passed"},
+        alpha=0.05,
+        n_features_tested=100,
+        n_significant=0,
+        method="basic_control_calibration_v1",
+        execution_hash="sha256:calibration-runner",
+        metadata=_trusted_metadata(tmp_path, "sha256:calibration-runner", "basic_control_calibration_v1", calibration_path),
+    )
+
     artifact = registry.register_composition_effect(
         path=_write(tmp_path, "composition_effect.json"),
         state_source="cell_state_reference_abc",
@@ -230,6 +369,7 @@ def test_composition_paper_profile_does_not_require_de_guide_power_metadata(tmp_
         scope=scope,
         quality={"eligibility": eligibility},
         execution_hash="sha256:composition-runner",
+        metadata=_trusted_metadata(tmp_path, "sha256:composition-runner", "fisher_exact", "outputs/composition_effect.json"),
     )
     claim = Claim(
         claim_id="composition_paper_without_guide_power",

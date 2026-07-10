@@ -1,0 +1,16 @@
+{
+  "schema_version": "pertura-exploratory-virtual-split-v0",
+  "dataset_id": "fixture",
+  "axes": {
+    "perturbation": {
+      "train": ["KLF1"],
+      "validation": ["TP53"],
+      "test": ["MYC"]
+    },
+    "donor": {
+      "train": ["d1"],
+      "validation": ["d2"],
+      "test": ["d3"]
+    }
+  }
+}

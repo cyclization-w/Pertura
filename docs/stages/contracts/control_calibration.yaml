@@ -1,0 +1,44 @@
+{
+    "stage_id": "control_calibration",
+    "stage_role": "analysis_eligibility",
+    "evidence_role": "control_calibration",
+    "turn_final_surface_type": "evidence_summary",
+    "evidence_producing": false,
+    "allowed_mcp_tools": [
+        "mcp__pertura_evidence__register_control_calibration_artifact"
+    ],
+    "required_outputs": [
+        "outputs/control_calibration_*.json"
+    ],
+    "optional_outputs": [
+        "outputs/control_calibration_*_diagnostics.csv"
+    ],
+    "can_support": [
+        "analysis_eligibility",
+        "control_calibration_context"
+    ],
+    "must_not_support": [
+        "measured_perturbation_effect",
+        "validated_mechanism",
+        "causal_mechanism",
+        "driver_validation"
+    ],
+    "failure_modes": [
+        "missing_required_metadata",
+        "ambiguous_uid_or_scope",
+        "no_supported_artifact_registered",
+        "tool_or_code_error"
+    ],
+    "next_stage_recommendations": [
+        "measured_de",
+        "claim_report"
+    ],
+    "benchmark_expectations": [
+        "stage_completion",
+        "artifact_registration_correct",
+        "metadata_completeness",
+        "stage_boundary_respected",
+        "exploration_not_surfaced",
+        "next_stage_recommendation_correct"
+    ]
+}

@@ -1,0 +1,26 @@
+schema_version: pertura-capability-spec-v2
+capability_id: state.reference.fit.v1
+version: "0.1.0"
+phase: 3
+kind: analysis
+summary: Fit PCA, kNN and stable Leiden states on confirmed controls only.
+trust_level: exploratory
+executor: state_reference_fit
+validator: candidate_standard
+input_requirements: [confirmed_controls, retained_cells]
+depends_on: [screen.retained_cells.v1]
+dependency_kinds: [contract, retained_cell_manifest]
+output_kind: state_reference_fit
+source_class: measured_result
+claim_permissions: []
+timeout_seconds: 3600
+parameters_schema:
+  type: object
+  properties:
+    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
+    n_jobs: {type: integer, default: 1, minimum: 1}
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true
+  environment_profile: perturbseq-python-v1

@@ -1,0 +1,16 @@
+{
+  "schema_version": "pertura-benchmark-source-v1",
+  "dataset_id": "replogle_k562_essential_2022",
+  "article_id": 20029387,
+  "article_url": "https://plus.figshare.com/articles/dataset/_Mapping_information-rich_genotype-phenotype_landscapes_with_genome-scale_Perturb-seq_Replogle_et_al_2022_processed_Perturb-seq_datasets/20029387",
+  "file": {
+    "file_id": 35773219,
+    "name": "K562_essential_raw_singlecell_01.h5ad",
+    "size_bytes": 10661879995,
+    "download_url": "https://ndownloader.figshare.com/files/35773219",
+    "supplied_md5": "4f1122ce1c7f13299a68df6459a266d3"
+  },
+  "intended_uses": ["intake", "crispri_qc", "target_reliability"],
+  "license_review_url": "https://plus.figshare.com/articles/dataset/20029387",
+  "download_tier": "nightly_or_manual"
+}

@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "calibration_fraction": {
+      "default": 0.6,
+      "title": "Calibration Fraction",
+      "type": "number"
+    },
+    "calibration_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Calibration Ids",
+      "type": "array"
+    },
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "evaluation_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evaluation Ids",
+      "type": "array"
+    },
+    "label_class": {
+      "default": "published_proxy",
+      "enum": [
+        "published_proxy",
+        "expert_adjudicated"
+      ],
+      "title": "Label Class",
+      "type": "string"
+    },
+    "modality": {
+      "enum": [
+        "crispri",
+        "crispra"
+      ],
+      "title": "Modality",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "pertura-benchmark-split-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "seed": {
+      "default": 1729,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "split_id": {
+      "default": "",
+      "title": "Split Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "modality",
+    "calibration_ids",
+    "evaluation_ids"
+  ],
+  "title": "BenchmarkSplitManifest",
+  "type": "object"
+}

@@ -215,7 +215,7 @@ def test_measured_de_with_only_prose_eligibility_is_not_measured_association(tmp
     assert any("structured perturbation-cell mapping" in reason or "negative control" in reason for reason in decision.reasons)
 
 
-def test_independent_design_guide_assignment_and_target_qc_build_eligibility(tmp_path: Path) -> None:
+def test_broad_unbound_eligibility_artifacts_cannot_build_effect_eligibility(tmp_path: Path) -> None:
     registry = _registry(tmp_path)
     design = registry.register_experiment_design(
         path=_write(tmp_path, "design.json"),
@@ -253,8 +253,8 @@ def test_independent_design_guide_assignment_and_target_qc_build_eligibility(tmp
     decision = resolve_claim(claim, registry)
 
     assert {design.artifact_id, guide.artifact_id, qc.artifact_id}
-    assert decision.max_strength == StrengthCeiling.measured_association
-    assert "EligibilityProfile satisfied" in "; ".join(decision.reasons)
+    assert decision.max_strength == StrengthCeiling.observation
+    assert "lacks a validated EligibilityProfile" in "; ".join(decision.reasons)
 
 
 
@@ -1115,6 +1115,36 @@ def test_low_post_qc_cell_count_downgrades_under_policy(tmp_path: Path) -> None:
     assert any("post-QC cell count" in reason for reason in decision.reasons)
 
 
+def test_boolean_only_cell_qc_passed_cannot_launder_missing_eligibility(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    scope = _manifest_scope(registry, tmp_path)
+    artifact = registry.register_measured_de(
+        path=_write(tmp_path, "boolean_qc_only_de.csv"),
+        contrast_left="KLF1",
+        contrast_baseline="NegCtrl",
+        method="wilcoxon",
+        n_left=120,
+        n_baseline=150,
+        multiple_testing="BH",
+        has_padj=True,
+        scope=scope,
+        eligibility={"cell_qc": {"qc_passed": True}},
+    )
+
+    decision = resolve_claim(Claim(
+        claim_id="boolean_qc_missing_eligibility",
+        text="KLF1 has a measured association.",
+        subject={"id": "KLF1"},
+        scope=scope,
+        requested_strength=StrengthCeiling.measured_association,
+        evidence_refs=[artifact.artifact_id],
+    ), registry)
+
+    assert decision.max_strength == StrengthCeiling.observation
+    assert any("guide-based claim requires structured perturbation-cell mapping" in reason for reason in decision.reasons)
+    assert any("negative control definition is missing" in reason for reason in decision.reasons)
+
+
 def test_boolean_only_cell_qc_passed_does_not_satisfy_required_qc(tmp_path: Path) -> None:
     registry = _registry(tmp_path)
     artifact = _measured_artifact(
@@ -1462,3 +1492,394 @@ def test_p13_artifact_self_tags_cannot_upgrade_to_mechanism(tmp_path: Path) -> N
     surface = decision.allowed_surface.lower()
     assert "validates" not in surface
     assert "master regulator" not in surface
+
+
+def test_composition_effect_supports_measured_association_not_fate_mechanism(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    scope = _manifest_scope(registry, tmp_path)
+    artifact = registry.register_composition_effect(
+        path=_write(tmp_path, "composition_effect.json"),
+        state_source="cell_state_reference_abc",
+        state_assignment_column="state_label",
+        comparison_method="fisher_exact",
+        effect_size=0.25,
+        padj=0.01,
+        n_target_cells=120,
+        n_control_cells=150,
+        scope=scope,
+        quality={
+            "state_counts_by_condition": {
+                "erythroid": {"target": 80, "control": 40},
+                "other": {"target": 40, "control": 110},
+            },
+            "eligibility": _eligible(),
+        },
+    )
+    claim = Claim(
+        claim_id="composition_fate_overclaim",
+        text="KLF1 causes erythroid fate conversion through a validated mechanism.",
+        subject={"type": "perturbation", "id": "KLF1"},
+        object={"type": "cell_state", "id": "erythroid"},
+        scope=artifact.scope,
+        requested_strength="causal_fate_conversion",
+        evidence_refs=[artifact.artifact_id],
+    )
+
+    decision = resolve_claim(claim, registry)
+
+    assert decision.decision == ClaimDecisionState.allowed_with_downgrade
+    assert decision.max_strength == StrengthCeiling.measured_association
+    assert "composition association" in decision.allowed_surface
+    assert "does not establish" in decision.allowed_surface
+    assert "causal fate conversion" in decision.allowed_surface
+
+
+
+def test_composition_effect_self_contained_metadata_supports_claim_without_de_eligibility(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    scope = _manifest_scope(registry, tmp_path)
+    artifact = registry.register_composition_effect(
+        path=_write(tmp_path, "composition_effect.json"),
+        state_source="cell_state_reference_abc",
+        state_assignment_column="state_label",
+        comparison_method="fisher_exact",
+        state_counts_by_condition={
+            "KLF1": {"state_a": 140, "state_b": 60},
+            "negative_control_pool": {"state_a": 80, "state_b": 120},
+        },
+        state_level_deltas={"state_a": {"delta_proportion": 0.3}},
+        effect_size=0.296,
+        padj=0.001,
+        n_target_cells=200,
+        n_control_cells=200,
+        scope=scope,
+    )
+    claim = Claim(
+        claim_id="composition_association_without_de_eligibility",
+        text="KLF1 is associated with a measured cell-state composition shift.",
+        subject={"type": "perturbation", "id": "KLF1"},
+        object={"type": "cell_state", "id": "state_a"},
+        scope=artifact.scope,
+        requested_strength=StrengthCeiling.measured_association,
+        evidence_refs=[artifact.artifact_id],
+    )
+
+    decision = resolve_claim(claim, registry)
+
+    assert decision.max_strength == StrengthCeiling.measured_association
+    assert decision.blocked_requested_strength is None
+    assert "composition association" in decision.allowed_surface
+    assert not any("EligibilityProfile" in reason for reason in decision.reasons)
+
+def test_composition_effect_cannot_support_gene_specific_or_target_engagement_claims(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    scope = _manifest_scope(registry, tmp_path)
+    artifact = registry.register_composition_effect(
+        path=_write(tmp_path, "composition_effect.json"),
+        state_source="cell_state_reference_abc",
+        state_assignment_column="state_label",
+        comparison_method="chi_square",
+        effect_size=0.2,
+        pvalue=0.02,
+        n_target_cells=120,
+        n_control_cells=150,
+        scope=scope,
+        quality={
+            "state_counts_by_condition": {"state_a": {"target": 70, "control": 30}},
+            "eligibility": _eligible(),
+        },
+    )
+    gene_claim = Claim(
+        claim_id="composition_as_gene_de",
+        text="The composition shift proves differential expression for GENE_X.",
+        subject={"type": "perturbation", "id": "KLF1"},
+        relation="differential_expression",
+        object={"type": "gene", "id": "GENE_X"},
+        scope=artifact.scope,
+        requested_strength=StrengthCeiling.measured_association,
+        evidence_refs=[artifact.artifact_id],
+    )
+    target_claim = Claim(
+        claim_id="composition_as_target_engagement",
+        text="The composition shift proves target engagement.",
+        subject={"type": "perturbation", "id": "KLF1"},
+        relation="target_engagement",
+        object={"type": "target_engagement", "id": "KLF1"},
+        scope=artifact.scope,
+        requested_strength=StrengthCeiling.measured_target_engagement,
+        evidence_refs=[artifact.artifact_id],
+    )
+
+    gene_decision = resolve_claim(gene_claim, registry)
+    target_decision = resolve_claim(target_claim, registry)
+
+    assert gene_decision.max_strength == StrengthCeiling.observation
+    assert any("gene-specific" in reason for reason in gene_decision.reasons)
+    assert target_decision.max_strength == StrengthCeiling.observation
+    assert any("target-engagement" in reason for reason in target_decision.reasons)
+
+
+def test_composition_effect_missing_metadata_or_failed_cell_qc_downgrades(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    scope = _manifest_scope(registry, tmp_path)
+    missing = registry.register_composition_effect(
+        path=_write(tmp_path, "composition_missing.json"),
+        scope=scope,
+    )
+    failed_qc = registry.register_composition_effect(
+        path=_write(tmp_path, "composition_failed_qc.json"),
+        state_source="cell_state_reference_abc",
+        state_assignment_column="state_label",
+        comparison_method="chi_square",
+        effect_size=0.2,
+        padj=0.03,
+        n_target_cells=120,
+        n_control_cells=150,
+        scope=scope,
+        quality={
+            "state_counts_by_condition": {"state_a": {"target": 70, "control": 30}},
+            "eligibility": _eligible(),
+        },
+    )
+    registry.register_cell_qc(
+        path=_write(tmp_path, "cell_qc_failed.json"),
+        passed=False,
+        n_cells_after_qc=20,
+        doublet_policy="failed",
+        ambient_policy="failed",
+        batch_qc={"passed": False},
+        scope=scope,
+    )
+    missing_claim = Claim(
+        claim_id="composition_missing",
+        text="KLF1 changes cell-state composition.",
+        subject={"type": "perturbation", "id": "KLF1"},
+        object={"type": "cell_state", "id": "state_a"},
+        scope=missing.scope,
+        requested_strength=StrengthCeiling.measured_association,
+        evidence_refs=[missing.artifact_id],
+    )
+    failed_claim = Claim(
+        claim_id="composition_failed_qc",
+        text="KLF1 changes cell-state composition.",
+        subject={"type": "perturbation", "id": "KLF1"},
+        object={"type": "cell_state", "id": "state_a"},
+        scope=failed_qc.scope,
+        requested_strength=StrengthCeiling.measured_association,
+        evidence_refs=[failed_qc.artifact_id],
+    )
+
+    missing_decision = resolve_claim(missing_claim, registry)
+    failed_decision = resolve_claim(failed_claim, registry)
+
+    assert missing_decision.max_strength == StrengthCeiling.observation
+    assert any("composition-effect artifact lacks required execution metadata" in reason for reason in missing_decision.reasons)
+    assert failed_decision.max_strength == StrengthCeiling.observation
+    assert any("cell QC" in reason for reason in failed_decision.reasons)
+
+
+
+
+
+def test_virtual_perturbation_prediction_stays_predicted(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    artifact = registry.register_virtual_perturbation_prediction(
+        path=_write(tmp_path, "virtual_prediction.json", '{"gene":"GENE_X","delta":1.0}\n'),
+        tool_name="GEARS",
+        tool_version="0.1",
+        model_name="toy-gears",
+        model_checkpoint_hash="sha256:model",
+        prediction_method="inference",
+        prediction_type="delta_expression",
+        perturbation_query={"perturbation": "KLF1"},
+        output_schema={"columns": ["gene", "delta"]},
+        n_predicted_genes=1,
+        scope={"perturbation": "KLF1"},
+        metadata={"evidence_class": "measured", "validated_mechanism": True},
+    )
+
+    decision = resolve_claim(Claim(
+        claim_id="virtual_prediction_as_measured",
+        text="The GEARS prediction measured and validated GENE_X activation.",
+        subject={"id": "KLF1"},
+        object={"type": "gene", "id": "GENE_X"},
+        scope=artifact.scope,
+        requested_strength=StrengthCeiling.measured_association,
+        evidence_refs=[artifact.artifact_id],
+    ), registry)
+
+    assert artifact.effective_evidence_class.value == "predicted"
+    assert artifact.effective_evidence_predicate.value == "predicted_perturbation_response"
+    assert decision.max_strength == StrengthCeiling.predicted_effect
+    assert "virtual perturbation model predicts" in decision.allowed_surface
+    assert "experimental result" in decision.allowed_surface
+
+
+def test_prediction_measured_concordance_does_not_create_measured_strength(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    prediction = registry.register_virtual_perturbation_prediction(
+        path=_write(tmp_path, "prediction.json"),
+        tool_name="scGPT",
+        model_name="toy-scgpt",
+        model_checkpoint_hash="sha256:model",
+        prediction_method="zero_shot",
+        prediction_type="de_like_ranked_genes",
+        perturbation_query={"perturbation": "KLF1"},
+        output_schema={"columns": ["gene", "score"]},
+        n_predicted_genes=100,
+        scope={"perturbation": "KLF1"},
+    )
+    measured = registry.register_measured_de(
+        path=_write(tmp_path, "weak_de.csv"),
+        contrast_left="KLF1",
+        contrast_baseline="NegCtrl",
+        method="wilcoxon",
+        n_left=120,
+        n_baseline=150,
+        multiple_testing="BH",
+        has_padj=True,
+        scope={"perturbation": "KLF1"},
+    )
+    concordance = registry.register_prediction_measured_concordance(
+        path=_write(tmp_path, "concordance.json"),
+        prediction_artifact_id=prediction.artifact_id,
+        measured_artifact_id=measured.artifact_id,
+        metric="spearman",
+        metric_value=0.7,
+        denominator=100,
+        scope_match="exact",
+        comparison_method="shared_gene_rank_correlation",
+        scope={"perturbation": "KLF1"},
+    )
+
+    decision = resolve_claim(Claim(
+        claim_id="concordance_as_measured",
+        text="Prediction concordance creates measured evidence for KLF1.",
+        subject={"id": "KLF1"},
+        scope=concordance.scope,
+        requested_strength=StrengthCeiling.measured_association,
+        evidence_refs=[concordance.artifact_id],
+    ), registry)
+
+    assert decision.max_strength == StrengthCeiling.observation
+    assert concordance.quality["reported_scope_match"] == "exact"
+    assert "scope_match" not in concordance.quality
+    assert any("UID-compatible scope" in reason for reason in decision.reasons)
+    assert any("diagnostic only" in reason for reason in decision.reasons)
+
+
+def test_prediction_measured_concordance_uses_runtime_scope_not_reported_scope_match(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    scope = _manifest_scope(registry, tmp_path)
+    prediction = registry.register_virtual_perturbation_prediction(
+        path=_write(tmp_path, "prediction.json"),
+        tool_name="GEARS",
+        model_name="toy-gears",
+        model_checkpoint_hash="sha256:model",
+        prediction_method="inference",
+        prediction_type="delta_expression",
+        perturbation_query={"perturbation": "KLF1"},
+        output_schema={"columns": ["gene", "predicted_delta"]},
+        n_predicted_genes=100,
+        scope=scope,
+    )
+    measured = _measured_artifact(registry, tmp_path, path=_write(tmp_path, "measured.csv"), scope=scope)
+    concordance = registry.register_prediction_measured_concordance(
+        path=_write(tmp_path, "concordance.json"),
+        prediction_artifact_id=prediction.artifact_id,
+        measured_artifact_id=measured.artifact_id,
+        metric="spearman",
+        metric_value=0.71,
+        denominator=100,
+        scope_match="same_dataset_same_perturbation",
+        comparison_method="shared_gene_rank_correlation",
+        scope=scope,
+    )
+
+    decision = resolve_claim(Claim(
+        claim_id="concordance_runtime_scope",
+        text="Prediction concordance validates measured KLF1 biology.",
+        subject={"id": "KLF1"},
+        scope=scope,
+        requested_strength=StrengthCeiling.measured_association,
+        evidence_refs=[concordance.artifact_id],
+    ), registry)
+
+    assert decision.max_strength == StrengthCeiling.predicted_effect
+    assert "concordance" in decision.allowed_surface.lower()
+    assert concordance.quality["reported_scope_match"] == "same_dataset_same_perturbation"
+    assert any("diagnostic only" in reason for reason in decision.reasons)
+    assert any("concordance remains prediction-level context" in reason for reason in decision.reasons)
+
+
+def test_prediction_measured_concordance_with_measured_artifact_remains_context(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    scope = _manifest_scope(registry, tmp_path)
+    prediction = registry.register_virtual_perturbation_prediction(
+        path=_write(tmp_path, "prediction.json"),
+        tool_name="CPA",
+        model_name="toy-cpa",
+        model_checkpoint_hash="sha256:model",
+        prediction_method="inference",
+        prediction_type="drug_response",
+        perturbation_query={"perturbation": "KLF1"},
+        output_schema={"columns": ["gene", "predicted_delta"]},
+        n_predicted_genes=100,
+        scope=scope,
+    )
+    measured = _measured_artifact(registry, tmp_path, path=_write(tmp_path, "measured.csv"), scope=scope)
+    concordance = registry.register_prediction_measured_concordance(
+        path=_write(tmp_path, "concordance.json"),
+        prediction_artifact_id=prediction.artifact_id,
+        measured_artifact_id=measured.artifact_id,
+        metric="topk_overlap",
+        metric_value=0.42,
+        denominator=50,
+        scope_match="exact",
+        comparison_method="top50_gene_overlap",
+        scope=scope,
+    )
+
+    decision = resolve_claim(Claim(
+        claim_id="concordance_validates_mechanism",
+        text="Prediction concordance validates a KLF1 mechanism.",
+        subject={"id": "KLF1"},
+        object={"id": "mechanism"},
+        scope=scope,
+        requested_strength=StrengthCeiling.validated_mechanism_disabled,
+        evidence_refs=[measured.artifact_id, concordance.artifact_id],
+    ), registry)
+
+    assert decision.max_strength == StrengthCeiling.measured_association
+    assert "concordance" in decision.allowed_surface.lower()
+    assert "does not create measured evidence" in decision.allowed_surface
+    assert any("concordance remains prediction-level context" in reason for reason in decision.reasons)
+
+
+def test_virtual_cell_state_transition_cannot_support_causal_fate_conversion(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    artifact = registry.register_virtual_cell_state_transition(
+        path=_write(tmp_path, "celloracle_transition.json"),
+        tool_name="CellOracle",
+        tool_version="0.18",
+        model_or_network_provenance={"network_hash": "sha256:network"},
+        transition_type="vector_field",
+        perturbation_query={"perturbation": "KLF1"},
+        state_space_reference={"basis": "umap", "state_column": "leiden"},
+        scope={"perturbation": "KLF1"},
+    )
+
+    decision = resolve_claim(Claim(
+        claim_id="virtual_transition_as_fate",
+        text="CellOracle proves KLF1 causes erythroid fate conversion.",
+        subject={"id": "KLF1"},
+        object={"type": "cell_fate", "id": "erythroid"},
+        scope=artifact.scope,
+        requested_strength="causal_fate_conversion",
+        evidence_refs=[artifact.artifact_id],
+    ), registry)
+
+    assert decision.max_strength == StrengthCeiling.predicted_effect
+    surface = decision.allowed_surface.lower()
+    assert "simulated state shift" in surface
+    assert "does not establish causal fate conversion" in surface

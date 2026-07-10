@@ -1,0 +1,42 @@
+{
+  "stage_id": "<stage_id>",
+  "stage_role": "scope_definition | analysis_eligibility | effect_evidence | prior_context | prediction_evidence | synthesis",
+  "evidence_role": "<reader_facing_role>",
+  "evidence_producing": false,
+  "turn_final_surface_type": "progress_only | evidence_summary | claim_decision_surface",
+  "allowed_mcp_tools": [
+    "mcp__pertura_evidence__register_specific_artifact"
+  ],
+  "required_outputs": [
+    "outputs/<stage_summary>.json"
+  ],
+  "optional_outputs": [
+    "outputs/<optional_table>.csv",
+    "outputs/plots/<optional_plot>.png"
+  ],
+  "can_support": [
+    "scope/context/eligibility/effect boundary supported by this stage"
+  ],
+  "must_not_support": [
+    "validated_mechanism",
+    "causal_mechanism",
+    "driver_validation"
+  ],
+  "failure_modes": [
+    "missing_required_metadata",
+    "ambiguous_uid_or_scope",
+    "no_supported_artifact_registered",
+    "tool_or_code_error"
+  ],
+  "next_stage_recommendations": [
+    "claim_report"
+  ],
+  "benchmark_expectations": [
+    "stage_completion",
+    "artifact_registration_correct",
+    "metadata_completeness",
+    "stage_boundary_respected",
+    "exploration_not_surfaced",
+    "next_stage_recommendation_correct"
+  ]
+}

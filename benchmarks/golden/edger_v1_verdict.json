@@ -1,0 +1,33 @@
+{
+  "canonical_hash": "sha256:c07b1a9f269592e15600cbb4fc7d1f42421e4dd95bc3a269723e7a09088eacd9",
+  "cases": {
+    "confounded_blocked": "blocked",
+    "paired_strict": "completed",
+    "two_unit_caution": "completed_with_caution",
+    "unpaired_strict": "completed"
+  },
+  "comparison_id": "golden_4671865d5e29751f4d55",
+  "environment_lock_hash": "sha256:8fb50201c33794fdf9dc7a0e011b4712e3b3d6ea591c2ea3812a591e20cda3e2",
+  "input_hashes": {
+    "paired_strict:counts": "sha256:44ac17d7c89b42eddf44dc0880c9ddf8613217b4725d904a4308c565e2318b57",
+    "paired_strict:metadata": "sha256:030f634666ac2d341cdad91889a27581a1d22486beec610ca9432205e1352dc0",
+    "two_unit_caution:counts": "sha256:465ee00e070a88a657036b051ff543e50044df896a5f34fcc3f64455d771d234",
+    "two_unit_caution:metadata": "sha256:918fab78637d25d8ba323cc67c1aaf03c4e38577a78b994aea20e197f00a2815",
+    "unpaired_strict:counts": "sha256:44ac17d7c89b42eddf44dc0880c9ddf8613217b4725d904a4308c565e2318b57",
+    "unpaired_strict:metadata": "sha256:7b82715ee7429bf00eef9a24305405adc611d3cf36d4725a237a96ecfdd85d48"
+  },
+  "maximum_errors": {
+    "F": 0.0,
+    "FDR": 0.0,
+    "PValue": 0.0,
+    "design_matrix": 0.0,
+    "logFC": 0.0,
+    "sample_manifest": 0.0,
+    "status": 0.0
+  },
+  "passed": true,
+  "reference_script_hash": "sha256:73ef90983d64d57e88b448692fb01aab634c30228f027531c7b7be12596a8271",
+  "runner_hash": "sha256:421274ec91e7bd7c31dca2bb38df4659cb593a24a216dbbd768dbbc77f354531",
+  "schema_version": "pertura-golden-comparison-v1",
+  "tolerance": 1e-07
+}

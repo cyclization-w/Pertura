@@ -79,6 +79,23 @@ def test_whole_genome_guide_map_can_aggregate_guides_to_target() -> None:
 
     assert scope_for_raw_label(manifest.to_dict(), "sgKLF1_1")["perturbation_uid"] == "target:KLF1"
     assert scope_for_raw_label(manifest.to_dict(), "sgKLF1_2")["perturbation_uid"] == "target:KLF1"
+    assert "contrast_uid" not in scope_for_raw_label(manifest.to_dict(), "sgKLF1_1")
+
+
+def test_control_aliases_map_to_negative_control_pool_and_enable_default_contrast() -> None:
+    manifest = build_guide_label_manifest(
+        manifest_id="manifest_1",
+        raw_labels=["KLF1_sg1", "non-targeting_ctrl1", "NTC_1", "NegCtrl0", "safe-targeting_2"],
+        guide_to_target_map={"KLF1_sg1": "KLF1"},
+    )
+
+    payload = manifest.to_dict()
+    for raw_label in ["non-targeting_ctrl1", "NTC_1", "NegCtrl0", "safe-targeting_2"]:
+        assert payload["raw_label_index"][raw_label] == "control:negative_control_pool"
+    scope = scope_for_raw_label(payload, "KLF1_sg1")
+    assert scope["perturbation_uid"] == "target:KLF1"
+    assert scope["control_uid"] == "control:negative_control_pool"
+    assert scope["contrast_uid"] == "contrast:target:KLF1:vs:control:negative_control_pool"
 
 
 def test_guide_map_negative_control_target_is_control_not_combo() -> None:

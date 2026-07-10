@@ -22,12 +22,17 @@ Current registrar tools:
 - `register_target_qc_artifact`
 - `register_measured_de_artifact`
 - `register_predicted_effect_artifact`
+- `register_virtual_perturbation_prediction_artifact`
+- `register_prediction_measured_concordance_artifact`
+- `register_virtual_cell_state_transition_artifact`
 - `register_curated_prior_artifact`
 - `register_perturbation_efficiency_artifact`
 - `register_curated_enrichment_artifact`
 - `register_module_effect_artifact`
 - `register_global_effect_artifact`
+- `register_composition_effect_artifact`
 - `register_cell_qc_artifact`
+- `register_control_calibration_artifact`
 - `register_replication_artifact`
 
 Decision/report tools:
@@ -47,7 +52,7 @@ Registrars own evidence class and intrinsic ceiling. Source files cannot upgrade
 }
 ```
 
-A prediction registered through `register_predicted_effect_artifact` remains prediction evidence regardless of self-tags.
+A prediction registered through `register_predicted_effect_artifact` or the virtual perturbation registrars remains prediction evidence regardless of self-tags.
 
 ## Path Boundaries
 
@@ -82,7 +87,19 @@ The template intentionally does not contain:
 - evidence class upgrade;
 - multi-artifact decision logic.
 
-Metadata/eligibility artifacts do not return direct claim templates. This prevents design manifest, target QC, guide assignment, or cell QC artifacts from being mistakenly used as effect evidence refs.
+Metadata/eligibility artifacts do not return direct claim templates. This prevents design manifest, target QC, guide assignment, cell QC, or control calibration artifacts from being mistakenly used as effect evidence refs.
+
+Control calibration artifacts are eligibility evidence only. NTC-vs-NTC and label-permutation checks can downgrade measured-strength eligibility under strict/paper profiles, but they never create effect evidence or biological conclusions.
+
+## Virtual Perturbation Wrapper Tools
+
+The first external-wrapper family adds specific Claude-facing registrars:
+
+- `register_virtual_perturbation_prediction_artifact`
+- `register_prediction_measured_concordance_artifact`
+- `register_virtual_cell_state_transition_artifact`
+
+These tools harvest structured outputs from GEARS, scGPT, Geneformer, CPA/scGen, CellOracle, or custom scripts. They do not train models, run heavy GPU inference by default, or allow prediction/concordance to become measured evidence.
 
 ## Future P2 Tool Surface
 

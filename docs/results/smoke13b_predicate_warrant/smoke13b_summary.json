@@ -1,0 +1,68 @@
+{
+  "schema_version": "pertura-smoke13b-predicate-warrant-v1",
+  "status": "completed",
+  "registry_path": "docs/results/smoke13b_predicate_warrant/artifacts/evidence_artifacts.jsonl",
+  "report_path": "docs/results/smoke13b_predicate_warrant/reports/evidence_report.md",
+  "artifact_ids": [
+    "design_manifest_8426511b7b98",
+    "composition_effect_a48561c33ab5"
+  ],
+  "composition_artifact_id": "composition_effect_a48561c33ab5",
+  "composition_evidence_predicate": "cell_state_composition_shift",
+  "composition_intrinsic_ceiling": "measured_association",
+  "decisions": [
+    {
+      "decision_id": "decision_15f60a9d1b5a",
+      "claim_id": "smoke13b_composition_as_fate_mechanism",
+      "decision": "allowed_with_downgrade",
+      "max_strength": "measured_association",
+      "claim_strength_ceiling": "measured_association",
+      "evidence_classes": [
+        "measured"
+      ],
+      "scope_fit": "exact",
+      "supporting_artifacts": [
+        "composition_effect_a48561c33ab5"
+      ],
+      "missing_artifacts": [],
+      "blocked_requested_strength": "causal_fate_conversion",
+      "allowed_surface": "Registered composition evidence supports a measured cell-state composition association for KLF1. This does not establish a gene-specific effect, target engagement, causal fate conversion, downstream mechanism, or driver validation.",
+      "reasons": [
+        "registered composition-effect artifact supports measured cell-state composition association only"
+      ],
+      "policy_version": "pertura-gate-v1",
+      "policy_hash": "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
+      "resolver_version": "pertura-gate-resolver-v1"
+    },
+    {
+      "decision_id": "decision_cde250541496",
+      "claim_id": "smoke13b_composition_association",
+      "decision": "allowed",
+      "max_strength": "measured_association",
+      "claim_strength_ceiling": "measured_association",
+      "evidence_classes": [
+        "measured"
+      ],
+      "scope_fit": "exact",
+      "supporting_artifacts": [
+        "composition_effect_a48561c33ab5"
+      ],
+      "missing_artifacts": [],
+      "blocked_requested_strength": null,
+      "allowed_surface": "Registered composition evidence supports a measured cell-state composition association for KLF1. This does not establish a gene-specific effect, target engagement, causal fate conversion, downstream mechanism, or driver validation.",
+      "reasons": [
+        "registered composition-effect artifact supports measured cell-state composition association only"
+      ],
+      "policy_version": "pertura-gate-v1",
+      "policy_hash": "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
+      "resolver_version": "pertura-gate-resolver-v1"
+    }
+  ],
+  "checks": {
+    "fate_mechanism_claim_downgraded_to_measured_association": true,
+    "composition_association_claim_allowed": true,
+    "surface_mentions_composition_association": true,
+    "surface_blocks_fate_mechanism": true,
+    "surface_not_de": true
+  }
+}

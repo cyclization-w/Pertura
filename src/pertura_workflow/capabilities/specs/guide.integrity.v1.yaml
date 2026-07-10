@@ -1,0 +1,25 @@
+schema_version: pertura-capability-spec-v2
+capability_id: guide.integrity.v1
+version: "0.1.0"
+phase: 2
+kind: diagnostic
+summary: Check guide barcodes, orientation and guide-target mapping.
+trust_level: exploratory
+executor: guide_integrity
+validator: candidate_standard
+input_requirements: [guide_matrix, rna_barcodes, guide_map]
+depends_on: [diagnostic.dataset_integrity.v1]
+dependency_kinds: [contract]
+output_kind: guide_integrity
+source_class: observed_metadata
+claim_permissions: []
+timeout_seconds: 900
+parameters_schema:
+  type: object
+  properties:
+    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
+    n_jobs: {type: integer, default: 1, minimum: 1}
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true

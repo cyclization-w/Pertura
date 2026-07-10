@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "CapabilityCoverageEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "blockers": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "capability_id": {
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "capability_version": {
+          "title": "Capability Version",
+          "type": "string"
+        },
+        "code_ready": {
+          "title": "Code Ready",
+          "type": "boolean"
+        },
+        "coverage_entry_id": {
+          "default": "",
+          "title": "Coverage Entry Id",
+          "type": "string"
+        },
+        "environment_ready": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Environment Ready"
+        },
+        "local_fixture_ready": {
+          "title": "Local Fixture Ready",
+          "type": "boolean"
+        },
+        "real_benchmark_ready": {
+          "default": false,
+          "title": "Real Benchmark Ready",
+          "type": "boolean"
+        },
+        "required_real_datasets": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Real Datasets",
+          "type": "array"
+        },
+        "schema_version": {
+          "default": "pertura-capability-coverage-entry-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "synthetic_case_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Synthetic Case Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "capability_id",
+        "capability_version",
+        "code_ready",
+        "local_fixture_ready"
+      ],
+      "title": "CapabilityCoverageEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "code_ready": {
+      "title": "Code Ready",
+      "type": "boolean"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/CapabilityCoverageEntry"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "local_fixture_ready": {
+      "title": "Local Fixture Ready",
+      "type": "boolean"
+    },
+    "matrix_id": {
+      "default": "",
+      "title": "Matrix Id",
+      "type": "string"
+    },
+    "real_benchmark_ready": {
+      "title": "Real Benchmark Ready",
+      "type": "boolean"
+    },
+    "release_ready": {
+      "default": false,
+      "title": "Release Ready",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "default": "pertura-capability-benchmark-matrix-v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "entries",
+    "code_ready",
+    "local_fixture_ready",
+    "real_benchmark_ready"
+  ],
+  "title": "CapabilityBenchmarkMatrix",
+  "type": "object"
+}

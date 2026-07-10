@@ -61,8 +61,6 @@ class GatePolicy:
     require_trusted_method_for_measured_claims: bool = False
     trusted_runner_methods: tuple[str, ...] = (
         "sceptre",
-        "pseudobulk",
-        "pseudobulk_de",
         "wilcoxon",
         "scanpy_wilcoxon",
         "mixscape",
@@ -74,6 +72,14 @@ class GatePolicy:
         "logistic_regression",
     )
     trusted_runner_requires_execution_hash: bool = True
+    trusted_runner_requires_ledger_entry: bool = False
+    trusted_calibration_methods: tuple[str, ...] = (
+        "basic_control_calibration_v1",
+        "basic_ntc_vs_ntc_v1",
+        "basic_label_permutation_null_v1",
+    )
+    trusted_calibration_requires_execution_hash: bool = True
+    require_trusted_calibration_for_required_checks: bool = False
     require_replicate_scope_for_measured_claims: bool = False
     allow_method_internal_replicate_handling: bool = True
     batch_confounding_fail_blocks_measured: bool = False
@@ -108,6 +114,10 @@ class GatePolicy:
             "require_trusted_method_for_measured_claims": self.require_trusted_method_for_measured_claims,
             "trusted_runner_methods": list(self.trusted_runner_methods),
             "trusted_runner_requires_execution_hash": self.trusted_runner_requires_execution_hash,
+            "trusted_runner_requires_ledger_entry": self.trusted_runner_requires_ledger_entry,
+            "trusted_calibration_methods": list(self.trusted_calibration_methods),
+            "trusted_calibration_requires_execution_hash": self.trusted_calibration_requires_execution_hash,
+            "require_trusted_calibration_for_required_checks": self.require_trusted_calibration_for_required_checks,
             "require_replicate_scope_for_measured_claims": self.require_replicate_scope_for_measured_claims,
             "allow_method_internal_replicate_handling": self.allow_method_internal_replicate_handling,
             "batch_confounding_fail_blocks_measured": self.batch_confounding_fail_blocks_measured,
@@ -136,6 +146,7 @@ def policy_for_profile(profile: PolicyProfile) -> GatePolicy:
             profile="strict",
             require_trusted_method_for_measured_claims=True,
             require_replicate_scope_for_measured_claims=True,
+            trusted_runner_requires_ledger_entry=True,
             batch_confounding_fail_blocks_measured=True,
             require_control_calibration_for_measured_claims=False,
             control_calibration_fail_blocks_measured=True,
@@ -149,11 +160,13 @@ def policy_for_profile(profile: PolicyProfile) -> GatePolicy:
             minimum_qc_cells=20,
             require_trusted_method_for_measured_claims=True,
             require_replicate_scope_for_measured_claims=True,
+            trusted_runner_requires_ledger_entry=True,
             batch_confounding_fail_blocks_measured=True,
             require_control_calibration_for_measured_claims=True,
             control_calibration_fail_blocks_measured=True,
             require_ntc_vs_ntc_check_for_measured_claims=True,
             require_label_permutation_check_for_measured_claims=True,
+            require_trusted_calibration_for_required_checks=True,
             minimum_guides_per_target=2,
             minimum_cells_per_guide=10,
             guide_consistency_fail_blocks_measured=True,

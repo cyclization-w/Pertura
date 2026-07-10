@@ -1,0 +1,172 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "article_id": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Article Id"
+    },
+    "article_url": {
+      "anyOf": [
+        {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Article Url"
+    },
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "conversion": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Conversion"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "download_tier": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Download Tier"
+    },
+    "file": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "File"
+    },
+    "intended_uses": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Intended Uses",
+      "type": "array"
+    },
+    "license_review_url": {
+      "format": "uri",
+      "maxLength": 2083,
+      "minLength": 1,
+      "title": "License Review Url",
+      "type": "string"
+    },
+    "manifest_id": {
+      "default": "",
+      "title": "Manifest Id",
+      "type": "string"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note"
+    },
+    "output_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Output Sha256"
+    },
+    "perturb_seq_claim_allowed": {
+      "default": true,
+      "title": "Perturb Seq Claim Allowed",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source"
+    },
+    "source_url": {
+      "anyOf": [
+        {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Url"
+    },
+    "source_versions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Source Versions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "dataset_id",
+    "intended_uses",
+    "license_review_url"
+  ],
+  "title": "BenchmarkSourceManifest",
+  "type": "object"
+}

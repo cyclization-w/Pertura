@@ -1,0 +1,84 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "metric_id": {
+      "default": "",
+      "title": "Metric Id",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "observed": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Observed"
+    },
+    "operator": {
+      "enum": [
+        "eq",
+        "lte",
+        "gte"
+      ],
+      "title": "Operator",
+      "type": "string"
+    },
+    "passed": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Passed"
+    },
+    "schema_version": {
+      "default": "pertura-capability-benchmark-metric-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "threshold": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Threshold"
+    }
+  },
+  "required": [
+    "name",
+    "operator",
+    "threshold"
+  ],
+  "title": "CapabilityBenchmarkMetric",
+  "type": "object"
+}

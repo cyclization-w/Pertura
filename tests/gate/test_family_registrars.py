@@ -55,18 +55,21 @@ def test_family_prediction_subtype_preserves_predicted_effect_semantics(tmp_path
     assert resolution.ceiling == StrengthCeiling.predicted_effect
 
 
-def test_generic_family_artifact_is_observational_until_specific_resolver_support_exists(tmp_path: Path) -> None:
+def test_family_composition_effect_subtype_uses_specific_registrar(tmp_path: Path) -> None:
     registry = EvidenceRegistry(tmp_path / "artifacts" / "evidence_artifacts.jsonl")
     artifact = registry.register_measured_effect_artifact(
         path=_write(tmp_path, "composition.csv"),
         artifact_subtype="composition_effect",
         scope={"dataset_id": "local"},
-        quality={"method": "synthetic"},
+        state_source="cell_state_reference_abc",
+        state_assignment_column="state_label",
+        comparison_method="synthetic",
+        quality={"state_counts_by_condition": {"state_a": {"target": 5, "control": 3}}},
     )
 
     resolution = resolve_artifact_strength(artifact)
 
-    assert artifact.kind == ArtifactKind.measured_effect
-    assert artifact.metadata["artifact_subtype"] == "composition_effect"
+    assert artifact.kind == ArtifactKind.composition_effect
+    assert artifact.provenance["created_by_tool"] == "register_composition_effect_artifact"
     assert artifact.effective_evidence_class == EvidenceClass.measured
     assert resolution.ceiling == StrengthCeiling.observation

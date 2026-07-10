@@ -10,13 +10,18 @@ from pertura_gate.core.schema import Claim
 from pertura_gate.evidence.registry import EvidenceRegistry
 from pertura_gate.identity.design_manifest import scope_for_raw_label
 from pertura_gate.render.renderer import render_evidence_report
-from pertura_gate.resolver.resolver import resolve_claims
+from pertura_gate.resolver.resolver import resolve_artifact_strength, resolve_claims
 from pertura_workflow.claims import link_candidate_claims, normalize_candidate_claims
 from pertura_workflow.harvest import harvest_artifacts_from_workspace
 from pertura_workflow.models import HarvestMode, HarvestReport, RecipeRunResult, WorkflowRunManifest, WorkflowRunStep
 from pertura_workflow.preflight import preflight_workspace
 from pertura_workflow.recommend import recommend_next_evidence
-from pertura_workflow.runners import run_basic_de_for_registered_contrast, run_basic_target_qc
+from pertura_workflow.runners import (
+    run_basic_de_for_registered_contrast,
+    run_basic_target_qc,
+    run_label_permutation_null,
+    run_ntc_vs_ntc_calibration,
+)
 
 
 RECIPE_NAME = "classic_perturbseq"
@@ -183,6 +188,7 @@ def _run_configured_classic_recipe(root: Path, *, config_path: Path, mode: str, 
     )
 
     optional_artifact_ids: list[str] = []
+    calibration_runner_steps: list[WorkflowRunStep] = []
     if isinstance(config.get("cell_qc"), dict):
         cell_qc = dict(config["cell_qc"])
         cell_artifact = registry.register_cell_qc(
@@ -196,6 +202,35 @@ def _run_configured_classic_recipe(root: Path, *, config_path: Path, mode: str, 
             scope=scope,
         )
         optional_artifact_ids.append(cell_artifact.artifact_id)
+
+    calibration_config = dict(config.get("control_calibration") or {})
+    for calibration_payload in _run_or_load_control_calibrations(root, calibration_config, scope):
+        calibration_path = _required_workspace_file(root, calibration_payload.get("path"))
+        calibration_artifact = registry.register_control_calibration(
+            path=calibration_path,
+            calibration_type=calibration_payload.get("calibration_type"),
+            scope=scope,
+            negative_control_status=calibration_payload.get("negative_control_status"),
+            ntc_vs_ntc_check=dict(calibration_payload.get("ntc_vs_ntc_check") or {}),
+            label_permutation_check=dict(calibration_payload.get("label_permutation_check") or {}),
+            alpha=_optional_float(calibration_payload.get("alpha")),
+            n_features_tested=_optional_int(calibration_payload.get("n_features_tested")),
+            n_significant=_optional_int(calibration_payload.get("n_significant")),
+            method=calibration_payload.get("method"),
+            execution_hash=calibration_payload.get("execution_hash"),
+            quality=dict(calibration_payload.get("quality") or {}),
+            metadata={"source": "classic_recipe_control_calibration"},
+        )
+        optional_artifact_ids.append(calibration_artifact.artifact_id)
+        calibration_runner_steps.append(
+            WorkflowRunStep(
+                f"register_control_calibration:{calibration_payload.get('calibration_type') or 'control_calibration'}",
+                "registered",
+                artifact_ids=[calibration_artifact.artifact_id],
+                output_paths=[str(calibration_path)],
+                notes=["control calibration is eligibility evidence only; scientific interpretation remains gated"],
+            )
+        )
 
     de = dict(config.get("measured_de") or {})
     basic_de = dict(config.get("basic_de") or {})
@@ -301,6 +336,7 @@ def _run_configured_classic_recipe(root: Path, *, config_path: Path, mode: str, 
                 notes=["narrow runner produced DE table only; scientific interpretation remains gated"],
             )
         )
+    runner_steps.extend(calibration_runner_steps)
     steps = [
         WorkflowRunStep("preflight", "passed"),
         WorkflowRunStep("register_design_manifest", "registered", artifact_ids=[manifest_artifact.artifact_id]),
@@ -336,6 +372,57 @@ def _run_configured_classic_recipe(root: Path, *, config_path: Path, mode: str, 
     )
 
 
+def _run_or_load_control_calibrations(root: Path, calibration_config: dict, scope: dict | None = None) -> list[dict[str, object]]:
+    if not calibration_config:
+        return []
+    payloads: list[dict[str, object]] = []
+    existing_path = calibration_config.get("path")
+    if existing_path:
+        path = _required_workspace_file(root, existing_path)
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        if isinstance(payload, dict):
+            payload = dict(payload)
+            payload.setdefault("path", str(path))
+            payloads.append(payload)
+    ntc_config = dict(calibration_config.get("ntc_vs_ntc") or {})
+    if ntc_config:
+        result = run_ntc_vs_ntc_calibration(
+            root,
+            expression_csv=ntc_config.get("expression_csv") or ntc_config.get("expression_matrix"),
+            metadata_csv=ntc_config.get("metadata_csv") or ntc_config.get("cell_metadata"),
+            control_uid=str(ntc_config.get("control_uid") or ""),
+            layer=str(ntc_config.get("layer") or calibration_config.get("layer") or ""),
+            output_path=ntc_config.get("output_path"),
+            cell_id_column=str(ntc_config.get("cell_id_column") or "cell_id"),
+            condition_column=str(ntc_config.get("condition_column") or "perturbation_uid"),
+            gene_columns=[str(item) for item in ntc_config.get("gene_columns")] if isinstance(ntc_config.get("gene_columns"), list) else None,
+            alpha=float(ntc_config.get("alpha") or calibration_config.get("alpha") or 0.05),
+            seed=int(ntc_config.get("seed") or calibration_config.get("seed") or 0),
+            max_features=_optional_int(ntc_config.get("max_features")),
+        )
+        payloads.append(result)
+    permutation_config = dict(calibration_config.get("label_permutation") or {})
+    if permutation_config:
+        result = run_label_permutation_null(
+            root,
+            expression_csv=permutation_config.get("expression_csv") or permutation_config.get("expression_matrix"),
+            metadata_csv=permutation_config.get("metadata_csv") or permutation_config.get("cell_metadata"),
+            contrast_uid=str(permutation_config.get("contrast_uid") or ""),
+            left_uid=str(permutation_config.get("left_uid") or ""),
+            baseline_uid=str(permutation_config.get("baseline_uid") or ""),
+            layer=str(permutation_config.get("layer") or calibration_config.get("layer") or ""),
+            output_path=permutation_config.get("output_path"),
+            cell_id_column=str(permutation_config.get("cell_id_column") or "cell_id"),
+            condition_column=str(permutation_config.get("condition_column") or "perturbation_uid"),
+            gene_columns=[str(item) for item in permutation_config.get("gene_columns")] if isinstance(permutation_config.get("gene_columns"), list) else None,
+            alpha=float(permutation_config.get("alpha") or calibration_config.get("alpha") or 0.05),
+            seed=int(permutation_config.get("seed") or calibration_config.get("seed") or 0),
+            max_features=_optional_int(permutation_config.get("max_features")),
+        )
+        payloads.append(result)
+    return payloads
+
+
 def _append_candidate_claim_gap_section(markdown: str, candidate_links) -> str:
     unlinked = [link for link in candidate_links if link.claim is None]
     if not unlinked:
@@ -353,7 +440,7 @@ def _render_configured_gap_report(registry: EvidenceRegistry, candidate_links, *
     lines = [
         "# Pertura Classic Perturb-seq Evidence Gap Report",
         "",
-        f"- Policy version: `{policy.policy_version}`",
+        f"- Policy version: `{policy.version}`",
         f"- Policy hash: `{policy.policy_hash}`",
         "- Recipe status: `partial_success`",
         "- Scientific surface: no effect-level conclusion was rendered because no candidate claim linked to both canonical UID scope and registered evidence.",
@@ -367,7 +454,7 @@ def _render_configured_gap_report(registry: EvidenceRegistry, candidate_links, *
         reasons = "; ".join(link.reasons) if link.reasons else "unlinked candidate claim"
         lines.append(f"- `{link.candidate_claim_id}`: `{link.status}`; {reasons}")
     lines.extend(["", "## Registered Evidence Artifacts", ""])
-    artifacts = registry.list_artifacts()
+    artifacts = registry.list()
     if not artifacts:
         lines.append("No evidence artifacts were registered.")
     else:
@@ -375,7 +462,7 @@ def _render_configured_gap_report(registry: EvidenceRegistry, candidate_links, *
         lines.append("| --- | --- | --- | --- |")
         for artifact in artifacts:
             lines.append(
-                f"| `{artifact.artifact_id}` | `{artifact.kind.value}` | `{artifact.evidence_class.value}` | `{artifact.artifact_intrinsic_ceiling.value}` |"
+                f"| `{artifact.artifact_id}` | `{artifact.kind.value}` | `{artifact.effective_evidence_class.value}` | `{resolve_artifact_strength(artifact, policy=policy).ceiling.value}` |"
             )
     lines.extend(
         [

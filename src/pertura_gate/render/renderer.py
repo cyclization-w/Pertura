@@ -5,6 +5,7 @@ from pathlib import Path
 from pertura_gate.core.policy import DEFAULT_POLICY, GatePolicy
 from pertura_gate.evidence.registry import EvidenceRegistry
 from pertura_gate.resolver.resolver import resolve_artifact_strength, resolve_claims
+from pertura_gate.resolver.warrant import surface_for_artifact
 from pertura_gate.core.schema import Claim, ClaimDecision, EvidenceArtifact, RenderedReport, StrengthCeiling
 
 
@@ -143,42 +144,10 @@ def _render_artifact_section(artifact: EvidenceArtifact, ceiling: StrengthCeilin
         f"- Evidence class: `{artifact.effective_evidence_class.value}`",
         f"- Artifact path: `{artifact.path}`",
         f"- Artifact intrinsic ceiling: `{ceiling.value}`",
+        "",
+        surface_for_artifact(artifact, ceiling),
     ]
-    if ceiling == StrengthCeiling.measured_association:
-        lines.extend(
-            [
-                "",
-                (
-                    f"In the measured contrast `{artifact.contrast_left}` versus "
-                    f"`{artifact.contrast_baseline}`, this run produced a differential-expression "
-                    f"artifact using `{artifact.method}` with multiple-testing metadata "
-                    f"(`{artifact.multiple_testing}`). This supports a measured association "
-                    "for the resolved contrast. It does not by itself establish a validated mechanism."
-                ),
-            ]
-        )
-    elif ceiling == StrengthCeiling.measured_target_engagement:
-        lines.extend(["", "A registered perturbation-efficiency artifact supports measured target engagement or perturbation response. This does not establish a downstream mechanism."])
-    elif ceiling == StrengthCeiling.predicted_effect:
-        lines.extend(["", "A registered prediction artifact predicts an effect. This is prediction evidence and must not be reported as an experimental result."])
-    elif ceiling == StrengthCeiling.curated_prior_support:
-        lines.extend(["", "A curated prior artifact provides prior support. This is curated prior context, not an experimental confirmation."])
-    elif ceiling == StrengthCeiling.replicated_measured_association:
-        lines.extend(["", "Registered measured artifacts support a replicated measured association."])
-    elif ceiling == StrengthCeiling.observation:
-        lines.extend(
-            [
-                "",
-                (
-                    "This run produced an observational artifact, but the registered execution metadata "
-                    "does not support a resolved differential-expression association."
-                ),
-            ]
-        )
-    else:
-        lines.extend(["", "No registered measured evidence supports this conclusion in the current run."])
     return lines
-
 
 def _render_evidence_table(artifacts: list[EvidenceArtifact], resolutions) -> list[str]:
     lines = ["## Registered evidence artifacts", ""]

@@ -1,0 +1,73 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "cases": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Cases",
+      "type": "object"
+    },
+    "comparison_id": {
+      "default": "",
+      "title": "Comparison Id",
+      "type": "string"
+    },
+    "environment_lock_hash": {
+      "title": "Environment Lock Hash",
+      "type": "string"
+    },
+    "input_hashes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Input Hashes",
+      "type": "object"
+    },
+    "maximum_errors": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Maximum Errors",
+      "type": "object"
+    },
+    "passed": {
+      "title": "Passed",
+      "type": "boolean"
+    },
+    "reference_script_hash": {
+      "title": "Reference Script Hash",
+      "type": "string"
+    },
+    "runner_hash": {
+      "title": "Runner Hash",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "pertura-golden-comparison-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tolerance": {
+      "default": 1e-07,
+      "title": "Tolerance",
+      "type": "number"
+    }
+  },
+  "required": [
+    "environment_lock_hash",
+    "input_hashes",
+    "reference_script_hash",
+    "runner_hash",
+    "maximum_errors",
+    "cases",
+    "passed"
+  ],
+  "title": "GoldenComparison",
+  "type": "object"
+}

@@ -1,0 +1,17 @@
+{
+  "policy": {
+    "minimum_independent_units_per_arm": 3,
+    "profile": "strict",
+    "require_calibration": true,
+    "require_current_dependencies": true,
+    "require_receipt_for_measured": true,
+    "required_measured_dependency_kinds": [
+      "contract",
+      "retained_cell_manifest",
+      "target_reliability"
+    ],
+    "version": "pertura-promotion-v2"
+  },
+  "policy_hash": "sha256:b50ce73e8706640513f0c980d8bd59cb073f24417e368ca300727bee42477388",
+  "schema_version": "pertura-v020-promotion-freeze-v1"
+}

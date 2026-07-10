@@ -10,11 +10,13 @@ from pertura_runtime.claude.options import (
     ClaudeRuntimeOptions,
     build_agent_options,
     describe_options,
+    runtime_policy,
 )
 from pertura_runtime.claude.prompt import build_default_task, write_prompt_files
-from pertura_runtime.claude.python_env import PythonEnvironmentError, prepare_python_environment
+from pertura_runtime.claude.python_env import SCIENCE_PACKAGES, PythonEnvironmentError, prepare_python_environment
 from pertura_runtime.claude.stream import ClaudeStreamRenderer
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
+from pertura_runtime.product import PerturaProductRuntime
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,19 @@ class ClaudePerturaAgent:
         self.config = config or ClaudeRuntimeOptions()
         self.stream = ClaudeStreamRenderer(output_fn=output_fn, verbose=verbose, raw_stream=raw_stream)
         self.manifest = ClaudeRunManifest(workspace)
+        self.policy = runtime_policy(self.config)
+        self.product_runtime = PerturaProductRuntime(workspace, policy_profile=self.config.policy_profile)
+        self.workspace.update_manifest(
+            {
+                "trust_policy": {
+                    "profile": self.policy.profile,
+                    "policy_hash": self.policy.policy_hash,
+                    "version": self.policy.version,
+                    "resolver_version": self.policy.resolver_version,
+                    "selected_by": "runtime_config",
+                }
+            }
+        )
 
     async def run(self, task: str | None = None) -> ClaudeRunResult:
         task_text = task or build_default_task(self.workspace.input_source)
@@ -48,6 +63,7 @@ class ClaudePerturaAgent:
             python_environment = prepare_python_environment(
                 self.config.python_exe,
                 base_env={**__import__("os").environ, **self.config.env},
+                required_packages=_required_preflight_packages(self.config),
                 timeout_s=self.config.python_preflight_timeout_s,
             )
         except PythonEnvironmentError as exc:
@@ -58,11 +74,13 @@ class ClaudePerturaAgent:
                 {
                     "claude_runtime_options": describe_options(self.config),
                     "task": task_text,
+                    "interaction_mode": self.config.interaction_mode,
+                    "stage_id": self.config.stage_id,
                     "python_environment_error": exc.payload or {"error": str(exc)},
                 }
             )
-            self.workspace.finalize(status="failed", error=error)
-            return ClaudeRunResult(status="failed", workspace=self.workspace.root, error=error)
+            runtime_final = self._finalize_with_runtime_summary(status="failed", error=error)
+            return ClaudeRunResult(status="failed", workspace=self.workspace.root, result_text=runtime_final, error=error)
 
         self.workspace.write_json(
             self.workspace.logs_dir / "python_env.json",
@@ -78,6 +96,7 @@ class ClaudePerturaAgent:
             python_environment=python_environment,
             interaction_mode=self.config.interaction_mode,
             stage_id=self.config.stage_id,
+            tool_surface=self.config.tool_surface,
         )
         self.workspace.update_manifest(
             {
@@ -97,13 +116,14 @@ class ClaudePerturaAgent:
                 "`python -m pip install 'pertura-gate[llm]'` or "
                 "`python -m pip install claude-agent-sdk`."
             )
-            self.workspace.finalize(status="failed", error=message)
+            self._finalize_with_runtime_summary(status="failed", error=message)
             raise RuntimeError(message) from exc
 
         options = build_agent_options(
             workspace=self.workspace,
             system_prompt=system_prompt,
             config=runtime_config,
+            product_runtime=self.product_runtime,
         )
         try:
             async with ClaudeSDKClient(options=options) as client:
@@ -112,16 +132,9 @@ class ClaudePerturaAgent:
                     self.stream.render(message)
                     self.manifest.capture(message)
             status = "failed" if self.manifest.is_error else "completed"
-            error = f"Claude SDK result error: {self.manifest.result_subtype or 'unknown'}" if self.manifest.is_error else None
+            error = _sdk_result_error(self.manifest) if self.manifest.is_error else None
             self.manifest.flush(status=status)
-            runtime_final = build_runtime_final_summary(self.workspace, status=status, error=error)
-            self.workspace.update_manifest(
-                {
-                    "runtime_final_path": "reports/pertura_final.md",
-                    "claude_final_path": "logs/claude_final.md" if (self.workspace.logs_dir / "claude_final.md").exists() else None,
-                }
-            )
-            self.workspace.finalize(status=status, result=runtime_final, error=error)
+            runtime_final = self._finalize_with_runtime_summary(status=status, error=error)
             return ClaudeRunResult(
                 status=status,
                 workspace=self.workspace.root,
@@ -131,10 +144,57 @@ class ClaudePerturaAgent:
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
             self.manifest.flush(status="failed")
-            self.workspace.finalize(status="failed", error=error)
-            return ClaudeRunResult(status="failed", workspace=self.workspace.root, error=error)
+            runtime_final = self._finalize_with_runtime_summary(status="failed", error=error)
+            return ClaudeRunResult(status="failed", workspace=self.workspace.root, result_text=runtime_final, error=error)
 
+    def _finalize_with_runtime_summary(self, *, status: str, error: str | None = None) -> str:
+        if self.config.tool_surface == "capability":
+            if status == "completed":
+                self.product_runtime.finalize_report(self.workspace.root.name)
+                runtime_final = (self.workspace.reports_dir / "pertura_final.md").read_text(encoding="utf-8")
+                self.product_runtime.close(graceful=True)
+            else:
+                self.product_runtime.close(graceful=False)
+                runtime_final = "# Pertura capability run failed\n\n" + (error or "The runtime failed before a verified result was finalized.") + "\n"
+                self.workspace.write_text(self.workspace.reports_dir / "pertura_final.md", runtime_final)
+            self.workspace.update_manifest(
+                {
+                    "runtime_final_path": "reports/pertura_final.md",
+                    "turn_final_path": None,
+                    "claude_final_path": "logs/claude_final.md" if (self.workspace.logs_dir / "claude_final.md").exists() else None,
+                }
+            )
+            self.workspace.finalize(status=status, result=runtime_final, error=error)
+            return runtime_final
+        if self.product_runtime.started:
+            if status == "completed":
+                self.product_runtime.finalize_report(self.workspace.root.name)
+                self.product_runtime.close(graceful=True)
+            else:
+                self.product_runtime.close(graceful=False)
+        runtime_final = build_runtime_final_summary(
+            self.workspace,
+            status=status,
+            error=error,
+            policy=self.policy,
+        )
+        self.workspace.update_manifest(
+            {
+                "runtime_final_path": "reports/pertura_final.md",
+                "turn_final_path": "reports/turn_final.md",
+                "claude_final_path": "logs/claude_final.md" if (self.workspace.logs_dir / "claude_final.md").exists() else None,
+            }
+        )
+        self.workspace.finalize(status=status, result=runtime_final, error=error)
+        return runtime_final
 
+def _required_preflight_packages(config: ClaudeRuntimeOptions) -> tuple[str, ...]:
+    if config.python_preflight_packages is not None:
+        return tuple(config.python_preflight_packages)
+    if config.stage_id == "cell_state_reference":
+        return ("anndata", "pandas", "numpy")
+    return tuple(SCIENCE_PACKAGES)
 
-
-
+def _sdk_result_error(manifest: ClaudeRunManifest) -> str:
+    detail = manifest.result_text or manifest.result_subtype or "unknown"
+    return f"Claude SDK result error: {detail}"

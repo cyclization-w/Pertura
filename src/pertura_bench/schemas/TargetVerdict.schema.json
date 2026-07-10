@@ -1,0 +1,180 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "adjudication": {
+      "additionalProperties": true,
+      "title": "Adjudication",
+      "type": "object"
+    },
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "doi": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Doi"
+    },
+    "expected_direction": {
+      "enum": [
+        "down",
+        "up"
+      ],
+      "title": "Expected Direction",
+      "type": "string"
+    },
+    "importer_hash": {
+      "title": "Importer Hash",
+      "type": "string"
+    },
+    "importer_version": {
+      "title": "Importer Version",
+      "type": "string"
+    },
+    "label_source": {
+      "enum": [
+        "published_proxy",
+        "expert_adjudicated"
+      ],
+      "title": "Label Source",
+      "type": "string"
+    },
+    "modality": {
+      "enum": [
+        "crispri",
+        "crispra"
+      ],
+      "title": "Modality",
+      "type": "string"
+    },
+    "pmid": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pmid"
+    },
+    "reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reason Codes",
+      "type": "array"
+    },
+    "reviewer_ids": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Reviewer Ids",
+      "type": "array"
+    },
+    "row": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Row"
+    },
+    "schema_version": {
+      "default": "pertura-target-verdict-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sheet": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sheet"
+    },
+    "supplement": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supplement"
+    },
+    "table": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Table"
+    },
+    "target_id": {
+      "title": "Target Id",
+      "type": "string"
+    },
+    "target_verdict_id": {
+      "default": "",
+      "title": "Target Verdict Id",
+      "type": "string"
+    },
+    "validated": {
+      "default": false,
+      "title": "Validated",
+      "type": "boolean"
+    },
+    "verdict": {
+      "enum": [
+        "screen_passed",
+        "caution",
+        "blocked",
+        "unresolved"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    }
+  },
+  "required": [
+    "modality",
+    "dataset_id",
+    "target_id",
+    "expected_direction",
+    "verdict",
+    "reason_codes",
+    "label_source",
+    "importer_version",
+    "importer_hash"
+  ],
+  "title": "TargetVerdict",
+  "type": "object"
+}

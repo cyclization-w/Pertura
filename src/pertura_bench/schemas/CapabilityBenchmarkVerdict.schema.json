@@ -1,0 +1,245 @@
+{
+  "$defs": {
+    "CapabilityBenchmarkMetric": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "metric_id": {
+          "default": "",
+          "title": "Metric Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "observed": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed"
+        },
+        "operator": {
+          "enum": [
+            "eq",
+            "lte",
+            "gte"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "passed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Passed"
+        },
+        "schema_version": {
+          "default": "pertura-capability-benchmark-metric-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Threshold"
+        }
+      },
+      "required": [
+        "name",
+        "operator",
+        "threshold"
+      ],
+      "title": "CapabilityBenchmarkMetric",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "capability_id": {
+      "title": "Capability Id",
+      "type": "string"
+    },
+    "capability_version": {
+      "title": "Capability Version",
+      "type": "string"
+    },
+    "case_id": {
+      "title": "Case Id",
+      "type": "string"
+    },
+    "environment_lock_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Environment Lock Hash"
+    },
+    "input_hashes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Input Hashes",
+      "type": "object"
+    },
+    "metrics": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CapabilityBenchmarkMetric"
+      },
+      "title": "Metrics",
+      "type": "array"
+    },
+    "observed_blockers": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Observed Blockers",
+      "type": "array"
+    },
+    "observed_status": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Observed Status"
+    },
+    "outcome": {
+      "enum": [
+        "passed",
+        "failed",
+        "not_available",
+        "not_run_environment_missing"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "output_hashes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Output Hashes",
+      "type": "object"
+    },
+    "peak_memory_mb": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Peak Memory Mb"
+    },
+    "reasons": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+    },
+    "runner_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Runner Hash"
+    },
+    "runtime_seconds": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Runtime Seconds"
+    },
+    "schema_version": {
+      "default": "pertura-capability-benchmark-verdict-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tier": {
+      "enum": [
+        "unit",
+        "synthetic_ci",
+        "frozen_subset",
+        "full_dataset"
+      ],
+      "title": "Tier",
+      "type": "string"
+    },
+    "verdict_id": {
+      "default": "",
+      "title": "Verdict Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "case_id",
+    "capability_id",
+    "capability_version",
+    "tier",
+    "outcome"
+  ],
+  "title": "CapabilityBenchmarkVerdict",
+  "type": "object"
+}

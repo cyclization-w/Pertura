@@ -1,0 +1,27 @@
+schema_version: pertura-capability-spec-v2
+capability_id: target.responder.mixscape.v1
+version: "0.1.0"
+phase: 4
+kind: diagnostic
+summary: Classify responder and escape cells with Pertpy Mixscape.
+trust_level: exploratory
+executor: mixscape_responder
+validator: candidate_standard
+input_requirements: [retained_cells, state_reference]
+depends_on: [screen.retained_cells.v1, state.reference.map_knn.v1]
+dependency_kinds: [contract, retained_cell_manifest, state_mapping]
+output_kind: mixscape_responder
+source_class: measured_result
+claim_permissions: []
+timeout_seconds: 3600
+parameters_schema:
+  type: object
+  properties:
+    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
+    n_jobs: {type: integer, default: 1, minimum: 1}
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true
+  environment_profile: perturbseq-python-v1
+  method_version: pertpy-1.1.1

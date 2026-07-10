@@ -17,6 +17,7 @@ from pertura_runtime.stages import load_stage_contract
 STAGE_BENCH_CASE_IDS = [
     "guide_assignment_eligibility_only",
     "cell_state_reference_context_only",
+    "composition_effect_association_only",
     "measured_de_association_only",
     "claim_report_decision_surface",
 ]
@@ -65,6 +66,8 @@ def run_stage_benchmark_case(case_id: str, *, root: str | Path) -> StageBenchmar
         return _case_guide_assignment(workspace, registry)
     if case_id == "cell_state_reference_context_only":
         return _case_cell_state_reference(workspace, registry)
+    if case_id == "composition_effect_association_only":
+        return _case_composition_effect(workspace, registry)
     if case_id == "measured_de_association_only":
         return _case_measured_de(workspace, registry, render_report=False)
     if case_id == "claim_report_decision_surface":
@@ -178,6 +181,74 @@ def _case_cell_state_reference(workspace: Path, registry: EvidenceRegistry) -> S
     )
 
 
+
+def _case_composition_effect(workspace: Path, registry: EvidenceRegistry) -> StageBenchmarkResult:
+    raw_left = "KLF1_NegCtrl0__KLF1_NegCtrl0"
+    raw_control = "NegCtrl0_NegCtrl0__NegCtrl0_NegCtrl0"
+    manifest_source = _write(workspace, "design_manifest_source.json", {"raw_labels": [raw_left, raw_control]})
+    manifest = registry.register_perturbation_design_manifest(
+        path=manifest_source,
+        dataset_id="stage_bench",
+        raw_labels=[raw_left, raw_control],
+    )
+    scope = scope_for_raw_label(manifest.metadata["manifest"], raw_left)
+    comp_path = _write(
+        workspace,
+        "composition_effect_summary.json",
+        {"state_counts_by_condition": {"state_a": {"target": 80, "control": 40}}},
+    )
+    artifact = registry.register_composition_effect(
+        path=comp_path,
+        state_source="cell_state_reference_synthetic",
+        state_assignment_column="state_label",
+        comparison_method="fisher_exact",
+        effect_size=0.25,
+        padj=0.01,
+        n_target_cells=120,
+        n_control_cells=150,
+        scope=scope,
+        quality={
+            "state_counts_by_condition": {"state_a": {"target": 80, "control": 40}, "other": {"target": 40, "control": 110}},
+            "eligibility": {
+                "perturbation_cell_mapping": {"assignment_method": "synthetic_threshold", "guide_to_target_map_hash": "sha256:guide-map"},
+                "control_definition": {"negative_controls": ["NegCtrl0"], "control_label": "NegCtrl0"},
+                "target_qc": {"n_target_cells": 120, "n_control_cells": 150, "guides_per_target": 1},
+                "assay_modality": "guide_based_perturb_seq",
+                "perturbation_modality": "CRISPRi",
+                "moi": "low",
+                "estimand": "single_target_marginal",
+                "control_calibration": {"negative_control_status": "available"},
+            },
+        },
+    )
+    claim = Claim(
+        claim_id="composition_as_fate_mechanism",
+        text="KLF1 causes cell fate conversion through a validated mechanism.",
+        subject={"id": "KLF1"},
+        object={"type": "cell_state", "id": "state_a"},
+        scope=scope,
+        requested_strength="causal_fate_conversion",
+        evidence_refs=[artifact.artifact_id],
+    )
+    decision = resolve_claim(claim, registry)
+    metrics = _base_metrics(
+        stage_id="composition_effect",
+        artifact_ok=artifact.kind.value == "composition_effect" and artifact.effective_evidence_class.value == "measured",
+        metadata_ok=artifact.quality.get("state_assignment_column") == "state_label" and artifact.quality.get("comparison_method") == "fisher_exact",
+        boundary_ok=decision.max_strength == StrengthCeiling.measured_association and decision.scope_fit == ScopeFit.exact,
+        surfaced_ok="composition association" in decision.allowed_surface.lower() and "does not establish" in decision.allowed_surface.lower(),
+    )
+    return StageBenchmarkResult(
+        case_id="composition_effect_association_only",
+        stage_id="composition_effect",
+        completion=all(metrics.values()),
+        metrics=metrics,
+        artifact_kinds=[manifest.kind.value, artifact.kind.value],
+        decision_strengths=[decision.max_strength.value],
+        scope_fits=[decision.scope_fit.value],
+        report_path=None,
+        notes=["composition effect downgraded causal fate request to measured composition association"],
+    )
 def _case_measured_de(workspace: Path, registry: EvidenceRegistry, *, render_report: bool) -> StageBenchmarkResult:
     raw_left = "KLF1_NegCtrl0__KLF1_NegCtrl0"
     raw_control = "NegCtrl0_NegCtrl0__NegCtrl0_NegCtrl0"

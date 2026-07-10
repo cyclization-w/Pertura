@@ -31,6 +31,10 @@ For this evidence-gated v0 run, create these files when possible:
 - `reports/evidence_report.md`: runtime-rendered evidence report when measured DE or effect artifacts are produced.
 - `artifacts/claim_decisions.json`: optional output from `mcp__pertura_evidence__evaluate_claims` when explicit claims are evaluated.
 
+Runtime-owned trust files:
+
+- Do not write `manifest.json`, the evidence registry, execution ledger, claim decisions, or files under `reports/` directly. They are written only by Pertura runtime/MCP tools.
+
 Smoke-run discipline:
 
 - Write the required output artifacts early. Optional deeper exploration comes after
@@ -54,6 +58,10 @@ Local-evidence discipline:
 
 Evidence-gated report discipline:
 
+- The claim policy is selected once by the runtime. Never request or attempt a weaker policy from an MCP call.
+- Call `mcp__pertura_evidence__route_analysis_method` before choosing a statistical family when design facts are available.
+- Prefer `run_target_reliability_audit`, `run_pseudobulk_de`, and the trusted control-calibration MCP tools when their input contracts fit. These runners write canonical execution-ledger records; register their outputs with the matching evidence registrar.
+
 - Do not present DE/effect conclusions directly as free-form final prose.
 - Before registering measured Perturb-seq DE/effect evidence, create or register a
   perturbation design manifest with `mcp__pertura_evidence__register_perturbation_design_manifest`.
@@ -73,6 +81,9 @@ Evidence-gated report discipline:
   Cell state references define scope/context and downstream stratification only; do not present them as perturbation effect evidence.
 - If you produce a cell-level QC summary, call `mcp__pertura_evidence__register_cell_qc_artifact`.
   Cell QC is analysis-eligibility evidence only; do not present it as biological effect evidence.
+- If you produce NTC-vs-NTC or label-permutation calibration summaries, call
+  `mcp__pertura_evidence__register_control_calibration_artifact`. Control calibration is
+  eligibility evidence only; it cannot support an effect claim by itself.
 - If you produce a measured DE table or similar scientific evidence, call
   `mcp__pertura_evidence__register_measured_de_artifact`. Include inline eligibility only
   when you can provide structured fields such as assignment method, control labels,
@@ -103,30 +114,64 @@ Evidence-gated report discipline:
 - If you produce global perturbation response evidence such as embedding distance or
   distribution shift, register it with `mcp__pertura_evidence__register_global_effect_artifact`.
   Global effects do not support gene-specific DE, causal fate, or mechanism claims.
+- If you produce cell-state or cluster composition evidence, register it with
+  `mcp__pertura_evidence__register_composition_effect_artifact`. Composition effects support
+  measured composition associations only; do not present them as causal fate conversion,
+  target engagement, mechanisms, or driver validation.
 - If you produce or receive prediction or curated-prior artifacts, register them
   with the corresponding Pertura evidence MCP tool. Do not label prediction or
   prior artifacts as measured evidence.
+- If you harvest GEARS, scGPT, Geneformer, CPA/scGen, CellOracle, or custom virtual
+  perturbation output, register it with `mcp__pertura_evidence__register_virtual_perturbation_prediction_artifact`
+  or `mcp__pertura_evidence__register_virtual_cell_state_transition_artifact` before making claims.
+  Virtual perturbation output is prediction evidence, not measured evidence.
+- If you compare a virtual prediction with a registered measured artifact, register the metric with
+  `mcp__pertura_evidence__register_prediction_measured_concordance_artifact`. Concordance is not
+  mechanism validation and does not create measured strength. Any reported scope_match is diagnostic only;
+  Pertura computes scope compatibility from registered manifest UID fields.
 - The final response should point to the rendered report and remain a working note.
+"""
+
+
+CAPABILITY_OUTPUT_CONTRACT = """# Pertura capability output contract
+
+Write exploratory code, notebooks, tables and figures under `outputs/` only.
+Pertura writes contracts, signed receipts, promotion decisions and final reports;
+never create or edit those trust objects yourself.
+
+Use the five Pertura tools as the product control plane:
+
+1. `inspect_dataset` creates a versioned DatasetContract.
+2. `run_diagnostic` runs a registered QC capability.
+3. `run_analysis` runs a registered scientific analysis capability.
+4. `evaluate_virtual_model` evaluates predictions without relabeling them as measurements.
+5. `finalize_report` seals receipts and renders committed results.
+
+CodeAct remains available for Read/Glob/Grep/Bash/Write/Edit/NotebookEdit exploration.
+Exploratory CodeAct output is untrusted until a bundled capability executes and the
+independent verifier commits a signed result. Tool responses are compact; inspect
+large Parquet/JSON/PNG/SVG outputs at the returned paths.
+
+Never infer missing control, guide-target, replicate, donor, batch, dose, time or
+state identity. Report unresolved fields and request a design confirmation.
+Never write an effect through a design confirmation.
 """
 
 
 def build_default_task(input_source: Path | None) -> str:
     source_text = str(input_source) if input_source else "the files under input/"
-    return f"""Inspect this Perturb-seq project as an evidence-gated Pertura v0 smoke test.
+    return f"""Inspect and analyse this Perturb-seq project with the Pertura capability workflow.
 
 Input source: {source_text}
 
 Tasks:
 
-0. First run the Python environment self-check command shown in the system prompt.
-1. Identify the available input files and likely formats.
-2. Write `outputs/observed_files.json` as soon as file inventory is known.
-3. Locate any cell/guide metadata and summarize guide counts if a guide column is available.
-4. Write `outputs/guide_summary.csv` or `outputs/guide_summary.json` with compact counts.
-5. Write `outputs/design_notes.md` with likely negative controls and single-vs-dual perturbation observations.
-6. Write `outputs/analysis_notes.md` with concise working notes.
-7. Before any measured DE/effect registration, register a perturbation design manifest with `mcp__pertura_evidence__register_perturbation_design_manifest`; measured artifacts and claims should use manifest-derived UID scope. Then register measured DE/effect artifacts plus structured eligibility. If the task asks for target engagement, register the target-efficiency result with `mcp__pertura_evidence__register_perturbation_efficiency_artifact` before evaluating claims. If it asks for enrichment, module-score, or global-response evidence, register those structured artifacts with the matching Pertura evidence MCP tool before evaluating claims. Evaluate explicit claims with `mcp__pertura_evidence__evaluate_claims`, and render with `mcp__pertura_evidence__render_evidence_report`. Prediction and curated-prior files must use the prediction/prior registration tools, not measured registration.
-8. Stop once those required artifacts and any needed evidence report exist; do not over-explore or read large tool logs.
+0. Run the Python environment self-check shown in the system prompt.
+1. Call `inspect_dataset`; review the DatasetContract and unresolved design fields.
+2. Use CodeAct to inspect local files and resolve candidates, without inventing identity metadata.
+3. Run appropriate registered diagnostics in phase order.
+4. Run only analyses whose blockers are resolved; exploratory scripts remain exploratory.
+5. Call `finalize_report` after the committed results needed for this task exist.
 
 Use CodeAct freely: inspect files, write small Python scripts, print intermediate
 results, and correct errors. Keep stdout compact and do not modify input data.
@@ -134,14 +179,15 @@ Use only local evidence; do not inject public dataset knowledge or memorized bio
 """
 
 
-def build_system_prompt(workspace: ClaudeRunWorkspace, *, python_environment: Any | None = None, interaction_mode: str = "benchmark", stage_id: str | None = None) -> str:
+def build_system_prompt(workspace: ClaudeRunWorkspace, *, python_environment: Any | None = None, interaction_mode: str = "benchmark", stage_id: str | None = None, tool_surface: str = "capability") -> str:
     python_section = ""
     if python_environment is not None:
         python_section = "\n" + python_environment.prompt_section()
     stage_section = build_stage_prompt_section(stage_id) if stage_id else ""
     return f"""You are Pertura, a Perturb-seq analysis coding agent.
 
-This is an evidence-gated Claude Agent SDK runtime v0 smoke test.
+This is the capability-first Pertura runtime. Scientific authority comes only
+from committed verifier results; CodeAct itself remains fully available.
 
 Working directory:
 {workspace.root}
@@ -173,20 +219,24 @@ Operating rules:
 8. Write reusable artifacts under `outputs/`.
 9. Keep stdout compact: for large tables, write files under `outputs/` and print only short summaries and paths.
 10. Do not read large persisted SDK tool-result files; inspect your compact `outputs/` artifacts instead.
-11. Register a perturbation design manifest before measured DE/effect artifacts; the manifest UID scope is required for measured association claim strength.
-12. Register prediction artifacts and curated-prior artifacts with their dedicated evidence tools; never describe them as measured validation.
-13. User-visible scientific report sections must come from `mcp__pertura_evidence__render_evidence_report`, which renders conclusion strength from registered execution artifacts, manifest UID scope, eligibility profiles, policy, and optional explicit claims.
-14. Treat your final response as working notes that point to generated files, not as a free-form scientific report.
+11. Use only the five high-level Pertura tools for scientific commits. Discover capabilities instead of inventing method names.
+12. `inspect_dataset` and design confirmations establish identity only; they cannot create measured effects.
+13. A result is trusted only when a bundled capability returns a valid signed receipt. Never hand-write, copy, or edit receipts.
+14. Call `finalize_report` for user-visible scientific conclusions; free-form prose cannot promote a claim.
 15. Use English for runtime artifacts, registered metadata, reports, and stage summaries. Prefer ASCII punctuation in JSON and Markdown fields.
+16. The run-level claim policy is immutable and cannot be selected or weakened by a tool call.
+17. Do not write runtime-owned contracts, receipts, commit-store projections, promotion decisions or reports directly.
+18. `stage_id` is progress/help metadata only and never scientific authority.
 
 {stage_section}
 The output contract is also written at `task/PERTURA_OUTPUT_CONTRACT.md`.
 """
 
 
-def write_prompt_files(workspace: ClaudeRunWorkspace, *, task: str, python_environment: Any | None = None, interaction_mode: str = "benchmark", stage_id: str | None = None) -> str:
-    system_prompt = build_system_prompt(workspace, python_environment=python_environment, interaction_mode=interaction_mode, stage_id=stage_id)
-    workspace.write_task_files(task=task, system_prompt=system_prompt, output_contract=OUTPUT_CONTRACT)
+def write_prompt_files(workspace: ClaudeRunWorkspace, *, task: str, python_environment: Any | None = None, interaction_mode: str = "benchmark", stage_id: str | None = None, tool_surface: str = "capability") -> str:
+    system_prompt = build_system_prompt(workspace, python_environment=python_environment, interaction_mode=interaction_mode, stage_id=stage_id, tool_surface=tool_surface)
+    output_contract = CAPABILITY_OUTPUT_CONTRACT if tool_surface == "capability" else OUTPUT_CONTRACT
+    workspace.write_task_files(task=task, system_prompt=system_prompt, output_contract=output_contract)
     if stage_id:
         workspace.write_text(workspace.task_dir / "PERTURA_STAGE_PROMPT.md", build_stage_prompt_section(stage_id))
     _write_task_helpers(workspace)
@@ -199,13 +249,3 @@ def _write_task_helpers(workspace: ClaudeRunWorkspace) -> None:
     for filename, source in TASK_HELPERS.items():
         if source.exists():
             workspace.write_text(workspace.task_dir / "helpers" / filename, source.read_text(encoding="utf-8"))
-
-
-
-
-
-
-
-
-
-

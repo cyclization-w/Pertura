@@ -1,0 +1,26 @@
+schema_version: pertura-capability-spec-v2
+capability_id: module.learn.control_nmf.v1
+version: "0.1.0"
+phase: 3
+kind: analysis
+summary: Learn stable NMF reference modules from confirmed control cells only.
+trust_level: exploratory
+executor: control_nmf
+validator: candidate_standard
+input_requirements: [confirmed_controls]
+depends_on: [state.reference.fit.v1]
+dependency_kinds: [contract, state_reference]
+output_kind: reference_modules
+source_class: measured_result
+claim_permissions: []
+timeout_seconds: 3600
+parameters_schema:
+  type: object
+  properties:
+    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
+    n_jobs: {type: integer, default: 1, minimum: 1}
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true
+  environment_profile: python-science-v1

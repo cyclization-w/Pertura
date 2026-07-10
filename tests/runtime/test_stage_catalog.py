@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -25,13 +26,18 @@ REQUIRED_STAGES = [
     "guide_assignment",
     "cell_qc",
     "target_qc",
+    "control_calibration",
     "cell_state_reference",
+    "composition_effect",
     "measured_de",
     "target_engagement",
     "curated_enrichment",
     "module_effect",
     "global_effect",
     "prediction_artifact",
+    "virtual_perturbation_prediction",
+    "prediction_measured_concordance",
+    "virtual_cell_state_transition",
     "claim_report",
 ]
 
@@ -49,6 +55,17 @@ def test_stage_catalog_index_has_cards_and_contracts() -> None:
         for key in ["stage_role", "failure_modes", "turn_final_surface_type", "next_stage_recommendations"]:
             assert key in contract
         assert card.startswith("# ")
+
+
+def test_control_calibration_contract_is_eligibility_only() -> None:
+    contract = load_stage_contract("control_calibration")
+    assert contract["stage_role"] == "analysis_eligibility"
+    assert contract["evidence_role"] == "control_calibration"
+    assert contract["evidence_producing"] is False
+    assert contract["turn_final_surface_type"] == "evidence_summary"
+    assert "measured_perturbation_effect" in contract["must_not_support"]
+    assert "validated_mechanism" in contract["must_not_support"]
+    assert "mcp__pertura_evidence__register_control_calibration_artifact" in contract["allowed_mcp_tools"]
 
 
 def test_cell_state_reference_contract_is_context_only() -> None:
@@ -150,3 +167,97 @@ def test_measured_de_prompt_keeps_claim_report_as_handoff() -> None:
     assert "candidate claims are handoff material" in text.lower()
     assert "mcp__pertura_evidence__evaluate_claims" not in text
     assert "# Claim Report" not in text
+
+def test_stage_extension_interface_docs_and_templates_exist() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    extension_doc = repo_root / "docs" / "extensions" / "extension_interface.md"
+    contract_template = STAGE_DOC_ROOT / "templates" / "contract_template.yaml"
+    card_template = STAGE_DOC_ROOT / "templates" / "card_template.md"
+
+    assert extension_doc.exists()
+    assert contract_template.exists()
+    assert card_template.exists()
+
+    contract = json.loads(contract_template.read_text(encoding="utf-8"))
+    for key in [
+        "stage_id",
+        "stage_role",
+        "evidence_role",
+        "evidence_producing",
+        "turn_final_surface_type",
+        "allowed_mcp_tools",
+        "required_outputs",
+        "can_support",
+        "must_not_support",
+        "failure_modes",
+        "next_stage_recommendations",
+        "benchmark_expectations",
+    ]:
+        assert key in contract
+    assert "validated_mechanism" in contract["must_not_support"]
+
+    card = card_template.read_text(encoding="utf-8")
+    assert "This stage card guides exploration" in card
+    assert "not a scientific conclusion surface" in card
+    assert "Candidate claims are handoff material only" in card
+
+
+def test_extension_interface_documents_boundary_invariants() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    text = (repo_root / "docs" / "extensions" / "extension_interface.md").read_text(encoding="utf-8")
+
+    for phrase in [
+        "Stage Extension",
+        "Evidence Extension",
+        "Runtime Extension",
+        "Benchmark Extension",
+        "Every user-visible scientific conclusion must pass through ClaimDecision",
+        "They are not Claude-facing MCP tools in P2.1",
+        "Do not expose abstract family registrars as MCP tools",
+    ]:
+        assert phrase in text
+
+
+def test_extension_docs_are_ascii_safe() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    paths = [
+        repo_root / "docs" / "extensions" / "extension_interface.md",
+        STAGE_DOC_ROOT / "templates" / "contract_template.yaml",
+        STAGE_DOC_ROOT / "templates" / "card_template.md",
+    ]
+    for path in paths:
+        path.read_text(encoding="utf-8").encode("ascii")
+
+
+def test_composition_effect_contract_is_measured_composition_handoff() -> None:
+    contract = load_stage_contract("composition_effect")
+    assert contract["stage_role"] == "effect_evidence"
+    assert contract["evidence_role"] == "cell_state_composition_association"
+    assert contract["evidence_producing"] is True
+    assert contract["turn_final_surface_type"] == "evidence_summary"
+    assert "measured_cell_state_composition_association" in contract["can_support"]
+    assert "causal_fate_conversion" in contract["must_not_support"]
+    assert "gene_specific_differential_expression" in contract["must_not_support"]
+    assert "mcp__pertura_evidence__register_composition_effect_artifact" in contract["allowed_mcp_tools"]
+    assert "claim_report" in contract["next_stage_recommendations"]
+
+
+
+def test_virtual_perturbation_stage_contracts_are_prediction_only() -> None:
+    prediction = load_stage_contract("virtual_perturbation_prediction")
+    assert prediction["stage_role"] == "prediction_evidence"
+    assert prediction["evidence_role"] == "predicted_perturbation_response"
+    assert prediction["turn_final_surface_type"] == "evidence_summary"
+    assert "predicted_effect" in prediction["can_support"]
+    assert "measured_association" in prediction["must_not_support"]
+    assert "mcp__pertura_evidence__register_virtual_perturbation_prediction_artifact" in prediction["allowed_mcp_tools"]
+
+    concordance = load_stage_contract("prediction_measured_concordance")
+    assert concordance["evidence_role"] == "prediction_measured_concordance"
+    assert "validated_mechanism" in concordance["must_not_support"]
+    assert "mcp__pertura_evidence__register_prediction_measured_concordance_artifact" in concordance["allowed_mcp_tools"]
+
+    transition = load_stage_contract("virtual_cell_state_transition")
+    assert transition["evidence_role"] == "predicted_cell_state_transition"
+    assert "causal_fate_conversion" in transition["must_not_support"]
+    assert "mcp__pertura_evidence__register_virtual_cell_state_transition_artifact" in transition["allowed_mcp_tools"]

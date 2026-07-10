@@ -95,6 +95,9 @@ curated_enrichment
 module_effect
 global_effect
 prediction_artifact
+virtual_perturbation_prediction
+prediction_measured_concordance
+virtual_cell_state_transition
 claim_report
 ```
 
@@ -108,8 +111,6 @@ driver_ranking
 regulatory_network
 genome_scale_screening
 chemical_treatment_effect
-virtual_perturbation_prediction
-prediction_measured_concordance
 replication_or_robustness
 ```
 

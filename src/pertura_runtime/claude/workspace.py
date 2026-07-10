@@ -56,6 +56,32 @@ class ClaudeRunWorkspace:
         workspace.initialize()
         return workspace
 
+    @classmethod
+    def open(cls, root: Path, *, input_source: Path | None = None) -> "ClaudeRunWorkspace":
+        run_root = Path(root).expanduser().resolve()
+        manifest_path = run_root / "manifest.json"
+        manifest: dict[str, Any] = {}
+        if manifest_path.exists():
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                manifest = {}
+        recorded_source = manifest.get("input_source")
+        source = input_source or (Path(recorded_source) if recorded_source else None)
+        workspace = cls(
+            root=run_root,
+            input_dir=run_root / "input",
+            outputs_dir=run_root / "outputs",
+            logs_dir=run_root / "logs",
+            artifacts_dir=run_root / "artifacts",
+            reports_dir=run_root / "reports",
+            task_dir=run_root / "task",
+            input_source=Path(source).expanduser().resolve() if source else None,
+        )
+        for path in (workspace.root, workspace.input_dir, workspace.outputs_dir, workspace.logs_dir, workspace.artifacts_dir, workspace.reports_dir, workspace.task_dir):
+            path.mkdir(parents=True, exist_ok=True)
+        return workspace
+
     def initialize(self) -> None:
         for path in [
             self.root,

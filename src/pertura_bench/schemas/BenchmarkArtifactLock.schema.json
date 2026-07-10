@@ -1,0 +1,90 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "artifact_sha256": {
+      "title": "Artifact Sha256",
+      "type": "string"
+    },
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "conversion_script_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Conversion Script Hash"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "license_status": {
+      "enum": [
+        "reviewed",
+        "required"
+      ],
+      "title": "License Status",
+      "type": "string"
+    },
+    "lock_id": {
+      "default": "",
+      "title": "Lock Id",
+      "type": "string"
+    },
+    "package_versions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Package Versions",
+      "type": "object"
+    },
+    "parameters": {
+      "additionalProperties": true,
+      "title": "Parameters",
+      "type": "object"
+    },
+    "schema_version": {
+      "default": "pertura-benchmark-artifact-lock-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "size_bytes": {
+      "exclusiveMinimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "source_manifest_hash": {
+      "title": "Source Manifest Hash",
+      "type": "string"
+    },
+    "upstream_checksum": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Upstream Checksum"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "source_manifest_hash",
+    "artifact_sha256",
+    "size_bytes",
+    "license_status"
+  ],
+  "title": "BenchmarkArtifactLock",
+  "type": "object"
+}

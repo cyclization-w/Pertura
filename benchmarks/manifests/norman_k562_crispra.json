@@ -1,0 +1,16 @@
+{
+  "schema_version": "pertura-benchmark-source-v1",
+  "dataset_id": "norman_k562_crispra_2019",
+  "article_id": 27766323,
+  "article_url": "https://figshare.com/articles/dataset/Norman_et_al_2019_Perturb-seq/27766323",
+  "file": {
+    "file_id": 50533869,
+    "name": "norman_2019.h5ad",
+    "size_bytes": 445652312,
+    "download_url": "https://ndownloader.figshare.com/files/50533869",
+    "supplied_md5": "8feb63ee1b1b33c0910730c0d693eca6"
+  },
+  "intended_uses": ["intake", "single_combo_scope", "future_virtual_evaluator"],
+  "license_review_url": "https://figshare.com/articles/dataset/27766323",
+  "download_tier": "nightly_or_manual"
+}

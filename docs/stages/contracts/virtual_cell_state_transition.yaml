@@ -1,0 +1,45 @@
+{
+    "stage_id": "virtual_cell_state_transition",
+    "stage_role": "prediction_evidence",
+    "evidence_role": "predicted_cell_state_transition",
+    "evidence_producing": true,
+    "turn_final_surface_type": "evidence_summary",
+    "allowed_mcp_tools": [
+        "mcp__pertura_evidence__register_virtual_cell_state_transition_artifact"
+    ],
+    "required_outputs": [
+        "outputs/virtual_cell_state_transition_summary.json"
+    ],
+    "optional_outputs": [
+        "outputs/vector_field_summary.csv",
+        "outputs/transition_scores.csv",
+        "outputs/plots/*"
+    ],
+    "can_support": [
+        "predicted_effect"
+    ],
+    "must_not_support": [
+        "causal_fate_conversion",
+        "validated_mechanism",
+        "driver_validation",
+        "measured_association"
+    ],
+    "failure_modes": [
+        "missing_model_or_network_provenance",
+        "missing_state_space_reference",
+        "ambiguous_uid_or_scope",
+        "no_supported_artifact_registered",
+        "tool_or_code_error"
+    ],
+    "next_stage_recommendations": [
+        "claim_report"
+    ],
+    "benchmark_expectations": [
+        "stage_completion",
+        "artifact_registration_correct",
+        "metadata_completeness",
+        "stage_boundary_respected",
+        "exploration_not_surfaced",
+        "next_stage_recommendation_correct"
+    ]
+}

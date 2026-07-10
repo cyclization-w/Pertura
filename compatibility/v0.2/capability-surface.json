@@ -1,0 +1,96 @@
+{
+  "capabilities": [
+    {
+      "capability_id": "calibration.replicate_null.v1",
+      "claim_permissions": [],
+      "implemented": true,
+      "kind": "analysis",
+      "phase": 5,
+      "trust_level": "builtin_trusted",
+      "version": "1.0.0"
+    },
+    {
+      "capability_id": "de.pseudobulk.edger.v1",
+      "claim_permissions": [
+        "measured_association"
+      ],
+      "implemented": true,
+      "kind": "analysis",
+      "phase": 5,
+      "trust_level": "builtin_trusted",
+      "version": "1.0.0"
+    },
+    {
+      "capability_id": "diagnostic.contract_integrity.v1",
+      "claim_permissions": [],
+      "implemented": true,
+      "kind": "diagnostic",
+      "phase": 1,
+      "trust_level": "builtin_trusted",
+      "version": "1.0.0"
+    },
+    {
+      "capability_id": "diagnostic.guide_assignment.v1",
+      "claim_permissions": [],
+      "implemented": true,
+      "kind": "diagnostic",
+      "phase": 2,
+      "trust_level": "builtin_trusted",
+      "version": "1.0.0"
+    },
+    {
+      "capability_id": "module.import.gmt.v1",
+      "claim_permissions": [
+        "curated_module_definition"
+      ],
+      "implemented": true,
+      "kind": "analysis",
+      "phase": 3,
+      "trust_level": "builtin_trusted",
+      "version": "1.0.0"
+    },
+    {
+      "capability_id": "module.learn.nmf.v1",
+      "claim_permissions": [
+        "derived_module_definition"
+      ],
+      "implemented": true,
+      "kind": "analysis",
+      "phase": 3,
+      "trust_level": "builtin_trusted",
+      "version": "1.0.0"
+    },
+    {
+      "capability_id": "reference.state.control_pca_leiden.v1",
+      "claim_permissions": [
+        "derived_state_assignment"
+      ],
+      "implemented": true,
+      "kind": "analysis",
+      "phase": 3,
+      "trust_level": "builtin_trusted",
+      "version": "1.0.0"
+    },
+    {
+      "capability_id": "target.reliability.v2",
+      "claim_permissions": [
+        "screen_passed"
+      ],
+      "implemented": true,
+      "kind": "diagnostic",
+      "phase": 4,
+      "trust_level": "builtin_trusted",
+      "version": "2.0.0"
+    },
+    {
+      "capability_id": "virtual.evaluate.v1",
+      "claim_permissions": [],
+      "implemented": false,
+      "kind": "virtual",
+      "phase": 7,
+      "trust_level": "builtin_trusted",
+      "version": "1.0.0"
+    }
+  ],
+  "schema_version": "pertura-v020-capability-freeze-v1"
+}

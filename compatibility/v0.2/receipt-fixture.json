@@ -1,0 +1,55 @@
+{
+  "receipt": {
+    "broker_exit_state": "running",
+    "broker_instance_id": "broker_freeze",
+    "canonical_hash": "sha256:a6d937acbb7788053852c27e292e158d3431e78149542650c4938ba9e928262f",
+    "capability_id": "de.pseudobulk.edger.v1",
+    "capability_version": "1.0.0",
+    "contract_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "contract_id": "contract_freeze",
+    "dependency_hashes": {
+      "contract_freeze": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "output_hashes": {
+      "edger_results.csv": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "policy_hash": "sha256:b50ce73e8706640513f0c980d8bd59cb073f24417e368ca300727bee42477388",
+    "public_key": "freeze-public-key",
+    "receipt_id": "receipt_9f59994f6bf64403f2c4",
+    "request_id": "request_freeze",
+    "result_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "result_id": "result_freeze",
+    "run_id": "freeze-run",
+    "run_root_digest": null,
+    "schema_version": "pertura-run-receipt-v2",
+    "scope_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "signature": "",
+    "signed_at_utc": "2026-01-01T00:00:00+00:00"
+  },
+  "schema_version": "pertura-v020-receipt-freeze-v1",
+  "signing_payload": {
+    "broker_exit_state": "running",
+    "broker_instance_id": "broker_freeze",
+    "capability_id": "de.pseudobulk.edger.v1",
+    "capability_version": "1.0.0",
+    "contract_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "contract_id": "contract_freeze",
+    "dependency_hashes": {
+      "contract_freeze": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "output_hashes": {
+      "edger_results.csv": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "policy_hash": "sha256:b50ce73e8706640513f0c980d8bd59cb073f24417e368ca300727bee42477388",
+    "public_key": "freeze-public-key",
+    "receipt_id": "receipt_9f59994f6bf64403f2c4",
+    "request_id": "request_freeze",
+    "result_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "result_id": "result_freeze",
+    "run_id": "freeze-run",
+    "run_root_digest": null,
+    "schema_version": "pertura-run-receipt-v2",
+    "scope_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "signed_at_utc": "2026-01-01T00:00:00+00:00"
+  }
+}

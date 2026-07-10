@@ -26,6 +26,8 @@ outputs/
 reports/
 artifacts/
 *.log
+*.local.json
+benchmarks/cache/
 
 # Local data and notebooks
 *.h5ad
@@ -47,3 +49,4 @@ artifacts/
 Thumbs.db
 .vscode/
 .idea/
+node_modules/

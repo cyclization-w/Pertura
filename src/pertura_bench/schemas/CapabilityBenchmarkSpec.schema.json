@@ -1,0 +1,273 @@
+{
+  "$defs": {
+    "CapabilityBenchmarkCase": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "capability_id": {
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "capability_version": {
+          "title": "Capability Version",
+          "type": "string"
+        },
+        "case_id": {
+          "default": "",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "environment_profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Environment Profile"
+        },
+        "expected_blockers": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Expected Blockers",
+          "type": "array"
+        },
+        "expected_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Status"
+        },
+        "fixture_id": {
+          "title": "Fixture Id",
+          "type": "string"
+        },
+        "max_memory_gb": {
+          "default": 4.0,
+          "exclusiveMinimum": 0,
+          "title": "Max Memory Gb",
+          "type": "number"
+        },
+        "metrics": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CapabilityBenchmarkMetric"
+          },
+          "title": "Metrics",
+          "type": "array"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "required_outputs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Outputs",
+          "type": "array"
+        },
+        "scenario": {
+          "title": "Scenario",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "pertura-capability-benchmark-case-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "seed": {
+          "default": 1729,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "tier": {
+          "enum": [
+            "unit",
+            "synthetic_ci",
+            "frozen_subset",
+            "full_dataset"
+          ],
+          "title": "Tier",
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "default": 900,
+          "exclusiveMinimum": 0,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "capability_id",
+        "capability_version",
+        "tier",
+        "scenario",
+        "fixture_id"
+      ],
+      "title": "CapabilityBenchmarkCase",
+      "type": "object"
+    },
+    "CapabilityBenchmarkMetric": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "metric_id": {
+          "default": "",
+          "title": "Metric Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "observed": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed"
+        },
+        "operator": {
+          "enum": [
+            "eq",
+            "lte",
+            "gte"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "passed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Passed"
+        },
+        "schema_version": {
+          "default": "pertura-capability-benchmark-metric-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Threshold"
+        }
+      },
+      "required": [
+        "name",
+        "operator",
+        "threshold"
+      ],
+      "title": "CapabilityBenchmarkMetric",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "benchmark_spec_id": {
+      "default": "",
+      "title": "Benchmark Spec Id",
+      "type": "string"
+    },
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "capability_id": {
+      "title": "Capability Id",
+      "type": "string"
+    },
+    "capability_version": {
+      "title": "Capability Version",
+      "type": "string"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/CapabilityBenchmarkCase"
+      },
+      "title": "Cases",
+      "type": "array"
+    },
+    "required_real_datasets": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Real Datasets",
+      "type": "array"
+    },
+    "schema_version": {
+      "default": "pertura-capability-benchmark-spec-v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "capability_id",
+    "capability_version",
+    "cases"
+  ],
+  "title": "CapabilityBenchmarkSpec",
+  "type": "object"
+}

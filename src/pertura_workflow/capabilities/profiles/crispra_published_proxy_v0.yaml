@@ -1,0 +1,13 @@
+profile: crispra_published_proxy_v0
+version: 0
+modality: crispra
+validated: false
+validation_class: published_proxy
+benchmark_hash: null
+minimum_cells: 20
+minimum_guides: 2
+minimum_cells_per_guide: 5
+minimum_control_detection: 0.10
+minimum_abs_effect: 0.10
+minimum_guide_concordance: 0.75
+objective: published-proxy evaluation only; cannot issue production screen_passed

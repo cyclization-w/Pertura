@@ -1,0 +1,17 @@
+schema_version: pertura-capability-spec-v2
+capability_id: virtual.evaluate.v1
+version: "1.0.0"
+phase: 7
+kind: virtual
+summary: Evaluate virtual perturbation predictions against fixed splits and mandatory baselines.
+trust_level: builtin_trusted
+executor: not_implemented
+validator: standard
+input_requirements: [prediction_contract]
+dependency_kinds: [prediction, split_contract]
+output_kind: virtual_evaluation
+source_class: prediction
+claim_permissions: []
+timeout_seconds: 7200
+parameters_schema: {type: object}
+implemented: false

@@ -36,3 +36,5 @@ Review each run by checking:
 The expected scientific surface is always the runtime report, not Claude free prose.
 
 
+
+- `14_virtual_perturbation_wrapper_family.md` - virtual perturbation prediction, concordance, and predicted transition laundering traps.

@@ -1,0 +1,21 @@
+schema_version: pertura-capability-spec-v2
+capability_id: diagnostic.guide_assignment.v1
+version: "1.0.0"
+phase: 2
+kind: diagnostic
+summary: Check barcode overlap, guide-map integrity, orientation, assignment posterior, ambient guides and MOI.
+trust_level: builtin_trusted
+executor: guide_assignment_qc
+validator: standard
+input_requirements: [dataset_contract, guide_matrix]
+depends_on: [diagnostic.contract_integrity.v1]
+dependency_kinds: [contract]
+output_kind: guide_assignment_qc
+source_class: measured_result
+claim_permissions: []
+timeout_seconds: 900
+parameters_schema: {type: object}
+implemented: true
+metadata:
+  deprecated: true
+  compatibility_only: true

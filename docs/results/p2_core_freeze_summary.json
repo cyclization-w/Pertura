@@ -1,0 +1,110 @@
+{
+  "schema_version": "pertura-p2-core-freeze-v1",
+  "status": "frozen",
+  "freeze_date": "2026-07-08",
+  "purpose": "Freeze the current gate, stage, runtime, benchmark, and predicate/warrant architecture before adding external wrappers such as CellOracle, scGPT, GEARS, or CPA.",
+  "test_baseline": {
+    "command": "python -m pytest -q",
+    "result": "184 passed in 10.72s",
+    "scope": "Full local test suite after Smoke 13 predicate/warrant closure"
+  },
+  "frozen_components": [
+    "P0.6 manifest UID scope discipline",
+    "P0.7 strong-baseline gate utility harness",
+    "P1.1 target engagement / perturbation efficiency",
+    "P1.2 cell QC eligibility tightening",
+    "P1.3 curated enrichment, module effect, and global effect",
+    "P2.0 workflow substrate",
+    "P2.1 classic guide-based Perturb-seq substrate",
+    "Evidence-Aware Stage Catalog",
+    "cell_state_reference stage",
+    "composition_effect extension",
+    "EvidencePredicate / WarrantRule / ControlledSurface closure"
+  ],
+  "packages": {
+    "pertura_gate": "Trusted evidence, identity, resolver, warrant, and renderer core",
+    "pertura_runtime": "Claude runtime and MCP tool surface; untrusted CodeAct carrier",
+    "pertura_bench": "Benchmark harnesses and surface evaluators; not part of gate truth",
+    "pertura_workflow": "Workflow substrate, preflight, candidate harvesting, and next-evidence recommendations"
+  },
+  "hard_invariants": [
+    "Every scientific conclusion surface must pass through ClaimDecision.",
+    "Raw labels and filenames cannot upgrade scope_fit or max_strength.",
+    "Manifest UID or manifest-declared typed compatibility is required for effect-level scope upgrades.",
+    "Artifact self-tags cannot upgrade evidence_class, evidence_predicate, or strength ceiling.",
+    "Prediction, prior, measured, inferred, ranking, and metadata evidence cannot launder into each other.",
+    "validated_mechanism remains disabled by policy.",
+    "Stage outputs and EvidenceCandidates are not evidence until registered and validated.",
+    "StrengthCeiling.measured_association is not synonymous with differential expression.",
+    "Renderer wording is predicate-specific, not strength-only.",
+    "pertura_gate must not import pertura_runtime, pertura_bench, or pertura_workflow."
+  ],
+  "implemented_predicates": [
+    "metadata_observation",
+    "scope_definition",
+    "analysis_eligibility",
+    "state_context",
+    "differential_expression",
+    "target_engagement",
+    "module_score_shift",
+    "global_transcriptomic_shift",
+    "cell_state_composition_shift",
+    "curated_prior_context",
+    "curated_enrichment_context",
+    "predicted_effect",
+    "replication_summary"
+  ],
+  "claude_facing_tools": {
+    "scope_and_design": [
+      "register_perturbation_design_manifest",
+      "register_experiment_design_artifact"
+    ],
+    "eligibility": [
+      "register_guide_assignment_artifact",
+      "register_target_qc_artifact",
+      "register_cell_qc_artifact"
+    ],
+    "state_context": [
+      "register_cell_state_reference_artifact"
+    ],
+    "measured_effects": [
+      "register_measured_de_artifact",
+      "register_perturbation_efficiency_artifact",
+      "register_module_effect_artifact",
+      "register_global_effect_artifact",
+      "register_composition_effect_artifact"
+    ],
+    "context_and_prediction": [
+      "register_curated_prior_artifact",
+      "register_curated_enrichment_artifact",
+      "register_predicted_effect_artifact"
+    ],
+    "synthesis": [
+      "evaluate_claims",
+      "render_evidence_report"
+    ]
+  },
+  "frozen_smokes": [
+    {
+      "id": "smoke13b",
+      "path": "docs/results/smoke13b_predicate_warrant/",
+      "result": "composition_effect resolves through cell_state_composition_shift and measured_association without DE wording or causal-fate/mechanism overclaim"
+    }
+  ],
+  "next_wrapper_policy": {
+    "allowed_next_targets": [
+      "CellOracle",
+      "scGPT",
+      "GEARS",
+      "CPA"
+    ],
+    "required_path": "external output -> structured artifact -> EvidencePredicate -> WarrantRule -> ClaimDecision -> ControlledSurface",
+    "do_not": [
+      "Do not let wrapper prose become scientific surface.",
+      "Do not let model provenance or confidence become measured evidence.",
+      "Do not let prediction-measured concordance become mechanism validation.",
+      "Do not add a wrapper without a predicate, warrant rule, controlled surface, and benchmark fixture."
+    ],
+    "recommended_first_wrapper_family": "prediction / virtual perturbation with prediction-measured concordance, because it directly extends the P0.7 laundering boundary."
+  }
+}

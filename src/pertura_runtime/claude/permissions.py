@@ -36,6 +36,21 @@ BASH_MUTATION_PATTERNS = [
     r"\bpython\b.*\bopen\s*\(",
 ]
 
+# Claude may create source artifacts and claims, while only runtime/MCP code
+# may mutate these trust-bearing files and calibrated final surfaces.
+RUNTIME_OWNED_RELATIVE_PATHS = (
+    Path("manifest.json"),
+    Path("artifacts/evidence_artifacts.jsonl"),
+    Path("artifacts/execution_ledger.jsonl"),
+    Path("artifacts/claim_decisions.json"),
+    Path("artifacts/analysis_state_manifest.json"),
+    Path("artifacts/turn_final.json"),
+    Path("reports/evidence_report.md"),
+    Path("reports/turn_final.md"),
+    Path("reports/pertura_final.md"),
+)
+RUNTIME_OWNED_RELATIVE_DIRECTORIES = (Path("reports"),)
+
 
 @dataclass(frozen=True)
 class PermissionDecision:
@@ -55,13 +70,23 @@ def decide_tool_permission(
     if tool_name in WRITE_TOOLS:
         for field in WRITE_PATH_FIELDS.get(tool_name, []):
             raw_path = input_data.get(field)
-            if raw_path and _is_protected_path(workspace, Path(str(raw_path))):
+            if raw_path and _is_runtime_owned_path(workspace, Path(str(raw_path))):
+                return PermissionDecision(
+                    allowed=False,
+                    reason=f"{tool_name} cannot write runtime-owned trust state: {raw_path}",
+                )
+            if raw_path and _is_protected_input_path(workspace, Path(str(raw_path))):
                 return PermissionDecision(
                     allowed=False,
                     reason=f"{tool_name} cannot write under read-only input path: {raw_path}",
                 )
     if tool_name == "Bash":
         command = str(input_data.get("command") or "")
+        if _looks_like_runtime_state_mutation_command(workspace, command):
+            return PermissionDecision(
+                allowed=False,
+                reason="Bash command appears to mutate runtime-owned trust state.",
+            )
         if _looks_like_input_mutation_command(workspace, command):
             return PermissionDecision(
                 allowed=False,
@@ -88,7 +113,7 @@ def build_input_readonly_guard(workspace: ClaudeRunWorkspace):
     return can_use_tool
 
 
-def _is_protected_path(workspace: ClaudeRunWorkspace, path: Path) -> bool:
+def _is_protected_input_path(workspace: ClaudeRunWorkspace, path: Path) -> bool:
     candidates = [workspace.input_dir]
     if workspace.input_source is not None:
         candidates.append(workspace.input_source)
@@ -97,6 +122,16 @@ def _is_protected_path(workspace: ClaudeRunWorkspace, path: Path) -> bool:
         if _is_relative_to(resolved, candidate):
             return True
     return False
+
+
+def _is_runtime_owned_path(workspace: ClaudeRunWorkspace, path: Path) -> bool:
+    resolved = _resolve_user_path(workspace.root, path)
+    if any(resolved == (workspace.root / relative).resolve() for relative in RUNTIME_OWNED_RELATIVE_PATHS):
+        return True
+    return any(
+        _is_relative_to(resolved, workspace.root / relative)
+        for relative in RUNTIME_OWNED_RELATIVE_DIRECTORIES
+    )
 
 
 def _resolve_user_path(cwd: Path, path: Path) -> Path:
@@ -118,11 +153,29 @@ def _looks_like_input_mutation_command(workspace: ClaudeRunWorkspace, command: s
         return False
     for path_text in _extract_command_paths(command):
         try:
-            if _is_protected_path(workspace, Path(path_text)):
+            if _is_protected_input_path(workspace, Path(path_text)):
                 return True
         except OSError:
             continue
     return _mentions_protected_path(workspace, command)
+
+
+def _looks_like_runtime_state_mutation_command(workspace: ClaudeRunWorkspace, command: str) -> bool:
+    if not any(re.search(pattern, command, flags=re.IGNORECASE | re.DOTALL) for pattern in BASH_MUTATION_PATTERNS):
+        return False
+    for path_text in _extract_command_paths(command):
+        try:
+            if _is_runtime_owned_path(workspace, Path(path_text)):
+                return True
+        except OSError:
+            continue
+    normalized = command.lower().replace("\\", "/")
+    if any(str(path).lower().replace("\\", "/") + "/" in normalized for path in RUNTIME_OWNED_RELATIVE_DIRECTORIES):
+        return True
+    return any(
+        str(path).lower().replace("\\", "/") in normalized
+        for path in RUNTIME_OWNED_RELATIVE_PATHS
+    )
 
 
 def _extract_command_paths(command: str) -> list[str]:

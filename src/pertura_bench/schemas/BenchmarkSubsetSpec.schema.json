@@ -1,0 +1,72 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "label_column": {
+      "title": "Label Column",
+      "type": "string"
+    },
+    "labels": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Labels",
+      "type": "array"
+    },
+    "max_cells_per_label": {
+      "default": 500,
+      "exclusiveMinimum": 0,
+      "title": "Max Cells Per Label",
+      "type": "integer"
+    },
+    "schema_version": {
+      "default": "pertura-benchmark-subset-spec-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "seed": {
+      "default": 1729,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "selection": {
+      "additionalProperties": true,
+      "title": "Selection",
+      "type": "object"
+    },
+    "source_lock_hash": {
+      "title": "Source Lock Hash",
+      "type": "string"
+    },
+    "split": {
+      "enum": [
+        "calibration",
+        "evaluation"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "subset_spec_id": {
+      "default": "",
+      "title": "Subset Spec Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "source_lock_hash",
+    "split",
+    "label_column",
+    "labels"
+  ],
+  "title": "BenchmarkSubsetSpec",
+  "type": "object"
+}

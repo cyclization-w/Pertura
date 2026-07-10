@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -8,6 +9,7 @@ from uuid import uuid4
 
 from pertura_gate.identity.design_manifest import build_guide_label_manifest, build_treatment_condition_manifest, scope_for_raw_label
 from pertura_gate.core.schema import ArtifactKind, ArtifactRole, EvidenceArtifact, EvidenceClass
+from pertura_gate.evidence.catalog import EvidenceTypeDefinition, get_evidence_type, evidence_type_exists
 
 
 class EvidenceRegistry:
@@ -92,6 +94,8 @@ class EvidenceRegistry:
         artifact_id: str | None = None,
         metadata: dict | None = None,
         notes: str | None = None,
+        code_sha256: str | None = None,
+        execution_hash: str | None = None,
     ) -> EvidenceArtifact:
         path_text = str(path)
         manifest_id = artifact_id or f"design_manifest_{uuid4().hex[:12]}"
@@ -160,6 +164,68 @@ class EvidenceRegistry:
             mapped = scope_for_raw_label(manifest, str(raw))
             return _canonicalize_scope_aliases({**data, **mapped})
         return _validate_manifest_uid_scope(data, manifest)
+
+    def register_evidence(
+        self,
+        type_id: str,
+        *,
+        path: str | Path,
+        artifact_id: str | None = None,
+        scope: dict | None = None,
+        predicate: dict | None = None,
+        quality: dict | None = None,
+        eligibility: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+        code_sha256: str | None = None,
+        execution_hash: str | None = None,
+        **fields,
+    ) -> EvidenceArtifact:
+        definition = get_evidence_type(type_id)
+        if definition is None:
+            raise ValueError(f"unknown evidence type: {type_id}")
+        missing = _missing_required_fields(definition, fields)
+        if missing:
+            raise ValueError(f"missing required fields for {type_id}: {', '.join(missing)}")
+        adapter = definition.registration.registration_adapter
+        if adapter:
+            return self._call_registration_adapter(
+                adapter,
+                path=path,
+                artifact_id=artifact_id,
+                scope=scope,
+                predicate=predicate,
+                quality=quality,
+                eligibility=eligibility,
+                metadata=metadata,
+                notes=notes,
+                code_sha256=code_sha256,
+                execution_hash=execution_hash,
+                **fields,
+            )
+        return self._register_family_artifact(
+            artifact_id=artifact_id or f"{definition.type_id}_{uuid4().hex[:12]}",
+            kind=definition.artifact_kind,
+            evidence_class=definition.evidence_class,
+            roles=list(definition.default_roles),
+            created_by_tool=f"register_{definition.type_id}_artifact",
+            path=path,
+            artifact_subtype=definition.type_id,
+            scope=scope,
+            predicate=predicate,
+            quality=quality,
+            eligibility=eligibility,
+            metadata=metadata,
+            notes=notes,
+            code_sha256=code_sha256,
+            execution_hash=execution_hash,
+        )
+
+    def _call_registration_adapter(self, adapter: str, **fields) -> EvidenceArtifact:
+        method = getattr(self, adapter)
+        signature = inspect.signature(method)
+        accepted = {key: value for key, value in fields.items() if key in signature.parameters}
+        return method(**accepted)
     def register_experiment_design(
         self,
         *,
@@ -323,6 +389,57 @@ class EvidenceRegistry:
             },
             provenance={"created_by_tool": "register_target_qc_artifact"},
             source_sha256=self._hash_for_path(path_text),
+            metadata=dict(metadata or {}),
+        )
+        self.append(artifact)
+        return artifact
+
+    def register_control_calibration(
+        self,
+        *,
+        path: str | Path,
+        calibration_type: str | None = None,
+        scope: dict | None = None,
+        negative_control_status: str | None = None,
+        ntc_vs_ntc_check: dict | None = None,
+        label_permutation_check: dict | None = None,
+        alpha: float | None = None,
+        n_features_tested: int | None = None,
+        n_significant: int | None = None,
+        method: str | None = None,
+        execution_hash: str | None = None,
+        artifact_id: str | None = None,
+        quality: dict | None = None,
+        metadata: dict | None = None,
+        notes: str | None = None,
+        code_sha256: str | None = None,
+    ) -> EvidenceArtifact:
+        path_text = str(path)
+        calibration = {
+            "calibration_type": calibration_type,
+            "negative_control_status": negative_control_status,
+            "ntc_vs_ntc_check": dict(ntc_vs_ntc_check or {}),
+            "label_permutation_check": dict(label_permutation_check or {}),
+            "alpha": alpha,
+            "n_features_tested": n_features_tested,
+            "n_significant": n_significant,
+            "method": method,
+            "execution_hash": execution_hash,
+        }
+        artifact = EvidenceArtifact(
+            artifact_id=artifact_id or f"control_calibration_{uuid4().hex[:12]}",
+            kind=ArtifactKind.control_calibration,
+            evidence_class=EvidenceClass.observed_metadata,
+            artifact_roles=[ArtifactRole.analysis_eligibility],
+            path=path_text,
+            notes=notes,
+            scope=self.resolve_manifest_scope(dict(scope or {})),
+            quality={key: value for key, value in {**calibration, **dict(quality or {})}.items() if value not in (None, "", {}, [])},
+            eligibility={"control_calibration": _clean_nested(calibration)},
+            provenance={"created_by_tool": "register_control_calibration_artifact"},
+            source_sha256=self._hash_for_path(path_text),
+            code_sha256=code_sha256,
+            execution_hash=execution_hash,
             metadata=dict(metadata or {}),
         )
         self.append(artifact)
@@ -1195,31 +1312,10 @@ class EvidenceRegistry:
         **kwargs,
     ) -> EvidenceArtifact:
         subtype = str(artifact_subtype or "measured_effect")
-        measured_de_required = {"contrast_left", "contrast_baseline", "method", "n_left", "n_baseline", "multiple_testing", "has_padj"}
-        if subtype == "measured_de" and measured_de_required.issubset(kwargs):
-            return self.register_measured_de(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
-        if subtype == "module_effect":
-            return self.register_module_effect(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
-        if subtype == "global_effect":
-            return self.register_global_effect(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
-        if subtype == "composition_effect":
-            return self.register_composition_effect(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
-        if subtype == "perturbation_efficiency":
-            return self.register_perturbation_efficiency(path=path, artifact_id=artifact_id, scope=scope, quality=quality, metadata=metadata, notes=notes, **kwargs)
-        return self._register_family_artifact(
-            artifact_id=artifact_id or f"measured_effect_{uuid4().hex[:12]}",
-            kind=ArtifactKind.measured_effect,
-            evidence_class=EvidenceClass.measured,
-            roles=[ArtifactRole.effect_evidence],
-            created_by_tool="register_measured_effect_artifact",
-            path=path,
-            artifact_subtype=subtype,
-            scope=scope,
-            predicate=predicate,
-            quality=quality,
-            metadata=metadata,
-            notes=notes,
-        )
+        definition = get_evidence_type(subtype)
+        if definition is not None and _has_required_fields(definition, kwargs):
+            return self.register_evidence(subtype, path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        return self.register_evidence("measured_effect", path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes)
 
     def register_prior_artifact(
         self,
@@ -1235,11 +1331,9 @@ class EvidenceRegistry:
         **kwargs,
     ) -> EvidenceArtifact:
         subtype = str(artifact_subtype or "curated_prior_lookup")
-        enrichment_required = {"input_measured_artifact_id", "database", "database_version", "term_id", "method"}
-        if subtype == "curated_enrichment_result" and enrichment_required.issubset(kwargs):
-            return self.register_curated_enrichment(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
-        if subtype == "curated_prior_lookup" and "database" in kwargs:
-            return self.register_curated_prior(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        definition = get_evidence_type(subtype)
+        if definition is not None and _has_required_fields(definition, kwargs):
+            return self.register_evidence(subtype, path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
         return self._register_family_artifact(
             artifact_id=artifact_id or f"prior_artifact_{uuid4().hex[:12]}",
             kind=ArtifactKind.curated_prior_lookup,
@@ -1269,28 +1363,10 @@ class EvidenceRegistry:
         **kwargs,
     ) -> EvidenceArtifact:
         subtype = str(artifact_subtype or "predicted_effect")
-        if subtype == "predicted_effect" and "model_name" in kwargs:
-            return self.register_predicted_effect(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
-        if subtype == "virtual_perturbation_prediction":
-            return self.register_virtual_perturbation_prediction(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
-        if subtype == "prediction_measured_concordance":
-            return self.register_prediction_measured_concordance(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
-        if subtype == "virtual_cell_state_transition":
-            return self.register_virtual_cell_state_transition(path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
-        return self._register_family_artifact(
-            artifact_id=artifact_id or f"prediction_artifact_{uuid4().hex[:12]}",
-            kind=ArtifactKind.prediction_artifact,
-            evidence_class=EvidenceClass.predicted,
-            roles=[ArtifactRole.prediction_evidence],
-            created_by_tool="register_prediction_artifact",
-            path=path,
-            artifact_subtype=subtype,
-            scope=scope,
-            predicate=predicate,
-            quality=quality,
-            metadata=metadata,
-            notes=notes,
-        )
+        definition = get_evidence_type(subtype)
+        if definition is not None and _has_required_fields(definition, kwargs):
+            return self.register_evidence(subtype, path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes, **kwargs)
+        return self.register_evidence("prediction_artifact", path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes)
 
     def register_inferred_structure_artifact(
         self,
@@ -1304,20 +1380,7 @@ class EvidenceRegistry:
         metadata: dict | None = None,
         notes: str | None = None,
     ) -> EvidenceArtifact:
-        return self._register_family_artifact(
-            artifact_id=artifact_id or f"inferred_structure_{uuid4().hex[:12]}",
-            kind=ArtifactKind.inferred_structure,
-            evidence_class=EvidenceClass.measured_inferred,
-            roles=[ArtifactRole.effect_evidence],
-            created_by_tool="register_inferred_structure_artifact",
-            path=path,
-            artifact_subtype=artifact_subtype,
-            scope=scope,
-            predicate=predicate,
-            quality=quality,
-            metadata=metadata,
-            notes=notes,
-        )
+        return self.register_evidence("inferred_structure", path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes)
 
     def register_ranking_artifact(
         self,
@@ -1331,20 +1394,7 @@ class EvidenceRegistry:
         metadata: dict | None = None,
         notes: str | None = None,
     ) -> EvidenceArtifact:
-        return self._register_family_artifact(
-            artifact_id=artifact_id or f"ranking_artifact_{uuid4().hex[:12]}",
-            kind=ArtifactKind.ranking_artifact,
-            evidence_class=EvidenceClass.composite_summary,
-            roles=[ArtifactRole.ranking_summary],
-            created_by_tool="register_ranking_artifact",
-            path=path,
-            artifact_subtype=artifact_subtype,
-            scope=scope,
-            predicate=predicate,
-            quality=quality,
-            metadata=metadata,
-            notes=notes,
-        )
+        return self.register_evidence("ranking_artifact", path=path, artifact_id=artifact_id, scope=scope, predicate=predicate, quality=quality, metadata=metadata, notes=notes)
 
     def register_dataset_metadata_artifact(
         self,
@@ -1357,19 +1407,7 @@ class EvidenceRegistry:
         metadata: dict | None = None,
         notes: str | None = None,
     ) -> EvidenceArtifact:
-        return self._register_family_artifact(
-            artifact_id=artifact_id or f"dataset_metadata_{uuid4().hex[:12]}",
-            kind=ArtifactKind.scope_artifact,
-            evidence_class=EvidenceClass.observed_metadata,
-            roles=[ArtifactRole.scope_definition],
-            created_by_tool="register_dataset_metadata_artifact",
-            path=path,
-            artifact_subtype=artifact_subtype,
-            scope=scope,
-            quality=quality,
-            metadata=metadata,
-            notes=notes,
-        )
+        return self.register_evidence("dataset_metadata", path=path, artifact_id=artifact_id, scope=scope, quality=quality, metadata=metadata, notes=notes)
 
     def _register_family_artifact(
         self,
@@ -1387,6 +1425,8 @@ class EvidenceRegistry:
         eligibility: dict | None = None,
         metadata: dict | None = None,
         notes: str | None = None,
+        code_sha256: str | None = None,
+        execution_hash: str | None = None,
     ) -> EvidenceArtifact:
         path_text = str(path)
         artifact = EvidenceArtifact(
@@ -1402,6 +1442,8 @@ class EvidenceRegistry:
             eligibility=dict(eligibility or {}),
             provenance={"created_by_tool": created_by_tool},
             source_sha256=self._hash_for_path(path_text),
+            code_sha256=code_sha256,
+            execution_hash=execution_hash,
             metadata={"artifact_subtype": artifact_subtype, **dict(metadata or {})},
         )
         self.append(artifact)
@@ -1529,10 +1571,10 @@ def _clean_nested(value):
         return [_clean_nested(item) for item in value if item not in (None, "", {}, [])]
     return value
 
+def _missing_required_fields(definition: EvidenceTypeDefinition, fields: dict) -> list[str]:
+    return [key for key in sorted(definition.registration.required_fields) if fields.get(key) in (None, "")]
 
 
-
-
-
-
+def _has_required_fields(definition: EvidenceTypeDefinition, fields: dict) -> bool:
+    return not _missing_required_fields(definition, fields)
 

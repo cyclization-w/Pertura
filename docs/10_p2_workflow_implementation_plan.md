@@ -334,7 +334,7 @@ Minimum fields:
 ```text
 prediction_artifact_id
 measured_artifact_id
-scope_match
+reported_scope_match (optional diagnostic only; runtime computes UID scope compatibility)
 metric
 value
 n_targets

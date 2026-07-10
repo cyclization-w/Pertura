@@ -1,0 +1,21 @@
+{
+  "name": "pertura-dashboard",
+  "private": true,
+  "version": "0.2.0-alpha.3",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "typescript": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "vitest": "latest"
+  }
+}

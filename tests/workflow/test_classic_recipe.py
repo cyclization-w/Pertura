@@ -303,3 +303,60 @@ def test_classic_recipe_reports_unlinked_candidate_claim_gaps(tmp_path: Path) ->
     assert "unlinked_dusp9_claim" in result.report_markdown
     assert len(result.decision_ids) == 1
     assert any(record["candidate_claim_id"] == "unlinked_dusp9_claim" and record["status"] == "unlinked" for record in result.candidate_claims)
+
+def test_classic_recipe_configured_gap_report_handles_no_linked_claims(tmp_path: Path) -> None:
+    (tmp_path / "klf1_de.csv").write_text("gene,logfc,padj\nKLF1,-1,0.01\n", encoding="utf-8")
+    config = {
+        "dataset_id": "synthetic_norman_no_linked_claims",
+        "raw_labels": ["KLF1_NegCtrl0__KLF1_NegCtrl0", "NegCtrl0_NegCtrl0__NegCtrl0_NegCtrl0"],
+        "perturbation_raw_label": "KLF1_NegCtrl0__KLF1_NegCtrl0",
+        "controls": {"negative_controls": ["NegCtrl0"]},
+        "experiment_design": {
+            "assay": "Perturb-seq",
+            "perturbation_modality": "guide_based_perturb_seq",
+            "moi": "low",
+            "controls": {"negative_controls": ["NegCtrl0"]},
+        },
+        "guide_assignment": {
+            "assignment_method": "synthetic_guide_calling",
+            "assigned_count": 40,
+            "unassigned_count": 0,
+            "multi_guide_count": 0,
+            "target_summary": {"KLF1": 20, "NegCtrl0": 20},
+        },
+        "target_qc": {
+            "target": "KLF1",
+            "control": "NegCtrl0",
+            "n_target_cells": 20,
+            "n_control_cells": 20,
+            "guides_per_target": 1,
+            "guide_consistency": "single_guide_synthetic",
+        },
+        "measured_de": {
+            "path": "klf1_de.csv",
+            "contrast_left": "KLF1_NegCtrl0__KLF1_NegCtrl0",
+            "contrast_baseline": "NegCtrl0_NegCtrl0__NegCtrl0_NegCtrl0",
+            "method": "synthetic_wilcoxon",
+            "n_left": 20,
+            "n_baseline": 20,
+            "multiple_testing": "BH",
+            "has_padj": True,
+        },
+        "candidate_claims": [
+            {
+                "claim_id": "unlinked_dusp9_claim",
+                "text": "DUSP9 validates a mechanism.",
+                "perturbation_raw_label": "DUSP9_NegCtrl0__DUSP9_NegCtrl0",
+                "requested_strength": "validated_mechanism_disabled",
+            }
+        ],
+    }
+    (tmp_path / "classic_recipe_config.json").write_text(json.dumps(config), encoding="utf-8")
+
+    result = run_classic_perturbseq(tmp_path)
+
+    assert not result.decision_ids
+    assert "Pertura Classic Perturb-seq Evidence Gap Report" in result.report_markdown
+    assert "Registered Evidence Artifacts" in result.report_markdown
+    assert "intrinsic_ceiling" in result.report_markdown
+    assert "unlinked_dusp9_claim" in result.report_markdown

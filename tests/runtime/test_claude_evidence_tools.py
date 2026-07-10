@@ -41,7 +41,7 @@ def _install_fake_sdk(monkeypatch, calls: dict) -> None:
     monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
 
 
-def test_claude_options_registers_evidence_mcp_server(monkeypatch, tmp_path: Path) -> None:
+def test_default_claude_options_expose_exactly_five_product_tools(monkeypatch, tmp_path: Path) -> None:
     calls = {}
     _install_fake_sdk(monkeypatch, calls)
 
@@ -52,42 +52,36 @@ def test_claude_options_registers_evidence_mcp_server(monkeypatch, tmp_path: Pat
         config=ClaudeRuntimeOptions(enable_audit_hooks=False),
     )
 
-    assert "pertura_evidence" in options.mcp_servers
-    assert calls["server"]["name"] == "pertura_evidence"
+    assert "pertura" in options.mcp_servers
+    assert calls["server"]["name"] == "pertura"
     assert [tool._tool_name for tool in calls["server"]["tools"]] == [
-        "register_perturbation_design_manifest",
-        "register_experiment_design_artifact",
-        "register_guide_assignment_artifact",
-        "register_target_qc_artifact",
-        "register_measured_de_artifact",
-        "register_predicted_effect_artifact",
-        "register_curated_prior_artifact",
-        "register_perturbation_efficiency_artifact",
-        "register_curated_enrichment_artifact",
-        "register_module_effect_artifact",
-        "register_global_effect_artifact",
-        "register_cell_state_reference_artifact",
-        "register_cell_qc_artifact",
-        "register_replication_artifact",
-        "evaluate_claims",
-        "render_evidence_report",
+        "inspect_dataset",
+        "run_diagnostic",
+        "run_analysis",
+        "evaluate_virtual_model",
+        "finalize_report",
     ]
-    assert "mcp__pertura_evidence__register_perturbation_design_manifest" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_experiment_design_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_guide_assignment_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_target_qc_artifact" in options.allowed_tools
+    assert {name for name in options.allowed_tools if name.startswith("mcp__pertura__")} == {
+        "mcp__pertura__inspect_dataset",
+        "mcp__pertura__run_diagnostic",
+        "mcp__pertura__run_analysis",
+        "mcp__pertura__evaluate_virtual_model",
+        "mcp__pertura__finalize_report",
+    }
+    assert {"Read", "Glob", "Grep", "Bash", "Write", "Edit", "NotebookEdit"}.issubset(options.allowed_tools)
+
+
+def test_legacy_tool_surface_remains_explicitly_available(monkeypatch, tmp_path: Path) -> None:
+    calls = {}
+    _install_fake_sdk(monkeypatch, calls)
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="legacy")
+    options = build_agent_options(
+        workspace=workspace,
+        system_prompt="prompt",
+        config=ClaudeRuntimeOptions(enable_audit_hooks=False, tool_surface="legacy"),
+    )
+    assert "pertura_evidence" in options.mcp_servers
     assert "mcp__pertura_evidence__register_measured_de_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_predicted_effect_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_curated_prior_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_perturbation_efficiency_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_curated_enrichment_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_module_effect_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_global_effect_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_cell_state_reference_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_cell_qc_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__register_replication_artifact" in options.allowed_tools
-    assert "mcp__pertura_evidence__evaluate_claims" in options.allowed_tools
-    assert "mcp__pertura_evidence__render_evidence_report" in options.allowed_tools
 
 def test_evidence_mcp_register_and_render_by_path(monkeypatch, tmp_path: Path) -> None:
     calls = {}
@@ -412,6 +406,37 @@ def test_evidence_mcp_registers_cell_qc_as_observation(monkeypatch, tmp_path: Pa
     assert registered["artifact_intrinsic_ceiling"] == "observation"
 
 
+def test_evidence_mcp_registers_control_calibration_artifact(monkeypatch, tmp_path: Path) -> None:
+    calls = {}
+    _install_fake_sdk(monkeypatch, calls)
+
+    from pertura_runtime.claude.tools.evidence_tools import create_evidence_mcp_server
+
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
+    path = workspace.outputs_dir / "control_calibration.json"
+    path.write_text("{}\n", encoding="utf-8")
+    create_evidence_mcp_server(workspace)
+
+    registered = asyncio.run(calls["tools"]["register_control_calibration_artifact"]({
+        "path": "outputs/control_calibration.json",
+        "calibration_type": "control_null_checks",
+        "ntc_vs_ntc_check": {"passed": True, "status": "passed"},
+        "label_permutation_check": {"passed": True, "status": "passed"},
+        "alpha": 0.05,
+        "n_features_tested": 100,
+        "n_significant": 0,
+        "method": "basic_control_calibration_v1",
+        "execution_hash": "sha256:control-calibration-runner",
+        "scope": {"dataset_id": "local"},
+    }))
+
+    assert registered["evidence_class"] == "observed_metadata"
+    assert registered["evidence_predicate"] == "analysis_eligibility"
+    assert registered["artifact_intrinsic_ceiling"] == "observation"
+    assert registered["next_claim_template"] is None
+    assert registered["artifact"]["eligibility"]["control_calibration"]["ntc_vs_ntc_check"]["passed"] is True
+
+
 def test_evidence_mcp_failed_cell_qc_downgrades_measured_de(monkeypatch, tmp_path: Path) -> None:
     calls = {}
     _install_fake_sdk(monkeypatch, calls)
@@ -526,6 +551,8 @@ def test_evidence_mcp_registers_module_effect_and_evaluates_claim(monkeypatch, t
         }],
     }))
 
+    assert registered["evidence_predicate"] == "module_score_shift"
+    assert registered["artifact"]["evidence_predicate"] == "module_score_shift"
     assert registered["artifact_intrinsic_ceiling"] == "measured_association"
     decision = result["decisions"][0]
     assert decision["max_strength"] == "measured_association"
@@ -662,3 +689,180 @@ def test_evidence_mcp_render_accepts_natural_string_claim_fields(monkeypatch, tm
     assert decision["decision"] == "allowed_with_downgrade"
     assert decision["blocked_requested_strength"] == "validates_mechanism"
     assert (workspace.artifacts_dir / "claim_decisions.json").exists()
+
+
+def test_family_registrars_are_not_claude_facing_mcp_tools(monkeypatch, tmp_path: Path) -> None:
+    calls = {}
+    _install_fake_sdk(monkeypatch, calls)
+
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
+    options = build_agent_options(
+        workspace=workspace,
+        system_prompt="prompt",
+        config=ClaudeRuntimeOptions(enable_audit_hooks=False),
+    )
+    create_tool_names = {tool._tool_name for tool in calls["server"]["tools"]}
+    allowed_tool_names = set(options.allowed_tools)
+    family_registrars = {
+        "register_scope_artifact",
+        "register_eligibility_artifact",
+        "register_measured_effect_artifact",
+        "register_prior_artifact",
+        "register_prediction_artifact",
+        "register_inferred_structure_artifact",
+        "register_ranking_artifact",
+        "register_dataset_metadata_artifact",
+    }
+
+    assert create_tool_names.isdisjoint(family_registrars)
+    assert allowed_tool_names.isdisjoint({f"mcp__pertura_evidence__{name}" for name in family_registrars})
+
+
+def test_evidence_mcp_registers_composition_effect_and_blocks_fate_claim(monkeypatch, tmp_path: Path) -> None:
+    calls = {}
+    _install_fake_sdk(monkeypatch, calls)
+
+    from pertura_runtime.claude.tools.evidence_tools import create_evidence_mcp_server
+
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
+    comp_path = workspace.outputs_dir / "composition_effect.json"
+    comp_path.write_text("{}\n", encoding="utf-8")
+    manifest_path = workspace.outputs_dir / "design_manifest_source.json"
+    manifest_path.write_text("{}\n", encoding="utf-8")
+    create_evidence_mcp_server(workspace)
+    manifest = asyncio.run(calls["tools"]["register_perturbation_design_manifest"]({
+        "path": "outputs/design_manifest_source.json",
+        "dataset_id": "local",
+        "raw_labels": ["KLF1_NegCtrl0__KLF1_NegCtrl0"],
+    }))
+    registered = asyncio.run(calls["tools"]["register_composition_effect_artifact"]({
+        "path": "outputs/composition_effect.json",
+        "state_source": "cell_state_reference_abc",
+        "state_assignment_column": "state_label",
+        "comparison_method": "fisher_exact",
+        "counts_by_state": {"target": {"erythroid": 80, "other": 40}, "control": {"erythroid": 40, "other": 110}},
+        "state_level_deltas": {"erythroid": 0.4, "other": -0.4},
+        "effect_size": 0.25,
+        "padj": 0.01,
+        "n_target_cells": 120,
+        "n_control_cells": 150,
+        "scope": {"design_manifest_id": manifest["artifact_id"], "raw_label": "KLF1_NegCtrl0__KLF1_NegCtrl0"},
+        "quality": {
+            "eligibility": {
+                "perturbation_cell_mapping": {"assignment_method": "guide_count_threshold", "guide_to_target_map_hash": "sha256:map"},
+                "control_definition": {"negative_controls": ["NegCtrl"], "control_label": "NegCtrl"},
+                "target_qc": {"n_target_cells": 120, "n_control_cells": 150},
+                "assay_modality": "guide_based_perturb_seq",
+                "moi": "low",
+                "estimand": "single_target_marginal",
+            },
+        },
+    }))
+    result = asyncio.run(calls["tools"]["evaluate_claims"]({
+        "claims": [{
+            "claim_id": "composition_fate_claim",
+            "text": "KLF1 causes erythroid fate conversion through a validated mechanism.",
+            "subject": {"id": "KLF1"},
+            "object": {"type": "cell_state", "id": "erythroid"},
+            "scope": registered["artifact"]["scope"],
+            "requested_strength": "causal_fate_conversion",
+            "evidence_refs": [registered["artifact_id"]],
+        }],
+    }))
+
+    assert registered["artifact_intrinsic_ceiling"] == "measured_association"
+    assert registered["artifact_id"].startswith("composition_effect_")
+    decision = result["decisions"][0]
+    assert decision["max_strength"] == "measured_association"
+    assert "composition association" in decision["allowed_surface"]
+    assert "does not establish" in decision["allowed_surface"]
+
+
+
+
+def test_evidence_mcp_registers_virtual_prediction_and_concordance(monkeypatch, tmp_path: Path) -> None:
+    calls = {}
+    _install_fake_sdk(monkeypatch, calls)
+
+    from pertura_runtime.claude.tools.evidence_tools import create_evidence_mcp_server
+
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
+    pred_path = workspace.outputs_dir / "virtual_prediction.json"
+    pred_path.write_text('{"gene":"GENE_X","delta":1.0}\n', encoding="utf-8")
+    de_path = workspace.outputs_dir / "measured_de.csv"
+    de_path.write_text("gene,padj\nGENE_X,0.01\n", encoding="utf-8")
+    conc_path = workspace.outputs_dir / "concordance.json"
+    conc_path.write_text('{"metric":"spearman","value":0.7}\n', encoding="utf-8")
+    create_evidence_mcp_server(workspace)
+
+    pred = asyncio.run(calls["tools"]["register_virtual_perturbation_prediction_artifact"]({
+        "path": "outputs/virtual_prediction.json",
+        "tool_name": "GEARS",
+        "tool_version": "0.1",
+        "model_name": "toy-gears",
+        "model_checkpoint_hash": "sha256:model",
+        "prediction_method": "inference",
+        "prediction_type": "delta_expression",
+        "perturbation_query": {"perturbation": "KLF1"},
+        "output_schema": {"columns": ["gene", "delta"]},
+        "n_predicted_genes": 1,
+        "scope": {"perturbation": "KLF1"},
+    }))
+    measured = asyncio.run(calls["tools"]["register_measured_de_artifact"]({
+        "path": "outputs/measured_de.csv",
+        "contrast_left": "KLF1",
+        "contrast_baseline": "NegCtrl",
+        "method": "wilcoxon",
+        "n_left": 120,
+        "n_baseline": 150,
+        "multiple_testing": "BH",
+        "has_padj": True,
+        "scope": {"perturbation": "KLF1"},
+    }))
+    concordance = asyncio.run(calls["tools"]["register_prediction_measured_concordance_artifact"]({
+        "path": "outputs/concordance.json",
+        "prediction_artifact_id": pred["artifact_id"],
+        "measured_artifact_id": measured["artifact_id"],
+        "metric": "spearman",
+        "metric_value": 0.7,
+        "denominator": 1,
+        "scope_match": "exact",
+        "comparison_method": "shared_gene_delta_correlation",
+        "scope": {"perturbation": "KLF1"},
+    }))
+
+    assert pred["evidence_class"] == "predicted"
+    assert pred["evidence_predicate"] == "predicted_perturbation_response"
+    assert pred["artifact_intrinsic_ceiling"] == "predicted_effect"
+    assert concordance["evidence_predicate"] == "prediction_measured_concordance"
+    assert concordance["artifact_intrinsic_ceiling"] == "predicted_effect"
+    assert concordance["next_claim_template"] == {
+        "scope": concordance["artifact"]["scope"],
+        "evidence_refs": [concordance["artifact_id"]],
+    }
+
+
+def test_evidence_mcp_registers_virtual_cell_state_transition(monkeypatch, tmp_path: Path) -> None:
+    calls = {}
+    _install_fake_sdk(monkeypatch, calls)
+
+    from pertura_runtime.claude.tools.evidence_tools import create_evidence_mcp_server
+
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
+    transition_path = workspace.outputs_dir / "celloracle_transition.json"
+    transition_path.write_text('{"state":"erythroid","score":0.4}\n', encoding="utf-8")
+    create_evidence_mcp_server(workspace)
+
+    result = asyncio.run(calls["tools"]["register_virtual_cell_state_transition_artifact"]({
+        "path": "outputs/celloracle_transition.json",
+        "tool_name": "CellOracle",
+        "model_or_network_provenance": {"network_hash": "sha256:network"},
+        "transition_type": "vector_field",
+        "perturbation_query": {"perturbation": "KLF1"},
+        "state_space_reference": {"basis": "umap"},
+        "scope": {"perturbation": "KLF1"},
+    }))
+
+    assert result["evidence_class"] == "predicted"
+    assert result["evidence_predicate"] == "predicted_cell_state_transition"
+    assert result["artifact_intrinsic_ceiling"] == "predicted_effect"

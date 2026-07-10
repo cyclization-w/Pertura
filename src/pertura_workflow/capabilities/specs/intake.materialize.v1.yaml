@@ -1,0 +1,25 @@
+schema_version: pertura-capability-spec-v2
+capability_id: intake.materialize.v1
+version: "0.1.0"
+phase: 1
+kind: analysis
+summary: Materialize a bounded sparse internal dataset bundle.
+trust_level: exploratory
+executor: intake_materialize
+validator: candidate_standard
+input_requirements: [dataset_contract]
+depends_on: [diagnostic.contract_integrity.v1]
+dependency_kinds: [contract]
+output_kind: materialized_dataset
+source_class: observed_metadata
+claim_permissions: []
+timeout_seconds: 1800
+parameters_schema:
+  type: object
+  properties:
+    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
+    n_jobs: {type: integer, default: 1, minimum: 1}
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true

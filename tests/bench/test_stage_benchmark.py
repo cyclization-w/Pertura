@@ -31,6 +31,16 @@ def test_stage_benchmark_cell_state_reference_is_context_only(tmp_path: Path) ->
     assert all(result.metrics.values())
 
 
+
+def test_stage_benchmark_composition_effect_caps_fate_claim(tmp_path: Path) -> None:
+    result = run_stage_benchmark_case("composition_effect_association_only", root=tmp_path)
+
+    assert result.completion is True
+    assert result.stage_id == "composition_effect"
+    assert "composition_effect" in result.artifact_kinds
+    assert result.decision_strengths == ["measured_association"]
+    assert result.scope_fits == ["exact"]
+    assert all(result.metrics.values())
 def test_stage_benchmark_measured_de_caps_mechanism(tmp_path: Path) -> None:
     result = run_stage_benchmark_case("measured_de_association_only", root=tmp_path)
 

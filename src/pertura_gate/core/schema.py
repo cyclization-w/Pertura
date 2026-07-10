@@ -16,11 +16,16 @@ class ArtifactKind(str, Enum):
     measured_de = "measured_de"
     perturbation_efficiency = "perturbation_efficiency"
     cell_qc = "cell_qc"
+    control_calibration = "control_calibration"
     predicted_effect = "predicted_effect"
+    virtual_perturbation_prediction = "virtual_perturbation_prediction"
+    prediction_measured_concordance = "prediction_measured_concordance"
+    virtual_cell_state_transition = "virtual_cell_state_transition"
     curated_prior_lookup = "curated_prior_lookup"
     curated_enrichment_result = "curated_enrichment_result"
     module_effect = "module_effect"
     global_effect = "global_effect"
+    composition_effect = "composition_effect"
     replication_summary = "replication_summary"
     scope_artifact = "scope_artifact"
     measured_effect = "measured_effect"
@@ -51,6 +56,25 @@ class ArtifactRole(str, Enum):
     prior_context = "prior_context"
     prediction_evidence = "prediction_evidence"
     ranking_summary = "ranking_summary"
+
+
+class EvidencePredicate(str, Enum):
+    metadata_observation = "metadata_observation"
+    scope_definition = "scope_definition"
+    analysis_eligibility = "analysis_eligibility"
+    state_context = "state_context"
+    differential_expression = "differential_expression"
+    target_engagement = "target_engagement"
+    module_score_shift = "module_score_shift"
+    global_transcriptomic_shift = "global_transcriptomic_shift"
+    cell_state_composition_shift = "cell_state_composition_shift"
+    curated_prior_context = "curated_prior_context"
+    curated_enrichment_context = "curated_enrichment_context"
+    predicted_effect = "predicted_effect"
+    predicted_perturbation_response = "predicted_perturbation_response"
+    prediction_measured_concordance = "prediction_measured_concordance"
+    predicted_cell_state_transition = "predicted_cell_state_transition"
+    replication_summary = "replication_summary"
 
 
 class EvidenceTier(str, Enum):
@@ -160,6 +184,7 @@ class EvidenceArtifact:
     kind: ArtifactKind
     path: str
     evidence_class: EvidenceClass | None = None
+    evidence_predicate: EvidencePredicate | None = None
     artifact_roles: list[ArtifactRole | str] = field(default_factory=list)
     schema_version: str = "pertura-evidence-v1"
     adapter_version: str = "pertura-gate-v1"
@@ -186,11 +211,21 @@ class EvidenceArtifact:
     created_at_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        if self.evidence_predicate is None:
+            object.__setattr__(self, "evidence_predicate", default_evidence_predicate(self.kind))
+
     @property
     def effective_evidence_class(self) -> EvidenceClass:
         if self.evidence_class is not None:
             return self.evidence_class
         return default_evidence_class(self.kind)
+
+    @property
+    def effective_evidence_predicate(self) -> EvidencePredicate:
+        if self.evidence_predicate is not None:
+            return self.evidence_predicate
+        return default_evidence_predicate(self.kind)
 
     def to_dict(self) -> dict[str, Any]:
         roles = [item.value if isinstance(item, ArtifactRole) else str(item) for item in self.artifact_roles]
@@ -199,6 +234,7 @@ class EvidenceArtifact:
             "kind": self.kind.value,
             "artifact_type": self.kind.value,
             "evidence_class": self.effective_evidence_class.value,
+            "evidence_predicate": self.effective_evidence_predicate.value,
             "artifact_roles": roles,
             "schema_version": self.schema_version,
             "adapter_version": self.adapter_version,
@@ -235,10 +271,16 @@ class EvidenceArtifact:
         kind = ArtifactKind(payload.get("kind") or payload.get("artifact_type") or ArtifactKind.generic_observation.value)
         evidence_class_raw = payload.get("evidence_class")
         evidence_class = EvidenceClass(evidence_class_raw) if evidence_class_raw else default_evidence_class(kind)
+        predicate_raw = payload.get("evidence_predicate") or payload.get("predicate_type")
+        try:
+            evidence_predicate = EvidencePredicate(predicate_raw) if predicate_raw else default_evidence_predicate(kind)
+        except ValueError:
+            evidence_predicate = default_evidence_predicate(kind)
         return cls(
             artifact_id=str(payload["artifact_id"]),
             kind=kind,
             evidence_class=evidence_class,
+            evidence_predicate=evidence_predicate,
             artifact_roles=[_artifact_role(item) for item in payload.get("artifact_roles") or []],
             schema_version=str(payload.get("schema_version") or "pertura-evidence-v1"),
             adapter_version=str(payload.get("adapter_version") or "pertura-gate-v1"),
@@ -384,19 +426,21 @@ class RenderedReport:
         }
 
 
-def default_evidence_class(kind: ArtifactKind) -> EvidenceClass:
-    if kind in {ArtifactKind.measured_de, ArtifactKind.measured_effect, ArtifactKind.global_effect, ArtifactKind.module_effect, ArtifactKind.perturbation_efficiency}:
-        return EvidenceClass.measured
-    if kind in {ArtifactKind.predicted_effect, ArtifactKind.prediction_artifact}:
-        return EvidenceClass.predicted
-    if kind in {ArtifactKind.curated_prior_lookup, ArtifactKind.curated_enrichment_result}:
-        return EvidenceClass.curated_prior
-    if kind == ArtifactKind.replication_summary:
-        return EvidenceClass.composite_summary
-    if kind == ArtifactKind.inferred_structure:
-        return EvidenceClass.measured_inferred
-    return EvidenceClass.observed_metadata
+def default_evidence_predicate(kind: ArtifactKind) -> EvidencePredicate:
+    from pertura_gate.evidence.catalog import evidence_type_for_kind
 
+    definition = evidence_type_for_kind(kind)
+    if definition is not None:
+        return definition.evidence_predicate
+    return EvidencePredicate.metadata_observation
+
+def default_evidence_class(kind: ArtifactKind) -> EvidenceClass:
+    from pertura_gate.evidence.catalog import evidence_type_for_kind
+
+    definition = evidence_type_for_kind(kind)
+    if definition is not None:
+        return definition.evidence_class
+    return EvidenceClass.observed_metadata
 
 def _artifact_role(value: Any) -> ArtifactRole | str:
     try:
@@ -409,8 +453,3 @@ def _optional_int(value: Any) -> int | None:
     if value is None or value == "":
         return None
     return int(value)
-
-
-
-
-

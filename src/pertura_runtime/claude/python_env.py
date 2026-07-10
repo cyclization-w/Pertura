@@ -128,7 +128,7 @@ Use this exact Python executable for all analysis code:
 `{self.shell_python}`
 
 Do not use bare `python`, `python3`, or `py`; those may resolve to a base environment
-without scanpy/pertpy/decoupler. As your first Bash action, verify the SDK tool
+without the preflighted scientific packages. As your first Bash action, verify the SDK tool
 subprocess sees the same environment by running:
 
 ```bash

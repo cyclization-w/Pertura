@@ -21,6 +21,7 @@ from pertura_gate.core.schema import (
 )
 from pertura_gate.identity.scope import compare_scope
 from pertura_gate.resolver.binding import resolve_bound_measured_artifact, resolve_prediction_measured_binding
+from pertura_gate.evidence.execution_ledger import artifact_execution_is_in_ledger
 from pertura_gate.resolver.warrant import (
     best_resolution as choose_best_resolution,
     intrinsic_warrant,
@@ -34,6 +35,7 @@ _ELIGIBILITY_KINDS = {
     ArtifactKind.guide_assignment,
     ArtifactKind.target_qc,
     ArtifactKind.cell_qc,
+    ArtifactKind.control_calibration,
 }
 
 
@@ -424,7 +426,7 @@ def validate_measured_association_eligibility(
     *,
     policy: GatePolicy = DEFAULT_POLICY,
 ) -> EligibilityValidation:
-    profile = _build_eligibility_profile(claim, artifact, registry)
+    profile = _build_eligibility_profile(claim, artifact, registry, policy=policy)
     reasons: list[str] = []
 
     modality = _norm(profile.perturbation_modality or profile.assay_modality or "guide_based_perturb_seq")
@@ -466,7 +468,7 @@ def validate_measured_association_eligibility(
             reasons.append(f"estimand {estimand!r} is not allowed by policy")
 
     reasons.extend(_validate_cell_qc(cell_qc, policy))
-    reasons.extend(_validate_statistical_safety(profile, artifact, policy))
+    reasons.extend(_validate_statistical_safety(profile, artifact, policy, registry=registry))
 
     if _truthy(_first(target_qc, "eligibility_passed", "guide_assignment_passed", "target_qc_passed")) and len(_structured_keys(profile)) < 3:
         reasons.append("boolean/prose eligibility flags are ignored without structured, hashable fields")
@@ -474,20 +476,34 @@ def validate_measured_association_eligibility(
     return EligibilityValidation(profile=profile, passed=not reasons, reasons=reasons, sources=profile.sources or [artifact.artifact_id])
 
 
-def _build_eligibility_profile(claim: Claim, measured: EvidenceArtifact, registry) -> EligibilityProfile:
+def _build_eligibility_profile(
+    claim: Claim,
+    measured: EvidenceArtifact,
+    registry,
+    *,
+    policy: GatePolicy = DEFAULT_POLICY,
+) -> EligibilityProfile:
     merged: dict[str, Any] = {}
     sources: list[str] = []
 
-    def merge_from(source: dict[str, Any] | None, source_id: str) -> None:
+    def merge_from(source: dict[str, Any] | None, source_id: str, source_artifact: EvidenceArtifact | None = None) -> None:
         if not source:
             return
-        _deep_merge(merged, _normalize_eligibility(source))
+        normalized = _normalize_eligibility(source)
+        if "control_calibration" in normalized:
+            normalized["control_calibration"] = _annotate_control_calibration_source(
+                normalized["control_calibration"],
+                source_artifact,
+                policy,
+                registry=registry,
+            )
+        _deep_merge(merged, normalized)
         if source_id not in sources:
             sources.append(source_id)
 
-    merge_from(measured.eligibility, measured.artifact_id)
+    merge_from(measured.eligibility, measured.artifact_id, measured)
     if measured.quality.get("eligibility"):
-        merge_from(dict(measured.quality.get("eligibility") or {}), measured.artifact_id)
+        merge_from(dict(measured.quality.get("eligibility") or {}), measured.artifact_id, measured)
 
     explicit_ids = _explicit_eligibility_artifact_ids(measured)
     for artifact_id in explicit_ids:
@@ -496,8 +512,11 @@ def _build_eligibility_profile(claim: Claim, measured: EvidenceArtifact, registr
             continue
         if not _eligibility_scope_can_support(claim.scope or measured.scope, measured.scope, artifact.scope):
             continue
-        merge_from(artifact.eligibility, artifact.artifact_id)
+        merge_from(artifact.eligibility, artifact.artifact_id, artifact)
 
+    # Legacy-v1 compatibility only. The capability kernel never calls this path:
+    # its promotion engine consumes explicit ResultEnvelope dependencies. Keep the
+    # historical registry projection readable until the P3 write-surface removal.
     for artifact in registry.list():
         if artifact.artifact_id == measured.artifact_id or artifact.kind not in _ELIGIBILITY_KINDS:
             continue
@@ -505,7 +524,7 @@ def _build_eligibility_profile(claim: Claim, measured: EvidenceArtifact, registr
             continue
         if not _eligibility_scope_can_support(claim.scope or measured.scope, measured.scope, artifact.scope):
             continue
-        merge_from(artifact.eligibility, artifact.artifact_id)
+        merge_from(artifact.eligibility, artifact.artifact_id, artifact)
 
     profile = EligibilityProfile.from_dict(merged)
     target_qc = dict(profile.target_qc)
@@ -561,11 +580,11 @@ def _eligibility_scope_can_support(claim_scope: dict[str, Any] | None, measured_
     fit = compare_manifest_scope(claim_scope, artifact_scope)
     if fit == ScopeFit.mismatch:
         return False
-    if fit in {ScopeFit.exact, ScopeFit.compatible, ScopeFit.weaker, ScopeFit.unknown}:
+    if fit in {ScopeFit.exact, ScopeFit.compatible}:
         return True
 
     legacy_fit = compare_scope(claim_scope or measured_scope, artifact_scope)
-    return legacy_fit != ScopeFit.mismatch
+    return legacy_fit in {ScopeFit.exact, ScopeFit.compatible}
 
 def _normalize_eligibility(payload: dict[str, Any]) -> dict[str, Any]:
     data = dict(payload or {})
@@ -660,22 +679,86 @@ def _statistical_safety_reasons_for_claim_artifact(
     policy: GatePolicy,
     checks: tuple[str, ...] = ("cell_qc", "trusted_method", "replicate", "confound", "control_calibration", "guide_power"),
 ) -> list[str]:
-    profile = _build_eligibility_profile(claim, artifact, registry)
+    profile = _build_eligibility_profile(claim, artifact, registry, policy=policy)
     reasons: list[str] = []
     if "cell_qc" in checks:
         reasons.extend(_validate_cell_qc(_merged_cell_qc(profile), policy))
-    reasons.extend(_validate_statistical_safety(profile, artifact, policy, checks=checks))
+    reasons.extend(_validate_statistical_safety(profile, artifact, policy, registry=registry, checks=checks))
     return reasons
 
 
-def is_trusted_execution(artifact: EvidenceArtifact, policy: GatePolicy) -> bool:
+def is_trusted_execution(artifact: EvidenceArtifact, policy: GatePolicy, registry=None) -> bool:
     method = _norm(_first(artifact.quality, "method", "runner_method", "comparison_method", "scoring_method") or artifact.method or "")
     trusted_methods = {_norm(item) for item in policy.trusted_runner_methods}
     if not method or method not in trusted_methods:
         return False
     if policy.trusted_runner_requires_execution_hash and not artifact.execution_hash:
         return False
+    if policy.trusted_runner_requires_ledger_entry:
+        run_root = getattr(registry, "run_root", None)
+        if run_root is None or not artifact_execution_is_in_ledger(artifact, run_root, method=method):
+            return False
     return True
+
+
+def _control_calibration_method(artifact: EvidenceArtifact | None) -> str:
+    if artifact is None:
+        return ""
+    calibration = {}
+    if isinstance(artifact.eligibility, dict):
+        calibration = dict(artifact.eligibility.get("control_calibration") or {})
+    return _norm(
+        _first(artifact.quality, "method", "runner_method", "calibration_method")
+        or artifact.method
+        or _first(calibration, "method", "calibration_method")
+        or ""
+    )
+
+
+def is_trusted_control_calibration(artifact: EvidenceArtifact | None, policy: GatePolicy, registry=None) -> bool:
+    if artifact is None or artifact.kind != ArtifactKind.control_calibration:
+        return False
+    method = _control_calibration_method(artifact)
+    trusted_methods = {_norm(item) for item in policy.trusted_calibration_methods}
+    if not method or method not in trusted_methods:
+        return False
+    if policy.trusted_calibration_requires_execution_hash and not artifact.execution_hash:
+        return False
+    if policy.trusted_runner_requires_ledger_entry:
+        run_root = getattr(registry, "run_root", None)
+        if run_root is None or not artifact_execution_is_in_ledger(artifact, run_root, method=method):
+            return False
+    return True
+
+
+def _annotate_control_calibration_source(
+    control_calibration: dict[str, Any],
+    source_artifact: EvidenceArtifact | None,
+    policy: GatePolicy,
+    *,
+    registry=None,
+) -> dict[str, Any]:
+    annotated = dict(control_calibration or {})
+    if not annotated:
+        return annotated
+    source_id = source_artifact.artifact_id if source_artifact is not None else None
+    source_kind = source_artifact.kind.value if source_artifact is not None else "inline"
+    source_method = _control_calibration_method(source_artifact)
+    source_trusted = is_trusted_control_calibration(source_artifact, policy, registry=registry)
+    annotated.setdefault("_source_artifact_id", source_id)
+    annotated.setdefault("_source_kind", source_kind)
+    annotated.setdefault("_source_method", source_method)
+    annotated.setdefault("_source_trusted", source_trusted)
+    for key in ["ntc_vs_ntc_check", "label_permutation_check"]:
+        check = annotated.get(key)
+        if isinstance(check, dict):
+            check = dict(check)
+            check.setdefault("_source_artifact_id", source_id)
+            check.setdefault("_source_kind", source_kind)
+            check.setdefault("_source_method", source_method)
+            check.setdefault("_source_trusted", source_trusted)
+            annotated[key] = check
+    return annotated
 
 
 def _validate_statistical_safety(
@@ -683,10 +766,11 @@ def _validate_statistical_safety(
     artifact: EvidenceArtifact,
     policy: GatePolicy,
     *,
+    registry=None,
     checks: tuple[str, ...] = ("trusted_method", "replicate", "confound", "control_calibration", "guide_power"),
 ) -> list[str]:
     reasons: list[str] = []
-    trusted = is_trusted_execution(artifact, policy)
+    trusted = is_trusted_execution(artifact, policy, registry=registry)
     if "trusted_method" in checks and policy.require_trusted_method_for_measured_claims and not trusted:
         reasons.append("strict policy requires trusted runner provenance with an allowed method and execution hash")
     if "replicate" in checks:
@@ -751,6 +835,8 @@ def _validate_named_calibration_check(control_calibration: dict[str, Any], polic
             return [f"policy requires {key} for measured claims"]
         return []
     status = _norm(_first(value, "status", "result", "passed") or "")
+    if required and policy.require_trusted_calibration_for_required_checks and not _truthy(value.get("_source_trusted")):
+        return [f"policy requires trusted control calibration provenance for {key}"]
     if _falsey(_first(value, "passed")) or status in {"failed", "fail", "invalid", "not_calibrated"}:
         return [f"registered control calibration reports failed {key}"]
     return []
@@ -966,6 +1052,14 @@ def _contrast_text(artifact: EvidenceArtifact) -> str:
 
 def _deep_merge(target: dict[str, Any], source: dict[str, Any]) -> None:
     for key, value in source.items():
+        if (
+            key in {"ntc_vs_ntc_check", "label_permutation_check"}
+            and isinstance(value, dict)
+            and isinstance(target.get(key), dict)
+            and _truthy(target[key].get("_source_trusted"))
+            and not _truthy(value.get("_source_trusted"))
+        ):
+            continue
         if isinstance(value, dict) and isinstance(target.get(key), dict):
             _deep_merge(target[key], value)
         elif value not in (None, "", {}, []):

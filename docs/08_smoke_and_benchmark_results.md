@@ -1,13 +1,13 @@
 # 08. Smoke and Benchmark Results
 
-This file summarizes the key completed smoke/benchmark evidence for the current P0.6/P0.7/P1 implementation.
+This file summarizes the key completed smoke/benchmark evidence for the current P0.6/P0.7/P1/P2 stage implementation.
 
 ## Test Suite
 
-Latest full-suite status recorded after the repo-level cleanup:
+Latest full-suite status recorded after the virtual perturbation wrapper family implementation:
 
 ```text
-110 passed
+192 passed
 ```
 
 ## P0.6 Smoke Set
@@ -124,3 +124,55 @@ The failures were mostly not resolver errors. They were evidence workflow contra
 - missing structured eligibility.
 
 A+C closure addressed this by adding an evidence workflow SOP and registrar-returned `next_claim_template` for bookkeeping.
+
+
+## P2 Core Freeze
+
+Current frozen baseline before external wrappers:
+
+```text
+docs/results/p2_core_freeze_summary.md
+docs/results/p2_core_freeze_summary.json
+```
+
+The freeze records the completed gate, runtime, workflow, stage, benchmark, and predicate/warrant layers. External wrappers such as CellOracle, scGPT, GEARS, or CPA must enter through structured artifacts and predicate-specific warrant rules, not direct prose.
+
+## P2 Smoke13b: Composition Predicate/Warrant Closure
+
+Smoke13b verifies the predicate/warrant architecture after the first `composition_effect` extension.
+
+Frozen result path:
+
+```text
+docs/results/smoke13b_predicate_warrant/
+```
+
+Key invariant:
+
+```text
+composition_effect
+-> EvidencePredicate.cell_state_composition_shift
+-> measured cell-state composition association
+-> not DE
+-> not target engagement
+-> not causal fate conversion
+-> not downstream mechanism
+-> not driver validation
+```
+
+Result:
+
+```text
+smoke13b_composition_as_fate_mechanism:
+  decision=allowed_with_downgrade
+  max_strength=measured_association
+  blocked_requested_strength=causal_fate_conversion
+  scope_fit=exact
+
+smoke13b_composition_association:
+  decision=allowed
+  max_strength=measured_association
+  scope_fit=exact
+```
+
+The controlled surface says composition association and explicitly blocks gene-specific effect, target engagement, causal fate conversion, downstream mechanism, and driver validation. It does not use DE wording.

@@ -1,0 +1,52 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "datasets": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Datasets",
+      "type": "array"
+    },
+    "jobs": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Jobs",
+      "type": "array"
+    },
+    "plan_id": {
+      "default": "",
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "retry_policy": {
+      "additionalProperties": true,
+      "title": "Retry Policy",
+      "type": "object"
+    },
+    "scheduler": {
+      "const": "neutral",
+      "default": "neutral",
+      "title": "Scheduler",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "pertura-server-benchmark-plan-v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "jobs",
+    "datasets"
+  ],
+  "title": "ServerBenchmarkPlan",
+  "type": "object"
+}

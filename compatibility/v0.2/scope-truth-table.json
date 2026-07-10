@@ -1,0 +1,35 @@
+{
+  "comparisons": {
+    "broader": "broader",
+    "exact": "exact",
+    "mismatch": "mismatch",
+    "narrower": "narrower",
+    "unresolved": "unresolved"
+  },
+  "required": {
+    "batch_ids": [],
+    "canonical_hash": "sha256:9b096432c472846bda308deeffda94838821b7010966a4681283fbbb3b998953",
+    "contrast_id": null,
+    "control_ids": [
+      "NTC"
+    ],
+    "dataset_id": "dataset",
+    "declared_compatibility_rules": [],
+    "donor_ids": [],
+    "dose": null,
+    "estimand": null,
+    "metadata": {},
+    "perturbation_ids": [
+      "KLF1"
+    ],
+    "replicate_ids": [],
+    "schema_version": "pertura-scope-v2",
+    "scope_id": "scope_b46526fa1d53758e45fe",
+    "state_ids": [
+      "state_a"
+    ],
+    "timepoint": null,
+    "unresolved_fields": []
+  },
+  "schema_version": "pertura-v020-scope-freeze-v1"
+}

@@ -6,12 +6,20 @@ from typing import Any
 
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
 from pertura_gate.evidence.registry import EvidenceRegistry
-from pertura_gate.core.policy import policy_for_profile
+from pertura_gate.core.policy import GatePolicy, policy_for_profile
 from pertura_gate.render.renderer import render_evidence_report
 from pertura_gate.resolver.resolver import resolve_artifact_strength, resolve_claims
+from pertura_workflow.method_router import route_analysis
+from pertura_workflow.runners.control_calibration import run_label_permutation_null, run_ntc_vs_ntc_calibration
+from pertura_workflow.runners.pseudobulk_de import run_pseudobulk_de_for_registered_contrast
+from pertura_workflow.runners.target_reliability import run_target_reliability_audit as run_target_reliability
 
 
-def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
+def create_evidence_mcp_server(
+    workspace: ClaudeRunWorkspace,
+    *,
+    policy: GatePolicy | None = None,
+):
     """Create the in-process MCP server for Pertura evidence tools.
 
     The import is intentionally local so the rest of Pertura remains importable in
@@ -21,6 +29,9 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
     from claude_agent_sdk import create_sdk_mcp_server, tool
 
     registry = EvidenceRegistry.for_run(workspace.root)
+    # Direct callers retain the historical smoke default for compatibility.
+    # The Claude runtime always injects an explicit immutable policy.
+    bound_policy = policy or policy_for_profile("smoke")
 
     @tool(
         "register_perturbation_design_manifest",
@@ -198,6 +209,8 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             "predicate": dict,
             "quality": dict,
             "eligibility": dict,
+            "code_sha256": str,
+            "execution_hash": str,
         },
     )
     async def register_measured_de_artifact(args: dict[str, Any]) -> dict[str, Any]:
@@ -218,6 +231,8 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             predicate=_optional_dict(args.get("predicate")),
             quality=_optional_dict(args.get("quality")),
             eligibility=_optional_dict(args.get("eligibility")),
+            code_sha256=_optional_text(args.get("code_sha256")),
+            execution_hash=_optional_text(args.get("execution_hash")),
         )
         return _registration_result(workspace, registry, artifact)
 
@@ -721,6 +736,48 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
         )
         return _registration_result(workspace, registry, artifact)
     @tool(
+        "register_control_calibration_artifact",
+        "Register control-calibration eligibility metadata such as NTC-vs-NTC and label-permutation null checks. This is eligibility evidence, not effect evidence.",
+        {
+            "path": str,
+            "calibration_type": str,
+            "scope": dict,
+            "negative_control_status": str,
+            "ntc_vs_ntc_check": dict,
+            "label_permutation_check": dict,
+            "alpha": float,
+            "n_features_tested": int,
+            "n_significant": int,
+            "method": str,
+            "execution_hash": str,
+            "quality": dict,
+            "metadata": dict,
+            "notes": str,
+            "code_sha256": str,
+        },
+    )
+    async def register_control_calibration_artifact(args: dict[str, Any]) -> dict[str, Any]:
+        path = _resolve_evidence_source_path(workspace, str(args.get("path") or ""))
+        artifact = registry.register_control_calibration(
+            path=str(path.relative_to(workspace.root)),
+            calibration_type=_optional_text(args.get("calibration_type")),
+            scope=_optional_dict(args.get("scope")),
+            negative_control_status=_optional_text(args.get("negative_control_status")),
+            ntc_vs_ntc_check=_optional_dict(args.get("ntc_vs_ntc_check")),
+            label_permutation_check=_optional_dict(args.get("label_permutation_check")),
+            alpha=_optional_float(args.get("alpha")),
+            n_features_tested=_optional_int(args.get("n_features_tested")),
+            n_significant=_optional_int(args.get("n_significant")),
+            method=_optional_text(args.get("method")),
+            execution_hash=_optional_text(args.get("execution_hash")),
+            quality=_optional_dict(args.get("quality")),
+            metadata=_optional_dict(args.get("metadata")),
+            notes=_optional_text(args.get("notes")),
+            code_sha256=_optional_text(args.get("code_sha256")),
+        )
+        return _registration_result(workspace, registry, artifact)
+
+    @tool(
         "register_replication_artifact",
         "Register a conservative replication summary from already-registered measured artifact IDs only.",
         {
@@ -738,27 +795,132 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
         return _registration_result(workspace, registry, artifact)
 
     @tool(
+        "route_analysis_method",
+        "Route explicit Perturb-seq design facts to a conservative analysis family. This does not execute analysis or raise claim strength.",
+        {"objective": str, "design": dict},
+    )
+    async def route_analysis_method(args: dict[str, Any]) -> dict[str, Any]:
+        return route_analysis(_optional_dict(args.get("design")), objective=str(args.get("objective") or "measured_effect"))
+
+    @tool(
+        "run_target_reliability_audit",
+        "Run the trusted per-target reliability diagnostic over explicit metadata and a wide target-expression CSV.",
+        {
+            "expression_csv": str, "metadata_csv": str, "target_uid": str,
+            "control_uid": str, "target": str, "target_gene": str, "layer": str,
+            "output_path": str, "cell_id_column": str, "condition_column": str,
+            "guide_column": str, "batch_column": str, "replicate_column": str,
+            "expected_direction": str, "layer_scale": str, "perturbation_modality": str,
+            "minimum_cells": int, "minimum_guides": int,
+        },
+    )
+    async def run_target_reliability_audit_tool(args: dict[str, Any]) -> dict[str, Any]:
+        return run_target_reliability(
+            workspace.root,
+            expression_csv=str(args.get("expression_csv") or ""),
+            metadata_csv=str(args.get("metadata_csv") or ""),
+            target_uid=str(args.get("target_uid") or ""),
+            control_uid=str(args.get("control_uid") or ""),
+            target=str(args.get("target") or ""),
+            target_gene=str(args.get("target_gene") or ""),
+            layer=str(args.get("layer") or ""),
+            output_path=_optional_text(args.get("output_path")),
+            cell_id_column=_optional_text(args.get("cell_id_column")) or "cell_id",
+            condition_column=_optional_text(args.get("condition_column")) or "perturbation_uid",
+            guide_column=_optional_text(args.get("guide_column")),
+            batch_column=_optional_text(args.get("batch_column")),
+            replicate_column=_optional_text(args.get("replicate_column")),
+            expected_direction=_optional_text(args.get("expected_direction")) or "down",
+            layer_scale=_optional_text(args.get("layer_scale")) or "log_normalized",
+            perturbation_modality=_optional_text(args.get("perturbation_modality")) or "crispri",
+            minimum_cells=_optional_int(args.get("minimum_cells")) or 20,
+            minimum_guides=_optional_int(args.get("minimum_guides")) or 2,
+        )
+
+    @tool(
+        "run_pseudobulk_de",
+        "Run the trusted narrow pseudobulk DE runner for an explicit registered contrast. Register its output separately as measured evidence.",
+        {
+            "expression_csv": str, "metadata_csv": str, "contrast_uid": str,
+            "left_uid": str, "baseline_uid": str, "replicate_column": str,
+            "layer": str, "output_path": str, "cell_id_column": str,
+            "condition_column": str, "gene_columns": list,
+        },
+    )
+    async def run_pseudobulk_de(args: dict[str, Any]) -> dict[str, Any]:
+        return run_pseudobulk_de_for_registered_contrast(
+            workspace.root,
+            expression_csv=str(args.get("expression_csv") or ""),
+            metadata_csv=str(args.get("metadata_csv") or ""),
+            contrast_uid=str(args.get("contrast_uid") or ""),
+            left_uid=str(args.get("left_uid") or ""),
+            baseline_uid=str(args.get("baseline_uid") or ""),
+            replicate_column=str(args.get("replicate_column") or ""),
+            layer=str(args.get("layer") or ""),
+            output_path=_optional_text(args.get("output_path")),
+            cell_id_column=_optional_text(args.get("cell_id_column")) or "cell_id",
+            condition_column=_optional_text(args.get("condition_column")) or "perturbation_uid",
+            gene_columns=[str(item) for item in args.get("gene_columns") or []] or None,
+        )
+
+    @tool(
+        "run_ntc_control_calibration",
+        "Run trusted NTC-vs-NTC null calibration and record it in the canonical execution ledger.",
+        {"expression_csv": str, "metadata_csv": str, "control_uid": str, "layer": str, "condition_column": str, "gene_columns": list, "alpha": float, "seed": int},
+    )
+    async def run_ntc_control_calibration(args: dict[str, Any]) -> dict[str, Any]:
+        return run_ntc_vs_ntc_calibration(
+            workspace.root,
+            expression_csv=str(args.get("expression_csv") or ""),
+            metadata_csv=str(args.get("metadata_csv") or ""),
+            control_uid=str(args.get("control_uid") or ""),
+            layer=str(args.get("layer") or ""),
+            condition_column=_optional_text(args.get("condition_column")) or "perturbation_uid",
+            gene_columns=[str(item) for item in args.get("gene_columns") or []] or None,
+            alpha=float(args.get("alpha") or 0.05),
+            seed=int(args.get("seed") or 0),
+        )
+
+    @tool(
+        "run_label_permutation_calibration",
+        "Run trusted label-permutation null calibration and record it in the canonical execution ledger.",
+        {"expression_csv": str, "metadata_csv": str, "contrast_uid": str, "left_uid": str, "baseline_uid": str, "layer": str, "condition_column": str, "gene_columns": list, "alpha": float, "seed": int},
+    )
+    async def run_label_permutation_calibration(args: dict[str, Any]) -> dict[str, Any]:
+        return run_label_permutation_null(
+            workspace.root,
+            expression_csv=str(args.get("expression_csv") or ""),
+            metadata_csv=str(args.get("metadata_csv") or ""),
+            contrast_uid=str(args.get("contrast_uid") or ""),
+            left_uid=str(args.get("left_uid") or ""),
+            baseline_uid=str(args.get("baseline_uid") or ""),
+            layer=str(args.get("layer") or ""),
+            condition_column=_optional_text(args.get("condition_column")) or "perturbation_uid",
+            gene_columns=[str(item) for item in args.get("gene_columns") or []] or None,
+            alpha=float(args.get("alpha") or 0.05),
+            seed=int(args.get("seed") or 0),
+        )
+
+    @tool(
         "evaluate_claims",
         "Evaluate explicit scientific claims against the registered evidence registry and return ClaimDecision objects.",
         {
             "claims": list,
             "claims_json_path": str,
-            "decisions_filename": str,
-            "policy_profile": str,
         },
     )
     async def evaluate_claims(args: dict[str, Any]) -> dict[str, Any]:
         claims = _load_claims(workspace, args)
-        policy = policy_for_profile(str(args.get("policy_profile") or "smoke"))
-        decisions = resolve_claims(claims, registry, policy=policy)
+        _reject_policy_override(args)
+        decisions = resolve_claims(claims, registry, policy=bound_policy)
         decisions_payload = [decision.to_dict() for decision in decisions]
-        decisions_filename = _optional_text(args.get("decisions_filename"))
-        output_path = _write_claim_decisions(workspace, decisions_payload, decisions_filename or "claim_decisions.json")
+        output_path = _write_claim_decisions(workspace, decisions_payload, "claim_decisions.json")
         return {
             "success": True,
             "decisions": decisions_payload,
             "decisions_path": str(output_path.relative_to(workspace.root)) if output_path else None,
             "policy_hash": decisions_payload[0]["policy_hash"] if decisions_payload else None,
+            "policy_profile": bound_policy.profile,
         }
 
     @tool(
@@ -770,7 +932,6 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             "claims_json_path": str,
             "title": str,
             "report_filename": str,
-            "policy_profile": str,
         },
     )
     async def render_report(args: dict[str, Any]) -> dict[str, Any]:
@@ -778,14 +939,14 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
         report_path = _resolve_report_path(workspace, report_filename)
         artifact_ids = [str(item) for item in args.get("artifact_ids") or []]
         claims = _load_claims(workspace, args, required=False)
-        policy = policy_for_profile(str(args.get("policy_profile") or "smoke"))
+        _reject_policy_override(args)
         report = render_evidence_report(
             registry=registry,
             artifact_ids=artifact_ids or None,
             claims=claims or None,
             title=str(args.get("title") or "Pertura Evidence Report"),
             write_path=report_path,
-            policy=policy,
+            policy=bound_policy,
         )
         decisions_payload = [decision.to_dict() for decision in report.decisions]
         decisions_path = _write_claim_decisions(workspace, decisions_payload, "claim_decisions.json") if decisions_payload else None
@@ -796,6 +957,8 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             "resolutions": [resolution.to_dict() for resolution in report.resolutions],
             "decisions": decisions_payload,
             "markdown_preview": report.markdown[:2000],
+            "policy_profile": bound_policy.profile,
+            "policy_hash": bound_policy.policy_hash,
             "next_step": "Use reports/evidence_report.md as the scientific surface. Do not re-evaluate claims unless the claims or registry change.",
         }
 
@@ -820,12 +983,24 @@ def create_evidence_mcp_server(workspace: ClaudeRunWorkspace):
             register_composition_effect_artifact,
             register_cell_state_reference_artifact,
             register_cell_qc_artifact,
+            register_control_calibration_artifact,
             register_replication_artifact,
+            route_analysis_method,
+            run_target_reliability_audit_tool,
+            run_pseudobulk_de,
+            run_ntc_control_calibration,
+            run_label_permutation_calibration,
             evaluate_claims,
             render_report,
         ],
     )
 
+
+def _reject_policy_override(args: dict[str, Any]) -> None:
+    if args.get("policy_profile") not in (None, ""):
+        raise ValueError(
+            "policy_profile is runtime-owned and cannot be selected by an MCP tool call"
+        )
 
 
 def _write_registration_handoff(workspace: ClaudeRunWorkspace, payload: dict[str, Any]) -> None:

@@ -1,0 +1,17 @@
+name: pertura-perturbseq-python-v1
+channels:
+  - conda-forge
+channel_priority: strict
+dependencies:
+  - python=3.12
+  - pip
+  - numpy=2.1
+  - pandas=2.2
+  - scipy=1.15
+  - scikit-learn=1.6
+  - pyarrow=19
+  - python-igraph=0.11.8
+  - leidenalg=0.10.2
+  - pip:
+      - pertpy==1.1.1
+      - scrublet==0.2.3

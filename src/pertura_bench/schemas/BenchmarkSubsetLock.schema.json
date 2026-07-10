@@ -1,0 +1,61 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "n_cells": {
+      "exclusiveMinimum": 0,
+      "title": "N Cells",
+      "type": "integer"
+    },
+    "n_genes": {
+      "exclusiveMinimum": 0,
+      "title": "N Genes",
+      "type": "integer"
+    },
+    "output_sha256": {
+      "title": "Output Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "pertura-benchmark-subset-lock-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_lock_hash": {
+      "title": "Source Lock Hash",
+      "type": "string"
+    },
+    "subset_lock_id": {
+      "default": "",
+      "title": "Subset Lock Id",
+      "type": "string"
+    },
+    "subset_script_hash": {
+      "title": "Subset Script Hash",
+      "type": "string"
+    },
+    "subset_spec_hash": {
+      "title": "Subset Spec Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "subset_spec_hash",
+    "source_lock_hash",
+    "output_sha256",
+    "n_cells",
+    "n_genes",
+    "subset_script_hash"
+  ],
+  "title": "BenchmarkSubsetLock",
+  "type": "object"
+}

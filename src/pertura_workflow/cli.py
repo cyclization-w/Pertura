@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import warnings
 from pathlib import Path
 from uuid import uuid4
 
@@ -45,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     explain.add_argument("--format", choices=["json", "markdown"], default="markdown")
     explain.add_argument("--out", type=Path, default=None)
     explain.add_argument("--run-manifest", type=Path, default=None)
-    explain.add_argument("--policy-profile", choices=["smoke", "strict", "paper"], default="smoke")
+    explain.add_argument("--policy-profile", choices=["smoke", "strict", "paper"], default="strict")
 
     args = parser.parse_args(argv)
     if args.command == "preflight":
@@ -57,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         _maybe_write_run_manifest(args, [WorkflowRunStep("preflight", "passed", output_paths=_paths(args.out))], policy=policy)
         return 0
     if args.command == "harvest":
+        warnings.warn("harvest is available only as a deprecated legacy compatibility path", DeprecationWarning, stacklevel=2)
         policy = policy_for_profile(args.policy_profile)
         report = harvest_artifacts_from_workspace(args.workspace, mode=args.mode, registry_path=args.registry)
         payload = report.to_dict()
@@ -65,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         _maybe_write_run_manifest(args, [WorkflowRunStep("harvest", "passed", output_paths=_paths(args.out), notes=report.reasons)], policy=policy)
         return 0
     if args.command == "recommend-next":
+        warnings.warn("recommend-next is a deprecated legacy compatibility path", DeprecationWarning, stacklevel=2)
         policy = policy_for_profile(args.policy_profile)
         preflight_report = preflight_workspace(args.workspace, mode=args.interaction_mode)
         goals = recommend_next_evidence(preflight_report)
@@ -77,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         _maybe_write_run_manifest(args, [WorkflowRunStep("recommend_next", "passed", output_paths=_paths(args.out))], policy=policy)
         return 0
     if args.command == "recipe" and args.recipe_name == "classic":
+        warnings.warn("classic recipe is frozen as a legacy regression fixture", DeprecationWarning, stacklevel=2)
         policy = policy_for_profile(args.policy_profile)
         result = run_classic_perturbseq(args.workspace, mode=args.interaction_mode, harvest_mode=args.harvest_mode, policy=policy)
         payload = result.to_dict()
@@ -101,7 +105,7 @@ def _add_workspace_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--format", choices=["json", "markdown"], default="json")
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--run-manifest", type=Path, default=None)
-    parser.add_argument("--policy-profile", choices=["smoke", "strict", "paper"], default="smoke")
+    parser.add_argument("--policy-profile", choices=["smoke", "strict", "paper"], default="strict")
 
 
 def _write_or_print(text: str, path: Path | None) -> None:

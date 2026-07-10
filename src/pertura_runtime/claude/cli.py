@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import warnings
 from pathlib import Path
 
 from pertura_runtime.claude.agent import ClaudePerturaAgent
@@ -21,6 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", type=str, default=None, help="Claude model name.")
     parser.add_argument("--python-exe", type=str, default=None, help="Scientific Python executable for Claude CodeAct analysis. Defaults to PERTURA_PYTHON or the current interpreter.")
     parser.add_argument("--python-preflight-timeout-s", type=float, default=240.0, help="Timeout for scientific Python preflight imports.")
+    parser.add_argument("--python-preflight-packages", type=str, default=None, help="Comma-separated Python packages to require during preflight. Defaults are stage-aware.")
     parser.add_argument(
         "--permission-mode",
         choices=["default", "acceptEdits", "plan", "dontAsk", "bypassPermissions"],
@@ -30,6 +32,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-turns", type=int, default=20, help="Maximum Claude agent turns.")
     parser.add_argument("--interaction-mode", choices=["benchmark", "interactive"], default="benchmark", help="Benchmark mode never asks the user; interactive mode may collect metadata as user-supplied metadata only.")
     parser.add_argument("--stage", type=str, default=None, help="Run exactly one Evidence-Aware Stage Catalog stage by id.")
+    parser.add_argument(
+        "--tool-surface",
+        choices=["capability", "legacy"],
+        default="capability",
+        help="Default capability surface exposes exactly five Pertura tools. Legacy registrars are deprecated.",
+    )
+    parser.add_argument(
+        "--policy",
+        dest="policy_profile",
+        choices=["strict", "paper", "smoke"],
+        default="strict",
+        help="Run-level claim policy. Defaults to strict; smoke is fixture/debug only.",
+    )
     parser.add_argument("--max-budget-usd", type=float, default=None, help="Optional budget cap.")
     parser.add_argument("--task", type=str, default=None, help="Task prompt. Defaults to Norman smoke task.")
     parser.add_argument("--task-file", type=Path, default=None, help="Read task prompt from file.")
@@ -41,6 +56,8 @@ def main(argv: list[str] | None = None) -> int:
         help="Do not disallow WebFetch/WebSearch. Default blocks web tools for local smoke tests.",
     )
     args = parser.parse_args(argv)
+    if args.tool_surface == "legacy":
+        warnings.warn("The legacy registrar/stage tool surface is deprecated and read-compatibility only.", DeprecationWarning, stacklevel=2)
     try:
         stage_id = validate_stage_id(args.stage)
     except StageCatalogError as exc:
@@ -65,8 +82,11 @@ def main(argv: list[str] | None = None) -> int:
         disallowed_tools=[] if args.allow_web else ["WebFetch", "WebSearch"],
         python_exe=args.python_exe,
         python_preflight_timeout_s=args.python_preflight_timeout_s,
+        python_preflight_packages=[item.strip() for item in args.python_preflight_packages.split(",") if item.strip()] if args.python_preflight_packages else None,
         interaction_mode=args.interaction_mode,
         stage_id=stage_id,
+        policy_profile=args.policy_profile,
+        tool_surface=args.tool_surface,
     )
     agent = ClaudePerturaAgent(
         workspace=workspace,

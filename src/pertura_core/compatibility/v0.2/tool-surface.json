@@ -1,0 +1,109 @@
+{
+  "contracts": {
+    "evaluate_virtual_model": {
+      "input": {
+        "capability_id": "string",
+        "contract_id": "string",
+        "parameters": "object",
+        "scope": "object"
+      },
+      "output": {
+        "required": [
+          "result_id",
+          "receipt_id",
+          "status",
+          "blockers",
+          "cautions",
+          "summary",
+          "output_paths",
+          "scope_id",
+          "not_implemented_capabilities"
+        ]
+      }
+    },
+    "finalize_report": {
+      "input": {
+        "run_id": "string"
+      },
+      "output": {
+        "required": [
+          "run_id",
+          "status",
+          "result_count",
+          "report_paths",
+          "root_digest",
+          "promotion_decision_count"
+        ]
+      }
+    },
+    "inspect_dataset": {
+      "input": {
+        "confirmations": "object",
+        "dataset_id": "string",
+        "path": "string"
+      },
+      "output": {
+        "required": [
+          "contract_id",
+          "contract_hash",
+          "dataset_id",
+          "format",
+          "version",
+          "unresolved_fields",
+          "contract_path"
+        ]
+      }
+    },
+    "run_analysis": {
+      "input": {
+        "capability_id": "string",
+        "contract_id": "string",
+        "dependencies": "array",
+        "objective": "string",
+        "parameters": "object",
+        "scope": "object"
+      },
+      "output": {
+        "required": [
+          "result_id",
+          "receipt_id",
+          "status",
+          "blockers",
+          "cautions",
+          "summary",
+          "output_paths",
+          "scope_id"
+        ]
+      }
+    },
+    "run_diagnostic": {
+      "input": {
+        "capability_id": "string",
+        "contract_id": "string",
+        "dependencies": "array",
+        "parameters": "object",
+        "scope": "object"
+      },
+      "output": {
+        "required": [
+          "result_id",
+          "receipt_id",
+          "status",
+          "blockers",
+          "cautions",
+          "summary",
+          "output_paths",
+          "scope_id"
+        ]
+      }
+    }
+  },
+  "schema_version": "pertura-v020-tool-freeze-v1",
+  "tool_names": [
+    "inspect_dataset",
+    "run_diagnostic",
+    "run_analysis",
+    "evaluate_virtual_model",
+    "finalize_report"
+  ]
+}

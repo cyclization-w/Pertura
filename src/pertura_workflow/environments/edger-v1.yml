@@ -1,0 +1,11 @@
+name: pertura-edger-v1
+channels:
+  - conda-forge
+  - bioconda
+channel_priority: strict
+dependencies:
+  - r-base=4.5.3
+  - r-biocmanager=1.30.27
+  - r-jsonlite=2.0.0
+  - r-matrix=1.7
+  - r-renv=1.1

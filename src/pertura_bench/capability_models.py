@@ -1,0 +1,160 @@
+from __future__ import annotations
+
+from typing import Any, Literal
+
+from pydantic import Field, model_validator
+
+from pertura_core.models import CanonicalModel
+
+
+BenchmarkTier = Literal["unit", "synthetic_ci", "frozen_subset", "full_dataset"]
+BenchmarkOutcome = Literal[
+    "passed",
+    "failed",
+    "not_available",
+    "not_run_environment_missing",
+]
+
+
+class CapabilityBenchmarkMetric(CanonicalModel):
+    schema_version: str = "pertura-capability-benchmark-metric-v1"
+    metric_id: str = ""
+    id_field = "metric_id"
+    id_prefix = "benchmetric"
+
+    name: str
+    operator: Literal["eq", "lte", "gte"]
+    threshold: float | int | str
+    observed: float | int | str | None = None
+    passed: bool | None = None
+
+
+class CapabilityBenchmarkCase(CanonicalModel):
+    schema_version: str = "pertura-capability-benchmark-case-v1"
+    case_id: str = ""
+    id_field = "case_id"
+    id_prefix = "benchcase"
+
+    capability_id: str
+    capability_version: str
+    tier: BenchmarkTier
+    scenario: str
+    fixture_id: str
+    seed: int = 1729
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    expected_status: str | None = None
+    expected_blockers: tuple[str, ...] = ()
+    required_outputs: tuple[str, ...] = ()
+    metrics: tuple[CapabilityBenchmarkMetric, ...] = ()
+    environment_profile: str | None = None
+    max_memory_gb: float = Field(default=4.0, gt=0)
+    timeout_seconds: int = Field(default=900, gt=0)
+    dataset_id: str | None = None
+
+    @model_validator(mode="after")
+    def _portable(self) -> "CapabilityBenchmarkCase":
+        for value in (self.fixture_id, self.dataset_id or ""):
+            if value.startswith("/") or (len(value) > 2 and value[1:3] in {":\\", ":/"}):
+                raise ValueError("benchmark case identities cannot contain absolute paths")
+        return self
+
+
+class CapabilityBenchmarkSpec(CanonicalModel):
+    schema_version: str = "pertura-capability-benchmark-spec-v1"
+    benchmark_spec_id: str = ""
+    id_field = "benchmark_spec_id"
+    id_prefix = "capbenchspec"
+
+    capability_id: str
+    capability_version: str
+    cases: tuple[CapabilityBenchmarkCase, ...]
+    required_real_datasets: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _consistent(self) -> "CapabilityBenchmarkSpec":
+        if any(
+            case.capability_id != self.capability_id
+            or case.capability_version != self.capability_version
+            for case in self.cases
+        ):
+            raise ValueError("capability benchmark spec contains a case for another capability")
+        return self
+
+
+class CapabilityBenchmarkVerdict(CanonicalModel):
+    schema_version: str = "pertura-capability-benchmark-verdict-v1"
+    verdict_id: str = ""
+    id_field = "verdict_id"
+    id_prefix = "capbenchverdict"
+
+    case_id: str
+    capability_id: str
+    capability_version: str
+    tier: BenchmarkTier
+    outcome: BenchmarkOutcome
+    observed_status: str | None = None
+    observed_blockers: tuple[str, ...] = ()
+    metrics: tuple[CapabilityBenchmarkMetric, ...] = ()
+    input_hashes: dict[str, str] = Field(default_factory=dict)
+    output_hashes: dict[str, str] = Field(default_factory=dict)
+    runner_hash: str | None = None
+    environment_lock_hash: str | None = None
+    reasons: tuple[str, ...] = ()
+    runtime_seconds: float | None = None
+    peak_memory_mb: float | None = None
+
+
+class CapabilityCoverageEntry(CanonicalModel):
+    schema_version: str = "pertura-capability-coverage-entry-v1"
+    coverage_entry_id: str = ""
+    id_field = "coverage_entry_id"
+    id_prefix = "capcoverage"
+
+    capability_id: str
+    capability_version: str
+    code_ready: bool
+    local_fixture_ready: bool
+    environment_ready: bool | None = None
+    real_benchmark_ready: bool = False
+    synthetic_case_ids: tuple[str, ...] = ()
+    required_real_datasets: tuple[str, ...] = ()
+    blockers: tuple[str, ...] = ()
+
+
+class CapabilityBenchmarkMatrix(CanonicalModel):
+    schema_version: str = "pertura-capability-benchmark-matrix-v1"
+    matrix_id: str = ""
+    id_field = "matrix_id"
+    id_prefix = "capmatrix"
+
+    entries: tuple[CapabilityCoverageEntry, ...]
+    code_ready: bool
+    local_fixture_ready: bool
+    real_benchmark_ready: bool
+    release_ready: bool = False
+
+    @model_validator(mode="after")
+    def _derived_flags(self) -> "CapabilityBenchmarkMatrix":
+        if self.code_ready != all(item.code_ready for item in self.entries):
+            raise ValueError("matrix code_ready disagrees with coverage entries")
+        if self.local_fixture_ready != all(item.local_fixture_ready for item in self.entries):
+            raise ValueError("matrix local_fixture_ready disagrees with coverage entries")
+        if self.real_benchmark_ready != all(item.real_benchmark_ready for item in self.entries):
+            raise ValueError("matrix real_benchmark_ready disagrees with coverage entries")
+        if self.release_ready and not self.real_benchmark_ready:
+            raise ValueError("release cannot be ready without real-data benchmark coverage")
+        return self
+
+
+class ServerBenchmarkPlan(CanonicalModel):
+    schema_version: str = "pertura-server-benchmark-plan-v1"
+    plan_id: str = ""
+    id_field = "plan_id"
+    id_prefix = "serverbench"
+
+    jobs: tuple[dict[str, Any], ...]
+    datasets: tuple[str, ...]
+    scheduler: Literal["neutral"] = "neutral"
+    retry_policy: dict[str, Any] = Field(
+        default_factory=lambda: {"max_attempts": 2, "retry_on": ["timeout", "worker_lost"]}
+    )

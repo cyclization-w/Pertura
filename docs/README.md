@@ -20,6 +20,10 @@ docs/
   09_roadmap_and_boundaries.md
   10_p2_workflow_implementation_plan.md
   11_stage_skill_system.md
+  12_predicate_warrant_closure.md
+  13_product_pivot.md
+  14_capability_first_product_architecture.md
+  15_v020_implementation_status.md
   appendix/
     source_map.md
 ```
@@ -34,17 +38,21 @@ docs/
 6. Read `09_roadmap_and_boundaries.md` for the current stage boundaries.
 7. Read `10_p2_workflow_implementation_plan.md` before implementing P2 workflow changes.
 8. Read `11_stage_skill_system.md` for the fixed soft-stage / hard-gate design.
-9. Read `results/p0_p1_experiment_summary.md` for the compact saved result table.
-10. Read `results/p1_freeze_summary.md` for the frozen paper-facing P1 table.
+9. Read `12_predicate_warrant_closure.md` for the completed Smoke 13 predicate/warrant closure.
+10. Read `results/p2_core_freeze_summary.md` for the current frozen architecture before adding external wrappers.
+11. Read `results/p0_p1_experiment_summary.md` for the compact saved result table.
+12. Read `results/p1_freeze_summary.md` for the frozen paper-facing P1 table.
+13. Read `14_capability_first_product_architecture.md` for the capability-first hard invariants.
+14. Read `15_v020_implementation_status.md` for the implemented alpha surface and non-bypassable release blockers.
 
 ## Current Status
 
 P0.6, P0.7, P1.1, P1.2, and P1.3 are implemented for the current submission-oriented evidence lattice.
 
-Latest full test result recorded after P2.1 workflow freeze:
+Latest full test result for the capability-first alpha implementation:
 
 ```text
-139 passed
+316 passed at the 0.2.0a3 capability-completion checkpoint; run pytest for the current total
 ```
 
-P1 should be treated as implementation-complete for the current lattice. P2.0 workflow substrate and P2.1 classic guide-based workflow are implemented and frozen with deterministic GateBench fixtures. The next phase is P2.2 modality expansion.
+P1 should be treated as implementation-complete for the current lattice. P2.0 workflow substrate and P2.1 classic guide-based workflow are implemented and frozen with deterministic GateBench fixtures. The Smoke 13 predicate/warrant closure is implemented, and the current pre-wrapper baseline is frozen in `results/p2_core_freeze_summary.md`. Future P2 extensions and external wrappers should follow `docs/extensions/extension_interface.md`.

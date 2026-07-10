@@ -1,0 +1,43 @@
+{
+    "stage_id": "prediction_measured_concordance",
+    "stage_role": "prediction_context",
+    "evidence_role": "prediction_measured_concordance",
+    "evidence_producing": true,
+    "turn_final_surface_type": "evidence_summary",
+    "allowed_mcp_tools": [
+        "mcp__pertura_evidence__register_prediction_measured_concordance_artifact"
+    ],
+    "required_outputs": [
+        "outputs/prediction_measured_concordance_summary.json"
+    ],
+    "optional_outputs": [
+        "outputs/concordance_table.csv",
+        "outputs/plots/*"
+    ],
+    "can_support": [
+        "predicted_effect_context"
+    ],
+    "must_not_support": [
+        "measured_association_created_by_concordance",
+        "validated_mechanism",
+        "model_validation_as_mechanism"
+    ],
+    "failure_modes": [
+        "missing_prediction_artifact_id",
+        "missing_measured_artifact_id",
+        "scope_mismatch",
+        "missing_metric_metadata",
+        "tool_or_code_error"
+    ],
+    "next_stage_recommendations": [
+        "claim_report"
+    ],
+    "benchmark_expectations": [
+        "stage_completion",
+        "artifact_registration_correct",
+        "metadata_completeness",
+        "stage_boundary_respected",
+        "exploration_not_surfaced",
+        "next_stage_recommendation_correct"
+    ]
+}

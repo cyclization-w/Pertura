@@ -4,17 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pertura"
-version = "0.1.0"
+version = "0.2.0a3"
 description = "Execution-grounded evidence runtime for Perturb-seq CodeAct agents."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Pertura Team" }]
 dependencies = [
   "pydantic>=2",
+  "PyYAML>=6",
+  "cryptography>=42",
 ]
 
 [project.scripts]
-pertura = "pertura_workflow.cli:main"
+pertura = "pertura_runtime.product_cli:main"
 pertura-claude = "pertura_runtime.claude.cli:main"
 
 [project.optional-dependencies]
@@ -29,9 +31,15 @@ omics = [
   "pandas>=2",
   "numpy>=1.24",
   "matplotlib>=3.8",
+  "mudata>=0.3",
+  "scipy>=1.11",
+  "scikit-learn>=1.4",
+  "python-igraph>=0.11",
+  "leidenalg>=0.10",
+  "pyarrow>=15",
 ]
 perturbseq = [
-  "pertpy>=0.10",
+  "pertpy==1.1.1",
   "decoupler>=2",
   "gseapy>=1.1",
   "gprofiler-official>=1.0",
@@ -49,9 +57,20 @@ llm = [
 dev = [
   "pytest>=8",
 ]
+dashboard = [
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"pertura_workflow.capabilities" = ["specs/*.yaml", "profiles/*.yaml", "runners/*.R"]
+"pertura_workflow" = ["environments/*.yml", "environments/*.R"]
+"pertura_runtime" = ["dashboard_static/**/*"]
+"pertura_bench" = ["runners/*.R", "schemas/*.json"]
+"pertura_core" = ["compatibility/v0.2/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

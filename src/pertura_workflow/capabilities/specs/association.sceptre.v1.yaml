@@ -1,0 +1,27 @@
+schema_version: pertura-capability-spec-v2
+capability_id: association.sceptre.v1
+version: "0.1.0"
+phase: 5
+kind: analysis
+summary: Run calibrated high-MOI guide-response association with SCEPTRE.
+trust_level: exploratory
+executor: sceptre_association
+validator: candidate_standard
+input_requirements: [high_moi_counts, guide_map, discovery_pairs]
+depends_on: [screen.retained_cells.v1, diagnostic.design_balance.v1]
+dependency_kinds: [contract, retained_cell_manifest, design_balance]
+output_kind: conditional_association
+source_class: measured_result
+claim_permissions: []
+timeout_seconds: 7200
+parameters_schema:
+  type: object
+  properties:
+    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
+    n_jobs: {type: integer, default: 1, minimum: 1}
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true
+  environment_profile: sceptre-v1
+  method_version: sceptre-0.99.0

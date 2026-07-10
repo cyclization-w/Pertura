@@ -9,6 +9,7 @@ from pertura_gate.core.schema import ScopeFit
 
 MANIFEST_SCOPE_KEYS = {"design_manifest_id", "perturbation_uid", "control_uid", "contrast_uid", "estimand"}
 CONTROL_TOKENS = {"ntc", "non_targeting", "nontargeting", "non-targeting", "negative_control", "negativecontrol", "safe_targeting", "safe-targeting", "mock", "vehicle", "dmso", "untreated"}
+CONTROL_PREFIXES = ("negctrl", "ntc", "non_targeting", "nontargeting", "negative_control", "negativecontrol", "safe_targeting", "mock", "vehicle", "dmso", "untreated")
 
 
 @dataclass(frozen=True)
@@ -190,6 +191,22 @@ def build_guide_label_manifest(
                 estimand="combinatorial" if parsed["kind"] == "combinatorial" else "single_target_marginal",
             )
 
+    if control_uid in perturbations:
+        for uid, identity in list(perturbations.items()):
+            if uid == control_uid or identity.kind == "control":
+                continue
+            contrast_uid = contrast_uid_for(uid, control_uid)
+            contrasts.setdefault(
+                contrast_uid,
+                ContrastIdentity(
+                    contrast_uid=contrast_uid,
+                    left_uid=uid,
+                    baseline_uid=control_uid,
+                    contrast_type="combinatorial_vs_control" if identity.kind == "combinatorial" else "target_vs_control",
+                    estimand="combinatorial" if identity.kind == "combinatorial" else "single_target_marginal",
+                ),
+            )
+
     return PerturbationDesignManifest(
         manifest_id=manifest_id,
         dataset_id=dataset_id,
@@ -295,6 +312,17 @@ def parse_guide_label(raw_label: str, *, guide_to_target_map: dict[str, str] | N
             }
     parts = [part for part in raw.split("__") if part]
     core = parts[0] if parts else raw
+    if _looks_like_control_label(core):
+        return {
+            "perturbation_uid": "control:negative_control_pool",
+            "perturbation_type": "control_pool",
+            "modality": "guide_based",
+            "kind": "control",
+            "targets": [],
+            "inferred_control_uid": None,
+            "parse_rule": "guide_label_v1:control_alias",
+            "confidence": 1.0,
+        }
     raw_tokens = [token for token in re.split(r"[_\s+/;-]+", core) if token]
     targets: list[str] = []
     control_seen = False
@@ -493,6 +521,12 @@ def _gene_token(value: str) -> str | None:
 def _is_control_label(value: str) -> bool:
     token = str(value).strip().lower().replace("-", "_")
     return token.startswith("negctrl") or token in CONTROL_TOKENS
+
+
+def _looks_like_control_label(value: str) -> bool:
+    token = str(value).strip().lower().replace("-", "_")
+    token = re.sub(r"[^a-z0-9_]+", "_", token).strip("_")
+    return any(token == prefix or token.startswith(prefix + "_") or re.fullmatch(prefix + r"\d+", token) for prefix in CONTROL_PREFIXES)
 
 
 def _control_role(value: str) -> str | None:

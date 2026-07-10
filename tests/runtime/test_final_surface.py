@@ -26,16 +26,16 @@ def test_claude_prompt_files_are_written(tmp_path: Path) -> None:
     workspace = ClaudeRunWorkspace.create(root=tmp_path, run_id="run1")
     prompt = write_prompt_files(workspace, task="Inspect data")
 
-    assert "evidence-gated" in prompt
+    assert "capability-first" in prompt
     assert (workspace.task_dir / "PERTURA_TASK.md").read_text(encoding="utf-8") == "Inspect data"
     contract = (workspace.task_dir / "PERTURA_OUTPUT_CONTRACT.md").read_text(encoding="utf-8")
-    assert "outputs/analysis_notes.md" in contract
-    assert "reports/evidence_report.md" in contract
-    assert "register_measured_de_artifact" in contract
-    assert "Keep stdout compact" in contract
-    assert "Do not read back large persisted SDK tool-result files" in contract
-    assert "Local-evidence discipline" in contract
-    assert "not observed in local files" in contract
+    assert "inspect_dataset" in contract
+    assert "run_diagnostic" in contract
+    assert "run_analysis" in contract
+    assert "evaluate_virtual_model" in contract
+    assert "finalize_report" in contract
+    assert "CodeAct remains available" in contract
+    assert "independent verifier" in contract
     helper = workspace.task_dir / "helpers" / "policy_threshold_probe.py"
     assert helper.exists()
     assert "policy_threshold_probe_ok" in helper.read_text(encoding="utf-8")
@@ -172,7 +172,7 @@ def test_prompt_includes_resolved_python_environment(tmp_path: Path) -> None:
     assert "Do not use bare `python`" in prompt
     assert "pertura_python_self_check_ok" in prompt
     assert "memorized/public dataset knowledge" in prompt
-    assert "render_evidence_report" in prompt
+    assert "finalize_report" in prompt
     assert "not observed in local files" in prompt
 
 
@@ -224,8 +224,9 @@ def test_default_claude_options_autoapprove_codeact_tools() -> None:
     assert "Bash" in config.allowed_tools
     assert "Read" in config.allowed_tools
     assert "Write" in config.allowed_tools
-    assert "mcp__pertura_evidence__register_measured_de_artifact" in config.allowed_tools
-    assert "mcp__pertura_evidence__render_evidence_report" in config.allowed_tools
+    assert "mcp__pertura__inspect_dataset" in config.allowed_tools
+    assert "mcp__pertura__finalize_report" in config.allowed_tools
+    assert len([item for item in config.allowed_tools if item.startswith("mcp__pertura__")]) == 5
 
 
 
@@ -456,15 +457,16 @@ def test_runtime_final_renders_existing_decisions_and_manifest(tmp_path: Path) -
     assert state["evidence_report"] == "reports/evidence_report.md"
 
 
-def test_output_contract_requires_design_manifest_before_measured_claims(tmp_path: Path) -> None:
+def test_output_contract_requires_contract_and_receipt_before_measured_claims(tmp_path: Path) -> None:
     workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
 
     write_prompt_files(workspace, task="Inspect data")
     contract = (workspace.task_dir / "PERTURA_OUTPUT_CONTRACT.md").read_text(encoding="utf-8")
 
-    assert "register_perturbation_design_manifest" in contract
-    assert "manifest-derived scope" in contract
-    assert "Raw labels, basenames, and prose" in contract
+    assert "inspect_dataset" in contract
+    assert "signed receipt" in contract
+    assert "Never infer missing control" in contract
+    assert "Never write an effect through a design confirmation" in contract
 
 
 def test_p06_smoke_task_contracts_use_manifest_uid_scope() -> None:
@@ -519,3 +521,123 @@ def test_policy_threshold_helper_script_generates_decisions(tmp_path: Path, monk
 
 
 
+
+
+def test_runtime_turn_final_records_claim_report_decisions(tmp_path: Path) -> None:
+    from pertura_runtime.claude.finalizer import build_runtime_final_summary
+
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
+    workspace.update_manifest({"stage_id": "claim_report"})
+    workspace.write_json(
+        workspace.artifacts_dir / "claim_decisions.json",
+        {
+            "decisions": [
+                {
+                    "decision_id": "decision_1",
+                    "claim_id": "claim_mechanism_overreach",
+                    "decision": "allowed_with_downgrade",
+                    "max_strength": "measured_association",
+                    "scope_fit": "exact",
+                    "supporting_artifacts": ["measured_de_1"],
+                    "blocked_requested_strength": "validated_mechanism_disabled",
+                    "allowed_surface": "Measured association is supported; downstream mechanism is not established.",
+                    "policy_hash": "sha256:policy",
+                    "reasons": ["validated mechanism remains disabled"],
+                }
+            ]
+        },
+    )
+    workspace.write_text(workspace.logs_dir / "claude_final.md", "KLF1 validates a mechanism.\n")
+
+    summary = build_runtime_final_summary(workspace, status="completed")
+
+    turn_payload = json.loads((workspace.artifacts_dir / "turn_final.json").read_text(encoding="utf-8"))
+    turn_markdown = (workspace.reports_dir / "turn_final.md").read_text(encoding="utf-8")
+    state = json.loads((workspace.artifacts_dir / "analysis_state_manifest.json").read_text(encoding="utf-8"))
+
+    assert turn_payload["stage_id"] == "claim_report"
+    assert turn_payload["surface_type"] == "claim_decision_surface"
+    assert turn_payload["claim_decisions"] == ["claim_mechanism_overreach"]
+    assert any("validated mechanism remains disabled" in reason for reason in turn_payload["blocked_or_downgraded_reasons"])
+    assert state["turn_final"] == "reports/turn_final.md"
+    assert "## Runtime Turn Final" in summary
+    assert "claim_mechanism_overreach" in turn_markdown
+    assert "logs/claude_final.md" not in summary
+    assert "KLF1 validates a mechanism" not in summary
+
+
+def test_runtime_turn_final_uses_stage_contract_for_non_claim_stage(tmp_path: Path) -> None:
+    from pertura_runtime.claude.finalizer import build_runtime_final_summary
+    from pertura_gate.evidence.registry import EvidenceRegistry
+
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
+    workspace.update_manifest({"stage_id": "cell_state_reference"})
+    registry = EvidenceRegistry.for_run(workspace.root)
+    registry.register_measured_de(
+        path="outputs/de.csv",
+        contrast_left="KLF1",
+        contrast_baseline="NegCtrl",
+        method="wilcoxon",
+        n_left=20,
+        n_baseline=30,
+        multiple_testing="bh",
+        has_padj=True,
+    )
+
+    build_runtime_final_summary(workspace, status="completed")
+
+    turn_payload = json.loads((workspace.artifacts_dir / "turn_final.json").read_text(encoding="utf-8"))
+    turn_markdown = (workspace.reports_dir / "turn_final.md").read_text(encoding="utf-8")
+
+    assert turn_payload["stage_id"] == "cell_state_reference"
+    assert turn_payload["surface_type"] == "evidence_summary"
+    assert turn_payload["claim_decisions"] == []
+    assert "claim_decision_surface" not in turn_markdown
+    assert "Registered 1 evidence artifact" in turn_markdown
+    assert "`measured_association`" in turn_markdown
+
+
+def test_runtime_turn_final_marks_empty_completed_run_as_no_evidence_registered(tmp_path: Path) -> None:
+    from pertura_runtime.claude.finalizer import build_runtime_final_summary
+
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
+
+    build_runtime_final_summary(workspace, status="completed")
+
+    turn_payload = json.loads((workspace.artifacts_dir / "turn_final.json").read_text(encoding="utf-8"))
+
+    assert turn_payload["stage_id"] == "unstaged"
+    assert turn_payload["status"] == "no_evidence_registered"
+    assert turn_payload["surface_type"] == "progress_only"
+    assert turn_payload["what_was_done"] == ["No evidence artifacts were registered."]
+
+
+def test_agent_preflight_failure_writes_capability_final_without_legacy_turn_state(tmp_path: Path, monkeypatch) -> None:
+    import asyncio
+
+    import pertura_runtime.claude.agent as agent_module
+    from pertura_runtime.claude.agent import ClaudePerturaAgent
+    from pertura_runtime.claude.options import ClaudeRuntimeOptions
+    from pertura_runtime.claude.python_env import PythonEnvironmentError
+
+    def fail_preflight(*args, **kwargs):
+        raise PythonEnvironmentError("preflight failed", payload={"packages": {"scanpy": {"status": "error"}}})
+
+    monkeypatch.setattr(agent_module, "prepare_python_environment", fail_preflight)
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
+    agent = ClaudePerturaAgent(
+        workspace=workspace,
+        config=ClaudeRuntimeOptions(stage_id="cell_state_reference"),
+        output_fn=lambda _line: None,
+    )
+
+    result = asyncio.run(agent.run("Run the stage."))
+
+    assert result.status == "failed"
+    assert (workspace.reports_dir / "pertura_final.md").exists()
+    manifest = json.loads((workspace.root / "manifest.json").read_text(encoding="utf-8"))
+
+    assert not (workspace.artifacts_dir / "turn_final.json").exists()
+    assert "PythonEnvironmentError" in (workspace.reports_dir / "pertura_final.md").read_text(encoding="utf-8")
+    assert manifest["runtime_final_path"] == "reports/pertura_final.md"
+    assert manifest["turn_final_path"] is None

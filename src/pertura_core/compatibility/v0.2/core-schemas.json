@@ -1,0 +1,1805 @@
+{
+  "models": {
+    "CapabilityRunRequest": {
+      "$defs": {
+        "DependencyRef": {
+          "additionalProperties": false,
+          "properties": {
+            "canonical_hash": {
+              "default": "",
+              "title": "Canonical Hash",
+              "type": "string"
+            },
+            "dependency_id": {
+              "default": "",
+              "title": "Dependency Id",
+              "type": "string"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "object_hash": {
+              "title": "Object Hash",
+              "type": "string"
+            },
+            "object_id": {
+              "title": "Object Id",
+              "type": "string"
+            },
+            "required": {
+              "default": true,
+              "title": "Required",
+              "type": "boolean"
+            },
+            "role": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Role"
+            },
+            "schema_version": {
+              "default": "pertura-dependency-v2",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "state": {
+              "default": "current",
+              "enum": [
+                "current",
+                "stale",
+                "missing"
+              ],
+              "title": "State",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "object_id",
+            "object_hash"
+          ],
+          "title": "DependencyRef",
+          "type": "object"
+        },
+        "ScopeKey": {
+          "additionalProperties": false,
+          "properties": {
+            "batch_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Batch Ids",
+              "type": "array"
+            },
+            "canonical_hash": {
+              "default": "",
+              "title": "Canonical Hash",
+              "type": "string"
+            },
+            "contrast_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Contrast Id"
+            },
+            "control_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Control Ids",
+              "type": "array"
+            },
+            "dataset_id": {
+              "title": "Dataset Id",
+              "type": "string"
+            },
+            "declared_compatibility_rules": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Declared Compatibility Rules",
+              "type": "array"
+            },
+            "donor_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Donor Ids",
+              "type": "array"
+            },
+            "dose": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Dose"
+            },
+            "estimand": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Estimand"
+            },
+            "metadata": {
+              "additionalProperties": true,
+              "title": "Metadata",
+              "type": "object"
+            },
+            "perturbation_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Perturbation Ids",
+              "type": "array"
+            },
+            "replicate_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Replicate Ids",
+              "type": "array"
+            },
+            "schema_version": {
+              "default": "pertura-scope-v2",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "scope_id": {
+              "default": "",
+              "title": "Scope Id",
+              "type": "string"
+            },
+            "state_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "State Ids",
+              "type": "array"
+            },
+            "timepoint": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Timepoint"
+            },
+            "unresolved_fields": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Unresolved Fields",
+              "type": "array"
+            }
+          },
+          "required": [
+            "dataset_id"
+          ],
+          "title": "ScopeKey",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "capability_id": {
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "capability_version": {
+          "title": "Capability Version",
+          "type": "string"
+        },
+        "contract_hash": {
+          "title": "Contract Hash",
+          "type": "string"
+        },
+        "contract_id": {
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "dependencies": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DependencyRef"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "objective": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Objective"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "request_id": {
+          "default": "",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "requested_at_utc": {
+          "title": "Requested At Utc",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "pertura-capability-run-request-v2",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/ScopeKey"
+        }
+      },
+      "required": [
+        "run_id",
+        "capability_id",
+        "capability_version",
+        "contract_id",
+        "contract_hash",
+        "scope"
+      ],
+      "title": "CapabilityRunRequest",
+      "type": "object"
+    },
+    "CapabilitySpec": {
+      "$defs": {
+        "CapabilityTrust": {
+          "enum": [
+            "builtin_trusted",
+            "installed_untrusted",
+            "exploratory"
+          ],
+          "title": "CapabilityTrust",
+          "type": "string"
+        },
+        "SourceClass": {
+          "enum": [
+            "observed_metadata",
+            "measured_result",
+            "prediction",
+            "curated_prior",
+            "hypothesis"
+          ],
+          "title": "SourceClass",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "capability_id": {
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "capability_spec_id": {
+          "default": "",
+          "title": "Capability Spec Id",
+          "type": "string"
+        },
+        "claim_permissions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Permissions",
+          "type": "array"
+        },
+        "dependency_kinds": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependency Kinds",
+          "type": "array"
+        },
+        "depends_on": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "executor": {
+          "title": "Executor",
+          "type": "string"
+        },
+        "implemented": {
+          "default": true,
+          "title": "Implemented",
+          "type": "boolean"
+        },
+        "input_requirements": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Requirements",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "diagnostic",
+            "analysis",
+            "virtual",
+            "report"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "output_kind": {
+          "title": "Output Kind",
+          "type": "string"
+        },
+        "parameters_schema": {
+          "additionalProperties": true,
+          "title": "Parameters Schema",
+          "type": "object"
+        },
+        "phase": {
+          "maximum": 7,
+          "minimum": 1,
+          "title": "Phase",
+          "type": "integer"
+        },
+        "schema_version": {
+          "default": "pertura-capability-spec-v2",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_class": {
+          "$ref": "#/$defs/SourceClass"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "default": 900,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "trust_level": {
+          "$ref": "#/$defs/CapabilityTrust",
+          "default": "builtin_trusted"
+        },
+        "validator": {
+          "title": "Validator",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "capability_id",
+        "version",
+        "phase",
+        "kind",
+        "summary",
+        "executor",
+        "validator",
+        "output_kind",
+        "source_class"
+      ],
+      "title": "CapabilitySpec",
+      "type": "object"
+    },
+    "DatasetContract": {
+      "$defs": {
+        "DependencyRef": {
+          "additionalProperties": false,
+          "properties": {
+            "canonical_hash": {
+              "default": "",
+              "title": "Canonical Hash",
+              "type": "string"
+            },
+            "dependency_id": {
+              "default": "",
+              "title": "Dependency Id",
+              "type": "string"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "object_hash": {
+              "title": "Object Hash",
+              "type": "string"
+            },
+            "object_id": {
+              "title": "Object Id",
+              "type": "string"
+            },
+            "required": {
+              "default": true,
+              "title": "Required",
+              "type": "boolean"
+            },
+            "role": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Role"
+            },
+            "schema_version": {
+              "default": "pertura-dependency-v2",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "state": {
+              "default": "current",
+              "enum": [
+                "current",
+                "stale",
+                "missing"
+              ],
+              "title": "State",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "object_id",
+            "object_hash"
+          ],
+          "title": "DependencyRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "contract_id": {
+          "default": "",
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "contract_version": {
+          "default": 1,
+          "title": "Contract Version",
+          "type": "integer"
+        },
+        "created_at_utc": {
+          "default": "",
+          "title": "Created At Utc",
+          "type": "string"
+        },
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "dependencies": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DependencyRef"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "expression_matrix": {
+          "additionalProperties": true,
+          "title": "Expression Matrix",
+          "type": "object"
+        },
+        "guide_matrix": {
+          "additionalProperties": true,
+          "title": "Guide Matrix",
+          "type": "object"
+        },
+        "identity_fields": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Identity Fields",
+          "type": "object"
+        },
+        "input_format": {
+          "title": "Input Format",
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "parent_contract_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Contract Id"
+        },
+        "schema_version": {
+          "default": "pertura-dataset-contract-v2",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_paths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Paths",
+          "type": "array"
+        },
+        "unresolved_fields": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Unresolved Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "input_format"
+      ],
+      "title": "DatasetContract",
+      "type": "object"
+    },
+    "DependencyRef": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "dependency_id": {
+          "default": "",
+          "title": "Dependency Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "object_hash": {
+          "title": "Object Hash",
+          "type": "string"
+        },
+        "object_id": {
+          "title": "Object Id",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "schema_version": {
+          "default": "pertura-dependency-v2",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "state": {
+          "default": "current",
+          "enum": [
+            "current",
+            "stale",
+            "missing"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "object_id",
+        "object_hash"
+      ],
+      "title": "DependencyRef",
+      "type": "object"
+    },
+    "DesignConfirmation": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "confirmation_id": {
+          "default": "",
+          "title": "Confirmation Id",
+          "type": "string"
+        },
+        "confirmed_by": {
+          "default": "user",
+          "title": "Confirmed By",
+          "type": "string"
+        },
+        "contract_id": {
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "created_at_utc": {
+          "title": "Created At Utc",
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "control",
+            "guide_target",
+            "replicate",
+            "state_label",
+            "donor",
+            "batch"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "pertura-design-confirmation-v2",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value"
+        }
+      },
+      "required": [
+        "run_id",
+        "contract_id",
+        "field",
+        "value",
+        "rationale"
+      ],
+      "title": "DesignConfirmation",
+      "type": "object"
+    },
+    "PromotionDecision": {
+      "$defs": {
+        "SourceClass": {
+          "enum": [
+            "observed_metadata",
+            "measured_result",
+            "prediction",
+            "curated_prior",
+            "hypothesis"
+          ],
+          "title": "SourceClass",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "decided_at_utc": {
+          "title": "Decided At Utc",
+          "type": "string"
+        },
+        "decision_id": {
+          "default": "",
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "dependency_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependency Ids",
+          "type": "array"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "max_strength": {
+          "title": "Max Strength",
+          "type": "string"
+        },
+        "policy_hash": {
+          "title": "Policy Hash",
+          "type": "string"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "receipt_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Receipt Ids",
+          "type": "array"
+        },
+        "result_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Result Ids",
+          "type": "array"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "pertura-promotion-decision-v2",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_class": {
+          "$ref": "#/$defs/SourceClass"
+        },
+        "statement_id": {
+          "title": "Statement Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "promoted",
+            "downgraded",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "statement_id",
+        "status",
+        "max_strength",
+        "source_class",
+        "policy_hash"
+      ],
+      "title": "PromotionDecision",
+      "type": "object"
+    },
+    "ResultEnvelope": {
+      "$defs": {
+        "AnalysisStatus": {
+          "enum": [
+            "completed",
+            "completed_with_caution",
+            "blocked",
+            "failed"
+          ],
+          "title": "AnalysisStatus",
+          "type": "string"
+        },
+        "CapabilityTrust": {
+          "enum": [
+            "builtin_trusted",
+            "installed_untrusted",
+            "exploratory"
+          ],
+          "title": "CapabilityTrust",
+          "type": "string"
+        },
+        "DependencyRef": {
+          "additionalProperties": false,
+          "properties": {
+            "canonical_hash": {
+              "default": "",
+              "title": "Canonical Hash",
+              "type": "string"
+            },
+            "dependency_id": {
+              "default": "",
+              "title": "Dependency Id",
+              "type": "string"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "object_hash": {
+              "title": "Object Hash",
+              "type": "string"
+            },
+            "object_id": {
+              "title": "Object Id",
+              "type": "string"
+            },
+            "required": {
+              "default": true,
+              "title": "Required",
+              "type": "boolean"
+            },
+            "role": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Role"
+            },
+            "schema_version": {
+              "default": "pertura-dependency-v2",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "state": {
+              "default": "current",
+              "enum": [
+                "current",
+                "stale",
+                "missing"
+              ],
+              "title": "State",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "object_id",
+            "object_hash"
+          ],
+          "title": "DependencyRef",
+          "type": "object"
+        },
+        "DiagnosticStatus": {
+          "enum": [
+            "screen_passed",
+            "caution",
+            "blocked",
+            "unresolved",
+            "failed"
+          ],
+          "title": "DiagnosticStatus",
+          "type": "string"
+        },
+        "ScopeKey": {
+          "additionalProperties": false,
+          "properties": {
+            "batch_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Batch Ids",
+              "type": "array"
+            },
+            "canonical_hash": {
+              "default": "",
+              "title": "Canonical Hash",
+              "type": "string"
+            },
+            "contrast_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Contrast Id"
+            },
+            "control_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Control Ids",
+              "type": "array"
+            },
+            "dataset_id": {
+              "title": "Dataset Id",
+              "type": "string"
+            },
+            "declared_compatibility_rules": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Declared Compatibility Rules",
+              "type": "array"
+            },
+            "donor_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Donor Ids",
+              "type": "array"
+            },
+            "dose": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Dose"
+            },
+            "estimand": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Estimand"
+            },
+            "metadata": {
+              "additionalProperties": true,
+              "title": "Metadata",
+              "type": "object"
+            },
+            "perturbation_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Perturbation Ids",
+              "type": "array"
+            },
+            "replicate_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Replicate Ids",
+              "type": "array"
+            },
+            "schema_version": {
+              "default": "pertura-scope-v2",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "scope_id": {
+              "default": "",
+              "title": "Scope Id",
+              "type": "string"
+            },
+            "state_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "State Ids",
+              "type": "array"
+            },
+            "timepoint": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Timepoint"
+            },
+            "unresolved_fields": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Unresolved Fields",
+              "type": "array"
+            }
+          },
+          "required": [
+            "dataset_id"
+          ],
+          "title": "ScopeKey",
+          "type": "object"
+        },
+        "SourceClass": {
+          "enum": [
+            "observed_metadata",
+            "measured_result",
+            "prediction",
+            "curated_prior",
+            "hypothesis"
+          ],
+          "title": "SourceClass",
+          "type": "string"
+        },
+        "VirtualStatus": {
+          "enum": [
+            "supported",
+            "limited",
+            "out_of_scope",
+            "failed"
+          ],
+          "title": "VirtualStatus",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "blockers": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "capability_id": {
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "capability_trust": {
+          "$ref": "#/$defs/CapabilityTrust"
+        },
+        "capability_version": {
+          "title": "Capability Version",
+          "type": "string"
+        },
+        "cautions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Cautions",
+          "type": "array"
+        },
+        "completed_at_utc": {
+          "title": "Completed At Utc",
+          "type": "string"
+        },
+        "contract_hash": {
+          "title": "Contract Hash",
+          "type": "string"
+        },
+        "contract_id": {
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "dependencies": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DependencyRef"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "metrics": {
+          "additionalProperties": true,
+          "title": "Metrics",
+          "type": "object"
+        },
+        "output_hashes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Output Hashes",
+          "type": "object"
+        },
+        "output_paths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Output Paths",
+          "type": "array"
+        },
+        "receipt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receipt Id"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "result_id": {
+          "default": "",
+          "title": "Result Id",
+          "type": "string"
+        },
+        "result_kind": {
+          "title": "Result Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "pertura-result-envelope-v2",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/ScopeKey"
+        },
+        "source_class": {
+          "$ref": "#/$defs/SourceClass"
+        },
+        "stale": {
+          "default": false,
+          "title": "Stale",
+          "type": "boolean"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DiagnosticStatus"
+            },
+            {
+              "$ref": "#/$defs/AnalysisStatus"
+            },
+            {
+              "$ref": "#/$defs/VirtualStatus"
+            }
+          ],
+          "title": "Status"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "request_id",
+        "capability_id",
+        "capability_version",
+        "capability_trust",
+        "contract_id",
+        "contract_hash",
+        "scope",
+        "status",
+        "result_kind",
+        "source_class",
+        "summary"
+      ],
+      "title": "ResultEnvelope",
+      "type": "object"
+    },
+    "RunReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "broker_exit_state": {
+          "default": "running",
+          "enum": [
+            "running",
+            "sealed"
+          ],
+          "title": "Broker Exit State",
+          "type": "string"
+        },
+        "broker_instance_id": {
+          "title": "Broker Instance Id",
+          "type": "string"
+        },
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "capability_id": {
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "capability_version": {
+          "title": "Capability Version",
+          "type": "string"
+        },
+        "contract_hash": {
+          "title": "Contract Hash",
+          "type": "string"
+        },
+        "contract_id": {
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "dependency_hashes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Dependency Hashes",
+          "type": "object"
+        },
+        "output_hashes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Output Hashes",
+          "type": "object"
+        },
+        "policy_hash": {
+          "title": "Policy Hash",
+          "type": "string"
+        },
+        "public_key": {
+          "title": "Public Key",
+          "type": "string"
+        },
+        "receipt_id": {
+          "default": "",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "result_hash": {
+          "title": "Result Hash",
+          "type": "string"
+        },
+        "result_id": {
+          "title": "Result Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_root_digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Root Digest"
+        },
+        "schema_version": {
+          "default": "pertura-run-receipt-v2",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope_hash": {
+          "title": "Scope Hash",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "signed_at_utc": {
+          "title": "Signed At Utc",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "request_id",
+        "result_id",
+        "result_hash",
+        "capability_id",
+        "capability_version",
+        "contract_id",
+        "contract_hash",
+        "scope_hash",
+        "policy_hash",
+        "broker_instance_id",
+        "public_key"
+      ],
+      "title": "RunReceipt",
+      "type": "object"
+    },
+    "ScientificStatement": {
+      "$defs": {
+        "ScopeKey": {
+          "additionalProperties": false,
+          "properties": {
+            "batch_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Batch Ids",
+              "type": "array"
+            },
+            "canonical_hash": {
+              "default": "",
+              "title": "Canonical Hash",
+              "type": "string"
+            },
+            "contrast_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Contrast Id"
+            },
+            "control_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Control Ids",
+              "type": "array"
+            },
+            "dataset_id": {
+              "title": "Dataset Id",
+              "type": "string"
+            },
+            "declared_compatibility_rules": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Declared Compatibility Rules",
+              "type": "array"
+            },
+            "donor_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Donor Ids",
+              "type": "array"
+            },
+            "dose": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Dose"
+            },
+            "estimand": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Estimand"
+            },
+            "metadata": {
+              "additionalProperties": true,
+              "title": "Metadata",
+              "type": "object"
+            },
+            "perturbation_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Perturbation Ids",
+              "type": "array"
+            },
+            "replicate_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Replicate Ids",
+              "type": "array"
+            },
+            "schema_version": {
+              "default": "pertura-scope-v2",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "scope_id": {
+              "default": "",
+              "title": "Scope Id",
+              "type": "string"
+            },
+            "state_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "State Ids",
+              "type": "array"
+            },
+            "timepoint": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Timepoint"
+            },
+            "unresolved_fields": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Unresolved Fields",
+              "type": "array"
+            }
+          },
+          "required": [
+            "dataset_id"
+          ],
+          "title": "ScopeKey",
+          "type": "object"
+        },
+        "SourceClass": {
+          "enum": [
+            "observed_metadata",
+            "measured_result",
+            "prediction",
+            "curated_prior",
+            "hypothesis"
+          ],
+          "title": "SourceClass",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "language": {
+          "default": "en",
+          "title": "Language",
+          "type": "string"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "requested_strength": {
+          "title": "Requested Strength",
+          "type": "string"
+        },
+        "result_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Result Ids",
+          "type": "array"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "pertura-scientific-statement-v2",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/ScopeKey"
+        },
+        "source_class": {
+          "$ref": "#/$defs/SourceClass"
+        },
+        "statement_id": {
+          "default": "",
+          "title": "Statement Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "text",
+        "source_class",
+        "scope",
+        "requested_strength"
+      ],
+      "title": "ScientificStatement",
+      "type": "object"
+    },
+    "ScopeKey": {
+      "additionalProperties": false,
+      "properties": {
+        "batch_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Batch Ids",
+          "type": "array"
+        },
+        "canonical_hash": {
+          "default": "",
+          "title": "Canonical Hash",
+          "type": "string"
+        },
+        "contrast_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contrast Id"
+        },
+        "control_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Control Ids",
+          "type": "array"
+        },
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "declared_compatibility_rules": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Declared Compatibility Rules",
+          "type": "array"
+        },
+        "donor_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Donor Ids",
+          "type": "array"
+        },
+        "dose": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dose"
+        },
+        "estimand": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimand"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "perturbation_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Perturbation Ids",
+          "type": "array"
+        },
+        "replicate_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Replicate Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "default": "pertura-scope-v2",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope_id": {
+          "default": "",
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "state_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "State Ids",
+          "type": "array"
+        },
+        "timepoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timepoint"
+        },
+        "unresolved_fields": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Unresolved Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "dataset_id"
+      ],
+      "title": "ScopeKey",
+      "type": "object"
+    }
+  },
+  "schema_version": "pertura-v020-schema-freeze-v1"
+}

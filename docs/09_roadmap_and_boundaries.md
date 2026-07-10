@@ -35,8 +35,6 @@ P2.2: modality expansion: genome-scale / chemical / virtual KO
 
 The detailed implementation plan is maintained in `10_p2_workflow_implementation_plan.md`.
 
-The detailed implementation plan is maintained in `10_p2_workflow_implementation_plan.md`.
-
 ## P2.0 Workflow Substrate
 
 P2.0 adds `src/pertura_workflow/` and a public `pertura` CLI.
@@ -91,13 +89,43 @@ Generated claims are candidate claims, not scientific surface. Unlinked or ambig
 
 P2.1 currently implemented scope: internal family registrar API, P1-compatible family subtype delegation, partial-success classic recipe behavior, a strict structured classic recipe path that can register DesignManifest, eligibility artifacts, measured DE, evaluate candidate claims, and render ClaimDecision reports from `classic_recipe_config.json`, plus `run_basic_de_for_registered_contrast` and `run_basic_target_qc` for explicit UID-linked CSV inputs. It still does not infer confounders/cell types or register ambiguous candidates.
 
+## P2 Core Refactor Completed: Predicate / Warrant Layer
+
+Smoke 13 showed that later measured evidence types can inherit DE-shaped assumptions if the gate only branches on `StrengthCeiling.measured_association`. That issue is now closed.
+
+The gate core now uses:
+
+```text
+EvidenceArtifact -> EvidencePredicate -> WarrantRule -> ClaimDecision -> ControlledSurface
+```
+
+`measured_association` is a strength ceiling, not a synonym for differential expression. New extension stages must define predicate-specific warrant and surface rules before they can support claims. See `12_predicate_warrant_closure.md`.
+
+
+## Next External Wrapper Direction
+
+Before adding CellOracle, scGPT, GEARS, CPA, or similar wrappers, use the frozen P2 core baseline in `results/p2_core_freeze_summary.md`.
+
+External wrappers should follow this path:
+
+```text
+external output
+  -> structured artifact
+  -> EvidencePredicate
+  -> WarrantRule
+  -> ClaimDecision
+  -> ControlledSurface
+```
+
+The first wrapper family is now prediction / virtual perturbation plus prediction-measured concordance. It extends the P0.7 laundering boundary without weakening measured-vs-predicted separation; the implementation remains output-harvesting first, not full model training or GPU-heavy inference.
+
 ## P2.2 Modality Expansion
 
 P2.2 should add:
 
 - `genome_scale_guide_based_perturbseq`, not a general bulk CRISPR screen workflow.
 - `TreatmentManifest` and chemical/treatment workflows.
-- `virtual_perturbation` with prediction provenance and prediction-measured concordance.
+- `virtual_perturbation` with prediction provenance, prediction-measured concordance, and CellOracle-style predicted state transition artifacts.
 
 `prediction_measured_concordance` is concordance only. It cannot validate a mechanism and cannot create measured strength unless the measured artifact alone supports it.
 

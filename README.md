@@ -1,14 +1,16 @@
 # Pertura
 
-Pertura is an execution-grounded evidence and claim-strength runtime for scientific CodeAct agents working on Perturb-seq analysis.
+Pertura is a capability-first, execution-grounded Perturb-seq runtime for scientific CodeAct agents.
 
 Claude or another CodeAct agent remains free to inspect files, write Python, run scanpy/pertpy/custom analysis code, and produce intermediate artifacts. Pertura controls the formal scientific conclusion boundary:
 
 ```text
-free CodeAct analysis
-  -> runtime-registered evidence artifacts
-  -> explicit claims
-  -> claim-conditioned resolver
+free CodeAct exploration
+  -> versioned DatasetContract
+  -> registered capability
+  -> independent verifier process
+  -> signed RunReceipt + broker-owned commit store
+  -> structured promotion decision
   -> controlled scientific final surface
 ```
 
@@ -16,7 +18,30 @@ The system is designed to prevent prompt pressure, artifact self-tags, predicted
 
 ## Current Status
 
-Implemented for the current submission-oriented evidence lattice:
+The `0.2.0a3` capability kernel now implements:
+
+- the neutral Pydantic v2 contracts and JSON Schema surface (`DatasetContract`, `ScopeKey`, capability request/result, receipt, statement, decision and confirmation);
+- an independent verifier process with ephemeral in-memory Ed25519 receipts for trusted capabilities, replay protection, an authority SQLite store, explicit dependencies and stale propagation;
+- exactly five default Pertura MCP tools while retaining normal Claude CodeAct file/Bash/notebook tools;
+- deterministic CSV/TSV, H5AD, MuData and 10x intake inspection with versioned identity confirmations;
+- guide barcode/orientation/map checks, two-component negative-binomial guide assignment, ambient/MOI/retained-cell outputs and separate doublet status;
+- control-derived PCA/Leiden state-reference and GMT/NMF reference-module capabilities (blocked with an actionable dependency message when the scientific environment is missing);
+- target reliability v2 with bootstrap intervals, guide effects, leave-one-guide-out, heterogeneity, signature efficacy and imported Mixscape/Mixscale responder labels;
+- a verifier-only edgeR QL pseudobulk runner and explicit Micromamba environment setup/doctor commands;
+- a local React/Vite dashboard that is read-only except for design/identity confirmation.
+- a frozen v0.2 compatibility surface for schemas, tools, capability permissions, policy, scope and receipt signing;
+- a portable benchmark protocol, maintainer CLI, published-proxy provenance boundary and expert annotation packet;
+- an edgeR 4.8.2 environment lock plus an independent direct-R scientific golden with zero observed fixture error;
+- isolated P4/P5 exploratory contracts and planted leakage tests that cannot enter trusted promotion;
+- twenty granular P0-P3 candidate capabilities spanning intake/design, guide assignment/QC, state/module reference, target reliability, SCEPTRE, Propeller, sensitivity and method-null calibration;
+- a capability benchmark matrix with six deterministic local protocol cases per candidate and a scheduler-neutral server benchmark plan.
+
+The twenty additions are bundled exploratory candidates (version 0.1.0,
+synthetic_only, no claim permissions). They are committed without a trusted
+receipt so downstream candidate analyses can depend on them, but they cannot
+support strong measured statements before real-data server benchmarks.
+
+The former evidence lattice remains as a deprecated legacy/regression surface through the P3 migration window:
 
 - P0.6 canonical perturbation scope and manifest UID binding
 - P0.7 strong-baseline gate utility harness
@@ -26,17 +51,20 @@ Implemented for the current submission-oriented evidence lattice:
 - Evidence workflow closure with registrar-provided `next_claim_template`
 - P2.0 workflow substrate: preflight, candidate harvest, next-evidence recommendation
 - P2.1 core: internal family registrar API and classic recipe strict structured path
+- Runtime trust spine: immutable run policy, protected registry/ledger/final surface, ledger-backed calibration
+- Product vertical slice: target reliability audit and design-aware method/virtual-scope routing
 
-Latest recorded full test result from this cleaned repo:
+Latest local full test baseline is recorded by CI and `python -m pytest -q`; do not use the historical count below as a release gate.
 
 ```text
-124 passed
+See the current test run in the release handoff.
 ```
 
 ## Repository Layout
 
 ```text
 src/pertura_gate/       Trusted deterministic gate core
+src/pertura_core/       Runtime-neutral canonical contracts and receipt verification
 src/pertura_workflow/   Bounded evidence-acquisition workflow substrate
 src/pertura_runtime/    Claude/agent runtime adapter and MCP tool surface
 src/pertura_bench/      Benchmark harness and surface evaluator
@@ -52,9 +80,9 @@ docs/                   Architecture docs, smoke tasks, skill cards
 Architecture invariant:
 
 ```text
-pertura_workflow -> pertura_gate
-pertura_runtime  -> pertura_gate + pertura_workflow
-pertura_bench    -> pertura_gate
+pertura_workflow -> pertura_core + pertura_gate
+pertura_runtime  -> pertura_core + pertura_gate + pertura_workflow
+pertura_bench    -> pertura_core + pertura_gate + maintainer-only runtime/workflow adapters
 pertura_gate     -> neither pertura_workflow, pertura_runtime, nor pertura_bench
 ```
 
@@ -66,6 +94,7 @@ Start reading here:
 - [docs/02_architecture.md](docs/02_architecture.md)
 - [docs/03_evidence_lattice.md](docs/03_evidence_lattice.md)
 - [docs/08_smoke_and_benchmark_results.md](docs/08_smoke_and_benchmark_results.md)
+- [docs/13_product_pivot.md](docs/13_product_pivot.md)
 - [docs/results/p0_p1_experiment_summary.md](docs/results/p0_p1_experiment_summary.md)
 - [docs/results/p1_freeze_summary.md](docs/results/p1_freeze_summary.md)
 
@@ -106,14 +135,21 @@ The expected test baseline for this cleaned repo is:
 
 ## Runtime Command
 
-Workflow substrate CLI:
+Capability product CLI:
 
 ```bash
-pertura preflight --help
-pertura harvest --help
-pertura recommend-next --help
-pertura recipe classic --help
+pertura env doctor edger-v1
+pertura capabilities list
+pertura inspect <workspace>
+pertura diagnostic <capability_id> <workspace>
+pertura analyze <objective> <workspace>
+pertura evaluate-virtual <workspace>
+pertura finalize <run_id> --workspace <project>
+pertura dashboard <workspace> --run <run_id>
 ```
+
+`preflight` forwards to `inspect` on the product CLI. Frozen commands such as
+`recipe classic` require `--tool-surface legacy`.
 
 Claude CodeAct runtime:
 
@@ -121,11 +157,22 @@ Claude CodeAct runtime:
 pertura-claude --help
 ```
 
+Benchmark maintenance does not add MCP tools and never downloads data implicitly:
+
+```bash
+python -m pertura_bench validate --repo .
+python -m pertura_bench status --repo .
+python -m pertura_bench annotation-packet --modality crispri
+python -m pertura_bench capabilities matrix
+python -m pertura_bench validate-cases
+python -m pertura_bench export-server-plan --output server-plan.json
+```
+
 A typical smoke command is documented in [docs/smoke_tasks/README.md](docs/smoke_tasks/README.md).
 
 ## Boundary
 
-Pertura provides bounded evidence-acquisition workflows for Perturb-seq: it can run or harvest minimal analyses needed for claim calibration, while every user-visible scientific conclusion remains controlled by the evidence gate. It is not a replacement for full Scanpy, Seurat, Cell Ranger, SCEPTRE, Milo, CellOracle, or virtual-perturbation pipelines. It does not currently ship real runners for Mixscape/Mixscale, g:Profiler, Milo/scCODA, CellOracle, scGPT, GEARS, or Cell Ranger. Agents may use those tools in normal CodeAct. Pertura registers their structured outputs and controls what scientific claims those outputs can support.
+Pertura provides bounded evidence-acquisition workflows for Perturb-seq: it can run or harvest minimal analyses needed for claim calibration, while every user-visible scientific conclusion remains controlled by the evidence gate. It is not a replacement for full Scanpy, Seurat, Cell Ranger, SCEPTRE, Milo, CellOracle, or virtual-perturbation pipelines. It now ships exploratory adapters for Pertpy Mixscape, SCEPTRE 0.99.0 and speckle/Propeller 1.10.0, but these remain synthetic-only candidates until the server benchmark. It does not ship trusted runners for g:Profiler, Milo/scCODA, CellOracle, scGPT, GEARS, arbitrary Seurat RDS, or Cell Ranger execution. Agents may still use those tools in normal CodeAct. Pertura registers their structured outputs and controls what scientific claims those outputs can support.
 
 `validated_mechanism` is intentionally disabled in the current policy unless future evidence types such as rescue assays, orthogonal validation, time-course causality, epistasis, protein validation, or reporter assays are added.
 

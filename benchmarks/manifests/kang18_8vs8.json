@@ -1,0 +1,12 @@
+{
+  "schema_version": "pertura-benchmark-conversion-v1",
+  "dataset_id": "kang18_8vs8_pbmc",
+  "source": "muscData::Kang18_8vs8",
+  "source_url": "https://bioconductor.org/packages/release/data/experiment/manuals/muscData/man/muscData.pdf",
+  "conversion": "scripts/convert_kang_to_h5ad.R",
+  "intended_uses": ["replicated_pseudobulk", "edger_scientific_golden"],
+  "perturb_seq_claim_allowed": false,
+  "license_review_url": "https://bioconductor.org/packages/release/data/experiment/html/muscData.html",
+  "output_sha256": null,
+  "note": "This is an independent statistical golden set, not a Perturb-seq dataset. Release evaluation requires a frozen conversion lock."
+}

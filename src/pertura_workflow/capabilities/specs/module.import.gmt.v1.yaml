@@ -1,0 +1,17 @@
+schema_version: pertura-capability-spec-v2
+capability_id: module.import.gmt.v1
+version: "1.0.0"
+phase: 3
+kind: analysis
+summary: Import versioned GMT modules with species, namespace, duplicate and coverage validation.
+trust_level: builtin_trusted
+executor: gmt_import
+validator: standard
+input_requirements: [dataset_contract, gmt]
+dependency_kinds: [contract]
+output_kind: module_reference
+source_class: curated_prior
+claim_permissions: [curated_module_definition]
+timeout_seconds: 120
+parameters_schema: {type: object}
+implemented: true

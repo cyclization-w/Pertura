@@ -1,0 +1,21 @@
+schema_version: pertura-capability-spec-v2
+capability_id: reference.state.control_pca_leiden.v1
+version: "1.0.0"
+phase: 3
+kind: analysis
+summary: Fit a control-only PCA/Leiden reference and map perturbed cells with frozen kNN.
+trust_level: builtin_trusted
+executor: state_reference
+validator: standard
+input_requirements: [dataset_contract, confirmed_controls, retained_cells]
+depends_on: [diagnostic.guide_assignment.v1]
+dependency_kinds: [contract, retained_cell_manifest]
+output_kind: state_reference
+source_class: measured_result
+claim_permissions: [derived_state_assignment]
+timeout_seconds: 3600
+parameters_schema: {type: object}
+implemented: true
+metadata:
+  deprecated: true
+  compatibility_only: true

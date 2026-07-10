@@ -1,0 +1,46 @@
+{
+    "stage_id": "virtual_perturbation_prediction",
+    "stage_role": "prediction_evidence",
+    "evidence_role": "predicted_perturbation_response",
+    "evidence_producing": true,
+    "turn_final_surface_type": "evidence_summary",
+    "allowed_mcp_tools": [
+        "mcp__pertura_evidence__register_virtual_perturbation_prediction_artifact"
+    ],
+    "required_outputs": [
+        "outputs/virtual_perturbation_prediction_summary.json"
+    ],
+    "optional_outputs": [
+        "outputs/predicted_expression.csv",
+        "outputs/predicted_delta_expression.csv",
+        "outputs/plots/*"
+    ],
+    "can_support": [
+        "predicted_effect"
+    ],
+    "must_not_support": [
+        "measured_association",
+        "measured_target_engagement",
+        "validated_mechanism",
+        "driver_validation"
+    ],
+    "failure_modes": [
+        "missing_model_provenance",
+        "missing_prediction_schema",
+        "ambiguous_uid_or_scope",
+        "no_supported_artifact_registered",
+        "tool_or_code_error"
+    ],
+    "next_stage_recommendations": [
+        "prediction_measured_concordance",
+        "claim_report"
+    ],
+    "benchmark_expectations": [
+        "stage_completion",
+        "artifact_registration_correct",
+        "metadata_completeness",
+        "stage_boundary_respected",
+        "exploration_not_surfaced",
+        "next_stage_recommendation_correct"
+    ]
+}

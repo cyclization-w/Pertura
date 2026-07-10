@@ -1,0 +1,9 @@
+name: pertura-sceptre-v1
+channels:
+  - conda-forge
+channel_priority: strict
+dependencies:
+  - r-base=4.5.3
+  - r-jsonlite=2.0.0
+  - r-matrix=1.7
+  - r-remotes=2.5

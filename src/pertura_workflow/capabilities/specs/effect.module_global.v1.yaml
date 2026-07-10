@@ -1,0 +1,26 @@
+schema_version: pertura-capability-spec-v2
+capability_id: effect.module_global.v1
+version: "0.1.0"
+phase: 5
+kind: analysis
+summary: Derive module and global summaries from committed gene-level effects.
+trust_level: exploratory
+executor: module_global_effect
+validator: candidate_standard
+input_requirements: [effect_table, reference_modules]
+depends_on: [module.import.gmt.v1, target.reliability.aggregate.v1]
+dependency_kinds: [reference_modules, target_reliability]
+output_kind: module_global_effect
+source_class: measured_result
+claim_permissions: []
+timeout_seconds: 900
+parameters_schema:
+  type: object
+  properties:
+    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
+    n_jobs: {type: integer, default: 1, minimum: 1}
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true
+  derived_only: true
