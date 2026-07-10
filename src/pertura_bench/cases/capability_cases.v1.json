@@ -1,0 +1,3598 @@
+{
+  "capabilities": [
+    {
+      "capability_id": "intake.materialize.v1",
+      "cases": [
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "completed"
+          ],
+          "fixture_id": "synthetic/v1/intake.materialize.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_cells",
+              "operator": "eq",
+              "threshold": 3
+            },
+            {
+              "name": "n_features",
+              "operator": "eq",
+              "threshold": 2
+            },
+            {
+              "name": "nnz",
+              "operator": "eq",
+              "threshold": 4
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "sparse_integer_counts"
+          },
+          "required_outputs": [
+            "counts.npz",
+            "obs.parquet",
+            "var.parquet",
+            "materialization_manifest.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "completed"
+          ],
+          "fixture_id": "synthetic/v1/intake.materialize.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "estimated_sparse_gb",
+              "operator": "lte",
+              "threshold": 0.001
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "bounded_sparse_materialization"
+          },
+          "required_outputs": [
+            "counts.npz",
+            "obs.parquet",
+            "var.parquet",
+            "materialization_manifest.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "exceeds max_memory_gb=1e-20"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/intake.materialize.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "failure_detected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "memory_budget_exceeded"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "exceeds max_memory_gb=1e-20"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/intake.materialize.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "failure_detected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "planted_impossible_memory_budget"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "completed"
+          ],
+          "fixture_id": "synthetic/v1/intake.materialize.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_cells",
+              "operator": "eq",
+              "threshold": 3
+            },
+            {
+              "name": "nnz",
+              "operator": "eq",
+              "threshold": 4
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "identical_sparse_rerun"
+          },
+          "required_outputs": [
+            "counts.npz",
+            "obs.parquet",
+            "var.parquet",
+            "materialization_manifest.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/intake.materialize.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": null,
+      "environment_required": false,
+      "execution_mode": "product_path",
+      "fixture_profile": "intake",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022"
+      ]
+    },
+    {
+      "capability_id": "diagnostic.dataset_integrity.v1",
+      "cases": [
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.dataset_integrity.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "barcode_suffix_collision",
+              "operator": "eq",
+              "threshold": 0
+            },
+            {
+              "name": "nonnegative",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "integer_like",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "missing_value_count",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "valid_integer_counts"
+          },
+          "required_outputs": [
+            "dataset_integrity.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "caution"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.dataset_integrity.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "integer_like",
+              "operator": "eq",
+              "threshold": 0
+            },
+            {
+              "name": "nonnegative",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "fractional_expression_layer"
+          },
+          "required_outputs": [
+            "dataset_integrity.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "barcode suffix removal would create collisions"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.dataset_integrity.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "barcode_suffix_collision",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "barcode_suffix_collision"
+          },
+          "required_outputs": [
+            "dataset_integrity.json"
+          ],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "barcode suffix removal would create collisions"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.dataset_integrity.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "barcode_suffix_collision",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "planted_barcode_collision"
+          },
+          "required_outputs": [
+            "dataset_integrity.json"
+          ],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.dataset_integrity.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "nonnegative",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "integer_like",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "identical_integrity_rerun"
+          },
+          "required_outputs": [
+            "dataset_integrity.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.dataset_integrity.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "intake",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": null,
+      "environment_required": false,
+      "execution_mode": "product_path",
+      "fixture_profile": "intake",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022"
+      ]
+    },
+    {
+      "capability_id": "diagnostic.design_balance.v1",
+      "cases": [
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.design_balance.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_conditions",
+              "operator": "eq",
+              "threshold": 2
+            },
+            {
+              "name": "minimum_units_per_condition",
+              "operator": "eq",
+              "threshold": 3
+            },
+            {
+              "name": "contrast_estimable",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "design",
+            "fixture_variant": "three_units_per_arm"
+          },
+          "required_outputs": [
+            "design_balance.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "caution"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.design_balance.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "minimum_units_per_condition",
+              "operator": "eq",
+              "threshold": 2
+            },
+            {
+              "name": "contrast_estimable",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "design",
+            "fixture_variant": "two_units_per_arm"
+          },
+          "required_outputs": [
+            "design_balance.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "condition is completely confounded with batch"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.design_balance.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "contrast_estimable",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "design",
+            "fixture_variant": "condition_batch_confounding"
+          },
+          "required_outputs": [
+            "design_balance.json"
+          ],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "missing required design columns: replicate"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.design_balance.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "failure_detected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "design",
+            "fixture_variant": "missing_replicate_column"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.design_balance.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "minimum_units_per_condition",
+              "operator": "eq",
+              "threshold": 3
+            },
+            {
+              "name": "contrast_estimable",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "design",
+            "fixture_variant": "identical_design_rerun"
+          },
+          "required_outputs": [
+            "design_balance.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/diagnostic.design_balance.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "design",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": null,
+      "environment_required": false,
+      "execution_mode": "product_path",
+      "fixture_profile": "design",
+      "required_real_datasets": [
+        "kang18_8vs8_pbmc"
+      ]
+    },
+    {
+      "capability_id": "guide.integrity.v1",
+      "cases": [
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/guide.integrity.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "orientation",
+              "operator": "eq",
+              "threshold": "forward"
+            },
+            {
+              "name": "selected_overlap",
+              "operator": "eq",
+              "threshold": 8
+            },
+            {
+              "name": "missing_guide_count",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "forward_complete_guide_map"
+          },
+          "required_outputs": [
+            "guide_integrity.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/guide.integrity.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "orientation",
+              "operator": "eq",
+              "threshold": "forward"
+            },
+            {
+              "name": "suffix_collision",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "confirmed_forward_orientation"
+          },
+          "required_outputs": [
+            "guide_integrity.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "guide map is missing 1 observed guides"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/guide.integrity.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "missing_guide_count",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "incomplete_guide_map"
+          },
+          "required_outputs": [
+            "guide_integrity.json"
+          ],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "guide map is missing 1 observed guides"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/guide.integrity.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "missing_guide_count",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "planted_missing_guide_target"
+          },
+          "required_outputs": [
+            "guide_integrity.json"
+          ],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/guide.integrity.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "selected_overlap",
+              "operator": "eq",
+              "threshold": 8
+            },
+            {
+              "name": "missing_guide_count",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "identical_integrity_rerun"
+          },
+          "required_outputs": [
+            "guide_integrity.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/guide.integrity.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": null,
+      "environment_required": false,
+      "execution_mode": "product_path",
+      "fixture_profile": "guide",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022"
+      ]
+    },
+    {
+      "capability_id": "guide.assignment.nb_mixture.v1",
+      "cases": [
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/guide.assignment.nb_mixture.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_cells",
+              "operator": "eq",
+              "threshold": 8
+            },
+            {
+              "name": "n_guides",
+              "operator": "eq",
+              "threshold": 2
+            },
+            {
+              "name": "posterior_threshold",
+              "operator": "eq",
+              "threshold": 0.9
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "two_component_nb_assignment"
+          },
+          "required_outputs": [
+            "guide_posterior.npz",
+            "guide_posterior_rows.parquet",
+            "guide_posterior_columns.parquet",
+            "guide_assignments.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/guide.assignment.nb_mixture.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_cells",
+              "operator": "eq",
+              "threshold": 8
+            },
+            {
+              "name": "posterior_threshold",
+              "operator": "eq",
+              "threshold": 0.9
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "fixed_threshold_assignment"
+          },
+          "required_outputs": [
+            "guide_posterior.npz",
+            "guide_posterior_rows.parquet",
+            "guide_posterior_columns.parquet",
+            "guide_assignments.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "guide UMI matrix must contain nonnegative integer counts"
+          ],
+          "expected_statuses": [
+            "exception_blocked"
+          ],
+          "fixture_id": "synthetic/v1/guide.assignment.nb_mixture.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "exception_blocked",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "negative_guide_umi"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "guide UMI matrix must contain nonnegative integer counts"
+          ],
+          "expected_statuses": [
+            "exception_blocked"
+          ],
+          "fixture_id": "synthetic/v1/guide.assignment.nb_mixture.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "exception_blocked",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "planted_negative_guide_umi"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/guide.assignment.nb_mixture.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_cells",
+              "operator": "eq",
+              "threshold": 8
+            },
+            {
+              "name": "n_guides",
+              "operator": "eq",
+              "threshold": 2
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "identical_nb_rerun"
+          },
+          "required_outputs": [
+            "guide_posterior.npz",
+            "guide_posterior_rows.parquet",
+            "guide_posterior_columns.parquet",
+            "guide_assignments.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/guide.assignment.nb_mixture.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": null,
+      "environment_required": false,
+      "execution_mode": "product_path",
+      "fixture_profile": "guide",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022"
+      ]
+    },
+    {
+      "capability_id": "guide.ambient.v1",
+      "cases": [
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/guide.ambient.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "ambient_status",
+              "operator": "eq",
+              "threshold": "estimated"
+            },
+            {
+              "name": "n_empty_droplets",
+              "operator": "eq",
+              "threshold": 2
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "raw_empty_droplets_available"
+          },
+          "required_outputs": [
+            "guide_ambient.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "unresolved"
+          ],
+          "fixture_id": "synthetic/v1/guide.ambient.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "ambient_status",
+              "operator": "eq",
+              "threshold": "unresolved"
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "raw_droplets_missing"
+          },
+          "required_outputs": [
+            "guide_ambient.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "raw and filtered guide matrices have different guide columns"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/guide.ambient.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "failure_detected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "raw_filtered_guide_column_mismatch"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "raw and filtered guide matrices have different guide columns"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/guide.ambient.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "failure_detected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "planted_ambient_column_mismatch"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/guide.ambient.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "ambient_status",
+              "operator": "eq",
+              "threshold": "estimated"
+            },
+            {
+              "name": "n_empty_droplets",
+              "operator": "eq",
+              "threshold": 2
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "identical_ambient_rerun"
+          },
+          "required_outputs": [
+            "guide_ambient.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/guide.ambient.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": null,
+      "environment_required": false,
+      "execution_mode": "product_path",
+      "fixture_profile": "guide",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022"
+      ]
+    },
+    {
+      "capability_id": "screen.moi_doublet.v1",
+      "cases": [
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "caution"
+          ],
+          "fixture_id": "synthetic/v1/screen.moi_doublet.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "doublet_status",
+              "operator": "eq",
+              "threshold": "unresolved"
+            },
+            {
+              "name": "n_predicted_doublet",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "moi_with_unresolved_doublets"
+          },
+          "required_outputs": [
+            "moi_doublet.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "caution"
+          ],
+          "fixture_id": "synthetic/v1/screen.moi_doublet.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "doublet_status",
+              "operator": "eq",
+              "threshold": "unresolved"
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "doublet_scores_unavailable"
+          },
+          "required_outputs": [
+            "moi_doublet.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "Expecting property name enclosed in double quotes"
+          ],
+          "expected_statuses": [
+            "exception_blocked"
+          ],
+          "fixture_id": "synthetic/v1/screen.moi_doublet.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "exception_blocked",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "malformed_assignment_json"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "Expecting property name enclosed in double quotes"
+          ],
+          "expected_statuses": [
+            "exception_blocked"
+          ],
+          "fixture_id": "synthetic/v1/screen.moi_doublet.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "exception_blocked",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "planted_malformed_assignment_json"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "caution"
+          ],
+          "fixture_id": "synthetic/v1/screen.moi_doublet.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "doublet_status",
+              "operator": "eq",
+              "threshold": "unresolved"
+            },
+            {
+              "name": "n_predicted_doublet",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "identical_moi_rerun"
+          },
+          "required_outputs": [
+            "moi_doublet.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/screen.moi_doublet.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": null,
+      "environment_required": false,
+      "execution_mode": "product_path",
+      "fixture_profile": "guide",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022"
+      ]
+    },
+    {
+      "capability_id": "screen.retained_cells.v1",
+      "cases": [
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "caution"
+          ],
+          "fixture_id": "synthetic/v1/screen.retained_cells.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_cells",
+              "operator": "eq",
+              "threshold": 8
+            },
+            {
+              "name": "design_moi",
+              "operator": "eq",
+              "threshold": "low"
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "low_moi_retained_manifest"
+          },
+          "required_outputs": [
+            "retained_cells.csv",
+            "retained_cells_summary.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "caution"
+          ],
+          "fixture_id": "synthetic/v1/screen.retained_cells.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_cells",
+              "operator": "eq",
+              "threshold": 8
+            },
+            {
+              "name": "design_moi",
+              "operator": "eq",
+              "threshold": "high"
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "high_moi_multi_guide_preserved"
+          },
+          "required_outputs": [
+            "retained_cells.csv",
+            "retained_cells_summary.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "Expecting property name enclosed in double quotes"
+          ],
+          "expected_statuses": [
+            "exception_blocked"
+          ],
+          "fixture_id": "synthetic/v1/screen.retained_cells.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "exception_blocked",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "malformed_assignment_for_retention"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "Expecting property name enclosed in double quotes"
+          ],
+          "expected_statuses": [
+            "exception_blocked"
+          ],
+          "fixture_id": "synthetic/v1/screen.retained_cells.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "exception_blocked",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "planted_malformed_retention_input"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "caution"
+          ],
+          "fixture_id": "synthetic/v1/screen.retained_cells.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_cells",
+              "operator": "eq",
+              "threshold": 8
+            },
+            {
+              "name": "design_moi",
+              "operator": "eq",
+              "threshold": "low"
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "identical_retained_manifest_rerun"
+          },
+          "required_outputs": [
+            "retained_cells.csv",
+            "retained_cells_summary.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/screen.retained_cells.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "guide",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": null,
+      "environment_required": false,
+      "execution_mode": "product_path",
+      "fixture_profile": "guide",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022"
+      ]
+    },
+    {
+      "capability_id": "state.reference.fit.v1",
+      "cases": [
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.fit.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "valid_protocol_output"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.fit.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "environment_unavailable_protocol_only"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.fit.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "missing_required_output_field"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.fit.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "malformed_external_result"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.fit.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "identical_protocol_rerun"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.fit.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": "perturbseq-python-v1",
+      "environment_required": true,
+      "execution_mode": "protocol_fake",
+      "fixture_profile": "state",
+      "required_real_datasets": [
+        "papalexi_thp1_eccite"
+      ]
+    },
+    {
+      "capability_id": "state.reference.map_knn.v1",
+      "cases": [
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.map_knn.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "valid_protocol_output"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.map_knn.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "environment_unavailable_protocol_only"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.map_knn.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "missing_required_output_field"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.map_knn.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "malformed_external_result"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.map_knn.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "identical_protocol_rerun"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/state.reference.map_knn.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": "perturbseq-python-v1",
+      "environment_required": true,
+      "execution_mode": "protocol_fake",
+      "fixture_profile": "state",
+      "required_real_datasets": [
+        "papalexi_thp1_eccite"
+      ]
+    },
+    {
+      "capability_id": "state.annotation_candidates.v1",
+      "cases": [
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/state.annotation_candidates.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "valid_protocol_output"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/state.annotation_candidates.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "environment_unavailable_protocol_only"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/state.annotation_candidates.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "missing_required_output_field"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/state.annotation_candidates.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "malformed_external_result"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/state.annotation_candidates.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "identical_protocol_rerun"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/state.annotation_candidates.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "state",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": "perturbseq-python-v1",
+      "environment_required": true,
+      "execution_mode": "protocol_fake",
+      "fixture_profile": "state",
+      "required_real_datasets": [
+        "papalexi_thp1_eccite"
+      ]
+    },
+    {
+      "capability_id": "module.learn.control_nmf.v1",
+      "cases": [
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/module.learn.control_nmf.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "module",
+            "fixture_variant": "valid_protocol_output"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/module.learn.control_nmf.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "module",
+            "fixture_variant": "environment_unavailable_protocol_only"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/module.learn.control_nmf.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "module",
+            "fixture_variant": "missing_required_output_field"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/module.learn.control_nmf.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "module",
+            "fixture_variant": "malformed_external_result"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/module.learn.control_nmf.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "module",
+            "fixture_variant": "identical_protocol_rerun"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/module.learn.control_nmf.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "module",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": "python-science-v1",
+      "environment_required": true,
+      "execution_mode": "protocol_fake",
+      "fixture_profile": "module",
+      "required_real_datasets": [
+        "papalexi_thp1_eccite"
+      ]
+    },
+    {
+      "capability_id": "target.responder.mixscape.v1",
+      "cases": [
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/target.responder.mixscape.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "valid_protocol_output"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/target.responder.mixscape.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "environment_unavailable_protocol_only"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/target.responder.mixscape.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "missing_required_output_field"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/target.responder.mixscape.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "malformed_external_result"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/target.responder.mixscape.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "identical_protocol_rerun"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/target.responder.mixscape.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": "perturbseq-python-v1",
+      "environment_required": true,
+      "execution_mode": "protocol_fake",
+      "fixture_profile": "target",
+      "required_real_datasets": [
+        "papalexi_thp1_eccite"
+      ]
+    },
+    {
+      "capability_id": "target.guide_efficacy.v1",
+      "cases": [
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/target.guide_efficacy.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_shared_replicates",
+              "operator": "eq",
+              "threshold": 3
+            },
+            {
+              "name": "n_guides",
+              "operator": "eq",
+              "threshold": 3
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "three_replicate_direct_efficacy"
+          },
+          "required_outputs": [
+            "target_guide_efficacy.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "caution"
+          ],
+          "fixture_id": "synthetic/v1/target.guide_efficacy.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_shared_replicates",
+              "operator": "eq",
+              "threshold": 2
+            },
+            {
+              "name": "n_guides",
+              "operator": "eq",
+              "threshold": 3
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "two_replicate_efficacy"
+          },
+          "required_outputs": [
+            "target_guide_efficacy.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "target gene is absent: MISSING"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/target.guide_efficacy.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "failure_detected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "undetectable_target_gene"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "target gene is absent: MISSING"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/target.guide_efficacy.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "failure_detected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "planted_missing_target_gene"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "screen_passed"
+          ],
+          "fixture_id": "synthetic/v1/target.guide_efficacy.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_shared_replicates",
+              "operator": "eq",
+              "threshold": 3
+            },
+            {
+              "name": "n_guides",
+              "operator": "eq",
+              "threshold": 3
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "identical_efficacy_rerun"
+          },
+          "required_outputs": [
+            "target_guide_efficacy.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/target.guide_efficacy.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": null,
+      "environment_required": false,
+      "execution_mode": "product_path",
+      "fixture_profile": "target",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022",
+        "norman_k562_crispra_2019"
+      ]
+    },
+    {
+      "capability_id": "target.reliability.aggregate.v1",
+      "cases": [
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/target.reliability.aggregate.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "valid_protocol_output"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/target.reliability.aggregate.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "environment_unavailable_protocol_only"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/target.reliability.aggregate.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "missing_required_output_field"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/target.reliability.aggregate.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "malformed_external_result"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/target.reliability.aggregate.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "identical_protocol_rerun"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/target.reliability.aggregate.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "target",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": "perturbseq-python-v1",
+      "environment_required": true,
+      "execution_mode": "protocol_fake",
+      "fixture_profile": "target",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022",
+        "norman_k562_crispra_2019"
+      ]
+    },
+    {
+      "capability_id": "association.sceptre.v1",
+      "cases": [
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/association.sceptre.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "association",
+            "fixture_variant": "valid_protocol_output"
+          },
+          "required_outputs": [
+            "sceptre_config.json",
+            "sceptre_calibration.csv",
+            "sceptre_results.csv",
+            "sceptre_metadata.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/association.sceptre.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "association",
+            "fixture_variant": "environment_unavailable_protocol_only"
+          },
+          "required_outputs": [
+            "sceptre_config.json",
+            "sceptre_calibration.csv",
+            "sceptre_results.csv",
+            "sceptre_metadata.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "SCEPTRE negative-control calibration exceeded"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/association.sceptre.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "association",
+            "fixture_variant": "missing_required_output_field"
+          },
+          "required_outputs": [
+            "sceptre_config.json",
+            "sceptre_calibration.csv",
+            "sceptre_metadata.json"
+          ],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "SCEPTRE result is missing columns: FDR"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/association.sceptre.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "association",
+            "fixture_variant": "malformed_external_result"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/association.sceptre.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "association",
+            "fixture_variant": "identical_protocol_rerun"
+          },
+          "required_outputs": [
+            "sceptre_config.json",
+            "sceptre_calibration.csv",
+            "sceptre_results.csv",
+            "sceptre_metadata.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/association.sceptre.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "association",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": "sceptre-v1",
+      "environment_required": true,
+      "execution_mode": "protocol_fake",
+      "fixture_profile": "association",
+      "required_real_datasets": [
+        "norman_k562_crispra_2019"
+      ]
+    },
+    {
+      "capability_id": "composition.propeller.v1",
+      "cases": [
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/composition.propeller.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "composition",
+            "fixture_variant": "valid_protocol_output"
+          },
+          "required_outputs": [
+            "propeller_config.json",
+            "sample_state_proportions.csv",
+            "propeller_results.csv",
+            "propeller_metadata.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/composition.propeller.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "composition",
+            "fixture_variant": "environment_unavailable_protocol_only"
+          },
+          "required_outputs": [
+            "propeller_config.json",
+            "sample_state_proportions.csv",
+            "propeller_results.csv",
+            "propeller_metadata.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "Propeller output has invalid FDR"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/composition.propeller.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "composition",
+            "fixture_variant": "missing_required_output_field"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "Propeller result is missing columns: FDR"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/composition.propeller.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "composition",
+            "fixture_variant": "malformed_external_result"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/composition.propeller.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "composition",
+            "fixture_variant": "identical_protocol_rerun"
+          },
+          "required_outputs": [
+            "propeller_config.json",
+            "sample_state_proportions.csv",
+            "propeller_results.csv",
+            "propeller_metadata.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/composition.propeller.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "composition",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": "composition-v1",
+      "environment_required": true,
+      "execution_mode": "protocol_fake",
+      "fixture_profile": "composition",
+      "required_real_datasets": [
+        "kang18_8vs8_pbmc"
+      ]
+    },
+    {
+      "capability_id": "effect.guide_target_sensitivity.v1",
+      "cases": [
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "completed_with_caution"
+          ],
+          "fixture_id": "synthetic/v1/effect.guide_target_sensitivity.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_targets",
+              "operator": "eq",
+              "threshold": 2
+            },
+            {
+              "name": "unstable_target_count",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "pooled_unpooled_guide_effects"
+          },
+          "required_outputs": [
+            "guide_target_sensitivity.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "completed_with_caution"
+          ],
+          "fixture_id": "synthetic/v1/effect.guide_target_sensitivity.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "unstable_target_count",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "discordant_target_guides"
+          },
+          "required_outputs": [
+            "guide_target_sensitivity.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "effect table must contain guide, target and effect"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/effect.guide_target_sensitivity.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "failure_detected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "missing_effect_column"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "effect table must contain guide, target and effect"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/effect.guide_target_sensitivity.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "failure_detected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "planted_malformed_effect_table"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "completed_with_caution"
+          ],
+          "fixture_id": "synthetic/v1/effect.guide_target_sensitivity.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_targets",
+              "operator": "eq",
+              "threshold": 2
+            },
+            {
+              "name": "unstable_target_count",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "identical_sensitivity_rerun"
+          },
+          "required_outputs": [
+            "guide_target_sensitivity.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/effect.guide_target_sensitivity.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": null,
+      "environment_required": false,
+      "execution_mode": "product_path",
+      "fixture_profile": "effect",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022",
+        "norman_k562_crispra_2019"
+      ]
+    },
+    {
+      "capability_id": "effect.module_global.v1",
+      "cases": [
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/effect.module_global.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "valid_protocol_output"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/effect.module_global.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "external_environment_executed",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "environment_unavailable_protocol_only"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/effect.module_global.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "missing_required_output_field"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [
+            "executor returned the wrong result kind"
+          ],
+          "expected_statuses": [
+            "protocol_rejected"
+          ],
+          "fixture_id": "synthetic/v1/effect.module_global.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "malformed_output_rejected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "malformed_external_result"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "protocol_fake",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "protocol_validated"
+          ],
+          "fixture_id": "synthetic/v1/effect.module_global.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "actual_serializer_parser",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "identical_protocol_rerun"
+          },
+          "required_outputs": [
+            "protocol_output.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/effect.module_global.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "effect",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": "python-science-v1",
+      "environment_required": true,
+      "execution_mode": "protocol_fake",
+      "fixture_profile": "effect",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022"
+      ]
+    },
+    {
+      "capability_id": "calibration.method_null.v1",
+      "cases": [
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "completed_with_caution"
+          ],
+          "fixture_id": "synthetic/v1/calibration.method_null.v1/happy",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_null_tests",
+              "operator": "eq",
+              "threshold": 5
+            },
+            {
+              "name": "type1_rate",
+              "operator": "eq",
+              "threshold": 0
+            },
+            {
+              "name": "calibration_passed",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "calibration",
+            "fixture_variant": "replicate_level_nulls"
+          },
+          "required_outputs": [
+            "method_null_calibration.json"
+          ],
+          "scenario": "happy",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "completed_with_caution"
+          ],
+          "fixture_id": "synthetic/v1/calibration.method_null.v1/caution_or_unresolved",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_null_tests",
+              "operator": "eq",
+              "threshold": 5
+            },
+            {
+              "name": "calibration_passed",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "calibration",
+            "fixture_variant": "synthetic_only_null_calibration"
+          },
+          "required_outputs": [
+            "method_null_calibration.json"
+          ],
+          "scenario": "caution_or_unresolved",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "null calibration must permute replicate/independent-unit labels"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/calibration.method_null.v1/blocked",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "failure_detected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "calibration",
+            "fixture_variant": "cell_level_permutation"
+          },
+          "required_outputs": [],
+          "scenario": "blocked",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [
+            "null result table contains no valid p-values"
+          ],
+          "expected_statuses": [
+            "blocked"
+          ],
+          "fixture_id": "synthetic/v1/calibration.method_null.v1/planted_failure",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "failure_detected",
+              "operator": "eq",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "calibration",
+            "fixture_variant": "invalid_null_pvalues"
+          },
+          "required_outputs": [],
+          "scenario": "planted_failure",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "product_path",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "completed_with_caution"
+          ],
+          "fixture_id": "synthetic/v1/calibration.method_null.v1/determinism",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "n_null_tests",
+              "operator": "eq",
+              "threshold": 5
+            },
+            {
+              "name": "type1_rate",
+              "operator": "eq",
+              "threshold": 0
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "calibration",
+            "fixture_variant": "identical_null_rerun"
+          },
+          "required_outputs": [
+            "method_null_calibration.json"
+          ],
+          "scenario": "determinism",
+          "seed": 1729
+        },
+        {
+          "execution_mode": "stale_audit",
+          "expected_blocker_contains": [],
+          "expected_statuses": [
+            "stale"
+          ],
+          "fixture_id": "synthetic/v1/calibration.method_null.v1/stale_propagation",
+          "fixture_version": "v1",
+          "metrics": [
+            {
+              "name": "stale_detected",
+              "operator": "eq",
+              "threshold": 1
+            },
+            {
+              "name": "stale_results",
+              "operator": "gte",
+              "threshold": 1
+            }
+          ],
+          "parameters": {
+            "fixture_profile": "calibration",
+            "fixture_variant": "upstream_hash_changed"
+          },
+          "required_outputs": [],
+          "scenario": "stale_propagation",
+          "seed": 1729
+        }
+      ],
+      "environment_profile": null,
+      "environment_required": false,
+      "execution_mode": "product_path",
+      "fixture_profile": "calibration",
+      "required_real_datasets": [
+        "replogle_k562_essential_2022",
+        "norman_k562_crispra_2019",
+        "kang18_8vs8_pbmc"
+      ]
+    }
+  ],
+  "capability_version": "0.1.0",
+  "catalog_version": "v1",
+  "scenarios": [
+    "happy",
+    "caution_or_unresolved",
+    "blocked",
+    "planted_failure",
+    "determinism",
+    "stale_propagation"
+  ],
+  "schema_version": "pertura-capability-benchmark-catalog-v2"
+}

@@ -1,114 +1,64 @@
-# 06. MCP Tool Surface
+# 06. Five-tool product surface
 
-## Design Rule
-
-MCP tools are evidence boundaries, not a full Perturb-seq analysis menu. Claude remains free to run external analysis code, but runtime-owned tools register evidence, evaluate claims, and render controlled reports.
-
-This prevents tool-surface explosion while keeping the evidence lattice auditable.
-
-## Current Evidence Tools
-
-Implemented in:
+Pertura exposes five high-level domain tools. They bound formal scientific execution and reporting; they do not replace Claude CodeAct.
 
 ```text
-src/pertura_runtime/claude/tools/evidence_tools.py
+mcp__pertura__inspect_dataset
+mcp__pertura__run_diagnostic
+mcp__pertura__run_analysis
+mcp__pertura__evaluate_virtual_model
+mcp__pertura__finalize_report
 ```
 
-Current registrar tools:
+Claude may still use `Read`, `Glob`, `Grep`, `Bash`, `Write`, `Edit`, and notebook tools for exploration. Results produced only through free CodeAct remain exploratory unless a registered capability validates and commits them.
 
-- `register_perturbation_design_manifest`
-- `register_experiment_design_artifact`
-- `register_guide_assignment_artifact`
-- `register_target_qc_artifact`
-- `register_measured_de_artifact`
-- `register_predicted_effect_artifact`
-- `register_virtual_perturbation_prediction_artifact`
-- `register_prediction_measured_concordance_artifact`
-- `register_virtual_cell_state_transition_artifact`
-- `register_curated_prior_artifact`
-- `register_perturbation_efficiency_artifact`
-- `register_curated_enrichment_artifact`
-- `register_module_effect_artifact`
-- `register_global_effect_artifact`
-- `register_composition_effect_artifact`
-- `register_cell_qc_artifact`
-- `register_control_calibration_artifact`
-- `register_replication_artifact`
+## Tool responsibilities
 
-Decision/report tools:
+### `inspect_dataset`
 
-- `evaluate_claims`
-- `render_report`
+Creates a new versioned `DatasetContract`, records observed/inferred/confirmed/unresolved design fields, and recommends the next capability. It does not run a scientific analysis.
 
-## Registrar-Owned Truth
+### `run_diagnostic`
 
-Registrars own evidence class and intrinsic ceiling. Source files cannot upgrade themselves by including fields like:
+Executes one intake, guide/QC, design-balance, or target-reliability diagnostic through the capability registry and controlled runtime. It returns compact IDs, status, blockers/cautions, summaries, and output paths.
+
+### `run_analysis`
+
+Routes an objective, or validates an explicitly requested capability, through the single product planner. The planner uses confirmed design facts, committed diagnostics, environment availability, and method constraints. Missing dependencies block; the runtime does not silently fall back to a weaker method.
+
+### `evaluate_virtual_model`
+
+Reserves the v0.2 virtual-evaluation surface. Until a bundled evaluator is implemented and benchmarked, it returns an explicit out-of-scope/not-implemented result and grants no claim permission.
+
+### `finalize_report`
+
+Reads committed results and authority-session records, verifies receipts and current dependencies, applies the frozen promotion policy, and renders trusted and exploratory sections separately. It does not register new evidence or re-sign historical results.
+
+## Dependency inputs
+
+Tool schemas retain an optional `dependencies` array for v0.2 compatibility. Callers may provide result IDs only as disambiguation hints. The runtime reconstructs dependency kind, hash, scope, status, trust, and stale state from its own commit store; caller-supplied authority fields cannot upgrade a result.
+
+## Return shape
+
+Domain tools return compact structured payloads. Large tables are written as JSON/Parquet and plots as PNG/SVG. A typical execution response includes:
 
 ```json
 {
-  "evidence_class": "measured",
-  "strength": "validated_mechanism",
-  "validated_mechanism": true
+  "result_id": "result-...",
+  "receipt_id": null,
+  "status": "completed_with_caution",
+  "blockers": [],
+  "cautions": ["synthetic-only exploratory capability"],
+  "summary": "Candidate analysis completed.",
+  "output_paths": ["artifacts/..."],
+  "scope_id": "scope-..."
 }
 ```
 
-A prediction registered through `register_predicted_effect_artifact` or the virtual perturbation registrars remains prediction evidence regardless of self-tags.
+A null receipt indicates a validated-untrusted candidate result. Such a result may enter the dependency DAG but cannot support a strong measured statement.
 
-## Path Boundaries
+## Compatibility boundary
 
-Registration tools should read evidence sources only from workspace evidence roots such as:
+The tool names and JSON contracts are frozen under `compatibility/v0.2/tool-surface.json`. Adding an exploratory capability with no claim permission does not add another MCP tool.
 
-```text
-outputs/
-artifacts/
-```
-
-Reports are final surfaces and should not become evidence sources.
-
-## next_claim_template
-
-A+C closure added `next_claim_template` to claimable registrar responses.
-
-Claimable registrars return:
-
-```json
-{
-  "next_claim_template": {
-    "scope": { "...": "artifact canonical scope" },
-    "evidence_refs": ["artifact_id"]
-  }
-}
-```
-
-The template intentionally does not contain:
-
-- requested strength;
-- suggested conclusion;
-- evidence class upgrade;
-- multi-artifact decision logic.
-
-Metadata/eligibility artifacts do not return direct claim templates. This prevents design manifest, target QC, guide assignment, cell QC, or control calibration artifacts from being mistakenly used as effect evidence refs.
-
-Control calibration artifacts are eligibility evidence only. NTC-vs-NTC and label-permutation checks can downgrade measured-strength eligibility under strict/paper profiles, but they never create effect evidence or biological conclusions.
-
-## Virtual Perturbation Wrapper Tools
-
-The first external-wrapper family adds specific Claude-facing registrars:
-
-- `register_virtual_perturbation_prediction_artifact`
-- `register_prediction_measured_concordance_artifact`
-- `register_virtual_cell_state_transition_artifact`
-
-These tools harvest structured outputs from GEARS, scGPT, Geneformer, CPA/scGen, CellOracle, or custom scripts. They do not train models, run heavy GPU inference by default, or allow prediction/concordance to become measured evidence.
-
-## Future P2 Tool Surface
-
-P2 should avoid one MCP tool per method. It should move toward artifact-family APIs:
-
-- `register_scope_artifact`
-- `register_measured_effect_artifact`
-- `register_inferred_structure_artifact`
-- `register_prediction_artifact`
-- `register_ranking_artifact`
-
-Method-specific differences should live in subtype validators, provenance, and policy rules.
+The former registrar/evidence MCP surface is retained only for legacy regression tests. See [the historical registrar tool document](legacy/06_registrar_tool_surface.md).

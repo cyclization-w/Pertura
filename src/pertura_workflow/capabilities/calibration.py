@@ -10,6 +10,16 @@ from typing import Any
 
 from pertura_core import AnalysisStatus, CapabilityRunRequest, CapabilitySpec, DatasetContract, ResultEnvelope
 from pertura_core.hashing import file_sha256
+from pertura_workflow.capabilities.dependency_inputs import (
+    apply_retained_cells,
+    dependency_grounding_metadata,
+    retained_cells_for_request,
+)
+
+
+CALIBRATION_PROFILE = "replicate_null_v1"
+MAX_NTC_MEDIAN_ABSOLUTE_EFFECT = 0.25
+MAX_NTC_P95_ABSOLUTE_EFFECT = 0.50
 
 
 def run_replicate_null_calibration(
@@ -37,9 +47,20 @@ def run_replicate_null_calibration(
     metadata = _read_metadata(metadata_path, cell_column)
     if set(cells) - set(metadata):
         raise ValueError("count matrix contains cells absent from metadata")
+    retained = retained_cells_for_request(staging, request)
+    analysis_cells = apply_retained_cells(cells, retained)
+    grounding = dependency_grounding_metadata(retained, analysis_cells)
+    if not analysis_cells:
+        return _blocked(
+            spec,
+            request,
+            contract,
+            ("retained-cell manifest has no overlap with the count matrix",),
+            metadata=grounding,
+        )
     sample_vectors: dict[tuple[str, str], list[int]] = {}
     cell_index = {cell: index for index, cell in enumerate(cells)}
-    for cell in cells:
+    for cell in analysis_cells:
         condition = metadata[cell].get(condition_column, "")
         replicate = metadata[cell].get(replicate_column, "")
         if not condition or not replicate:
@@ -92,50 +113,103 @@ def run_replicate_null_calibration(
 
     observed_median = median(abs(value) for value in observed_effects)
     permutation_p = (1 + sum(value >= observed_median for value in permuted_median_abs)) / (1 + len(permuted_median_abs))
+    permutation_p95 = _quantile(permuted_median_abs, 0.95)
     permutation_summary = {
-        "status": "estimated",
+        "status": "estimated" if len(permuted_median_abs) == permutations else "incomplete",
         "permutation_unit": "replicate_label",
         "n_permutations": len(permuted_median_abs),
+        "requested_permutations": permutations,
         "observed_median_absolute_effect": observed_median,
-        "null_median_absolute_effect_p95": _quantile(permuted_median_abs, 0.95),
+        "null_median_absolute_effect_p95": permutation_p95,
         "empirical_p": permutation_p,
     }
-    cautions = []
-    if ntc_summary["status"] == "unresolved":
-        cautions.append("NTC-vs-NTC calibration is unresolved")
-    passed = ntc_summary["status"] == "estimated" and permutation_summary["status"] == "estimated"
-    status = AnalysisStatus.completed if passed else AnalysisStatus.completed_with_caution
+    thresholds = {
+        "profile": CALIBRATION_PROFILE,
+        "max_ntc_median_absolute_effect": MAX_NTC_MEDIAN_ABSOLUTE_EFFECT,
+        "max_ntc_p95_absolute_effect": MAX_NTC_P95_ABSOLUTE_EFFECT,
+        "required_permutations": permutations,
+    }
+    failures: list[str] = []
+    if ntc_summary["status"] != "estimated":
+        failures.append("NTC-vs-NTC calibration is unresolved")
+    else:
+        ntc_median = ntc_summary.get("median_absolute_effect")
+        ntc_p95 = ntc_summary.get("p95_absolute_effect")
+        if not _finite_number(ntc_median) or float(ntc_median) > MAX_NTC_MEDIAN_ABSOLUTE_EFFECT:
+            failures.append("NTC median absolute effect exceeds the calibration threshold")
+        if not _finite_number(ntc_p95) or float(ntc_p95) > MAX_NTC_P95_ABSOLUTE_EFFECT:
+            failures.append("NTC p95 absolute effect exceeds the calibration threshold")
+    if len(permuted_median_abs) != permutations:
+        failures.append("replicate-label permutation calibration is incomplete")
+    if not _finite_number(permutation_p95):
+        failures.append("replicate-label permutation null is non-finite")
+    if not _finite_number(permutation_p) or not 0.0 <= float(permutation_p) <= 1.0:
+        failures.append("replicate-label empirical p value is invalid")
+
+    passed = not failures
+    status = AnalysisStatus.completed if passed else AnalysisStatus.blocked
     payload = {
         "schema_version": "pertura-replicate-null-calibration-v1",
         "status": status.value,
         "label_permutation": permutation_summary,
         "ntc_vs_ntc": ntc_summary,
+        "thresholds": thresholds,
         "replicate_label_permutation_only": True,
         "cell_label_permutation_performed": False,
         "passed": passed,
-        "cautions": cautions,
+        "failures": failures,
+        "dependency_grounding": grounding,
     }
     output = staging / "replicate_null_calibration.json"
     output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    summary = (
+        "Replicate-level NTC and label-permutation calibration passed."
+        if passed
+        else "Replicate-level null calibration failed its pinned thresholds."
+    )
     return ResultEnvelope(
         run_id=request.run_id, request_id=request.request_id, capability_id=spec.capability_id,
         capability_version=spec.version, capability_trust=spec.trust_level,
         contract_id=contract.contract_id, contract_hash=contract.canonical_hash, scope=request.scope,
         status=status, result_kind=spec.output_kind, source_class=spec.source_class,
-        summary="Replicate-level NTC and label-permutation calibration completed.",
-        cautions=tuple(cautions), metrics={"passed": passed, "permutation_unit": "replicate_label", "n_permutations": len(permuted_median_abs), "ntc_status": ntc_summary["status"]},
+        summary=summary,
+        blockers=tuple(failures),
+        metrics={
+            "passed": passed,
+            "calibration_profile": CALIBRATION_PROFILE,
+            "permutation_unit": "replicate_label",
+            "n_permutations": len(permuted_median_abs),
+            "ntc_status": ntc_summary["status"],
+            "ntc_median_absolute_effect": ntc_summary.get("median_absolute_effect"),
+            "ntc_p95_absolute_effect": ntc_summary.get("p95_absolute_effect"),
+            **grounding,
+        },
         output_paths=(output.name,), output_hashes={output.name: file_sha256(output)},
-        dependencies=request.dependencies, metadata={"cell_level_permutation": False},
+        dependencies=request.dependencies,
+        metadata={
+            "cell_level_permutation": False,
+            "calibration_profile": CALIBRATION_PROFILE,
+            "thresholds": thresholds,
+            **grounding,
+        },
     )
 
 
-def _blocked(spec: CapabilitySpec, request: CapabilityRunRequest, contract: DatasetContract, blockers: tuple[str, ...]) -> ResultEnvelope:
+def _blocked(
+    spec: CapabilitySpec,
+    request: CapabilityRunRequest,
+    contract: DatasetContract,
+    blockers: tuple[str, ...],
+    *,
+    metadata: dict[str, Any] | None = None,
+) -> ResultEnvelope:
     return ResultEnvelope(
         run_id=request.run_id, request_id=request.request_id, capability_id=spec.capability_id,
         capability_version=spec.version, capability_trust=spec.trust_level,
         contract_id=contract.contract_id, contract_hash=contract.canonical_hash, scope=request.scope,
         status=AnalysisStatus.blocked, result_kind=spec.output_kind, source_class=spec.source_class,
-        summary="Replicate-level null calibration was blocked.", blockers=blockers, dependencies=request.dependencies,
+        summary="Replicate-level null calibration was blocked.", blockers=blockers,
+        dependencies=request.dependencies, metadata=metadata or {},
     )
 
 
@@ -199,6 +273,10 @@ def _contrast_effects(normalized: dict[tuple[str, str], list[float]], left_units
 
 def _mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
+
+
+def _finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
 def _quantile(values: list[float], quantile: float) -> float | None:

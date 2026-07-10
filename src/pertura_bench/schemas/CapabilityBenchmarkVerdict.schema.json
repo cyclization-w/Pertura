@@ -57,7 +57,7 @@
           "title": "Passed"
         },
         "schema_version": {
-          "default": "pertura-capability-benchmark-metric-v1",
+          "default": "pertura-capability-benchmark-metric-v2",
           "title": "Schema Version",
           "type": "string"
         },
@@ -100,6 +100,10 @@
       "title": "Capability Version",
       "type": "string"
     },
+    "case_hash": {
+      "title": "Case Hash",
+      "type": "string"
+    },
     "case_id": {
       "title": "Case Id",
       "type": "string"
@@ -115,6 +119,15 @@
       ],
       "default": null,
       "title": "Environment Lock Hash"
+    },
+    "execution_mode": {
+      "enum": [
+        "product_path",
+        "protocol_fake",
+        "stale_audit"
+      ],
+      "title": "Execution Mode",
+      "type": "string"
     },
     "input_hashes": {
       "additionalProperties": {
@@ -213,9 +226,21 @@
       "title": "Runtime Seconds"
     },
     "schema_version": {
-      "default": "pertura-capability-benchmark-verdict-v1",
+      "default": "pertura-capability-benchmark-verdict-v2",
       "title": "Schema Version",
       "type": "string"
+    },
+    "scientific_result_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scientific Result Hash"
     },
     "tier": {
       "enum": [
@@ -235,9 +260,11 @@
   },
   "required": [
     "case_id",
+    "case_hash",
     "capability_id",
     "capability_version",
     "tier",
+    "execution_mode",
     "outcome"
   ],
   "title": "CapabilityBenchmarkVerdict",

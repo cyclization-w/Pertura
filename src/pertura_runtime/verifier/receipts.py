@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import base64
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from pertura_core import CapabilityRunRequest, ResultEnvelope, RunReceipt, verify_receipt
@@ -51,3 +52,14 @@ class ReceiptSigner:
     def sign_bytes(self, payload: bytes) -> str:
         return base64.b64encode(self._private_key.sign(payload)).decode("ascii")
 
+
+def verify_detached_signature(*, public_key_b64: str, signature_b64: str, payload: bytes) -> bool:
+    try:
+        public_key = Ed25519PublicKey.from_public_bytes(
+            base64.b64decode(public_key_b64.encode("ascii"), validate=True)
+        )
+        signature = base64.b64decode(signature_b64.encode("ascii"), validate=True)
+        public_key.verify(signature, payload)
+        return True
+    except (InvalidSignature, TypeError, ValueError):
+        return False

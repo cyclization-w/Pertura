@@ -4,7 +4,6 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
-from pertura_runtime.claude.finalizer import build_runtime_final_summary
 from pertura_runtime.claude.manifest import ClaudeRunManifest
 from pertura_runtime.claude.options import (
     ClaudeRuntimeOptions,
@@ -44,18 +43,7 @@ class ClaudePerturaAgent:
         self.stream = ClaudeStreamRenderer(output_fn=output_fn, verbose=verbose, raw_stream=raw_stream)
         self.manifest = ClaudeRunManifest(workspace)
         self.policy = runtime_policy(self.config)
-        self.product_runtime = PerturaProductRuntime(workspace, policy_profile=self.config.policy_profile)
-        self.workspace.update_manifest(
-            {
-                "trust_policy": {
-                    "profile": self.policy.profile,
-                    "policy_hash": self.policy.policy_hash,
-                    "version": self.policy.version,
-                    "resolver_version": self.policy.resolver_version,
-                    "selected_by": "runtime_config",
-                }
-            }
-        )
+        self.product_runtime = PerturaProductRuntime(workspace, policy=self.policy)
 
     async def run(self, task: str | None = None) -> ClaudeRunResult:
         task_text = task or build_default_task(self.workspace.input_source)
@@ -148,46 +136,23 @@ class ClaudePerturaAgent:
             return ClaudeRunResult(status="failed", workspace=self.workspace.root, result_text=runtime_final, error=error)
 
     def _finalize_with_runtime_summary(self, *, status: str, error: str | None = None) -> str:
-        if self.config.tool_surface == "capability":
-            if status == "completed":
-                self.product_runtime.finalize_report(self.workspace.root.name)
-                runtime_final = (self.workspace.reports_dir / "pertura_final.md").read_text(encoding="utf-8")
-                self.product_runtime.close(graceful=True)
-            else:
-                self.product_runtime.close(graceful=False)
-                runtime_final = "# Pertura capability run failed\n\n" + (error or "The runtime failed before a verified result was finalized.") + "\n"
-                self.workspace.write_text(self.workspace.reports_dir / "pertura_final.md", runtime_final)
-            self.workspace.update_manifest(
-                {
-                    "runtime_final_path": "reports/pertura_final.md",
-                    "turn_final_path": None,
-                    "claude_final_path": "logs/claude_final.md" if (self.workspace.logs_dir / "claude_final.md").exists() else None,
-                }
-            )
-            self.workspace.finalize(status=status, result=runtime_final, error=error)
-            return runtime_final
-        if self.product_runtime.started:
-            if status == "completed":
-                self.product_runtime.finalize_report(self.workspace.root.name)
-                self.product_runtime.close(graceful=True)
-            else:
-                self.product_runtime.close(graceful=False)
-        runtime_final = build_runtime_final_summary(
-            self.workspace,
-            status=status,
-            error=error,
-            policy=self.policy,
-        )
+        if status == "completed":
+            self.product_runtime.finalize_report(self.workspace.root.name)
+            runtime_final = (self.workspace.reports_dir / "pertura_final.md").read_text(encoding="utf-8")
+            self.product_runtime.close(graceful=True)
+        else:
+            self.product_runtime.close(graceful=False)
+            runtime_final = "# Pertura capability run failed\n\n" + (error or "The runtime failed before a verified result was finalized.") + "\n"
+            self.workspace.write_text(self.workspace.reports_dir / "pertura_final.md", runtime_final)
         self.workspace.update_manifest(
             {
                 "runtime_final_path": "reports/pertura_final.md",
-                "turn_final_path": "reports/turn_final.md",
+                "turn_final_path": None,
                 "claude_final_path": "logs/claude_final.md" if (self.workspace.logs_dir / "claude_final.md").exists() else None,
             }
         )
         self.workspace.finalize(status=status, result=runtime_final, error=error)
         return runtime_final
-
 def _required_preflight_packages(config: ClaudeRuntimeOptions) -> tuple[str, ...]:
     if config.python_preflight_packages is not None:
         return tuple(config.python_preflight_packages)

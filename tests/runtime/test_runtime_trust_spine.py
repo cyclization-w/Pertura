@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from pertura_core import PromotionPolicy
 from pertura_gate.core.policy import policy_for_profile
 from pertura_runtime.claude.agent import ClaudePerturaAgent
 from pertura_runtime.claude.options import ClaudeRuntimeOptions, describe_options
@@ -28,7 +29,7 @@ def _fake_sdk(monkeypatch, calls):
 def test_runtime_defaults_to_strict_policy_and_records_hash() -> None:
     payload = describe_options(ClaudeRuntimeOptions())
     assert payload["policy_profile"] == "strict"
-    assert payload["policy_hash"] == policy_for_profile("strict").policy_hash
+    assert payload["policy_hash"] == PromotionPolicy(profile="strict").policy_hash
 
 
 def test_agent_freezes_policy_in_run_manifest(tmp_path: Path) -> None:

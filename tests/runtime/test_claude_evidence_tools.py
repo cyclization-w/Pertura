@@ -7,6 +7,8 @@ import types
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from pertura_runtime.claude.options import ClaudeRuntimeOptions, build_agent_options
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
 
@@ -71,17 +73,17 @@ def test_default_claude_options_expose_exactly_five_product_tools(monkeypatch, t
     assert {"Read", "Glob", "Grep", "Bash", "Write", "Edit", "NotebookEdit"}.issubset(options.allowed_tools)
 
 
-def test_legacy_tool_surface_remains_explicitly_available(monkeypatch, tmp_path: Path) -> None:
+def test_legacy_tool_surface_is_not_available_in_production(monkeypatch, tmp_path: Path) -> None:
     calls = {}
     _install_fake_sdk(monkeypatch, calls)
     workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="legacy")
-    options = build_agent_options(
-        workspace=workspace,
-        system_prompt="prompt",
-        config=ClaudeRuntimeOptions(enable_audit_hooks=False, tool_surface="legacy"),
-    )
-    assert "pertura_evidence" in options.mcp_servers
-    assert "mcp__pertura_evidence__register_measured_de_artifact" in options.allowed_tools
+    with pytest.raises(ValueError, match="read-only"):
+        build_agent_options(
+            workspace=workspace,
+            system_prompt="prompt",
+            config=ClaudeRuntimeOptions(enable_audit_hooks=False, tool_surface="legacy"),
+        )
+    assert "server" not in calls
 
 def test_evidence_mcp_register_and_render_by_path(monkeypatch, tmp_path: Path) -> None:
     calls = {}

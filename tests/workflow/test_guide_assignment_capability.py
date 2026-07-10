@@ -3,8 +3,14 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from pertura_runtime.claude.workspace import ClaudeRunWorkspace
-from pertura_runtime.product import PerturaProductRuntime
+import pytest
+
+pytestmark = pytest.mark.legacy
+
+from pertura_core import CapabilityRunRequest, ScopeKey
+from pertura_workflow.capabilities import CapabilityRegistry
+from pertura_workflow.capabilities.executors import execute_capability
+from pertura_workflow.intake import contract_with_confirmations, inspect_dataset_path
 
 
 def _write_fixture(root: Path, *, collision: bool = False) -> None:
@@ -28,51 +34,70 @@ def _write_fixture(root: Path, *, collision: bool = False) -> None:
         writer.writerow(["GGGA-1", 0, 1])
 
 
-def test_guide_assignment_detects_mixture_ambient_moi_and_publishes_manifest(monkeypatch, tmp_path: Path) -> None:
+def _run_wrapper(
+    source: Path,
+    staging: Path,
+    *,
+    confirmations: dict | None = None,
+    parameters: dict,
+):
+    contract = inspect_dataset_path(source)
+    if confirmations:
+        contract = contract_with_confirmations(contract, confirmations)
+    spec = CapabilityRegistry.load_default(include_external=False).get(
+        "diagnostic.guide_assignment.v1"
+    )
+    request = CapabilityRunRequest(
+        run_id="legacy-wrapper-regression",
+        capability_id=spec.capability_id,
+        capability_version=spec.version,
+        contract_id=contract.contract_id,
+        contract_hash=contract.canonical_hash,
+        scope=ScopeKey(dataset_id=contract.dataset_id),
+        parameters=parameters,
+    )
+    staging.mkdir()
+    return execute_capability(spec, request, contract, staging)
+
+
+def test_guide_assignment_detects_mixture_ambient_moi_and_publishes_manifest(tmp_path: Path) -> None:
     source = tmp_path / "screen"
     _write_fixture(source)
-    monkeypatch.setenv("PERTURA_AUTHORITY_ROOT", str(tmp_path / "authority"))
-    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", input_source=source, run_id="guide-qc")
-    runtime = PerturaProductRuntime(workspace)
-    try:
-        contract = runtime.inspect_dataset(confirmations={"control": "NTC", "guide": "guide_counts.csv", "target": "guide_map.csv"})
-        result = runtime.run_diagnostic(
-            "diagnostic.guide_assignment.v1",
-            contract_id=contract["contract_id"],
-            parameters={
-                "guide_counts_path": "guide_counts.csv",
-                "rna_barcodes_path": "rna_barcodes.csv",
-                "guide_map_path": "guide_map.csv",
-                "raw_guide_counts_path": "raw_guide_counts.csv",
-                "design_moi": "low",
-            },
-        )
-        assert result["status"] in {"screen_passed", "caution"}
-        assert result["receipt_id"].startswith("receipt_")
-        assert len(result["output_paths"]) == 3
-        assert all((workspace.root / path).exists() for path in result["output_paths"])
-    finally:
-        runtime.close()
+    staging = tmp_path / "guide-output"
+    result = _run_wrapper(
+        source,
+        staging,
+        confirmations={
+            "control": "NTC",
+            "guide": "guide_counts.csv",
+            "target": "guide_map.csv",
+        },
+        parameters={
+            "guide_counts_path": "guide_counts.csv",
+            "rna_barcodes_path": "rna_barcodes.csv",
+            "guide_map_path": "guide_map.csv",
+            "raw_guide_counts_path": "raw_guide_counts.csv",
+            "design_moi": "low",
+        },
+    )
+    assert result.status.value in {"screen_passed", "caution"}
+    assert result.capability_trust.value == "builtin_trusted"
+    assert len(result.output_paths) == 3
+    assert all((staging / path).exists() for path in result.output_paths)
 
-
-def test_barcode_suffix_collision_blocks_assignment(monkeypatch, tmp_path: Path) -> None:
+def test_barcode_suffix_collision_blocks_assignment(tmp_path: Path) -> None:
     source = tmp_path / "screen"
     _write_fixture(source, collision=True)
-    monkeypatch.setenv("PERTURA_AUTHORITY_ROOT", str(tmp_path / "authority"))
-    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", input_source=source, run_id="collision")
-    runtime = PerturaProductRuntime(workspace)
-    try:
-        contract = runtime.inspect_dataset()
-        result = runtime.run_diagnostic(
-            "diagnostic.guide_assignment.v1",
-            contract_id=contract["contract_id"],
-            parameters={
-                "guide_counts_path": "guide_counts.csv",
-                "rna_barcodes_path": "rna_barcodes.csv",
-                "guide_map_path": "guide_map.csv",
-            },
-        )
-        assert result["status"] == "blocked"
-        assert any("collisions" in blocker for blocker in result["blockers"])
-    finally:
-        runtime.close()
+    result = _run_wrapper(
+        source,
+        tmp_path / "collision-output",
+        parameters={
+            "guide_counts_path": "guide_counts.csv",
+            "rna_barcodes_path": "rna_barcodes.csv",
+            "guide_map_path": "guide_map.csv",
+        },
+    )
+    assert result.status.value == "blocked"
+    assert any("collisions" in blocker for blocker in result.blockers)
+
+\n

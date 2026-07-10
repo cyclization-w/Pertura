@@ -7,11 +7,11 @@ Recommended command shape:
 
 ```powershell
 pertura-claude claude `
-  --input "D:\chrome download\Perturb_test" `
+  --input "<dataset-path>" `
   --model deepseek-v4-pro `
   --base-url "https://api.deepseek.com/anthropic" `
   --api-key-env ANTHROPIC_API_KEY `
-  --python-exe "D:\anaconda\envs\pertura\python.exe" `
+  --python-exe "<python-executable>" `
   --max-turns 24 `
   --task-file "docs\smoke_tasks\01_measured_association_with_eligibility.md"
 ```

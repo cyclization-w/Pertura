@@ -214,7 +214,9 @@ class AuthorityStore:
                     raise ValueError("request ID replayed with a different result")
                 return
             db.execute(
-                "INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)",
+                "INSERT INTO results "
+                "(result_id, request_id, run_id, capability_id, result_hash, status, stale, payload_json, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)",
                 (
                     result.result_id,
                     result.request_id,

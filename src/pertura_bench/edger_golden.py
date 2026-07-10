@@ -10,10 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from pertura_bench.models import GoldenComparison
+from pertura_core import CapabilityRunRequest, ScopeKey
 from pertura_core.hashing import file_sha256
-from pertura_runtime.claude.workspace import ClaudeRunWorkspace
-from pertura_runtime.product import PerturaProductRuntime
+from pertura_workflow.capabilities import CapabilityRegistry
+from pertura_workflow.capabilities.edger import run_edger_pseudobulk
 from pertura_workflow.environment import environment_lock, environment_prefix, micromamba_path
+from pertura_workflow.intake import inspect_dataset_path
 
 
 VALID_CASES = {
@@ -47,7 +49,7 @@ def run_edger_golden(*, environment: str = "edger-v1", repo_root: str | Path | N
                 maximum_errors["status"] = 1.0
                 continue
             reference = _run_reference(case_name, case_dir, case, reference_script)
-            actual_root = workspace.root
+            actual_root = workspace
             output_by_name = {Path(item).name: actual_root / item for item in observed["output_paths"]}
             for column in ("logFC", "F", "PValue", "FDR"):
                 maximum_errors[column] = max(
@@ -92,7 +94,11 @@ def run_edger_golden(*, environment: str = "edger-v1", repo_root: str | Path | N
     )
     output = root / "benchmarks" / "golden" / "edger_v1_verdict.json"
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(comparison.model_dump(mode="json"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    output.write_text(
+        json.dumps(comparison.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     return comparison.model_dump(mode="json") | {"output": str(output)}
 
 
@@ -142,36 +148,45 @@ def _write_case(
     return counts_path, metadata_path
 
 
-def _run_pertura_case(case_name: str, case_dir: Path, case: dict[str, Any]) -> tuple[dict[str, Any], ClaudeRunWorkspace]:
-    workspace = ClaudeRunWorkspace.create(root=case_dir / "runs", input_source=case_dir, run_id=case_name)
-    previous_authority = os.environ.get("PERTURA_AUTHORITY_ROOT")
-    os.environ["PERTURA_AUTHORITY_ROOT"] = str(case_dir / "authority")
-    runtime = PerturaProductRuntime(workspace)
-    try:
-        contract = runtime.inspect_dataset(case_dir, confirmations={"control": "baseline", "replicate": "replicate"})
-        parameters = {
-            "counts_path": "counts.csv",
-            "metadata_path": "metadata.csv",
-            "target_condition": "target",
-            "baseline_condition": "baseline",
-            "paired": bool(case["paired"]),
-            "minimum_cells_per_pseudobulk": 10,
-        }
-        if case.get("confounded"):
-            parameters["covariates"] = ["batch"]
-        result = runtime.run_analysis(
-            "replicate-aware differential expression",
-            capability_id="de.pseudobulk.edger.v1",
-            contract_id=contract["contract_id"],
-            parameters=parameters,
-        )
-        return result, workspace
-    finally:
-        runtime.close()
-        if previous_authority is None:
-            os.environ.pop("PERTURA_AUTHORITY_ROOT", None)
-        else:
-            os.environ["PERTURA_AUTHORITY_ROOT"] = previous_authority
+def _run_pertura_case(
+    case_name: str,
+    case_dir: Path,
+    case: dict[str, Any],
+) -> tuple[dict[str, Any], Path]:
+    """Run the bundled runner while keeping the statistical golden independent.
+
+    Product-path dependency/session behavior is covered by synthetic_ci. This
+    harness intentionally isolates the edgeR implementation so it can compare
+    the exact numerical output against an independently authored R reference.
+    """
+
+    contract = inspect_dataset_path(case_dir)
+    spec = CapabilityRegistry.load_default(include_external=False).get(
+        "de.pseudobulk.edger.v1"
+    )
+    staging = case_dir / "pertura"
+    staging.mkdir()
+    parameters = {
+        "counts_path": "counts.csv",
+        "metadata_path": "metadata.csv",
+        "target_condition": "target",
+        "baseline_condition": "baseline",
+        "paired": bool(case["paired"]),
+        "minimum_cells_per_pseudobulk": 10,
+    }
+    if case.get("confounded"):
+        parameters["covariates"] = ["batch"]
+    request = CapabilityRunRequest(
+        run_id=f"edger-golden-{case_name}",
+        capability_id=spec.capability_id,
+        capability_version=spec.version,
+        contract_id=contract.contract_id,
+        contract_hash=contract.canonical_hash,
+        scope=ScopeKey(dataset_id=contract.dataset_id),
+        parameters=parameters,
+    )
+    result = run_edger_pseudobulk(spec, request, contract, staging)
+    return result.model_dump(mode="json"), staging
 
 
 def _run_reference(case_name: str, case_dir: Path, case: dict[str, Any], script: Path) -> dict[str, Path]:

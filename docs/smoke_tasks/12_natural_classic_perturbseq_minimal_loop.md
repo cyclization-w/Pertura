@@ -13,7 +13,7 @@ This smoke is intentionally more natural than the earlier gate fixtures. Claude 
 Create the synthetic classic Perturb-seq fixture:
 
 ```powershell
-cd "C:\Users\25374\Documents\New project\pertura"
+Set-Location <path-to-pertura-repo>
 python scripts\make_synthetic_classic_perturbseq_fixture.py --out fixtures\synthetic_classic_perturbseq
 ```
 
@@ -39,7 +39,7 @@ synthetic expression signal where KLF1 and erythroid markers are lower in KLF1 p
 This smoke should run without `--stage` because it tests whether Claude can naturally compose the needed stage cards and evidence tools in one realistic task. It should still obey the stage boundaries and must end with a ClaimDecision report.
 
 ```powershell
-cd "C:\Users\25374\Documents\New project\pertura"
+Set-Location <path-to-pertura-repo>
 pertura-claude `
   --input "fixtures\synthetic_classic_perturbseq" `
   --interaction-mode benchmark `

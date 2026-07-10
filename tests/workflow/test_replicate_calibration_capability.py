@@ -4,8 +4,14 @@ import csv
 import json
 from pathlib import Path
 
-from pertura_runtime.claude.workspace import ClaudeRunWorkspace
-from pertura_runtime.product import PerturaProductRuntime
+import pytest
+
+pytestmark = pytest.mark.legacy
+
+from pertura_core import CapabilityRunRequest, ScopeKey
+from pertura_workflow.capabilities import CapabilityRegistry
+from pertura_workflow.capabilities.executors import execute_capability
+from pertura_workflow.intake import contract_with_confirmations, inspect_dataset_path
 
 
 def _write_fixture(root: Path) -> None:
@@ -31,30 +37,39 @@ def _write_fixture(root: Path) -> None:
         writer.writerows(metadata)
 
 
-def test_calibration_permutes_replicate_labels_never_cells(monkeypatch, tmp_path: Path) -> None:
+def test_calibration_permutes_replicate_labels_never_cells(tmp_path: Path) -> None:
     source = tmp_path / "screen"
     _write_fixture(source)
-    monkeypatch.setenv("PERTURA_AUTHORITY_ROOT", str(tmp_path / "authority"))
-    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", input_source=source, run_id="calibration")
-    runtime = PerturaProductRuntime(workspace)
-    try:
-        contract = runtime.inspect_dataset(confirmations={"control": ["baseline", "ntc_a", "ntc_b"], "replicate": "replicate"})
-        result = runtime.run_analysis(
-            "replicate null calibration",
-            capability_id="calibration.replicate_null.v1",
-            contract_id=contract["contract_id"],
-            parameters={
-                "counts_path": "counts.csv",
-                "metadata_path": "metadata.csv",
-                "target_condition": "target",
-                "baseline_condition": "baseline",
-                "negative_control_conditions": ["ntc_a", "ntc_b"],
-                "permutations": 50,
-            },
-        )
-        assert result["status"] == "completed"
-        payload = json.loads((workspace.root / result["output_paths"][0]).read_text(encoding="utf-8"))
-        assert payload["label_permutation"]["permutation_unit"] == "replicate_label"
-        assert payload["cell_label_permutation_performed"] is False
-    finally:
-        runtime.close()
+    contract = contract_with_confirmations(
+        inspect_dataset_path(source),
+        {"control": ["baseline", "ntc_a", "ntc_b"], "replicate": "replicate"},
+    )
+    spec = CapabilityRegistry.load_default(include_external=False).get(
+        "calibration.replicate_null.v1"
+    )
+    request = CapabilityRunRequest(
+        run_id="legacy-wrapper-regression",
+        capability_id=spec.capability_id,
+        capability_version=spec.version,
+        contract_id=contract.contract_id,
+        contract_hash=contract.canonical_hash,
+        scope=ScopeKey(dataset_id=contract.dataset_id),
+        parameters={
+            "counts_path": "counts.csv",
+            "metadata_path": "metadata.csv",
+            "target_condition": "target",
+            "baseline_condition": "baseline",
+            "negative_control_conditions": ["ntc_a", "ntc_b"],
+            "permutations": 50,
+        },
+    )
+    staging = tmp_path / "calibration-output"
+    staging.mkdir()
+    result = execute_capability(spec, request, contract, staging)
+
+    assert result.status.value == "completed"
+    payload = json.loads((staging / result.output_paths[0]).read_text(encoding="utf-8"))
+    assert payload["label_permutation"]["permutation_unit"] == "replicate_label"
+    assert payload["cell_label_permutation_performed"] is False
+
+\n

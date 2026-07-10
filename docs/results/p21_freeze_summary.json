@@ -21,12 +21,12 @@
                                       "strict structured classic recipe produced measured association and downgraded mechanism request"
                                   ],
                         "policy_hash":  "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
-                        "report_path":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\strict_measured_association\\reports\\evidence_report.md",
+                        "report_path":  "cases\\strict_measured_association\\reports\\evidence_report.md",
                         "runner_steps":  [
 
                                          ],
                         "unlinked_claims":  0,
-                        "workspace":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\strict_measured_association"
+                        "workspace":  "cases\\strict_measured_association"
                     },
                     {
                         "case_id":  "basic_runners_measured_association",
@@ -42,13 +42,13 @@
                                       "basic target QC and basic DE runners produced structured outputs before gate evaluation"
                                   ],
                         "policy_hash":  "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
-                        "report_path":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\basic_runners_measured_association\\reports\\evidence_report.md",
+                        "report_path":  "cases\\basic_runners_measured_association\\reports\\evidence_report.md",
                         "runner_steps":  [
                                              "run_basic_target_qc",
                                              "run_basic_de_for_registered_contrast"
                                          ],
                         "unlinked_claims":  0,
-                        "workspace":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\basic_runners_measured_association"
+                        "workspace":  "cases\\basic_runners_measured_association"
                     },
                     {
                         "case_id":  "candidate_claim_gap",
@@ -64,12 +64,12 @@
                                       "linked candidate evaluated; unlinked candidate remained a gap"
                                   ],
                         "policy_hash":  "sha256:e36c98adade4d45f4ab631eb7f09d5c3532f0eb0faf55d56b64caf0134b81935",
-                        "report_path":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\candidate_claim_gap\\reports\\evidence_report.md",
+                        "report_path":  "cases\\candidate_claim_gap\\reports\\evidence_report.md",
                         "runner_steps":  [
 
                                          ],
                         "unlinked_claims":  1,
-                        "workspace":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\candidate_claim_gap"
+                        "workspace":  "cases\\candidate_claim_gap"
                     },
                     {
                         "case_id":  "partial_success_missing_manifest",
@@ -90,13 +90,13 @@
 
                                          ],
                         "unlinked_claims":  0,
-                        "workspace":  "C:\\Users\\25374\\AppData\\Local\\Temp\\pertura_p21_freeze_fjjrjevq\\cases\\partial_success_missing_manifest"
+                        "workspace":  "cases\\partial_success_missing_manifest"
                     }
                 ],
     "schema_version":  "pertura-p21-classic-workflow-v1",
     "natural_claude_smoke":  {
                                  "case_id":  "smoke12_natural_classic_perturbseq",
-                                 "run_path":  "C:\\Users\\25374\\Documents\\New project\\pertura\\.claude_runs\\claude_20260707_002945_4aa87643",
+                                 "run_path":  ".claude_runs\\<redacted-run-id>",
                                  "completion":  true,
                                  "strengths":  [
                                                    "measured_association"

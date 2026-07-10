@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import os
 import subprocess
 from collections import Counter
@@ -11,6 +12,11 @@ from typing import Any
 
 from pertura_core import AnalysisStatus, CapabilityRunRequest, CapabilitySpec, DatasetContract, ResultEnvelope
 from pertura_core.hashing import file_sha256
+from pertura_workflow.capabilities.dependency_inputs import (
+    apply_retained_cells,
+    dependency_grounding_metadata,
+    retained_cells_for_request,
+)
 from pertura_workflow.environment import PROFILE, doctor_environment, environment_lock, environment_prefix, micromamba_path
 
 
@@ -45,9 +51,18 @@ def run_edger_pseudobulk(
     metadata = _read_metadata(metadata_path, cell_column)
     if set(cells) - set(metadata):
         raise ValueError("count matrix contains cells absent from metadata")
-    selected_cells = [cell for cell in cells if metadata[cell].get(condition_column) in {target, baseline}]
+    retained_cells = retained_cells_for_request(staging, request)
+    contrast_cells = [cell for cell in cells if metadata[cell].get(condition_column) in {target, baseline}]
+    selected_cells = apply_retained_cells(contrast_cells, retained_cells)
+    grounding = dependency_grounding_metadata(retained_cells, selected_cells)
     if not selected_cells:
-        return _blocked(spec, request, contract, ("no cells belong to the requested contrast",), {})
+        return _blocked(
+            spec,
+            request,
+            contract,
+            ("no retained cells belong to the requested contrast",),
+            grounding,
+        )
 
     sample_keys: dict[tuple[str, ...], list[str]] = {}
     for cell in selected_cells:
@@ -55,7 +70,13 @@ def run_edger_pseudobulk(
         replicate = row.get(replicate_column, "").strip()
         condition = row.get(condition_column, "").strip()
         if not replicate:
-            return _blocked(spec, request, contract, ("replicate identity is missing for at least one selected cell",), {})
+            return _blocked(
+                spec,
+                request,
+                contract,
+                ("replicate identity is missing for at least one selected cell",),
+                grounding,
+            )
         state = row.get(state_column, "").strip() if state_column else "all"
         covariate_values = tuple(row.get(column, "").strip() for column in covariates)
         key = (replicate, condition, state, *covariate_values)
@@ -95,6 +116,7 @@ def run_edger_pseudobulk(
         return _blocked(spec, request, contract, tuple(blockers), {
             "n_independent_units_per_arm": min(len(condition_units[target]), len(condition_units[baseline])),
             "n_paired_units": len(paired_units),
+            **grounding,
         })
 
     cell_index = {cell: index for index, cell in enumerate(cells)}
@@ -134,6 +156,12 @@ def run_edger_pseudobulk(
     for name in outputs:
         if not (staging / name).is_file():
             raise RuntimeError(f"edgeR runner omitted required output: {name}")
+    output_validation = _validate_edger_outputs(
+        staging,
+        baseline=baseline,
+        target=target,
+        expected_environment_lock=lock,
+    )
     independent = min(len(condition_units[target]), len(condition_units[baseline]))
     strict_units = len(paired_units) if paired else independent
     status = AnalysisStatus.completed if strict_units >= 3 else AnalysisStatus.completed_with_caution
@@ -159,6 +187,8 @@ def run_edger_pseudobulk(
             "minimum_cells_per_pseudobulk": minimum_cells,
             "paired": paired,
             "method": "edgeR_QL",
+            **grounding,
+            **output_validation,
         },
         output_paths=outputs,
         output_hashes={name: file_sha256(staging / name) for name in outputs},
@@ -167,8 +197,241 @@ def run_edger_pseudobulk(
             "design": "paired_donor_plus_condition" if paired else "covariates_plus_condition",
             "environment_profile": PROFILE,
             "environment_lock_hash": lock["lock_hash"],
+            "execution_grounding": grounding,
         },
     )
+
+
+_RESULT_COLUMNS = ("gene", "logFC", "F", "PValue", "FDR", "dispersion")
+_SAMPLE_COLUMNS = ("sample_id", "replicate", "condition", "state", "n_cells")
+_MDS_COLUMNS = ("sample_id", "leading_logFC_1", "leading_logFC_2")
+_R_ENVIRONMENT_KEYS = ("R", "Bioconductor", "edgeR", "limma", "jsonlite")
+
+
+def _validate_edger_outputs(
+    staging: Path,
+    *,
+    baseline: str,
+    target: str,
+    expected_environment_lock: dict[str, Any],
+) -> dict[str, int]:
+    """Fail closed on malformed or scientifically unbound edgeR outputs."""
+
+    sample_fields, sample_rows = _read_strict_csv(
+        staging / "pseudobulk_samples.csv", "pseudobulk sample manifest"
+    )
+    _require_columns(sample_fields, _SAMPLE_COLUMNS, "pseudobulk sample manifest")
+    if not sample_rows:
+        _invalid_output("pseudobulk sample manifest is empty")
+    sample_ids = [row["sample_id"] for row in sample_rows]
+    _require_unique_nonempty(sample_ids, "pseudobulk sample_id")
+    conditions = {row["condition"] for row in sample_rows}
+    if conditions != {baseline, target}:
+        _invalid_output(
+            "pseudobulk sample conditions do not exactly match the requested contrast"
+        )
+    for row in sample_rows:
+        if not row["replicate"] or not row["state"]:
+            _invalid_output("pseudobulk samples require replicate and state identities")
+        n_cells = _finite_number(row["n_cells"], "pseudobulk n_cells")
+        if not n_cells.is_integer() or n_cells <= 0:
+            _invalid_output("pseudobulk n_cells must be a positive integer")
+
+    count_genes = _validate_pseudobulk_counts(
+        staging / "pseudobulk_counts.csv", sample_ids
+    )
+
+    result_fields, result_rows = _read_strict_csv(
+        staging / "edger_results.csv", "edgeR result table"
+    )
+    _require_columns(result_fields, _RESULT_COLUMNS, "edgeR result table")
+    if not result_rows:
+        _invalid_output("edgeR result table is empty")
+    result_genes = [row["gene"] for row in result_rows]
+    _require_unique_nonempty(result_genes, "edgeR result gene")
+    if not set(result_genes).issubset(count_genes):
+        _invalid_output("edgeR result contains genes absent from pseudobulk counts")
+    for row in result_rows:
+        _finite_number(row["logFC"], "edgeR logFC")
+        f_statistic = _finite_number(row["F"], "edgeR F")
+        p_value = _finite_number(row["PValue"], "edgeR PValue")
+        fdr = _finite_number(row["FDR"], "edgeR FDR")
+        dispersion = _finite_number(row["dispersion"], "edgeR dispersion")
+        if f_statistic < 0 or dispersion < 0:
+            _invalid_output("edgeR F and dispersion must be nonnegative")
+        if not (0 <= p_value <= 1) or not (0 <= fdr <= 1):
+            _invalid_output("edgeR PValue and FDR must lie in [0, 1]")
+
+    design_fields, design_rows = _read_strict_csv(
+        staging / "design_matrix.csv", "edgeR design matrix"
+    )
+    if not design_fields or design_fields[0] != "sample_id":
+        _invalid_output("edgeR design matrix must begin with sample_id")
+    design_columns = list(design_fields[1:])
+    if not design_columns:
+        _invalid_output("edgeR design matrix contains no model columns")
+    if [row["sample_id"] for row in design_rows] != sample_ids:
+        _invalid_output("edgeR design matrix does not align with pseudobulk samples")
+    condition_columns = [name for name in design_columns if name.startswith("condition")]
+    if len(condition_columns) != 1:
+        _invalid_output("edgeR design matrix lacks a unique condition contrast column")
+    design_values = [
+        [_finite_number(row[column], f"edgeR design value {column}") for column in design_columns]
+        for row in design_rows
+    ]
+    if _matrix_rank(design_values) != len(design_columns):
+        _invalid_output("edgeR design matrix is not full rank")
+
+    mds_fields, mds_rows = _read_strict_csv(staging / "mds.csv", "edgeR MDS table")
+    _require_columns(mds_fields, _MDS_COLUMNS, "edgeR MDS table")
+    if [row["sample_id"] for row in mds_rows] != sample_ids:
+        _invalid_output("edgeR MDS table does not align with pseudobulk samples")
+    for row in mds_rows:
+        _finite_number(row["leading_logFC_1"], "edgeR MDS coordinate 1")
+        _finite_number(row["leading_logFC_2"], "edgeR MDS coordinate 2")
+
+    try:
+        r_environment = json.loads(
+            (staging / "r_environment.json").read_text(encoding="utf-8")
+        )
+        observed_lock = json.loads(
+            (staging / "environment_lock.json").read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        _invalid_output(f"edgeR environment metadata is invalid JSON: {exc}")
+    if not isinstance(r_environment, dict):
+        _invalid_output("edgeR R environment metadata must be an object")
+    for key in _R_ENVIRONMENT_KEYS:
+        if not isinstance(r_environment.get(key), str) or not r_environment[key].strip():
+            _invalid_output(f"edgeR R environment is missing {key}")
+    session_info = r_environment.get("sessionInfo")
+    if not (
+        (isinstance(session_info, str) and session_info.strip())
+        or (
+            isinstance(session_info, list)
+            and session_info
+            and all(isinstance(item, str) and item.strip() for item in session_info)
+        )
+    ):
+        _invalid_output("edgeR R environment is missing sessionInfo")
+    expected_versions = expected_environment_lock.get("expected_versions") or {}
+    for key, expected in expected_versions.items():
+        if str(r_environment.get(key) or "") != str(expected):
+            _invalid_output(f"edgeR R environment version mismatch for {key}")
+    if observed_lock != expected_environment_lock:
+        _invalid_output("edgeR environment lock output does not match the executed lock")
+
+    return {
+        "validated_result_gene_count": len(result_rows),
+        "validated_pseudobulk_sample_count": len(sample_rows),
+        "validated_design_column_count": len(design_columns),
+    }
+
+
+def _validate_pseudobulk_counts(path: Path, sample_ids: list[str]) -> set[str]:
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        fields = tuple(reader.fieldnames or ())
+        if len(fields) != len(set(fields)) or not fields or fields[0] != "gene":
+            _invalid_output("pseudobulk count matrix has an invalid or duplicate header")
+        if list(fields[1:]) != sample_ids:
+            _invalid_output("pseudobulk count matrix does not align with sample manifest")
+        genes: set[str] = set()
+        for row in reader:
+            if None in row:
+                _invalid_output("pseudobulk count matrix contains extra fields")
+            gene = str(row.get("gene") or "").strip()
+            if not gene or gene in genes:
+                _invalid_output("pseudobulk count genes must be nonempty and unique")
+            genes.add(gene)
+            for sample_id in sample_ids:
+                value = _finite_number(row.get(sample_id), "pseudobulk count")
+                if value < 0 or not value.is_integer():
+                    _invalid_output("pseudobulk counts must be nonnegative integers")
+    if not genes:
+        _invalid_output("pseudobulk count matrix is empty")
+    return genes
+
+
+def _read_strict_csv(path: Path, label: str) -> tuple[tuple[str, ...], list[dict[str, str]]]:
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            fields = tuple(reader.fieldnames or ())
+            if not fields or any(not field for field in fields):
+                _invalid_output(f"{label} has an empty header")
+            if len(fields) != len(set(fields)):
+                _invalid_output(f"{label} has duplicate columns")
+            rows: list[dict[str, str]] = []
+            for row in reader:
+                if None in row:
+                    _invalid_output(f"{label} contains extra fields")
+                normalized = {
+                    field: str(row.get(field) or "").strip() for field in fields
+                }
+                if not any(normalized.values()):
+                    _invalid_output(f"{label} contains an empty row")
+                rows.append(normalized)
+            return fields, rows
+    except OSError as exc:
+        _invalid_output(f"{label} cannot be read: {exc}")
+
+
+def _require_columns(
+    observed: tuple[str, ...], required: tuple[str, ...], label: str
+) -> None:
+    missing = sorted(set(required) - set(observed))
+    if missing:
+        _invalid_output(f"{label} is missing required columns: {', '.join(missing)}")
+
+
+def _require_unique_nonempty(values: list[str], label: str) -> None:
+    if any(not value for value in values):
+        _invalid_output(f"{label} contains an empty identity")
+    duplicates = sorted(value for value, count in Counter(values).items() if count > 1)
+    if duplicates:
+        _invalid_output(f"{label} contains duplicate identities: {', '.join(duplicates[:5])}")
+
+
+def _finite_number(value: Any, label: str) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        _invalid_output(f"{label} is not numeric")
+    if not math.isfinite(number):
+        _invalid_output(f"{label} is not finite")
+    return number
+
+
+def _matrix_rank(matrix: list[list[float]]) -> int:
+    if not matrix or not matrix[0]:
+        return 0
+    work = [list(row) for row in matrix]
+    rows = len(work)
+    columns = len(work[0])
+    scale = max((abs(value) for row in work for value in row), default=1.0)
+    tolerance = max(1.0, scale) * 1e-10
+    rank = 0
+    for column in range(columns):
+        pivot = max(range(rank, rows), key=lambda row: abs(work[row][column]))
+        if abs(work[pivot][column]) <= tolerance:
+            continue
+        work[rank], work[pivot] = work[pivot], work[rank]
+        pivot_value = work[rank][column]
+        for candidate in range(rank + 1, rows):
+            factor = work[candidate][column] / pivot_value
+            if abs(factor) <= tolerance:
+                continue
+            for remaining in range(column, columns):
+                work[candidate][remaining] -= factor * work[rank][remaining]
+        rank += 1
+        if rank == rows:
+            break
+    return rank
+
+
+def _invalid_output(message: str) -> None:
+    raise RuntimeError(f"edgeR output validation failed: {message}")
 
 
 def _blocked(spec: CapabilitySpec, request: CapabilityRunRequest, contract: DatasetContract, blockers: tuple[str, ...], metrics: dict[str, Any]) -> ResultEnvelope:

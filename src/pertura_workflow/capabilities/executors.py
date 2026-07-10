@@ -88,14 +88,35 @@ def _not_implemented(spec: CapabilitySpec, request: CapabilityRunRequest, contra
 
 
 def _validate_standard(spec: CapabilitySpec, request: CapabilityRunRequest, contract: DatasetContract, result: ResultEnvelope) -> None:
-    if result.request_id != request.request_id:
+    if result.run_id != request.run_id or result.request_id != request.request_id:
         raise ValueError("executor returned result for a different request")
     if result.capability_id != spec.capability_id or result.capability_version != spec.version:
         raise ValueError("executor returned the wrong capability identity")
+    if result.capability_trust != spec.trust_level:
+        raise ValueError("executor returned the wrong capability trust")
     if result.contract_id != contract.contract_id or result.contract_hash != contract.canonical_hash:
         raise ValueError("executor returned the wrong contract identity")
+    if result.scope.canonical_hash != request.scope.canonical_hash:
+        raise ValueError("executor returned the wrong analysis scope")
+    if result.result_kind != spec.output_kind:
+        raise ValueError("executor returned the wrong result kind")
     if result.source_class != spec.source_class:
         raise ValueError("executor source class exceeds or differs from its capability spec")
+    allowed_statuses = {
+        "diagnostic": {item.value for item in DiagnosticStatus},
+        "analysis": {item.value for item in AnalysisStatus},
+        "virtual": {item.value for item in VirtualStatus},
+        "report": {item.value for item in AnalysisStatus},
+    }[spec.kind]
+    status = str(getattr(result.status, "value", result.status))
+    if status not in allowed_statuses:
+        raise ValueError("executor returned a status outside the capability kind")
+    if tuple(item.canonical_hash for item in result.dependencies) != tuple(
+        item.canonical_hash for item in request.dependencies
+    ):
+        raise ValueError("executor changed or omitted authoritative dependencies")
+    if set(result.output_paths) != set(result.output_hashes):
+        raise ValueError("executor output paths and hashes do not match")
 
 
 _EXECUTORS: dict[str, Executor] = {

@@ -1,57 +1,52 @@
-# v0.2.0 capability-first implementation status
+# v0.2 capability-first implementation status
 
-This file records the 0.2.0a3 code checkpoint. It must not be represented as
-the final 0.2.0 scientific release.
+This file records the `0.2.0a4` pre-benchmark consolidation checkpoint. It is not the final `0.2.0` scientific release.
 
 ## Code checkpoint
 
-- The v0.2 core schemas, five MCP tools, PromotionPolicy, receipt payload and
-  ScopeKey semantics remain frozen.
-- Trusted capability receipts use a broker-lifetime in-memory Ed25519 key.
-  Receipts record controlled-runtime provenance; they are not an adversarial
-  same-user sandbox claim.
-- Validator-passed exploratory results are committed as
-  validated_untrusted, carry no receipt and cannot support strong measured
-  statements.
-- Twenty granular 0.1.0 candidate capabilities cover P0-P3 intake/design,
-  guide assignment/QC, state/module reference, target reliability, high-MOI
-  SCEPTRE, Propeller composition, sensitivity and null calibration.
+- The v0.2 core schemas, five MCP tools, promotion policy, receipt payload, and `ScopeKey` semantics remain frozen.
+- Product policy is runtime-neutral and shared by the manifest, broker, receipt, promotion, report, and compatibility snapshot.
+- Broker signing keys are ephemeral. Persisted authority-session records retain public keys and signed session roots so separate CLI processes can finalize historical results without re-signing them.
+- Receipts record execution provenance inside the controlled Pertura runtime. They are not a claim that arbitrary same-user local code is cryptographically unforgeable; the product boundary is preventing unsupported scientific claim promotion.
+- The default capability-first import path does not load legacy registrars, stages, classic recipes, or evidence tools.
+- A single planner selects methods from confirmed design facts and committed diagnostics. Runtime-owned dependency resolution reconstructs scope, status, trust, and hash from the commit store.
+- Validator-passed exploratory results are committed as `validated_untrusted`, carry no trusted receipt, and cannot support strong measured statements.
+- Twenty granular `0.1.0` candidate capabilities cover P0-P3 intake/design, guide assignment/QC, state/module reference, target reliability, SCEPTRE, Propeller, sensitivity, and null calibration.
 - Existing composite capabilities remain deprecated compatibility wrappers.
-- pertura_bench now exposes a 20-capability coverage matrix, six local
-  protocol cases per candidate and a scheduler-neutral server plan.
-- SCEPTRE, Propeller and Mixscape adapters are implemented but their optional
-  environments and real-data integrations are intentionally not run locally.
+- PerturaBench stores versioned case specifications and executes synthetic cases through the product path. Optional environment integrations explicitly report when they were not run.
+- Wheel and sdist checks cover capability specs, scientific runners, environment profiles, dashboard assets, benchmark cases/schemas, and compatibility snapshots.
 
 Expected audit state:
 
-    build_version: 0.2.0a3
-    code_ready: true
-    local_fixture_ready: true
-    real_benchmark_ready: false
-    release_ready: false
-    default Pertura domain tools: 5
-    bundled capability specs: 29
-    new exploratory candidate specs: 20
+```text
+build_version: 0.2.0a4
+repository_ready: true
+runtime_spine_ready: true
+code_ready: true
+local_fixture_ready: true
+real_benchmark_ready: false
+release_ready: false
+default Pertura domain tools: 5
+```
+
+`optional_environment_ready` is machine-specific and is not conflated with repository correctness.
 
 ## Deliberately blocking release
 
 Run:
 
-    pertura release-check --repo .
-    python -m pertura_bench capabilities matrix
-    python -m pertura_bench export-server-plan --output server-plan.json
+```bash
+pertura release-check --repo .
+python -m pertura_bench run-matrix --tier synthetic_ci
+python -m pertura_bench export-server-plan --output server-plan.json
+```
 
-Final 0.2.0 remains blocked until:
+Final `0.2.0` remains blocked until:
 
-1. Replogle, Papalexi, Norman and Kang locks/subsets exist and all mapped
-   full-data capability jobs have portable verdicts.
-2. Candidate scientific adapters pass their method-specific real-data and null
-   calibration thresholds.
-3. crispri_screen_v1 and crispra_screen_v1 reference independent
-   expert-adjudicated calibration/evaluation sets and pass the production
-   reliability metrics.
-4. Optional execution environments used for release verdicts have frozen
-   package/build manifests.
+1. Replogle, Papalexi, Norman, and Kang source/conversion/subset locks exist and mapped full-data jobs have portable verdicts.
+2. Candidate scientific adapters pass method-specific real-data, null-calibration, failure-detection, runtime, and memory thresholds.
+3. `crispri_screen_v1` and `crispra_screen_v1` reference independent expert-adjudicated calibration/evaluation sets and pass production reliability metrics.
+4. Optional execution environments used for release verdicts have frozen package/build manifests.
+5. Server outputs bind the same Git commit, wheel, case specifications, environment locks, and dataset locks.
 
-Synthetic fixtures, published proxy labels, copied hashes or a YAML
-validated flag cannot remove these blockers.
+Synthetic fixtures, published-proxy labels, copied hashes, or a YAML `validated` flag cannot remove these blockers.

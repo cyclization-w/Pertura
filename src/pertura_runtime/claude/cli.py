@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import warnings
 from pathlib import Path
 
 from pertura_runtime.claude.agent import ClaudePerturaAgent
 from pertura_runtime.claude.options import ClaudeRuntimeOptions
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
-from pertura_runtime.stages import StageCatalogError, validate_stage_id
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,13 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--max-turns", type=int, default=20, help="Maximum Claude agent turns.")
     parser.add_argument("--interaction-mode", choices=["benchmark", "interactive"], default="benchmark", help="Benchmark mode never asks the user; interactive mode may collect metadata as user-supplied metadata only.")
-    parser.add_argument("--stage", type=str, default=None, help="Run exactly one Evidence-Aware Stage Catalog stage by id.")
-    parser.add_argument(
-        "--tool-surface",
-        choices=["capability", "legacy"],
-        default="capability",
-        help="Default capability surface exposes exactly five Pertura tools. Legacy registrars are deprecated.",
-    )
+
     parser.add_argument(
         "--policy",
         dest="policy_profile",
@@ -56,13 +48,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Do not disallow WebFetch/WebSearch. Default blocks web tools for local smoke tests.",
     )
     args = parser.parse_args(argv)
-    if args.tool_surface == "legacy":
-        warnings.warn("The legacy registrar/stage tool surface is deprecated and read-compatibility only.", DeprecationWarning, stacklevel=2)
-    try:
-        stage_id = validate_stage_id(args.stage)
-    except StageCatalogError as exc:
-        parser.error(str(exc))
-
 
     task = args.task
     if args.task_file is not None:
@@ -84,9 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         python_preflight_timeout_s=args.python_preflight_timeout_s,
         python_preflight_packages=[item.strip() for item in args.python_preflight_packages.split(",") if item.strip()] if args.python_preflight_packages else None,
         interaction_mode=args.interaction_mode,
-        stage_id=stage_id,
         policy_profile=args.policy_profile,
-        tool_surface=args.tool_surface,
     )
     agent = ClaudePerturaAgent(
         workspace=workspace,

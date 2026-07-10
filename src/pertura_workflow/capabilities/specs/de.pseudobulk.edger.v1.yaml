@@ -8,8 +8,8 @@ trust_level: builtin_trusted
 executor: edger_pseudobulk
 validator: standard
 input_requirements: [raw_integer_counts, confirmed_replicates, retained_cells]
-depends_on: [target.reliability.v2]
-dependency_kinds: [contract, retained_cell_manifest, target_reliability]
+depends_on: [target.reliability.v2, calibration.replicate_null.v1]
+dependency_kinds: [contract, retained_cell_manifest, target_reliability, calibration]
 output_kind: differential_expression
 source_class: measured_result
 claim_permissions: [measured_association]
@@ -18,3 +18,8 @@ parameters_schema: {type: object}
 implemented: true
 metadata:
   environment_profile: edger-v1
+  dependency_policy:
+    target.reliability.v2:
+      accepted_statuses: [screen_passed]
+    calibration.replicate_null.v1:
+      accepted_statuses: [completed]

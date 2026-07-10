@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import multiprocessing
 import os
 import secrets
 import socket
 import shutil
+import sqlite3
 import tempfile
 import time
 from multiprocessing.connection import Client, Listener
@@ -17,6 +17,7 @@ from uuid import uuid4
 from pertura_core import CapabilityRunRequest, CapabilityTrust, DatasetContract, DesignConfirmation, PromotionDecision, ResultEnvelope, ScientificStatement
 from pertura_core.hashing import canonical_json, file_sha256
 from pertura_runtime.verifier.receipts import ReceiptSigner, verify_receipt
+from pertura_runtime.verifier.session_store import AuthoritySessionStore
 from pertura_runtime.verifier.store import AuthorityStore
 
 
@@ -27,9 +28,10 @@ class VerifierBrokerError(RuntimeError):
 class VerifierBroker:
     """Lifecycle wrapper for the local, separately keyed verifier process."""
 
-    def __init__(self, *, authority_dir: str | Path, policy_hash: str, export_dir: str | Path | None = None, output_root: str | Path | None = None, workspace_root: str | Path | None = None) -> None:
+    def __init__(self, *, authority_dir: str | Path, policy_hash: str, run_id: str | None = None, export_dir: str | Path | None = None, output_root: str | Path | None = None, workspace_root: str | Path | None = None) -> None:
         self.authority_dir = Path(authority_dir).resolve()
         self.policy_hash = policy_hash
+        self.run_id = run_id
         self.export_dir = Path(export_dir).resolve() if export_dir else None
         self.output_root = Path(output_root).resolve() if output_root else (self.authority_dir / "published")
         self.workspace_root = Path(workspace_root).resolve() if workspace_root else None
@@ -38,6 +40,8 @@ class VerifierBroker:
         self._process: multiprocessing.Process | None = None
         self._public_key: str | None = None
         self._instance_id: str | None = None
+        self._session_id: str | None = None
+        self._launch_instance_id: str | None = None
 
     @property
     def public_key(self) -> str:
@@ -51,45 +55,49 @@ class VerifierBroker:
             raise VerifierBrokerError("verifier broker is not running")
         return self._instance_id
 
+    @property
+    def session_id(self) -> str:
+        if not self._session_id:
+            raise VerifierBrokerError("verifier broker has not opened an authority session")
+        return self._session_id
+
     def start(self, *, timeout: float = 15.0) -> "VerifierBroker":
-        if self._process and self._process.is_alive():
-            return self
+        if self._process:
+            if self._process.is_alive():
+                return self
+            self._abort_owned_sessions(reason="broker_dead_before_restart")
+            self._reset_client_state()
         self.authority_dir.mkdir(parents=True, exist_ok=True)
-        self._process = multiprocessing.Process(
-            target=_serve,
-            args=(self._address, self._family, self._authkey, str(self.authority_dir / "authority.sqlite3"), self.policy_hash, str(self.output_root), str(self.workspace_root) if self.workspace_root else None),
-            name="pertura-verifier",
-            daemon=True,
-        )
-        self._process.start()
+        self._launch_instance_id = f"broker_{uuid4().hex}"
+        self._spawn_process()
         deadline = time.monotonic() + timeout
         last_error: Exception | None = None
         attempted_pipe_fallback = False
         while time.monotonic() < deadline:
-            if not self._process.is_alive():
+            if not self._process or not self._process.is_alive():
+                exitcode = self._process.exitcode if self._process else None
+                self._abort_owned_sessions(reason="broker_exited_during_startup")
                 if self._family == "AF_PIPE" and not attempted_pipe_fallback:
-                    # Restricted Windows service accounts can deny named-pipe
-                    # creation. Preserve process isolation and auth-key secrecy
-                    # with an authenticated loopback fallback in that environment.
                     attempted_pipe_fallback = True
                     self._address, self._family = _new_loopback_address()
-                    self._process = multiprocessing.Process(
-                        target=_serve,
-                        args=(self._address, self._family, self._authkey, str(self.authority_dir / "authority.sqlite3"), self.policy_hash, str(self.output_root), str(self.workspace_root) if self.workspace_root else None),
-                        name="pertura-verifier",
-                        daemon=True,
-                    )
-                    self._process.start()
+                    self._spawn_process()
                     continue
-                raise VerifierBrokerError(f"verifier broker exited during startup ({self._process.exitcode})")
+                self._reset_client_state()
+                raise VerifierBrokerError(f"verifier broker exited during startup ({exitcode})")
             try:
                 response = self._call({"action": "ping"})
                 self._public_key = response["public_key"]
                 self._instance_id = response["broker_instance_id"]
+                self._session_id = response.get("session_id")
                 return self
             except (OSError, EOFError, ConnectionError) as exc:
                 last_error = exc
                 time.sleep(0.05)
+        if self._process and self._process.is_alive():
+            self._process.terminate()
+            self._process.join(timeout=2)
+        self._abort_owned_sessions(reason="broker_start_timeout")
+        self._reset_client_state()
         raise VerifierBrokerError(f"verifier broker did not start: {last_error}")
 
     def register_contract(self, contract: DatasetContract) -> None:
@@ -112,9 +120,12 @@ class VerifierBroker:
         response = self._call({"action": "run", "request": request.model_dump(mode="json")})
         result = response["result"]
         receipt = response.get("receipt")
+        authority_session = response.get("authority_session") or {}
+        if authority_session.get("session_id"):
+            self._session_id = authority_session["session_id"]
         if receipt and not verify_receipt(
             receipt,
-            authoritative_public_key=self.public_key,
+            authoritative_public_key=authority_session.get("public_key") or self.public_key,
             expected_policy_hash=self.policy_hash,
         ):
             raise VerifierBrokerError("broker returned an invalid receipt")
@@ -153,17 +164,22 @@ class VerifierBroker:
     def stop(self, *, graceful: bool = True) -> None:
         if not self._process:
             return
-        if self._process.is_alive() and graceful:
+        delivered = False
+        if self._process.is_alive():
             try:
-                self._call({"action": "stop"})
-            except (OSError, EOFError):
+                self._call({"action": "stop" if graceful else "abort"})
+                delivered = True
+            except (OSError, EOFError, ConnectionError):
                 pass
         self._process.join(timeout=5)
         if self._process.is_alive():
             self._process.terminate()
             self._process.join(timeout=2)
-        self._process = None
-        self._public_key = None
+        if not delivered:
+            self._abort_owned_sessions(
+                reason="broker_dead_before_stop" if graceful else "broker_aborted_after_disconnect"
+            )
+        self._reset_client_state()
 
     def __enter__(self) -> "VerifierBroker":
         return self.start()
@@ -172,19 +188,67 @@ class VerifierBroker:
         self.stop(graceful=exc is None)
 
     def _call(self, message: dict[str, Any]) -> dict[str, Any]:
-        connection = Client(self._address, family=self._family, authkey=self._authkey)
         try:
-            connection.send(message)
-            response = connection.recv()
-        finally:
-            connection.close()
+            connection = Client(self._address, family=self._family, authkey=self._authkey)
+            try:
+                connection.send(message)
+                response = connection.recv()
+            finally:
+                connection.close()
+        except (OSError, EOFError, ConnectionError):
+            if not self._process or not self._process.is_alive():
+                self._abort_owned_sessions(reason="broker_died_during_request")
+            raise
         if not response.get("ok"):
             raise VerifierBrokerError(str(response.get("error") or "verifier request failed"))
         return response
 
     def _require_alive(self) -> None:
         if not self._process or not self._process.is_alive():
+            self._abort_owned_sessions(reason="broker_process_not_alive")
             raise VerifierBrokerError("verifier broker is unavailable; results remain untrusted")
+
+    def _spawn_process(self) -> None:
+        if not self._launch_instance_id:
+            raise VerifierBrokerError("broker launch identity is missing")
+        self._process = multiprocessing.Process(
+            target=_serve,
+            args=(
+                self._address,
+                self._family,
+                self._authkey,
+                str(self.authority_dir / "authority.sqlite3"),
+                self.policy_hash,
+                str(self.output_root),
+                str(self.workspace_root) if self.workspace_root else None,
+                self.run_id,
+                self._launch_instance_id,
+            ),
+            name="pertura-verifier",
+            daemon=True,
+        )
+        self._process.start()
+
+    def _abort_owned_sessions(self, *, reason: str) -> tuple[str, ...]:
+        database = self.authority_dir / "authority.sqlite3"
+        instance_id = self._launch_instance_id or self._instance_id
+        if not database.is_file() or (not self.run_id and not instance_id):
+            return ()
+        try:
+            return AuthoritySessionStore(database).abort_open_sessions(
+                run_id=self.run_id,
+                broker_instance_id=instance_id,
+                reason=reason,
+            )
+        except (OSError, RuntimeError, ValueError, sqlite3.Error):
+            return ()
+
+    def _reset_client_state(self) -> None:
+        self._process = None
+        self._public_key = None
+        self._instance_id = None
+        self._session_id = None
+        self._launch_instance_id = None
 
     def _export_projection(self, result: dict[str, Any], receipt: dict[str, Any] | None) -> None:
         self.export_dir.mkdir(parents=True, exist_ok=True)
@@ -202,15 +266,32 @@ class VerifierBroker:
                 pass
 
 
-def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_hash: str, output_root: str, workspace_root: str | None) -> None:
+def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_hash: str, output_root: str, workspace_root: str | None, initial_run_id: str | None, instance_id: str) -> None:
     from pertura_workflow.capabilities import CapabilityRegistry
     from pertura_workflow.capabilities.executors import execute_capability
 
     # Receipts are within-run provenance. The signing authority is deliberately
     # ephemeral: no private key is persisted into a same-user readable path.
     signer = ReceiptSigner()
-    instance_id = f"broker_{uuid4().hex}"
     store = AuthorityStore(store_path)
+    session_store = AuthoritySessionStore(store_path)
+    sessions: dict[str, str] = {}
+
+    def ensure_session(run_id: str) -> str:
+        current_id = sessions.get(run_id)
+        current = session_store.get_session(current_id) if current_id else None
+        if current is not None and current.status == "open":
+            return current.session_id
+        record = session_store.start_session(
+            session_id=f"authority_session_{uuid4().hex}",
+            run_id=run_id,
+            broker_instance_id=instance_id,
+            public_key=signer.public_key_b64,
+            policy_hash=policy_hash,
+        )
+        sessions[run_id] = record.session_id
+        return record.session_id
+
     registry = CapabilityRegistry.load_default(include_external=False)
     try:
         listener = Listener(address, family=family, authkey=authkey)
@@ -229,7 +310,13 @@ def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_ha
                 message = connection.recv()
                 action = message.get("action")
                 if action == "ping":
-                    response = {"ok": True, "public_key": signer.public_key_b64, "broker_instance_id": instance_id}
+                    ping_session_id = ensure_session(initial_run_id) if initial_run_id else None
+                    response = {
+                        "ok": True,
+                        "public_key": signer.public_key_b64,
+                        "broker_instance_id": instance_id,
+                        "session_id": ping_session_id,
+                    }
                 elif action == "register_contract":
                     contract = DatasetContract.model_validate(message["contract"])
                     store.put_contract(contract)
@@ -244,6 +331,7 @@ def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_ha
                     response = {"ok": True, "stale_results": stale}
                 elif action == "run":
                     request = CapabilityRunRequest.model_validate(message["request"])
+                    session_id = ensure_session(request.run_id)
                     spec = registry.get(request.capability_id, request.capability_version)
                     contract = store.get_contract(request.contract_id)
                     if contract is None or contract.canonical_hash != request.contract_hash:
@@ -251,14 +339,22 @@ def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_ha
                     dependency_issues = store.validate_dependencies(request.dependencies)
                     if dependency_issues:
                         raise ValueError("invalid explicit dependencies: " + "; ".join(dependency_issues))
+                    declared_issues = _validate_declared_dependencies(spec, request)
+                    if declared_issues:
+                        raise ValueError(
+                            "missing declared scientific dependencies: "
+                            + "; ".join(declared_issues)
+                        )
                     existing = store.get_result_for_request(request.request_id)
                     if existing is not None:
                         receipt = store.get_receipt_for_result(existing.result_id)
+                        historical_session = session_store.session_for_result(existing.result_id)
                         response = {
                             "ok": True,
                             "result": existing.model_dump(mode="json"),
                             "receipt": receipt.model_dump(mode="json") if receipt else None,
                             "replayed": True,
+                            "authority_session": historical_session.to_dict() if historical_session else None,
                         }
                     else:
                         with tempfile.TemporaryDirectory(prefix="pertura-verify-") as staging:
@@ -268,10 +364,13 @@ def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_ha
                         if spec.trust_level != CapabilityTrust.builtin_trusted:
                             result = _with_verification_state(result, "validated_untrusted")
                             store.commit_result(result, None)
+                            session_store.bind_result(result_id=result.result_id, run_id=result.run_id, session_id=session_id)
+                            authority_session = session_store.get_session(session_id)
                             response = {
                                 "ok": True,
                                 "result": result.model_dump(mode="json"),
                                 "receipt": None,
+                                "authority_session": authority_session.to_dict() if authority_session else None,
                                 "replayed": False,
                             }
                         else:
@@ -282,10 +381,13 @@ def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_ha
                                 broker_instance_id=instance_id,
                             )
                             store.commit_result(result, receipt)
+                            session_store.bind_result(result_id=result.result_id, run_id=result.run_id, session_id=session_id)
+                            authority_session = session_store.get_session(session_id)
                             response = {
                                 "ok": True,
                                 "result": result.model_dump(mode="json"),
                                 "receipt": receipt.model_dump(mode="json"),
+                                "authority_session": authority_session.to_dict() if authority_session else None,
                                 "replayed": False,
                             }
                 elif action == "record_confirmation":
@@ -295,14 +397,8 @@ def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_ha
                 elif action == "list_results":
                     response = {"ok": True, "results": [item.model_dump(mode="json") for item in store.list_results(str(message["run_id"]))]}
                 elif action == "list_committed":
-                    committed = []
-                    for result in store.list_results(str(message["run_id"])):
-                        receipt = store.get_receipt_for_result(result.result_id)
-                        committed.append({
-                            "result": result.model_dump(mode="json"),
-                            "receipt": receipt.model_dump(mode="json") if receipt else None,
-                        })
-                    response = {"ok": True, "committed": committed}
+                    projection = session_store.project_run(str(message["run_id"]), expected_policy_hash=policy_hash)
+                    response = {"ok": True, "committed": list(projection.committed), "projection": projection.to_dict()}
                 elif action == "commit_promotion":
                     statement = ScientificStatement.model_validate(message["statement"])
                     decision = PromotionDecision.model_validate(message["decision"])
@@ -315,13 +411,17 @@ def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_ha
                     response = {"ok": True, "events": store.list_events(str(message["run_id"]), int(message.get("after", 0)))}
                 elif action == "seal_run":
                     run_id = str(message["run_id"])
-                    hashes = store.receipt_hashes(run_id)
-                    root_digest = "sha256:" + hashlib.sha256(canonical_json(hashes).encode("utf-8")).hexdigest()
-                    signature = signer.sign_bytes(canonical_json({"run_id": run_id, "root_digest": root_digest}).encode("utf-8"))
-                    store.seal_run(run_id, root_digest, signature, signer.public_key_b64)
-                    response = {"ok": True, "run_id": run_id, "root_digest": root_digest, "signature": signature, "public_key": signer.public_key_b64}
+                    session_id = ensure_session(run_id)
+                    sealed = _seal_authority_session(session_store, signer, session_id)
+                    response = {"ok": True} | sealed.to_dict()
+                elif action == "abort":
+                    for session_id in sessions.values():
+                        session_store.abort_session(session_id)
+                    response = {"ok": True, "sessions": list(sessions.values())}
+                    running = False
                 elif action == "stop":
-                    response = {"ok": True}
+                    sealed_sessions = [_seal_authority_session(session_store, signer, session_id).to_dict() for session_id in sessions.values()]
+                    response = {"ok": True, "sessions": sealed_sessions}
                     running = False
                 else:
                     raise ValueError("unsupported verifier action")
@@ -338,6 +438,19 @@ def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_ha
                 pass
 
 
+def _seal_authority_session(
+    session_store: AuthoritySessionStore,
+    signer: ReceiptSigner,
+    session_id: str,
+):
+    current = session_store.get_session(session_id)
+    if current is None:
+        raise ValueError("unknown authority session")
+    if current.status == "sealed":
+        return current
+    signing_record = session_store.signing_record(session_id)
+    signature = signer.sign_bytes(canonical_json(signing_record.signing_payload()).encode("utf-8"))
+    return session_store.seal_session(session_id=session_id, root_digest=signing_record.root_digest or "", signature=signature)
 def _new_address(authority_dir: Path) -> tuple[Any, str]:
     token = uuid4().hex
     if os.name == "nt":
@@ -396,34 +509,62 @@ def _with_verification_state(result: ResultEnvelope, state: str) -> ResultEnvelo
     return ResultEnvelope.model_validate(payload)
 
 
+def _validate_declared_dependencies(spec: Any, request: CapabilityRunRequest) -> tuple[str, ...]:
+    """Fail closed when a trusted runner lacks its declared scientific inputs."""
+
+    if spec.trust_level != CapabilityTrust.builtin_trusted or not spec.implemented:
+        return ()
+    roles = {str(item.role or "") for item in request.dependencies}
+    kinds = {str(item.kind or "") for item in request.dependencies}
+    kinds.add("contract")
+    issues: list[str] = []
+    for capability_id in spec.depends_on:
+        if capability_id not in roles:
+            issues.append(f"missing capability dependency {capability_id}")
+    runtime_only = {"environment", "prediction", "split_contract"}
+    for kind in spec.dependency_kinds:
+        if kind not in kinds and kind not in runtime_only:
+            issues.append(f"missing dependency kind {kind}")
+    return tuple(issues)
+
+
 def _write_dependency_projection(
     store: AuthorityStore,
     request: CapabilityRunRequest,
     staging: Path,
     workspace_root: Path | None,
 ) -> None:
-    results = []
+    results_by_id: dict[str, dict[str, Any]] = {}
     dependency_root = staging / "_dependencies"
     for dependency in request.dependencies:
         result = store.get_result(dependency.object_id)
         if result is None:
             continue
-        payload = result.model_dump(mode="json")
-        local_paths = []
-        for output in result.output_paths:
-            source = Path(output)
-            if not source.is_absolute() and workspace_root is not None:
-                source = workspace_root / source
-            source = source.resolve()
-            if not source.is_file():
-                continue
-            destination = dependency_root / result.result_id / source.name
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
-            local_paths.append(str(destination))
-        payload["local_output_paths"] = local_paths
-        results.append(payload)
+        payload = results_by_id.get(result.result_id)
+        if payload is None:
+            payload = result.model_dump(mode="json")
+            local_paths = []
+            for output in result.output_paths:
+                source = Path(output)
+                if not source.is_absolute() and workspace_root is not None:
+                    source = workspace_root / source
+                source = source.resolve()
+                if not source.is_file():
+                    continue
+                destination = dependency_root / result.result_id / source.name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+                local_paths.append(str(destination))
+            payload["local_output_paths"] = local_paths
+            payload["dependency_refs"] = []
+            results_by_id[result.result_id] = payload
+        payload["dependency_refs"].append(dependency.model_dump(mode="json"))
     (staging / "_dependency_results.json").write_text(
-        json.dumps({"results": results}, indent=2, sort_keys=True) + "\n",
+        json.dumps(
+            {"results": [results_by_id[key] for key in sorted(results_by_id)]},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
         encoding="utf-8",
     )

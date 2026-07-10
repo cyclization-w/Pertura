@@ -8,7 +8,7 @@ trust_level: exploratory
 executor: intake_materialize
 validator: candidate_standard
 input_requirements: [dataset_contract]
-depends_on: [diagnostic.contract_integrity.v1]
+depends_on: []
 dependency_kinds: [contract]
 output_kind: materialized_dataset
 source_class: observed_metadata

@@ -6,50 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from pertura_runtime.claude.hooks import build_audit_hooks
-from pertura_runtime.claude.tools.evidence_tools import create_evidence_mcp_server
 from pertura_runtime.claude.tools.product_tools import PRODUCT_TOOL_NAMES, create_product_mcp_server
 from pertura_runtime.claude.permissions import build_input_readonly_guard
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
 from pertura_runtime.product import PerturaProductRuntime
-from pertura_gate.core.policy import GatePolicy, policy_for_profile
+from pertura_core import PromotionPolicy
 
-
-LEGACY_CODEACT_ALLOWED_TOOLS = [
-    "Read",
-    "Glob",
-    "Grep",
-    "Bash",
-    "Write",
-    "Edit",
-    "MultiEdit",
-    "NotebookEdit",
-    "mcp__pertura_evidence__register_perturbation_design_manifest",
-    "mcp__pertura_evidence__register_experiment_design_artifact",
-    "mcp__pertura_evidence__register_guide_assignment_artifact",
-    "mcp__pertura_evidence__register_target_qc_artifact",
-    "mcp__pertura_evidence__register_measured_de_artifact",
-    "mcp__pertura_evidence__register_predicted_effect_artifact",
-    "mcp__pertura_evidence__register_virtual_perturbation_prediction_artifact",
-    "mcp__pertura_evidence__register_prediction_measured_concordance_artifact",
-    "mcp__pertura_evidence__register_virtual_cell_state_transition_artifact",
-    "mcp__pertura_evidence__register_curated_prior_artifact",
-    "mcp__pertura_evidence__register_perturbation_efficiency_artifact",
-    "mcp__pertura_evidence__register_curated_enrichment_artifact",
-    "mcp__pertura_evidence__register_module_effect_artifact",
-    "mcp__pertura_evidence__register_global_effect_artifact",
-    "mcp__pertura_evidence__register_composition_effect_artifact",
-    "mcp__pertura_evidence__register_cell_state_reference_artifact",
-    "mcp__pertura_evidence__register_cell_qc_artifact",
-    "mcp__pertura_evidence__register_control_calibration_artifact",
-    "mcp__pertura_evidence__register_replication_artifact",
-    "mcp__pertura_evidence__route_analysis_method",
-    "mcp__pertura_evidence__run_target_reliability_audit",
-    "mcp__pertura_evidence__run_pseudobulk_de",
-    "mcp__pertura_evidence__run_ntc_control_calibration",
-    "mcp__pertura_evidence__run_label_permutation_calibration",
-    "mcp__pertura_evidence__evaluate_claims",
-    "mcp__pertura_evidence__render_evidence_report",
-]
 
 DEFAULT_CODEACT_ALLOWED_TOOLS = [
     "Read",
@@ -106,16 +68,15 @@ def build_agent_options(
         "PERTURA_REPO_ROOT": str(Path(__file__).resolve().parents[3]),
     }
     env.update(config.env)
-    if config.tool_surface == "legacy":
-        mcp_servers = {"pertura_evidence": create_evidence_mcp_server(workspace, policy=policy)}
-    elif config.tool_surface == "capability":
-        runtime = product_runtime or PerturaProductRuntime(workspace, policy_profile=config.policy_profile)
-        mcp_servers = {"pertura": create_product_mcp_server(runtime)}
-    else:
-        raise ValueError("tool_surface must be 'capability' or 'legacy'")
+    if config.tool_surface != "capability":
+        raise ValueError("the legacy tool surface is read-only and unavailable in the production Claude runtime")
+    if product_runtime is not None and product_runtime.promotion_policy.policy_hash != policy.policy_hash:
+        raise ValueError(
+            "Claude runtime policy conflicts with the workspace-bound product policy"
+        )
+    runtime = product_runtime or PerturaProductRuntime(workspace, policy=policy)
+    mcp_servers = {"pertura": create_product_mcp_server(runtime)}
     allowed_tools = list(config.allowed_tools)
-    if config.tool_surface == "legacy" and allowed_tools == DEFAULT_CODEACT_ALLOWED_TOOLS:
-        allowed_tools = list(LEGACY_CODEACT_ALLOWED_TOOLS)
     requested = {
         "cwd": str(workspace.root),
         "model": config.model,
@@ -177,10 +138,10 @@ def describe_options(config: ClaudeRuntimeOptions) -> dict[str, Any]:
     }
 
 
-def runtime_policy(config: ClaudeRuntimeOptions) -> GatePolicy:
+def runtime_policy(config: ClaudeRuntimeOptions) -> PromotionPolicy:
     """Resolve and validate the immutable policy selected for one SDK run."""
 
-    return policy_for_profile(config.policy_profile)
+    return PromotionPolicy(profile=config.policy_profile)
 
 
 

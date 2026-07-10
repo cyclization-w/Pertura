@@ -1,0 +1,18 @@
+* text=auto eol=lf
+
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.h5ad -text
+*.h5 -text
+*.loom -text
+*.npz -text
+*.parquet -text
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.pdf -text
+*.woff -text
+*.woff2 -text

@@ -13,22 +13,9 @@ from pertura_workflow.capabilities import CapabilityRegistry
 from pertura_workflow.environment import SUPPORTED_PROFILES, doctor_environment, setup_environment
 
 
-_LEGACY_COMMANDS = {"harvest", "recommend-next", "recipe", "explain"}
-
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(argv or __import__("sys").argv[1:])
-    if arguments and arguments[0] in _LEGACY_COMMANDS:
-        if "--tool-surface" not in arguments:
-            raise SystemExit("legacy commands require `--tool-surface legacy`")
-        index = arguments.index("--tool-surface")
-        if index + 1 >= len(arguments) or arguments[index + 1] != "legacy":
-            raise SystemExit("legacy commands require `--tool-surface legacy`")
-        del arguments[index : index + 2]
-        warnings.warn("Legacy workflow commands are frozen compatibility paths.", DeprecationWarning, stacklevel=2)
-        from pertura_workflow.cli import main as legacy_main
-
-        return legacy_main(arguments)
 
     parser = argparse.ArgumentParser(prog="pertura", description="Pertura capability-first Perturb-seq workflow.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -45,8 +32,11 @@ def main(argv: list[str] | None = None) -> int:
     capability_list = capability_commands.add_parser("list")
     capability_list.add_argument("--kind", choices=["diagnostic", "analysis", "virtual", "report"], default=None)
     capability_show = capability_commands.add_parser("show")
+    capability_list.add_argument("--include-deprecated", action="store_true")
+    capability_list.add_argument("--include-installed", action="store_true")
     capability_show.add_argument("capability_id")
 
+    capability_show.add_argument("--include-installed", action="store_true")
     inspect = commands.add_parser("inspect", help="Create a deterministic DatasetContract.")
     _add_inspect_args(inspect)
     preflight = commands.add_parser("preflight", help="Deprecated alias that forwards to inspect.")
@@ -92,9 +82,9 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0 if payload.get("ok", True) else 1
     if args.command == "capabilities":
-        registry = CapabilityRegistry.load_default(include_external=True)
+        registry = CapabilityRegistry.load_default(include_external=bool(args.include_installed))
         payload = (
-            {"capabilities": [item.to_dict() for item in registry.list(kind=args.kind)]}
+            {"capabilities": [item.to_dict() for item in registry.list(kind=args.kind, include_deprecated=args.include_deprecated)]}
             if args.capabilities_command == "list"
             else registry.get(args.capability_id).model_dump(mode="json")
         )

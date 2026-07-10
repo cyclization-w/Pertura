@@ -1,0 +1,82 @@
+{
+  "catalog_version": "v1",
+  "datasets": {
+    "kang18_8vs8_pbmc": {
+      "capabilities": {
+        "diagnostic.dataset_integrity.v1@0.1.0": {
+          "parameters": {
+            "input_path": {
+              "artifact_ref": "primary"
+            }
+          }
+        },
+        "intake.materialize.v1@0.1.0": {
+          "parameters": {
+            "input_path": {
+              "artifact_ref": "primary"
+            }
+          }
+        }
+      },
+      "contract_confirmations": {}
+    },
+    "norman_k562_crispra_2019": {
+      "capabilities": {
+        "diagnostic.dataset_integrity.v1@0.1.0": {
+          "parameters": {
+            "input_path": {
+              "artifact_ref": "primary"
+            }
+          }
+        },
+        "intake.materialize.v1@0.1.0": {
+          "parameters": {
+            "input_path": {
+              "artifact_ref": "primary"
+            }
+          }
+        }
+      },
+      "contract_confirmations": {}
+    },
+    "papalexi_thp1_eccite": {
+      "capabilities": {
+        "diagnostic.dataset_integrity.v1@0.1.0": {
+          "parameters": {
+            "input_path": {
+              "artifact_ref": "primary"
+            }
+          }
+        },
+        "intake.materialize.v1@0.1.0": {
+          "parameters": {
+            "input_path": {
+              "artifact_ref": "primary"
+            }
+          }
+        }
+      },
+      "contract_confirmations": {}
+    },
+    "replogle_k562_essential_2022": {
+      "capabilities": {
+        "diagnostic.dataset_integrity.v1@0.1.0": {
+          "parameters": {
+            "input_path": {
+              "artifact_ref": "primary"
+            }
+          }
+        },
+        "intake.materialize.v1@0.1.0": {
+          "parameters": {
+            "input_path": {
+              "artifact_ref": "primary"
+            }
+          }
+        }
+      },
+      "contract_confirmations": {}
+    }
+  },
+  "schema_version": "pertura-real-parameter-catalog-v1"
+}

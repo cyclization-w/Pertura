@@ -1,0 +1,170 @@
+{
+  "routes": [
+    {
+      "capability_id": "association.sceptre.v1",
+      "contains_any": [
+        "differential",
+        "measured_effect",
+        "pseudobulk"
+      ],
+      "objectives": [
+        "association",
+        "de",
+        "differential_expression",
+        "expression",
+        "measured_effect",
+        "pseudobulk"
+      ],
+      "priority": 200,
+      "requires": [
+        "controls_defined",
+        "guide_assignment_validated",
+        "guide_counts_available"
+      ],
+      "when": {
+        "moi_in": [
+          "high",
+          "multi",
+          "multiple",
+          "combinatorial",
+          "pooled_high"
+        ]
+      },
+      "when_blocker": "SCEPTRE requires an explicitly high-MOI design"
+    },
+    {
+      "capability_id": "de.pseudobulk.edger.v1",
+      "contains_any": [
+        "differential",
+        "measured_effect",
+        "pseudobulk"
+      ],
+      "min_replicates": 2,
+      "min_replicates_blocker": "no replicate-aware expression route is available",
+      "objectives": [
+        "association",
+        "de",
+        "differential_expression",
+        "expression",
+        "measured_effect",
+        "pseudobulk"
+      ],
+      "priority": 190,
+      "requires": [
+        "controls_defined",
+        "guide_assignment_validated"
+      ],
+      "when": {
+        "moi_not_in": [
+          "high",
+          "multi",
+          "multiple",
+          "combinatorial",
+          "pooled_high"
+        ]
+      },
+      "when_blocker": "edgeR pseudobulk is incompatible with a high-MOI design"
+    },
+    {
+      "capability_id": "composition.propeller.v1",
+      "contains_any": [
+        "cell_state_composition"
+      ],
+      "min_replicates": 2,
+      "min_replicates_blocker": "replicate-aware composition requires at least two units",
+      "objectives": [
+        "cell_state_composition",
+        "composition",
+        "composition_effect"
+      ],
+      "priority": 150,
+      "requires": [
+        "state_reference_available"
+      ]
+    },
+    {
+      "capability_id": "state.reference.fit.v1",
+      "contains_any": [
+        "state_reference"
+      ],
+      "objectives": [
+        "reference_state",
+        "state_fit",
+        "state_reference"
+      ],
+      "priority": 100
+    },
+    {
+      "capability_id": "state.reference.map_knn.v1",
+      "objectives": [
+        "knn_mapping",
+        "map_state",
+        "state_mapping"
+      ],
+      "priority": 100
+    },
+    {
+      "capability_id": "state.annotation_candidates.v1",
+      "objectives": [
+        "annotation_candidates",
+        "state_annotation"
+      ],
+      "priority": 100
+    },
+    {
+      "capability_id": "module.learn.control_nmf.v1",
+      "contains_any": [
+        "control_nmf",
+        "reference_module"
+      ],
+      "objectives": [
+        "control_nmf",
+        "module",
+        "nmf",
+        "reference_module"
+      ],
+      "priority": 100
+    },
+    {
+      "capability_id": "effect.guide_target_sensitivity.v1",
+      "objectives": [
+        "guide_loo",
+        "guide_sensitivity",
+        "leave_one_guide"
+      ],
+      "priority": 100
+    },
+    {
+      "capability_id": "effect.module_global.v1",
+      "objectives": [
+        "global_effect",
+        "module_effect"
+      ],
+      "priority": 100
+    },
+    {
+      "capability_id": "calibration.method_null.v1",
+      "objectives": [
+        "method_null",
+        "null_calibration"
+      ],
+      "priority": 100
+    },
+    {
+      "capability_id": "target.reliability.aggregate.v1",
+      "contains_any": [
+        "target_reliability"
+      ],
+      "objectives": [
+        "reliability",
+        "target_reliability"
+      ],
+      "priority": 180,
+      "requires": [
+        "controls_defined",
+        "guide_assignment_validated"
+      ]
+    }
+  ],
+  "schema_version": "pertura-capability-planner-routes-v1"
+}

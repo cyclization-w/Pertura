@@ -19,6 +19,7 @@ from pertura_core.models import (
 )
 from pertura_core.scope import ScopeComparison, compare_scope_keys, scope_can_support
 from pertura_core.receipt_verification import verify_receipt
+from pertura_core.promotion import PromotionPolicy, decide_promotion
 
 __all__ = [
     "AnalysisStatus",
@@ -30,6 +31,7 @@ __all__ = [
     "DesignConfirmation",
     "DiagnosticStatus",
     "PromotionDecision",
+    "PromotionPolicy",
     "ResultEnvelope",
     "RunReceipt",
     "ScopeComparison",
@@ -38,6 +40,7 @@ __all__ = [
     "SourceClass",
     "VirtualStatus",
     "compare_scope_keys",
+    "decide_promotion",
     "scope_can_support",
     "verify_receipt",
 ]

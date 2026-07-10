@@ -10,6 +10,7 @@ from pertura_bench.capability_models import (
     CapabilityBenchmarkSpec,
     CapabilityBenchmarkVerdict,
     CapabilityCoverageEntry,
+    ScientificResultDigest,
     ServerBenchmarkPlan,
 )
 from pertura_bench.models import (
@@ -39,6 +40,7 @@ BENCHMARK_MODELS = (
     CapabilityBenchmarkVerdict,
     CapabilityCoverageEntry,
     CapabilityBenchmarkMatrix,
+    ScientificResultDigest,
     ServerBenchmarkPlan,
 )
 
@@ -55,5 +57,5 @@ def export_benchmark_schemas(destination: str | Path, *, check: bool = False) ->
                 drift.append(name)
         else:
             root.mkdir(parents=True, exist_ok=True)
-            path.write_text(rendered, encoding="utf-8")
+            path.write_text(rendered, encoding="utf-8", newline="\n")
     return drift

@@ -14,6 +14,11 @@ import yaml
 
 from pertura_core import CapabilityRunRequest, CapabilitySpec, DatasetContract, DiagnosticStatus, ResultEnvelope
 from pertura_core.hashing import file_sha256
+from pertura_workflow.capabilities.dependency_inputs import (
+    apply_retained_cells,
+    dependency_grounding_metadata,
+    retained_cells_for_request,
+)
 
 
 def run_target_reliability_v2(
@@ -44,10 +49,32 @@ def run_target_reliability_v2(
 
     expression = _read_expression(expression_path, cell_column)
     metadata = _read_metadata(metadata_path, cell_column)
+    retained = retained_cells_for_request(staging, request)
+    expression_cells = [
+        cell for cell in metadata if cell in expression["rows"]
+    ]
+    analysis_cells = apply_retained_cells(expression_cells, retained)
+    analysis_cell_set = set(analysis_cells)
+    grounding = dependency_grounding_metadata(retained, analysis_cells)
     if target_gene not in expression["genes"]:
-        return _blocked(spec, request, contract, (f"target gene is absent from expression matrix: {target_gene}",), profile_name)
-    target_cells = [cell for cell, row in metadata.items() if row.get(condition_column) == target_uid and cell in expression["rows"]]
-    control_cells = [cell for cell, row in metadata.items() if row.get(condition_column) == control_uid and cell in expression["rows"]]
+        return _blocked(
+            spec,
+            request,
+            contract,
+            (f"target gene is absent from expression matrix: {target_gene}",),
+            profile_name,
+            metadata=grounding,
+        )
+    target_cells = [
+        cell
+        for cell, row in metadata.items()
+        if row.get(condition_column) == target_uid and cell in analysis_cell_set
+    ]
+    control_cells = [
+        cell
+        for cell, row in metadata.items()
+        if row.get(condition_column) == control_uid and cell in analysis_cell_set
+    ]
     target_values = [expression["rows"][cell][target_gene] for cell in target_cells]
     control_values = [expression["rows"][cell][target_gene] for cell in control_cells]
     effect = _effect(target_values, control_values, layer_scale)
@@ -89,6 +116,8 @@ def run_target_reliability_v2(
 
     blockers: list[str] = []
     cautions: list[str] = []
+    if retained is not None and not analysis_cells:
+        blockers.append("retained-cell manifest has no overlap with expression and metadata")
     if len(target_cells) < profile["minimum_cells"] or len(control_cells) < profile["minimum_cells"]:
         blockers.append("target or control cell coverage is below the profile minimum")
     if control_detection < profile["minimum_control_detection"] and not signature["available"]:
@@ -132,7 +161,7 @@ def run_target_reliability_v2(
         "profile": profile,
         "n_target_cells": len(target_cells),
         "n_control_cells": len(control_cells),
-        "target_gene": {
+        "target_gene_efficacy": {
             "effect": effect,
             "bootstrap_ci": ci,
             "expected_direction": expected,
@@ -150,6 +179,7 @@ def run_target_reliability_v2(
         "replicate_overlap": replicate_overlap,
         "blockers": blockers,
         "cautions": list(dict.fromkeys(cautions)),
+        "dependency_grounding": grounding,
     }
     output = staging / "target_reliability_v2.json"
     output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -179,22 +209,31 @@ def run_target_reliability_v2(
             "n_shared_replicates": len(replicate_overlap["shared_levels"]),
             "profile": profile_name,
             "profile_validated": production_profile,
+            **grounding,
         },
         output_paths=(output.name,),
         output_hashes={output.name: file_sha256(output)},
         dependencies=request.dependencies,
-        metadata={"profile_hash": profile["profile_hash"]},
+        metadata={"profile_hash": profile["profile_hash"], **grounding},
     )
 
 
-def _blocked(spec: CapabilitySpec, request: CapabilityRunRequest, contract: DatasetContract, blockers: tuple[str, ...], profile: str) -> ResultEnvelope:
+def _blocked(
+    spec: CapabilitySpec,
+    request: CapabilityRunRequest,
+    contract: DatasetContract,
+    blockers: tuple[str, ...],
+    profile: str,
+    *,
+    metadata: dict[str, Any] | None = None,
+) -> ResultEnvelope:
     return ResultEnvelope(
         run_id=request.run_id, request_id=request.request_id, capability_id=spec.capability_id,
         capability_version=spec.version, capability_trust=spec.trust_level,
         contract_id=contract.contract_id, contract_hash=contract.canonical_hash, scope=request.scope,
         status=DiagnosticStatus.blocked, result_kind=spec.output_kind, source_class=spec.source_class,
         summary="Target reliability was blocked before evaluation.", blockers=blockers,
-        dependencies=request.dependencies, metadata={"profile": profile},
+        dependencies=request.dependencies, metadata={"profile": profile, **(metadata or {})},
     )
 
 

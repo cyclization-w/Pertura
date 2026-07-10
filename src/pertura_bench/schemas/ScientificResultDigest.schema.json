@@ -1,0 +1,97 @@
+{
+  "additionalProperties": false,
+  "description": "Path-, clock- and run-identity-free digest of scientific behavior.",
+  "properties": {
+    "blockers": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Blockers",
+      "type": "array"
+    },
+    "canonical_hash": {
+      "default": "",
+      "title": "Canonical Hash",
+      "type": "string"
+    },
+    "capability_id": {
+      "title": "Capability Id",
+      "type": "string"
+    },
+    "capability_version": {
+      "title": "Capability Version",
+      "type": "string"
+    },
+    "cautions": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Cautions",
+      "type": "array"
+    },
+    "dependency_content_hashes": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Dependency Content Hashes",
+      "type": "array"
+    },
+    "metrics": {
+      "additionalProperties": true,
+      "title": "Metrics",
+      "type": "object"
+    },
+    "output_content_hashes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Output Content Hashes",
+      "type": "object"
+    },
+    "result_kind": {
+      "title": "Result Kind",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "pertura-scientific-result-digest-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scientific_digest_id": {
+      "default": "",
+      "title": "Scientific Digest Id",
+      "type": "string"
+    },
+    "scientific_metadata": {
+      "additionalProperties": true,
+      "title": "Scientific Metadata",
+      "type": "object"
+    },
+    "scope_payload": {
+      "additionalProperties": true,
+      "title": "Scope Payload",
+      "type": "object"
+    },
+    "source_class": {
+      "title": "Source Class",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "capability_id",
+    "capability_version",
+    "status",
+    "result_kind",
+    "source_class",
+    "scope_payload"
+  ],
+  "title": "ScientificResultDigest",
+  "type": "object"
+}

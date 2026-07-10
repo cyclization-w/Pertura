@@ -2,7 +2,7 @@
 
 This smoke freezes the first natural Claude run that completed a classic guide-based Perturb-seq loop under the Evidence-Aware Stage Catalog.
 
-- Run: `C:\Users\25374\Documents\New project\pertura\.claude_runs\claude_20260707_002945_4aa87643`
+- Run: `.claude_runs\<redacted-run-id>`
 - Status: `completed`
 - Mode: natural Claude smoke, benchmark interaction mode
 - Report: `reports/evidence_report.md`

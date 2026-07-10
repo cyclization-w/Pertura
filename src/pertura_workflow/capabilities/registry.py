@@ -25,6 +25,7 @@ class CapabilitySummary:
     implemented: bool
     validation_status: str | None = None
     deprecated: bool = False
+    broker_executable: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -38,6 +39,7 @@ class CapabilitySummary:
             "implemented": self.implemented,
             "validation_status": self.validation_status,
             "deprecated": self.deprecated,
+            "broker_executable": self.broker_executable,
         }
 
 
@@ -51,7 +53,7 @@ class CapabilityRegistry:
         self.validate()
 
     @classmethod
-    def load_default(cls, *, include_external: bool = True) -> "CapabilityRegistry":
+    def load_default(cls, *, include_external: bool = False) -> "CapabilityRegistry":
         specs = list(_load_bundled_specs())
         if include_external:
             specs.extend(_load_entry_point_specs())
@@ -74,10 +76,18 @@ class CapabilityRegistry:
             candidates.sort(key=lambda item: item.version)
         return candidates[-1]
 
-    def list(self, *, kind: str | None = None, phase: int | None = None) -> list[CapabilitySummary]:
+    def list(
+        self,
+        *,
+        kind: str | None = None,
+        phase: int | None = None,
+        include_deprecated: bool = False,
+    ) -> list[CapabilitySummary]:
         specs = sorted(self._specs.values(), key=lambda item: (item.phase, item.capability_id, item.version))
         result = []
         for spec in specs:
+            if bool(spec.metadata.get("deprecated", False)) and not include_deprecated:
+                continue
             if kind and spec.kind != kind:
                 continue
             if phase is not None and spec.phase != phase:
@@ -93,6 +103,10 @@ class CapabilityRegistry:
                 implemented=spec.implemented,
                 validation_status=spec.metadata.get("validation_status"),
                 deprecated=bool(spec.metadata.get("deprecated", False)),
+                broker_executable=bool(
+                    spec.implemented
+                    and not spec.metadata.get("installed_external", False)
+                ),
             ))
         return result
 
@@ -106,12 +120,15 @@ class CapabilityRegistry:
 
         by_id = {spec.capability_id: spec for spec in self._specs.values()}
         for spec in self._specs.values():
-            if not has_executor(spec.executor):
+            installed_external = bool(spec.metadata.get("installed_external", False))
+            if not installed_external and not has_executor(spec.executor):
                 raise CapabilityRegistryError(f"missing executor {spec.executor!r} for {spec.capability_id}")
-            if not has_validator(spec.validator):
+            if not installed_external and not has_validator(spec.validator):
                 raise CapabilityRegistryError(f"missing validator {spec.validator!r} for {spec.capability_id}")
             for dependency in spec.depends_on:
                 if dependency not in by_id:
+                    if installed_external:
+                        continue
                     raise CapabilityRegistryError(f"unknown dependency {dependency!r} for {spec.capability_id}")
                 if by_id[dependency].phase > spec.phase:
                     raise CapabilityRegistryError(f"backward phase dependency {spec.capability_id} -> {dependency}")
@@ -142,13 +159,17 @@ def _load_entry_point_specs() -> Iterable[CapabilitySpec]:
             values = [values]
         for value in values:
             spec = value if isinstance(value, CapabilitySpec) else CapabilitySpec.model_validate(value)
-            if spec.trust_level == CapabilityTrust.builtin_trusted:
-                payload = spec.model_dump(mode="json", exclude={"canonical_hash"})
-                payload["trust_level"] = CapabilityTrust.installed_untrusted.value
-                payload["claim_permissions"] = []
-                payload["capability_spec_id"] = ""
-                spec = CapabilitySpec.model_validate(payload)
-            yield spec
+            payload = spec.model_dump(mode="json", exclude={"canonical_hash"})
+            payload["trust_level"] = CapabilityTrust.installed_untrusted.value
+            payload["claim_permissions"] = []
+            payload["implemented"] = False
+            payload["metadata"] = dict(payload.get("metadata") or {}) | {
+                "installed_external": True,
+                "broker_executable": False,
+                "discovery_only": True,
+            }
+            payload["capability_spec_id"] = ""
+            yield CapabilitySpec.model_validate(payload)
 
 
 def _validate_acyclic(by_id: dict[str, CapabilitySpec]) -> None:
@@ -162,7 +183,8 @@ def _validate_acyclic(by_id: dict[str, CapabilitySpec]) -> None:
             raise CapabilityRegistryError(f"capability dependency cycle at {capability_id}")
         visiting.add(capability_id)
         for dependency in by_id[capability_id].depends_on:
-            visit(dependency)
+            if dependency in by_id:
+                visit(dependency)
         visiting.remove(capability_id)
         visited.add(capability_id)
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pertura"
-version = "0.2.0a3"
+version = "0.2.0a4"
 description = "Execution-grounded evidence runtime for Perturb-seq CodeAct agents."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -66,15 +66,18 @@ dashboard = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-"pertura_workflow.capabilities" = ["specs/*.yaml", "profiles/*.yaml", "runners/*.R"]
+"pertura_workflow.capabilities" = ["specs/*.yaml", "profiles/*.yaml", "runners/*.R", "planner_routes.json"]
 "pertura_workflow" = ["environments/*.yml", "environments/*.R"]
 "pertura_runtime" = ["dashboard_static/**/*"]
-"pertura_bench" = ["runners/*.R", "schemas/*.json"]
+"pertura_bench" = ["runners/*.R", "schemas/*.json", "cases/*.json"]
 "pertura_core" = ["compatibility/v0.2/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = [
+  "legacy: read-only compatibility, stage, registrar, and classic workflow regression",
+]
 
 
 

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from pertura_runtime.product import PerturaProductRuntime
+from pertura_core.version import package_version
+
+if TYPE_CHECKING:
+    from pertura_runtime.product import PerturaProductRuntime
 
 
 PRODUCT_TOOL_NAMES = (
@@ -40,7 +43,7 @@ PRODUCT_TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
 }
 
 
-def create_product_mcp_server(runtime: PerturaProductRuntime):
+def create_product_mcp_server(runtime: "PerturaProductRuntime"):
     from claude_agent_sdk import create_sdk_mcp_server, tool
 
     @tool(
@@ -107,6 +110,6 @@ def create_product_mcp_server(runtime: PerturaProductRuntime):
 
     return create_sdk_mcp_server(
         name="pertura",
-        version="0.2.0a3",
+        version=package_version(),
         tools=[inspect_dataset, run_diagnostic, run_analysis, evaluate_virtual_model, finalize_report],
     )

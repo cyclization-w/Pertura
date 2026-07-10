@@ -5,6 +5,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import tomllib
 import urllib.request
 from pathlib import Path
 from typing import Any, BinaryIO, Callable
@@ -19,12 +20,46 @@ from pertura_bench.models import (
 )
 
 
+def require_repo_root(repo_root: str | Path) -> Path:
+    """Return the authoritative inner Pertura repository or fail with a hint."""
+
+    root = Path(repo_root).expanduser().resolve()
+    pyproject = root / "pyproject.toml"
+    nested = root / "pertura" / "pyproject.toml"
+    if not pyproject.is_file():
+        hint = (
+            f"; detected nested Pertura checkout at {nested.parent}"
+            if nested.is_file()
+            else ""
+        )
+        raise ValueError(
+            f"--repo must point to the inner Pertura repository containing pyproject.toml{hint}"
+        )
+    try:
+        project = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("project") or {}
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise ValueError(f"cannot read repository pyproject.toml: {exc}") from exc
+    if project.get("name") != "pertura":
+        hint = (
+            f"; detected nested Pertura checkout at {nested.parent}"
+            if nested.is_file()
+            else ""
+        )
+        raise ValueError(
+            "--repo pyproject.toml does not declare project.name = 'pertura'"
+            + hint
+        )
+    if not (root / ".git").exists():
+        raise ValueError("--repo is not the authoritative Pertura Git worktree")
+    return root
+
+
 def load_source_manifest(path: str | Path) -> BenchmarkSourceManifest:
     return BenchmarkSourceManifest.model_validate_json(Path(path).read_text(encoding="utf-8"))
 
 
 def source_manifests(repo_root: str | Path) -> dict[str, tuple[Path, BenchmarkSourceManifest]]:
-    root = Path(repo_root).resolve()
+    root = require_repo_root(repo_root)
     loaded = {}
     for path in sorted((root / "benchmarks" / "manifests").glob("*.json")):
         manifest = load_source_manifest(path)

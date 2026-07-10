@@ -45,28 +45,44 @@
           "default": null,
           "title": "Environment Profile"
         },
-        "expected_blockers": {
+        "environment_required": {
+          "default": false,
+          "title": "Environment Required",
+          "type": "boolean"
+        },
+        "execution_mode": {
+          "default": "product_path",
+          "enum": [
+            "product_path",
+            "protocol_fake",
+            "stale_audit"
+          ],
+          "title": "Execution Mode",
+          "type": "string"
+        },
+        "expected_blocker_contains": {
           "default": [],
           "items": {
             "type": "string"
           },
-          "title": "Expected Blockers",
+          "title": "Expected Blocker Contains",
           "type": "array"
         },
-        "expected_status": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Expected Status"
+        "expected_statuses": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Expected Statuses",
+          "type": "array"
         },
         "fixture_id": {
           "title": "Fixture Id",
+          "type": "string"
+        },
+        "fixture_version": {
+          "default": "1",
+          "title": "Fixture Version",
           "type": "string"
         },
         "max_memory_gb": {
@@ -97,11 +113,19 @@
           "type": "array"
         },
         "scenario": {
+          "enum": [
+            "happy",
+            "caution_or_unresolved",
+            "blocked",
+            "planted_failure",
+            "determinism",
+            "stale_propagation"
+          ],
           "title": "Scenario",
           "type": "string"
         },
         "schema_version": {
-          "default": "pertura-capability-benchmark-case-v1",
+          "default": "pertura-capability-benchmark-case-v2",
           "title": "Schema Version",
           "type": "string"
         },
@@ -194,7 +218,7 @@
           "title": "Passed"
         },
         "schema_version": {
-          "default": "pertura-capability-benchmark-metric-v1",
+          "default": "pertura-capability-benchmark-metric-v2",
           "title": "Schema Version",
           "type": "string"
         },
@@ -249,6 +273,11 @@
       "title": "Cases",
       "type": "array"
     },
+    "catalog_version": {
+      "default": "v1",
+      "title": "Catalog Version",
+      "type": "string"
+    },
     "required_real_datasets": {
       "default": [],
       "items": {
@@ -258,7 +287,7 @@
       "type": "array"
     },
     "schema_version": {
-      "default": "pertura-capability-benchmark-spec-v1",
+      "default": "pertura-capability-benchmark-spec-v2",
       "title": "Schema Version",
       "type": "string"
     }

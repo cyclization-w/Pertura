@@ -8,7 +8,7 @@ trust_level: builtin_trusted
 executor: guide_assignment_qc
 validator: standard
 input_requirements: [dataset_contract, guide_matrix]
-depends_on: [diagnostic.contract_integrity.v1]
+depends_on: []
 dependency_kinds: [contract]
 output_kind: guide_assignment_qc
 source_class: measured_result
@@ -19,3 +19,4 @@ implemented: true
 metadata:
   deprecated: true
   compatibility_only: true
+  provides_dependency_kinds: [retained_cell_manifest]

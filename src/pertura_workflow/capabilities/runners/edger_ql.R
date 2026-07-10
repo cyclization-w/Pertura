@@ -13,6 +13,8 @@ counts <- as.matrix(counts)
 storage.mode(counts) <- "integer"
 if (any(counts < 0L)) stop("counts must be nonnegative")
 if (!identical(colnames(counts), samples$sample_id)) stop("sample manifest does not align with pseudobulk counts")
+if (anyDuplicated(samples$sample_id)) stop("sample manifest contains duplicate sample IDs")
+rownames(samples) <- samples$sample_id
 
 samples$condition <- factor(samples$condition, levels = c(config$baseline, config$target))
 terms <- c()

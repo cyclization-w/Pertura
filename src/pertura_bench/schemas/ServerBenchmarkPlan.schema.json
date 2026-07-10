@@ -1,10 +1,37 @@
 {
   "additionalProperties": false,
   "properties": {
+    "artifacts": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "cache_layout": {
+      "default": "datasets/{dataset_id}/{artifact_kind}/{artifact_hash}",
+      "title": "Cache Layout",
+      "type": "string"
+    },
     "canonical_hash": {
       "default": "",
       "title": "Canonical Hash",
       "type": "string"
+    },
+    "checkpoint_binding": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "title": "Checkpoint Binding",
+      "type": "object"
     },
     "datasets": {
       "items": {
@@ -12,6 +39,11 @@
       },
       "title": "Datasets",
       "type": "array"
+    },
+    "executable": {
+      "default": false,
+      "title": "Executable",
+      "type": "boolean"
     },
     "jobs": {
       "items": {
@@ -38,12 +70,13 @@
       "type": "string"
     },
     "schema_version": {
-      "default": "pertura-server-benchmark-plan-v1",
+      "default": "pertura-server-benchmark-plan-v2",
       "title": "Schema Version",
       "type": "string"
     }
   },
   "required": [
+    "artifacts",
     "jobs",
     "datasets"
   ],

@@ -10,6 +10,10 @@ htmlcov/
 .ruff_cache/
 *.egg-info/
 src/*.egg-info/
+/build/
+/dist/
+/ui/dist/
+*.whl
 
 # Virtual environments
 .venv/
@@ -28,6 +32,8 @@ artifacts/
 *.log
 *.local.json
 benchmarks/cache/
+benchmarks/local/
+benchmarks/annotations/
 
 # Local data and notebooks
 *.h5ad

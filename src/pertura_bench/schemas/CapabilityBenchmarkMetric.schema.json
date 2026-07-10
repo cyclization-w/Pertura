@@ -55,7 +55,7 @@
       "title": "Passed"
     },
     "schema_version": {
-      "default": "pertura-capability-benchmark-metric-v1",
+      "default": "pertura-capability-benchmark-metric-v2",
       "title": "Schema Version",
       "type": "string"
     },

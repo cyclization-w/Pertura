@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 import numpy as np
 import pandas as pd
 
+from pertura_core import CapabilityRunRequest, ScopeKey
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
 from pertura_runtime.product import PerturaProductRuntime
+from pertura_workflow.capabilities import CapabilityRegistry
+from pertura_workflow.capabilities.executors import execute_capability
 
 
 def _write_h5ad(path: Path) -> None:
@@ -43,6 +48,7 @@ def test_gmt_import_validates_namespace_duplicates_and_coverage(monkeypatch, tmp
         runtime.close()
 
 
+@pytest.mark.legacy
 def test_nmf_modules_are_fit_on_confirmed_controls_only(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "screen"
     source.mkdir()
@@ -52,14 +58,30 @@ def test_nmf_modules_are_fit_on_confirmed_controls_only(monkeypatch, tmp_path: P
     runtime = PerturaProductRuntime(workspace)
     try:
         contract = runtime.inspect_dataset(confirmations={"control": "control"})
-        result = runtime.run_analysis(
-            "learn NMF modules",
-            capability_id="module.learn.nmf.v1",
-            contract_id=contract["contract_id"],
-            parameters={"h5ad_path": "screen.h5ad", "control_column": "condition", "control_values": ["control"], "ranks": [2, 3], "seeds": [0, 1, 2]},
+        contract_model = runtime._get_contract(contract["contract_id"])
+        spec = CapabilityRegistry.load_default(include_external=False).get(
+            "module.learn.nmf.v1"
         )
-        assert result["status"] in {"completed", "completed_with_caution"}
-        assert len(result["output_paths"]) == 2
+        request = CapabilityRunRequest(
+            run_id="legacy-wrapper-regression",
+            capability_id=spec.capability_id,
+            capability_version=spec.version,
+            contract_id=contract_model.contract_id,
+            contract_hash=contract_model.canonical_hash,
+            scope=ScopeKey(dataset_id=contract_model.dataset_id),
+            parameters={
+                "h5ad_path": "screen.h5ad",
+                "control_column": "condition",
+                "control_values": ["control"],
+                "ranks": [2, 3],
+                "seeds": [0, 1, 2],
+            },
+        )
+        staging = tmp_path / "nmf-wrapper-output"
+        staging.mkdir()
+        result = execute_capability(spec, request, contract_model, staging)
+        assert result.status.value in {"completed", "completed_with_caution"}
+        assert len(result.output_paths) == 2
     finally:
         runtime.close()
 
@@ -75,11 +97,14 @@ def test_state_reference_blocks_when_leiden_runtime_is_unavailable(monkeypatch, 
         contract = runtime.inspect_dataset(confirmations={"control": "control"})
         result = runtime.run_analysis(
             "build state reference",
-            capability_id="reference.state.control_pca_leiden.v1",
+            capability_id="state.reference.fit.v1",
             contract_id=contract["contract_id"],
             parameters={"h5ad_path": "screen.h5ad", "control_column": "condition", "control_values": ["control"]},
         )
         assert result["status"] == "blocked"
-        assert any("dependency is missing" in item for item in result["blockers"])
+        assert any(
+            "environment is unavailable" in item or "dependency is missing" in item
+            for item in result["blockers"]
+        )
     finally:
         runtime.close()

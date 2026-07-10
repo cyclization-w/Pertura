@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
 from pertura_bench.capability_models import (
+    BenchmarkTier,
     CapabilityBenchmarkCase,
     CapabilityBenchmarkMatrix,
     CapabilityBenchmarkSpec,
@@ -12,101 +15,147 @@ from pertura_bench.capability_models import (
     CapabilityCoverageEntry,
     ServerBenchmarkPlan,
 )
+from pertura_bench.real_execution import (
+    _load_checkpoint_binding,
+    _real_case,
+    _real_identity_hashes,
+    first_existing,
+    load_real_parameter_catalog,
+    resolve_real_artifact_chain,
+    run_real_tier,
+)
+from pertura_bench.server_plan import build_server_plan
+from pertura_bench.synthetic_execution import (
+    benchmark_input_hashes,
+    run_synthetic_case,
+    runner_hash,
+    scientific_result_digest,
+)
+from pertura_core.hashing import canonical_hash
 from pertura_workflow.capabilities import CapabilityRegistry
 from pertura_workflow.capabilities.executors import has_executor, has_validator
+from pertura_workflow.environment import doctor_environment
 
-
-CANDIDATE_CAPABILITIES: tuple[str, ...] = (
-    "intake.materialize.v1",
-    "diagnostic.dataset_integrity.v1",
-    "diagnostic.design_balance.v1",
-    "guide.integrity.v1",
-    "guide.assignment.nb_mixture.v1",
-    "guide.ambient.v1",
-    "screen.moi_doublet.v1",
-    "screen.retained_cells.v1",
-    "state.reference.fit.v1",
-    "state.reference.map_knn.v1",
-    "state.annotation_candidates.v1",
-    "module.learn.control_nmf.v1",
-    "target.responder.mixscape.v1",
-    "target.guide_efficacy.v1",
-    "target.reliability.aggregate.v1",
-    "association.sceptre.v1",
-    "composition.propeller.v1",
-    "effect.guide_target_sensitivity.v1",
-    "effect.module_global.v1",
-    "calibration.method_null.v1",
-)
-
-_REAL_DATASETS: dict[str, tuple[str, ...]] = {
-    "intake.materialize.v1": ("replogle_k562_essential_2022",),
-    "diagnostic.dataset_integrity.v1": ("replogle_k562_essential_2022",),
-    "diagnostic.design_balance.v1": ("kang18_8vs8_pbmc",),
-    "guide.integrity.v1": ("replogle_k562_essential_2022",),
-    "guide.assignment.nb_mixture.v1": ("replogle_k562_essential_2022",),
-    "guide.ambient.v1": ("replogle_k562_essential_2022",),
-    "screen.moi_doublet.v1": ("replogle_k562_essential_2022",),
-    "screen.retained_cells.v1": ("replogle_k562_essential_2022",),
-    "state.reference.fit.v1": ("papalexi_thp1_eccite",),
-    "state.reference.map_knn.v1": ("papalexi_thp1_eccite",),
-    "state.annotation_candidates.v1": ("papalexi_thp1_eccite",),
-    "module.learn.control_nmf.v1": ("papalexi_thp1_eccite",),
-    "target.responder.mixscape.v1": ("papalexi_thp1_eccite",),
-    "target.guide_efficacy.v1": (
-        "replogle_k562_essential_2022",
-        "norman_k562_crispra_2019",
-    ),
-    "target.reliability.aggregate.v1": (
-        "replogle_k562_essential_2022",
-        "norman_k562_crispra_2019",
-    ),
-    "association.sceptre.v1": ("norman_k562_crispra_2019",),
-    "composition.propeller.v1": ("kang18_8vs8_pbmc",),
-    "effect.guide_target_sensitivity.v1": (
-        "replogle_k562_essential_2022",
-        "norman_k562_crispra_2019",
-    ),
-    "effect.module_global.v1": ("replogle_k562_essential_2022",),
-    "calibration.method_null.v1": (
-        "replogle_k562_essential_2022",
-        "norman_k562_crispra_2019",
-        "kang18_8vs8_pbmc",
-    ),
-}
 
 _SCENARIOS = (
-    ("happy_path", "completed"),
-    ("caution_or_unresolved", "caution"),
-    ("blocked_design", "blocked"),
-    ("planted_failure", "failed"),
-    ("deterministic_rerun", "completed"),
-    ("stale_upstream", "blocked"),
+    "happy",
+    "caution_or_unresolved",
+    "blocked",
+    "planted_failure",
+    "determinism",
+    "stale_propagation",
 )
+
+
+def _catalog_payload() -> dict[str, Any]:
+    resource = resources.files("pertura_bench").joinpath(
+        "cases", "capability_cases.v1.json"
+    )
+    return json.loads(resource.read_text(encoding="utf-8"))
+
+
+_CATALOG = _catalog_payload()
+CANDIDATE_CAPABILITIES: tuple[str, ...] = tuple(
+    item["capability_id"] for item in _CATALOG["capabilities"]
+)
+
+
+def _entry_for(capability_id: str) -> dict[str, Any]:
+    for item in _CATALOG["capabilities"]:
+        if item["capability_id"] == capability_id:
+            return dict(item)
+    raise ValueError(f"unknown benchmark capability: {capability_id}")
+
+
+_EXPLICIT_CASE_FIELDS = frozenset(
+    {
+        "scenario",
+        "fixture_id",
+        "fixture_version",
+        "execution_mode",
+        "seed",
+        "parameters",
+        "expected_statuses",
+        "expected_blocker_contains",
+        "required_outputs",
+        "metrics",
+    }
+)
+_EARLY_BLOCK_STATUSES = frozenset({"blocked", "exception_blocked"})
+
+
+def _explicit_case(entry: dict[str, Any], spec: Any, raw: Any) -> CapabilityBenchmarkCase:
+    if not isinstance(raw, dict):
+        raise ValueError(f"benchmark case for {spec.capability_id} must be an object")
+    missing = sorted(_EXPLICIT_CASE_FIELDS - set(raw))
+    if missing:
+        raise ValueError(
+            f"benchmark case for {spec.capability_id} is missing explicit fields: "
+            + ", ".join(missing)
+        )
+    statuses = tuple(str(item) for item in raw["expected_statuses"])
+    if len(statuses) != 1:
+        raise ValueError(
+            f"benchmark case {spec.capability_id}/{raw.get('scenario')} must name "
+            "one exact expected status"
+        )
+    scenario = str(raw["scenario"])
+    blocker_tokens = tuple(str(item) for item in raw["expected_blocker_contains"])
+    if scenario in {"blocked", "planted_failure"} and not blocker_tokens:
+        raise ValueError(
+            f"benchmark case {spec.capability_id}/{scenario} must assert a planted blocker token"
+        )
+    if scenario not in {"blocked", "planted_failure"} and blocker_tokens:
+        raise ValueError(
+            f"non-blocking benchmark case {spec.capability_id}/{scenario} cannot expect blockers"
+        )
+    metrics = tuple(raw["metrics"])
+    if not metrics:
+        raise ValueError(
+            f"benchmark case {spec.capability_id}/{scenario} must assert a metric"
+        )
+    if len({str(item.get("name")) for item in metrics}) != len(metrics):
+        raise ValueError(
+            f"benchmark case {spec.capability_id}/{scenario} repeats a metric name"
+        )
+    expected_mode = (
+        "stale_audit" if scenario == "stale_propagation" else entry["execution_mode"]
+    )
+    if raw["execution_mode"] != expected_mode:
+        raise ValueError(
+            f"benchmark case {spec.capability_id}/{scenario} has execution mode "
+            f"{raw['execution_mode']!r}; expected {expected_mode!r}"
+        )
+    return CapabilityBenchmarkCase.model_validate(
+        {
+            "capability_id": spec.capability_id,
+            "capability_version": spec.version,
+            "tier": "synthetic_ci",
+            **raw,
+            "environment_profile": entry.get("environment_profile"),
+            "environment_required": bool(entry.get("environment_required")),
+            "max_memory_gb": 4,
+            "timeout_seconds": min(spec.timeout_seconds, 900),
+        }
+    )
 
 
 def benchmark_specs() -> tuple[CapabilityBenchmarkSpec, ...]:
+    registry = CapabilityRegistry.load_default(include_external=False)
     specs: list[CapabilityBenchmarkSpec] = []
-    for capability_id in CANDIDATE_CAPABILITIES:
-        cases = tuple(
-            CapabilityBenchmarkCase(
-                capability_id=capability_id,
-                capability_version="0.1.0",
-                tier="synthetic_ci",
-                scenario=scenario,
-                fixture_id=f"synthetic/{capability_id}/{scenario}",
-                expected_status=status,
-                max_memory_gb=4.0,
-                timeout_seconds=900,
-            )
-            for scenario, status in _SCENARIOS
-        )
+    for entry in _CATALOG["capabilities"]:
+        spec = registry.get(entry["capability_id"], _CATALOG["capability_version"])
+        cases = [
+            _explicit_case(entry, spec, raw)
+            for raw in entry.get("cases") or ()
+        ]
         specs.append(
             CapabilityBenchmarkSpec(
-                capability_id=capability_id,
-                capability_version="0.1.0",
-                cases=cases,
-                required_real_datasets=_REAL_DATASETS[capability_id],
+                catalog_version=_CATALOG["catalog_version"],
+                capability_id=spec.capability_id,
+                capability_version=spec.version,
+                cases=tuple(cases),
+                required_real_datasets=tuple(entry["required_real_datasets"]),
             )
         )
     return tuple(specs)
@@ -116,79 +165,151 @@ def validate_cases() -> dict[str, Any]:
     registry = CapabilityRegistry.load_default(include_external=False)
     problems: list[str] = []
     seen: set[str] = set()
-    for spec in benchmark_specs():
-        if spec.capability_id in seen:
-            problems.append(f"duplicate benchmark spec: {spec.capability_id}")
-        seen.add(spec.capability_id)
+    if tuple(_CATALOG.get("scenarios") or ()) != _SCENARIOS:
+        problems.append("case catalog scenario order or membership drifted")
+    for bench_spec in benchmark_specs():
+        if bench_spec.capability_id in seen:
+            problems.append(f"duplicate benchmark spec: {bench_spec.capability_id}")
+        seen.add(bench_spec.capability_id)
         try:
-            capability = registry.get(spec.capability_id, spec.capability_version)
+            capability = registry.get(
+                bench_spec.capability_id, bench_spec.capability_version
+            )
         except ValueError as exc:
             problems.append(str(exc))
             continue
         if capability.trust_level.value != "exploratory":
-            problems.append(f"candidate is not exploratory: {spec.capability_id}")
+            problems.append(f"candidate is not exploratory: {bench_spec.capability_id}")
         if capability.claim_permissions:
-            problems.append(f"candidate carries claim permissions: {spec.capability_id}")
+            problems.append(
+                f"candidate carries claim permissions: {bench_spec.capability_id}"
+            )
         if not has_executor(capability.executor):
-            problems.append(f"candidate executor is missing: {spec.capability_id}")
+            problems.append(
+                f"candidate executor is missing: {bench_spec.capability_id}"
+            )
         if not has_validator(capability.validator):
-            problems.append(f"candidate validator is missing: {spec.capability_id}")
-        if len(spec.cases) != len(_SCENARIOS):
-            problems.append(f"candidate does not have six local cases: {spec.capability_id}")
+            problems.append(
+                f"candidate validator is missing: {bench_spec.capability_id}"
+            )
+        if len(bench_spec.cases) != 6:
+            problems.append(
+                f"candidate does not have six local cases: {bench_spec.capability_id}"
+            )
+    if set(seen) != set(CANDIDATE_CAPABILITIES):
+        problems.append("case catalog and exported candidate list disagree")
     return {
-        "schema_version": "pertura-capability-case-validation-v1",
+        "schema_version": "pertura-capability-case-validation-v2",
         "ok": not problems,
+        "catalog_version": _CATALOG["catalog_version"],
+        "catalog_hash": canonical_hash(_CATALOG),
         "candidate_count": len(seen),
+        "case_count": sum(len(item.cases) for item in benchmark_specs()),
         "problems": problems,
     }
 
 
-def run_protocol_cases(capability_id: str, *, tier: str = "synthetic_ci") -> list[dict[str, Any]]:
+
+def run_protocol_cases(
+    capability_id: str,
+    *,
+    tier: BenchmarkTier = "synthetic_ci",
+    repo_root: str | Path | None = None,
+    dataset_id: str | None = None,
+    split: str | None = None,
+    cache: str | Path | None = None,
+    output: str | Path | None = None,
+) -> list[dict[str, Any]]:
     matching = [item for item in benchmark_specs() if item.capability_id == capability_id]
     if not matching:
         raise ValueError(f"unknown benchmark capability: {capability_id}")
     spec = matching[0]
-    registry = CapabilityRegistry.load_default(include_external=False)
-    capability = registry.get(capability_id, spec.capability_version)
-    verdicts: list[CapabilityBenchmarkVerdict] = []
-    for case in spec.cases:
-        if tier in {"frozen_subset", "full_dataset"}:
-            outcome = "not_available"
-            reasons = ("real benchmark artifact lock is not available on this machine",)
-        elif tier not in {"unit", "synthetic_ci"}:
-            raise ValueError(f"unknown benchmark tier: {tier}")
-        else:
-            ok = (
-                capability.trust_level.value == "exploratory"
-                and not capability.claim_permissions
-                and capability.implemented
-                and has_executor(capability.executor)
-                and has_validator(capability.validator)
-            )
-            outcome = "passed" if ok else "failed"
-            reasons = () if ok else ("candidate protocol validation failed",)
-        verdicts.append(
-            CapabilityBenchmarkVerdict(
-                case_id=case.case_id,
-                capability_id=capability_id,
-                capability_version=spec.capability_version,
-                tier=tier,
-                outcome=outcome,
-                observed_status="protocol_validated" if outcome == "passed" else None,
-                input_hashes={"case": case.canonical_hash},
-                reasons=reasons,
-            )
+    if tier in {"frozen_subset", "full_dataset"}:
+        verdicts = run_real_tier(
+            spec,
+            tier=tier,
+            repo_root=repo_root,
+            dataset_id=dataset_id,
+            split=split,
+            cache=cache,
+            output=output,
         )
+    elif tier in {"unit", "synthetic_ci"}:
+        verdicts = [
+            run_synthetic_case(case, catalog=_CATALOG)
+            for case in spec.cases
+        ]
+    else:
+        raise ValueError(f"unknown benchmark tier: {tier}")
     return [item.model_dump(mode="json") for item in verdicts]
 
 
-def coverage_matrix() -> CapabilityBenchmarkMatrix:
+_SHA256_VALUE = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def _synthetic_verdict_current(
+    verdict: CapabilityBenchmarkVerdict | None,
+    case: CapabilityBenchmarkCase,
+    capability: Any,
+) -> bool:
+    if verdict is None or verdict.outcome != "passed":
+        return False
+    if (
+        verdict.case_hash != case.canonical_hash
+        or verdict.capability_id != case.capability_id
+        or verdict.capability_version != case.capability_version
+        or verdict.tier != case.tier
+        or verdict.execution_mode != case.execution_mode
+        or verdict.observed_status not in case.expected_statuses
+    ):
+        return False
+    expected_bindings = benchmark_input_hashes(case, capability, _CATALOG)
+    if verdict.input_hashes != expected_bindings:
+        return False
+    if verdict.runner_hash != expected_bindings["product_spine"]:
+        return False
+    if not verdict.scientific_result_hash or not _SHA256_VALUE.fullmatch(
+        verdict.scientific_result_hash
+    ):
+        return False
+    if any(not _SHA256_VALUE.fullmatch(value) for value in verdict.output_hashes.values()):
+        return False
+    output_names = {Path(str(name)).name for name in verdict.output_hashes}
+    if not set(case.required_outputs).issubset(output_names):
+        return False
+    if any(
+        not any(token in blocker for blocker in verdict.observed_blockers)
+        for token in case.expected_blocker_contains
+    ):
+        return False
+    if len(verdict.metrics) != len(case.metrics):
+        return False
+    observed_metrics = {item.name: item for item in verdict.metrics}
+    for expected in case.metrics:
+        observed = observed_metrics.get(expected.name)
+        if (
+            observed is None
+            or observed.operator != expected.operator
+            or observed.threshold != expected.threshold
+            or observed.observed is None
+            or observed.passed is not True
+        ):
+            return False
+    return True
+
+def coverage_matrix(
+    repo_root: str | Path | None = None,
+) -> CapabilityBenchmarkMatrix:
+    root = _default_repo_root() if repo_root is None else Path(repo_root).resolve()
     registry = CapabilityRegistry.load_default(include_external=False)
+    persisted = _load_synthetic_verdicts(root)
     entries: list[CapabilityCoverageEntry] = []
     for bench_spec in benchmark_specs():
         blockers: list[str] = []
         try:
-            capability = registry.get(bench_spec.capability_id, bench_spec.capability_version)
+            capability = registry.get(
+                bench_spec.capability_id, bench_spec.capability_version
+            )
             code_ready = (
                 capability.implemented
                 and capability.trust_level.value == "exploratory"
@@ -197,99 +318,292 @@ def coverage_matrix() -> CapabilityBenchmarkMatrix:
                 and has_validator(capability.validator)
             )
         except ValueError:
+            capability = None
             code_ready = False
         if not code_ready:
             blockers.append("candidate implementation or protocol is incomplete")
-        blockers.append("real-data benchmark has not been executed")
+        current = [
+            verdict
+            for case in bench_spec.cases
+            if (
+                (verdict := persisted.get(case.case_id)) is not None
+                and capability is not None
+                and _synthetic_verdict_current(verdict, case, capability)
+            )
+        ]
+        local_fixture_ready = len(current) == len(bench_spec.cases)
+        if not local_fixture_ready:
+            blockers.append(
+                f"current synthetic verdicts: {len(current)}/{len(bench_spec.cases)}"
+            )
+        entry = _entry_for(bench_spec.capability_id)
+        environment_profile = entry.get("environment_profile")
+        environment_ready = None
+        if environment_profile:
+            try:
+                environment_ready = bool(
+                    doctor_environment(environment_profile).get("ok")
+                )
+            except (KeyError, ValueError):
+                environment_ready = False
+            if not environment_ready:
+                blockers.append(
+                    f"optional environment is unavailable: {environment_profile}"
+                )
+        real_ready = _real_verdict_current(root, bench_spec)
+        if not real_ready:
+            blockers.append("real-data benchmark has not been executed")
         entries.append(
             CapabilityCoverageEntry(
                 capability_id=bench_spec.capability_id,
                 capability_version=bench_spec.capability_version,
                 code_ready=code_ready,
-                local_fixture_ready=code_ready,
-                environment_ready=None,
-                real_benchmark_ready=False,
+                local_fixture_ready=local_fixture_ready,
+                environment_ready=environment_ready,
+                real_benchmark_ready=real_ready,
                 synthetic_case_ids=tuple(case.case_id for case in bench_spec.cases),
+                current_verdict_ids=tuple(item.verdict_id for item in current),
                 required_real_datasets=bench_spec.required_real_datasets,
                 blockers=tuple(blockers),
             )
         )
+    known_environment = [
+        item.environment_ready
+        for item in entries
+        if item.environment_ready is not None
+    ]
     return CapabilityBenchmarkMatrix(
         entries=tuple(entries),
         code_ready=all(item.code_ready for item in entries),
         local_fixture_ready=all(item.local_fixture_ready for item in entries),
-        real_benchmark_ready=False,
+        optional_environment_ready=(
+            all(known_environment) if known_environment else None
+        ),
+        real_benchmark_ready=all(item.real_benchmark_ready for item in entries),
         release_ready=False,
     )
 
 
-def server_benchmark_plan() -> ServerBenchmarkPlan:
-    jobs: list[dict[str, Any]] = []
-    profiles = {
-        "association.sceptre.v1": "sceptre-v1",
-        "composition.propeller.v1": "composition-v1",
-        "target.responder.mixscape.v1": "perturbseq-python-v1",
-    }
-    registry = CapabilityRegistry.load_default(include_external=False)
-    for spec in benchmark_specs():
-        capability = registry.get(spec.capability_id, spec.capability_version)
-        for dataset_id in spec.required_real_datasets:
-            dependency_jobs = [
-                f"{dataset_id}::{dependency}"
-                for dependency in capability.depends_on
-                if dependency in _REAL_DATASETS and dataset_id in _REAL_DATASETS[dependency]
-            ]
-            jobs.append(
-                {
-                    "job_id": f"{dataset_id}::{spec.capability_id}",
-                    "dataset_id": dataset_id,
-                    "capability_id": spec.capability_id,
-                    "capability_version": spec.capability_version,
-                    "depends_on": sorted(dependency_jobs),
-                    "environment_profile": profiles.get(spec.capability_id, "python-science-v1"),
-                    "prepare_commands": [
-                        f"python -m pertura_bench fetch {dataset_id} --cache $PERTURA_BENCH_CACHE",
-                        f"python -m pertura_bench convert {dataset_id} --cache $PERTURA_BENCH_CACHE",
-                        (
-                            f"python -m pertura_bench subset {dataset_id} --split evaluation "
-                            "--cache $PERTURA_BENCH_CACHE --input <converted> --output <subset> "
-                            "--source-lock-hash <lock> --label-column <column> --labels <labels>"
-                        ),
-                    ],
-                    "command": (
-                        "python -m pertura_bench run "
-                        f"{spec.capability_id} --tier full_dataset --dataset {dataset_id}"
-                    ),
-                    "resources": {
-                        "cpus": 8 if spec.capability_id == "association.sceptre.v1" else 4,
-                        "memory_gb": 64 if dataset_id == "replogle_k562_essential_2022" else 32,
-                        "walltime_minutes": 720,
-                    },
-                    "split": "evaluation",
-                    "expected_locks": ["source", "converted", "subset", "verdict"],
-                    "failure_policy": {
-                        "missing_lock": "blocked",
-                        "missing_environment": "blocked",
-                        "timeout": "failed_no_fallback",
-                    },
-                }
-            )
-    return ServerBenchmarkPlan(
-        jobs=tuple(jobs),
-        datasets=tuple(sorted({dataset for values in _REAL_DATASETS.values() for dataset in values})),
-    )
+def _default_repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
 
-def write_server_plan(path: str | Path) -> dict[str, Any]:
+
+def _load_synthetic_verdicts(
+    root: Path,
+) -> dict[str, CapabilityBenchmarkVerdict]:
+    candidates = (
+        root / "src" / "pertura_bench" / "cases" / "synthetic_verdicts.v1.json",
+        root / "benchmarks" / "verdicts" / "synthetic_ci.v1.json",
+    )
+    path = first_existing(candidates)
+    if path is None:
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload.get("catalog_hash") != canonical_hash(_CATALOG):
+            return {}
+        verdicts = [
+            CapabilityBenchmarkVerdict.model_validate(item)
+            for item in payload.get("verdicts") or ()
+        ]
+    except (ValueError, OSError, json.JSONDecodeError):
+        return {}
+    return {item.case_id: item for item in verdicts}
+
+
+def _frozen_real_lock_bindings(
+    root: Path,
+    dataset_id: str,
+    tier: BenchmarkTier,
+    split: str,
+) -> dict[str, str] | None:
+    from pertura_bench.models import BenchmarkArtifactLock, BenchmarkSubsetLock
+    from pertura_bench.operations import source_manifests
+
+    artifact = None
+    subset = None
+    for path in sorted((root / "benchmarks" / "locks").rglob("*.json")):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        schema = str(raw.get("schema_version") or "")
+        try:
+            if schema == "pertura-benchmark-artifact-lock-v1":
+                candidate = BenchmarkArtifactLock.model_validate(raw)
+                if candidate.dataset_id == dataset_id:
+                    if artifact is not None:
+                        return None
+                    artifact = candidate
+            elif schema == "pertura-benchmark-subset-lock-v1":
+                candidate = BenchmarkSubsetLock.model_validate(raw)
+                declared_split = str(raw.get("split") or "")
+                if (
+                    candidate.dataset_id == dataset_id
+                    and (declared_split == split or split in path.stem)
+                ):
+                    if subset is not None:
+                        return None
+                    subset = candidate
+        except ValueError:
+            return None
+    if artifact is None:
+        return None
+    manifests = source_manifests(root)
+    if dataset_id not in manifests:
+        return None
+    bindings = {
+        "source_manifest": manifests[dataset_id][1].canonical_hash,
+        "artifact_lock": artifact.canonical_hash,
+        "artifact": artifact.artifact_sha256,
+    }
+    if tier == "frozen_subset":
+        if subset is None or subset.source_lock_hash != artifact.canonical_hash:
+            return None
+        bindings.update(
+            {
+                "subset_lock": subset.canonical_hash,
+                "subset": subset.output_sha256,
+                "subset_spec": subset.subset_spec_hash,
+            }
+        )
+    return bindings
+
+
+def _real_verdict_current(root: Path, spec: CapabilityBenchmarkSpec) -> bool:
+    directory = root / "benchmarks" / "verdicts" / "real"
+    registry = CapabilityRegistry.load_default(include_external=False)
+    capability = registry.get(spec.capability_id, spec.capability_version)
+    parameter_catalog, parameter_catalog_hash = load_real_parameter_catalog()
+    try:
+        checkpoint = _load_checkpoint_binding(root)
+    except (FileNotFoundError, ValueError, OSError):
+        return False
+    expected_count = 0
+    for dataset_id in spec.required_real_datasets:
+        for tier in ("frozen_subset", "full_dataset"):
+            for split in ("calibration", "evaluation"):
+                expected_count += 1
+                path = directory / (
+                    f"{dataset_id}__{spec.capability_id}__{tier}__{split}.json"
+                )
+                if not path.is_file():
+                    return False
+                try:
+                    verdict = CapabilityBenchmarkVerdict.model_validate_json(
+                        path.read_text(encoding="utf-8")
+                    )
+                    case = _real_case(
+                        spec,
+                        tier,
+                        dataset_id,
+                        split=split,
+                        parameter_catalog=parameter_catalog,
+                        parameter_catalog_hash=parameter_catalog_hash,
+                    )
+                    expected = _real_identity_hashes(
+                        root,
+                        case=case,
+                        spec=capability,
+                        dataset_id=dataset_id,
+                        split=split,
+                        tier=tier,
+                        parameter_catalog_hash=parameter_catalog_hash,
+                    )
+                except (ValueError, OSError, json.JSONDecodeError):
+                    return False
+                lock_bindings = _frozen_real_lock_bindings(
+                    root, dataset_id, tier, split
+                )
+                if lock_bindings is None:
+                    return False
+                expected.update(lock_bindings)
+                expected.update(
+                    {
+                        "checkpoint_git": checkpoint["git_commit"],
+                        "checkpoint_wheel": checkpoint["wheel_sha256"],
+                        "checkpoint_plan": checkpoint["server_plan_hash"],
+                    }
+                )
+                if (
+                    verdict.outcome != "passed"
+                    or verdict.case_hash != case.canonical_hash
+                    or verdict.capability_id != spec.capability_id
+                    or verdict.capability_version != spec.capability_version
+                    or verdict.tier != tier
+                    or verdict.execution_mode != "product_path"
+                    or verdict.runner_hash != runner_hash(capability.executor)
+                    or verdict.input_hashes != expected
+                    or not verdict.scientific_result_hash
+                    or not _SHA256_VALUE.fullmatch(verdict.scientific_result_hash)
+                    or verdict.environment_lock_hash
+                    != expected.get("environment_lock")
+                ):
+                    return False
+    return expected_count > 0
+
+
+def _write_text_lf(path: Path, text: str) -> None:
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+
+
+def write_synthetic_verdicts(
+    output: str | Path | None = None,
+) -> dict[str, Any]:
+    verdicts = []
+    for capability_id in CANDIDATE_CAPABILITIES:
+        verdicts.extend(
+            CapabilityBenchmarkVerdict.model_validate(item)
+            for item in run_protocol_cases(capability_id, tier="synthetic_ci")
+        )
+    destination = (
+        Path(output).resolve()
+        if output
+        else _default_repo_root()
+        / "src"
+        / "pertura_bench"
+        / "cases"
+        / "synthetic_verdicts.v1.json"
+    )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": "pertura-synthetic-verdict-set-v1",
+        "catalog_hash": canonical_hash(_CATALOG),
+        "case_count": len(verdicts),
+        "passed_count": sum(item.outcome == "passed" for item in verdicts),
+        "verdicts": [item.model_dump(mode="json") for item in verdicts],
+    }
+    _write_text_lf(destination, json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    return {
+        "path": str(destination),
+        "case_count": len(verdicts),
+        "passed_count": payload["passed_count"],
+        "ready": payload["passed_count"] == len(verdicts),
+    }
+
+
+
+def server_benchmark_plan(
+    repo_root: str | Path | None = None,
+) -> ServerBenchmarkPlan:
+    return build_server_plan(benchmark_specs(), repo_root)
+
+
+def write_server_plan(
+    path: str | Path, *, repo_root: str | Path | None = None
+) -> dict[str, Any]:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    plan = server_benchmark_plan()
-    destination.write_text(
+    plan = server_benchmark_plan(repo_root)
+    _write_text_lf(
+        destination,
         json.dumps(plan.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
     )
     return {
         "plan_id": plan.plan_id,
         "plan_hash": plan.canonical_hash,
         "path": str(destination),
         "job_count": len(plan.jobs),
+        "artifact_count": len(plan.artifacts),
     }

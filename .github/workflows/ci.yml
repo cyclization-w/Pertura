@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  product:
+    name: Product tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev,dashboard,omics]"
+      - name: Run capability-first product suite
+        run: >-
+          python -m pytest -q -m "not legacy"
+          --ignore=tests/gate
+          --ignore=tests/bench/test_p07_gate_utility.py
+          --ignore=tests/bench/test_p21_classic_workflow.py
+          --ignore=tests/bench/test_stage_benchmark.py
+          --ignore=tests/runtime/test_claude_evidence_tools.py
+          --ignore=tests/runtime/test_final_surface.py
+          --ignore=tests/runtime/test_stage_catalog.py
+          --ignore=tests/workflow/test_classic_recipe.py
+          --ignore=tests/workflow/test_workflow_substrate.py
+
+  legacy-regression:
+    name: Legacy read-only regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - name: Run explicitly marked legacy tests
+        shell: bash
+        run: |
+          set +e
+          python -m pytest -q -m legacy
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ] && [ "$status" -ne 5 ]; then
+            exit "$status"
+          fi
+      - name: Run legacy gate, stage, and classic fixtures
+        run: >-
+          python -m pytest -q -m "not legacy"
+          tests/gate
+          tests/bench/test_p07_gate_utility.py
+          tests/bench/test_p21_classic_workflow.py
+          tests/bench/test_stage_benchmark.py
+          tests/runtime/test_claude_evidence_tools.py
+          tests/runtime/test_final_surface.py
+          tests/runtime/test_stage_catalog.py
+          tests/workflow/test_classic_recipe.py
+          tests/workflow/test_workflow_substrate.py
+
+
+  synthetic-benchmark:
+    name: Synthetic product path (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev,omics]"
+      - name: Execute all synthetic capability cases through the product path
+        run: python -m pertura_bench run-matrix --tier synthetic_ci --repo .
+
+  frozen-contracts:
+    name: Frozen contracts, schemas, and versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python scripts/check_version_sync.py
+      - run: python scripts/freeze_v020_contracts.py --check
+      - run: python scripts/export_benchmark_schemas.py --check
+      - run: python -m pertura_bench validate-cases
+      - run: python -m pytest -q tests/compatibility tests/bench/test_benchmark_schema_export.py
+
+  dashboard:
+    name: Dashboard test and bundle drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - working-directory: ui
+        run: npm ci
+      - working-directory: ui
+        run: npm test
+      - working-directory: ui
+        run: npm run build
+      - run: git diff --exit-code -- src/pertura_runtime/dashboard_static
+
+  distributions:
+    name: Wheel and sdist smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip build
+      - run: python -m build
+      - run: python scripts/check_distribution_contents.py dist/*.whl dist/*.tar.gz
+      - run: python -m pip wheel --no-deps --wheel-dir reconstructed dist/*.tar.gz
+      - run: python -m venv .smoke
+      - run: .smoke/bin/python -m pip install dist/*.whl
+      - name: Verify installed distribution version matches the repository source
+        run: .smoke/bin/python -c "import tomllib; from importlib.metadata import version; expected=tomllib.load(open('pyproject.toml','rb'))['project']['version']; assert version('pertura') == expected"

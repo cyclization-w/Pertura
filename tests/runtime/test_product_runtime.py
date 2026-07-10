@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pertura_core import DatasetContract
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
 from pertura_runtime.product import PerturaProductRuntime
 
@@ -37,3 +38,41 @@ def test_product_runtime_inspect_diagnostic_receipt_and_report(monkeypatch, tmp_
         assert not (workspace.root / "authority.sqlite3").exists()
     finally:
         runtime.close()
+
+
+def test_diagnostic_planner_blocks_without_auto_executing_dependencies(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv(
+        "PERTURA_AUTHORITY_ROOT", str(tmp_path / "authority-outside-workspace")
+    )
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="planner")
+    runtime = PerturaProductRuntime(workspace)
+    contract = DatasetContract(
+        dataset_id="dataset",
+        input_format="csv",
+        guide_matrix={"path": "guides.csv"},
+        identity_fields={
+            "control": {"status": "confirmed", "value": ["NTC"]},
+            "replicate": {
+                "status": "confirmed",
+                "value": ["r1", "r2", "r3"],
+            },
+        },
+    )
+    runtime._persist_contract(contract)
+
+    result = runtime.run_diagnostic(
+        "target.reliability.aggregate.v1",
+        contract_id=contract.contract_id,
+    )
+
+    assert result["status"] == "blocked"
+    assert result["result_id"] is None
+    assert not runtime.started
+    assert result["plan"]["capability_id"] == "target.reliability.aggregate.v1"
+    assert "guide assignment is not validated" in result["blockers"]
+    assert {
+        "target.guide_efficacy.v1",
+        "target.responder.mixscape.v1",
+    }.issubset(result["required_upstream"])

@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
-from pertura_runtime.stages import build_stage_prompt_section
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TASK_HELPERS = {
@@ -183,7 +182,9 @@ def build_system_prompt(workspace: ClaudeRunWorkspace, *, python_environment: An
     python_section = ""
     if python_environment is not None:
         python_section = "\n" + python_environment.prompt_section()
-    stage_section = build_stage_prompt_section(stage_id) if stage_id else ""
+    if stage_id and tool_surface == "capability":
+        raise ValueError("stage prompts are not available on the production capability surface")
+    stage_section = _legacy_stage_prompt_section(stage_id) if stage_id else ""
     return f"""You are Pertura, a Perturb-seq analysis coding agent.
 
 This is the capability-first Pertura runtime. Scientific authority comes only
@@ -238,10 +239,17 @@ def write_prompt_files(workspace: ClaudeRunWorkspace, *, task: str, python_envir
     output_contract = CAPABILITY_OUTPUT_CONTRACT if tool_surface == "capability" else OUTPUT_CONTRACT
     workspace.write_task_files(task=task, system_prompt=system_prompt, output_contract=output_contract)
     if stage_id:
-        workspace.write_text(workspace.task_dir / "PERTURA_STAGE_PROMPT.md", build_stage_prompt_section(stage_id))
+        workspace.write_text(workspace.task_dir / "PERTURA_STAGE_PROMPT.md", _legacy_stage_prompt_section(stage_id))
     _write_task_helpers(workspace)
     return system_prompt
 
+
+def _legacy_stage_prompt_section(stage_id: str) -> str:
+    """Load frozen stage help only for explicit legacy regression callers."""
+
+    from pertura_runtime.stages import build_stage_prompt_section
+
+    return build_stage_prompt_section(stage_id)
 
 def _write_task_helpers(workspace: ClaudeRunWorkspace) -> None:
     """Stage deterministic task helpers into the isolated run bundle."""

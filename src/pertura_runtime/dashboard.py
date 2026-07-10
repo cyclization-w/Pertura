@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from pertura_core.version import package_version
 from pertura_runtime.product import PerturaProductRuntime
 
 
@@ -26,16 +27,18 @@ def create_dashboard_app(runtime: PerturaProductRuntime):
     except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
         raise RuntimeError("Dashboard dependencies are missing. Install with `pip install 'pertura[dashboard]'`.") from exc
 
-    app = FastAPI(title="Pertura dashboard", version="0.2.0a3", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Pertura dashboard", version=package_version(), docs_url=None, redoc_url=None)
 
     @app.get("/api/run")
     async def run_projection() -> dict[str, Any]:
         contract_path = runtime.workspace.artifacts_dir / "dataset_contract.latest.json"
         contract = json.loads(contract_path.read_text(encoding="utf-8")) if contract_path.exists() else None
-        results = runtime.broker.list_results(runtime.workspace.root.name)
+        authority = runtime.read_authority_projection(runtime.workspace.root.name)
+        results = [item["result"] for item in authority.get("committed", ())]
         report_path = runtime.workspace.reports_dir / "capability_report.md"
         return {
             "run_id": runtime.workspace.root.name,
+            "authority": authority,
             "contract": contract,
             "results": results,
             "phases": _phase_projection(results),
@@ -49,7 +52,7 @@ def create_dashboard_app(runtime: PerturaProductRuntime):
         async def stream():
             cursor = after
             while True:
-                items = runtime.broker.list_events(runtime.workspace.root.name, after=cursor)
+                items = runtime.read_authority_events(runtime.workspace.root.name, after=cursor)
                 for item in items:
                     cursor = max(cursor, int(item["sequence"]))
                     yield f"id: {cursor}\nevent: {item['event_type']}\ndata: {json.dumps(item, ensure_ascii=False)}\n\n"

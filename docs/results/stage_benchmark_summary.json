@@ -111,7 +111,7 @@
       "notes": [
         "claim report rendered through ClaimDecision"
       ],
-      "report_path": "C:\\Users\\25374\\Documents\\New project\\pertura\\tmp_stage_benchmark_runs\\claim_report_decision_surface\\reports\\evidence_report.md",
+      "report_path": "tmp_stage_benchmark_runs\\claim_report_decision_surface\\reports\\evidence_report.md",
       "scope_fits": [
         "exact"
       ],

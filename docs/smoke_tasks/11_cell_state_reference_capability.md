@@ -7,7 +7,7 @@ Purpose: verify that `--stage cell_state_reference` can run on a real AnnData ob
 Create the synthetic fixture:
 
 ```powershell
-cd "C:\Users\25374\Documents\New project\pertura"
+Set-Location <path-to-pertura-repo>
 python scripts\make_synthetic_state_reference_fixture.py --out fixtures\synthetic_state_reference
 ```
 
@@ -21,7 +21,7 @@ fixtures/synthetic_state_reference/fixture_manifest.json
 ## Claude Smoke Command
 
 ```powershell
-cd "C:\Users\25374\Documents\New project\pertura"
+Set-Location <path-to-pertura-repo>
 pertura-claude `
   --stage cell_state_reference `
   --input "fixtures\synthetic_state_reference" `

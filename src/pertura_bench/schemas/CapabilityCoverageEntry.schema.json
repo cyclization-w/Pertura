@@ -31,6 +31,14 @@
       "title": "Coverage Entry Id",
       "type": "string"
     },
+    "current_verdict_ids": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Current Verdict Ids",
+      "type": "array"
+    },
     "environment_ready": {
       "anyOf": [
         {
@@ -61,7 +69,7 @@
       "type": "array"
     },
     "schema_version": {
-      "default": "pertura-capability-coverage-entry-v1",
+      "default": "pertura-capability-coverage-entry-v2",
       "title": "Schema Version",
       "type": "string"
     },

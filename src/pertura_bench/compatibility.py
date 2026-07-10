@@ -7,6 +7,7 @@ from typing import Any
 
 from pertura_core import (
     CapabilityRunRequest,
+    PromotionPolicy,
     CapabilitySpec,
     DatasetContract,
     DependencyRef,
@@ -17,7 +18,6 @@ from pertura_core import (
     ScientificStatement,
     ScopeKey,
 )
-from pertura_gate.promotion import PromotionPolicy
 from pertura_runtime.claude.tools.product_tools import PRODUCT_TOOL_CONTRACTS, PRODUCT_TOOL_NAMES
 from pertura_workflow.capabilities import CapabilityRegistry
 
@@ -123,7 +123,7 @@ def freeze_contracts(repo_root: str | Path, *, check: bool) -> list[str]:
                     drift.append(label)
             else:
                 destination.mkdir(parents=True, exist_ok=True)
-                path.write_text(rendered, encoding="utf-8")
+                path.write_text(rendered, encoding="utf-8", newline="\n")
     return drift
 
 

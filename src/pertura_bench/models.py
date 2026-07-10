@@ -232,5 +232,6 @@ from pertura_bench.capability_models import (  # noqa: E402
     CapabilityBenchmarkSpec,
     CapabilityBenchmarkVerdict,
     CapabilityCoverageEntry,
+    ScientificResultDigest,
     ServerBenchmarkPlan,
 )
