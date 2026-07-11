@@ -71,5 +71,3 @@ def test_calibration_permutes_replicate_labels_never_cells(tmp_path: Path) -> No
     payload = json.loads((staging / result.output_paths[0]).read_text(encoding="utf-8"))
     assert payload["label_permutation"]["permutation_unit"] == "replicate_label"
     assert payload["cell_label_permutation_performed"] is False
-
-\n

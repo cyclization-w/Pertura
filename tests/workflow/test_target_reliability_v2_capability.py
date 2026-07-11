@@ -102,5 +102,3 @@ def test_low_detectability_without_signature_blocks_target_reliability(tmp_path:
     )
     assert result.status.value == "blocked"
     assert any("detectability" in blocker for blocker in result.blockers)
-
-\n

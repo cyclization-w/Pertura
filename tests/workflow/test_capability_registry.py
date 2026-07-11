@@ -76,5 +76,3 @@ def test_installed_capability_is_discovery_only_without_local_runner(monkeypatch
         item for item in registry.list() if item.capability_id == spec.capability_id
     )
     assert summary.broker_executable is False
-
-\n

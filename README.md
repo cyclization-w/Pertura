@@ -14,7 +14,7 @@ DatasetContract
 
 ## Current checkpoint
 
-`0.2.0a4` is the pre-benchmark consolidation checkpoint, not the final `0.2.0` scientific release.
+`0.2.0a5` is the provider-neutral agent-skills checkpoint, not the final `0.2.0` scientific release.
 
 The current product surface provides:
 
@@ -25,6 +25,8 @@ The current product surface provides:
 - trusted receipt-gated promotion and a separate exploratory-results report section;
 - twenty granular exploratory P0-P3 candidate capabilities with synthetic-only validation and no claim permissions;
 - PerturaBench case specifications, synthetic execution, portable artifact locks, and scheduler-neutral server plans;
+- four provider-neutral Perturb-seq skills bundled once and loaded by the Claude adapter without reducing CodeAct access;
+- an import-safe OpenAI Agents SDK adapter contract that reuses the same five tool schemas but is deliberately not runnable yet;
 - a read-mostly React/Vite dashboard whose only write operation confirms dataset design or identity.
 
 Real-data benchmark locks, verdicts, and expert-adjudicated CRISPRi/CRISPRa profiles remain required before `release_ready` can become true.
@@ -63,11 +65,15 @@ pertura finalize <run_id> --workspace <workspace>
 pertura dashboard <workspace> --run <run_id>
 ```
 
-Claude CodeAct uses the same product runtime:
+Claude CodeAct uses the same product runtime. The four bundled Pertura skills are enabled by default; additional local skill plugins require an explicit path:
 
 ```bash
 pertura-claude --help
+pertura-claude --no-bundled-skills
+pertura-claude --skill-plugin <plugin-root>
 ```
+
+Skills guide tool selection and scientific reasoning only. They cannot create contracts, receipts, promotion decisions, or measured results. The OpenAI adapter currently provides schema and instruction projection for future Agents SDK integration; it does not expose a CLI or make API requests.
 
 Legacy registrars, stages, and classic recipes are regression-only internals and are not part of the production CLI or MCP surface.
 
@@ -78,6 +84,7 @@ Benchmark commands never download data implicitly:
 ```bash
 python -m pertura_bench validate --repo .
 python -m pertura_bench validate-cases
+python -m pertura_bench skills validate --repo .
 python -m pertura_bench run-matrix --tier synthetic_ci
 python -m pertura_bench export-server-plan --output server-plan.json
 ```
@@ -103,6 +110,7 @@ python -m pytest -q
 python scripts/check_version_sync.py
 python scripts/freeze_v020_contracts.py --check
 python -m pertura_bench validate-cases
+python -m pertura_bench skills validate --repo .
 ```
 
 The repository does not encode a historical test count as a release gate. CI and the release audit are the source of truth for the current checkout.

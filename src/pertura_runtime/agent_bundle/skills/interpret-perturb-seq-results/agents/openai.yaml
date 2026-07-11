@@ -1,0 +1,4 @@
+interface:
+  display_name: "Interpret Perturb-seq Results"
+  short_description: "Interpret effects without overclaiming"
+  default_prompt: "Use -perturb-seq-results to interpret these Pertura results and limitations."

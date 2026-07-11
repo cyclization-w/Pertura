@@ -1,0 +1,4 @@
+interface:
+  display_name: "Inspect Perturb-seq Design"
+  short_description: "Resolve Perturb-seq experimental design"
+  default_prompt: "Use -perturb-seq-design to inspect this screen design and identify unresolved fields."

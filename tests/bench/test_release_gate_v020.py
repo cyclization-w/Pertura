@@ -20,6 +20,8 @@ def test_release_audit_v3_separates_repository_runtime_fixture_and_real_state(
 ) -> None:
     monkeypatch.setenv("PERTURA_CACHE_DIR", str(tmp_path / "empty-cache"))
     root = Path(__file__).resolve().parents[2]
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    monkeypatch.setattr(release_gate, "package_version", lambda: str(project["project"]["version"]))
     audit = audit_v020(root, require_clean_worktree=False)
     checks = {item["check_id"]: item for item in audit["checks"]}
     assert checks["default_domain_tool_count"]["passed"] is True
@@ -39,6 +41,13 @@ def test_release_audit_v3_separates_repository_runtime_fixture_and_real_state(
     assert checks["tracked_machine_paths_absent"]["passed"] is True
     assert checks["banned_tracked_artifacts_absent"]["passed"] is True
     assert checks["package_version_parity"]["passed"] is True
+    assert checks["skill_bundle_ready"]["passed"] is True
+    assert checks["claude_skill_adapter_ready"]["passed"] is True
+    assert checks["openai_adapter_ready"]["passed"] is False
+    assert checks["openai_adapter_ready"]["category"] == "agent_optional"
+    assert checks["skill_behavior_benchmark_ready"]["passed"] is False
+    assert "openai_adapter_ready" not in audit["blocking_checks"]
+    assert "skill_behavior_benchmark_ready" not in audit["blocking_checks"]
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     assert audit["build_version"] == str(project["project"]["version"])
     assert audit["runtime_spine_ready"] is True

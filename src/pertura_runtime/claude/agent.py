@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
+from pertura_runtime.agent_bundle import resolve_skill_configuration
 from pertura_runtime.claude.manifest import ClaudeRunManifest
 from pertura_runtime.claude.options import (
     ClaudeRuntimeOptions,
@@ -12,7 +13,11 @@ from pertura_runtime.claude.options import (
     runtime_policy,
 )
 from pertura_runtime.claude.prompt import build_default_task, write_prompt_files
-from pertura_runtime.claude.python_env import SCIENCE_PACKAGES, PythonEnvironmentError, prepare_python_environment
+from pertura_runtime.claude.python_env import (
+    SCIENCE_PACKAGES,
+    PythonEnvironmentError,
+    prepare_python_environment,
+)
 from pertura_runtime.claude.stream import ClaudeStreamRenderer
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
 from pertura_runtime.product import PerturaProductRuntime
@@ -27,7 +32,7 @@ class ClaudeRunResult:
 
 
 class ClaudePerturaAgent:
-    """Thin Claude Agent SDK runner for Pertura CodeAct v0."""
+    """Thin Claude Agent SDK runner for the Pertura capability runtime."""
 
     def __init__(
         self,
@@ -40,7 +45,11 @@ class ClaudePerturaAgent:
     ) -> None:
         self.workspace = workspace
         self.config = config or ClaudeRuntimeOptions()
-        self.stream = ClaudeStreamRenderer(output_fn=output_fn, verbose=verbose, raw_stream=raw_stream)
+        self.stream = ClaudeStreamRenderer(
+            output_fn=output_fn,
+            verbose=verbose,
+            raw_stream=raw_stream,
+        )
         self.manifest = ClaudeRunManifest(workspace)
         self.policy = runtime_policy(self.config)
         self.product_runtime = PerturaProductRuntime(workspace, policy=self.policy)
@@ -57,7 +66,10 @@ class ClaudePerturaAgent:
         except PythonEnvironmentError as exc:
             error = f"{type(exc).__name__}: {exc}"
             if exc.payload:
-                self.workspace.write_json(self.workspace.logs_dir / "python_env.json", exc.payload)
+                self.workspace.write_json(
+                    self.workspace.logs_dir / "python_env.json",
+                    exc.payload,
+                )
             self.workspace.update_manifest(
                 {
                     "claude_runtime_options": describe_options(self.config),
@@ -67,8 +79,16 @@ class ClaudePerturaAgent:
                     "python_environment_error": exc.payload or {"error": str(exc)},
                 }
             )
-            runtime_final = self._finalize_with_runtime_summary(status="failed", error=error)
-            return ClaudeRunResult(status="failed", workspace=self.workspace.root, result_text=runtime_final, error=error)
+            runtime_final = self._finalize_with_runtime_summary(
+                status="failed",
+                error=error,
+            )
+            return ClaudeRunResult(
+                status="failed",
+                workspace=self.workspace.root,
+                result_text=runtime_final,
+                error=error,
+            )
 
         self.workspace.write_json(
             self.workspace.logs_dir / "python_env.json",
@@ -101,12 +121,17 @@ class ClaudePerturaAgent:
         except ModuleNotFoundError as exc:
             message = (
                 "claude-agent-sdk is not installed. Install with "
-                "`python -m pip install 'pertura-gate[llm]'` or "
-                "`python -m pip install claude-agent-sdk`."
+                "`python -m pip install 'pertura[llm]'` or "
+                "`python -m pip install 'claude-agent-sdk>=0.1.62,<0.3'`."
             )
             self._finalize_with_runtime_summary(status="failed", error=message)
             raise RuntimeError(message) from exc
 
+        skill_config = resolve_skill_configuration(
+            enable_bundled=runtime_config.enable_bundled_skills,
+            additional_plugin_paths=runtime_config.additional_skill_plugins,
+        )
+        expected_skills = tuple(sorted(skill_config.skill_names))
         options = build_agent_options(
             workspace=self.workspace,
             system_prompt=system_prompt,
@@ -114,15 +139,33 @@ class ClaudePerturaAgent:
             product_runtime=self.product_runtime,
         )
         try:
+            skills_validated = False
             async with ClaudeSDKClient(options=options) as client:
                 await client.query(task_text)
                 async for message in client.receive_response():
                     self.stream.render(message)
                     self.manifest.capture(message)
+                    if self.manifest.init_seen and not skills_validated:
+                        _validate_sdk_skill_surface(
+                            expected_skills,
+                            self.manifest.init_skills,
+                        )
+                        skills_validated = True
+            if not skills_validated:
+                raise RuntimeError(
+                    "Claude Agent SDK did not report the initialized skill surface"
+                )
             status = "failed" if self.manifest.is_error else "completed"
-            error = _sdk_result_error(self.manifest) if self.manifest.is_error else None
+            error = (
+                _sdk_result_error(self.manifest)
+                if self.manifest.is_error
+                else None
+            )
             self.manifest.flush(status=status)
-            runtime_final = self._finalize_with_runtime_summary(status=status, error=error)
+            runtime_final = self._finalize_with_runtime_summary(
+                status=status,
+                error=error,
+            )
             return ClaudeRunResult(
                 status=status,
                 workspace=self.workspace.root,
@@ -132,27 +175,62 @@ class ClaudePerturaAgent:
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
             self.manifest.flush(status="failed")
-            runtime_final = self._finalize_with_runtime_summary(status="failed", error=error)
-            return ClaudeRunResult(status="failed", workspace=self.workspace.root, result_text=runtime_final, error=error)
+            runtime_final = self._finalize_with_runtime_summary(
+                status="failed",
+                error=error,
+            )
+            return ClaudeRunResult(
+                status="failed",
+                workspace=self.workspace.root,
+                result_text=runtime_final,
+                error=error,
+            )
 
-    def _finalize_with_runtime_summary(self, *, status: str, error: str | None = None) -> str:
+    def _finalize_with_runtime_summary(
+        self,
+        *,
+        status: str,
+        error: str | None = None,
+    ) -> str:
         if status == "completed":
             self.product_runtime.finalize_report(self.workspace.root.name)
-            runtime_final = (self.workspace.reports_dir / "pertura_final.md").read_text(encoding="utf-8")
+            runtime_final = (
+                self.workspace.reports_dir / "pertura_final.md"
+            ).read_text(encoding="utf-8")
             self.product_runtime.close(graceful=True)
         else:
             self.product_runtime.close(graceful=False)
-            runtime_final = "# Pertura capability run failed\n\n" + (error or "The runtime failed before a verified result was finalized.") + "\n"
-            self.workspace.write_text(self.workspace.reports_dir / "pertura_final.md", runtime_final)
+            runtime_final = (
+                "# Pertura capability run failed\n\n"
+                + (
+                    error
+                    or "The runtime failed before a verified result was finalized."
+                )
+                + "\n"
+            )
+            self.workspace.write_text(
+                self.workspace.reports_dir / "pertura_final.md",
+                runtime_final,
+            )
         self.workspace.update_manifest(
             {
                 "runtime_final_path": "reports/pertura_final.md",
                 "turn_final_path": None,
-                "claude_final_path": "logs/claude_final.md" if (self.workspace.logs_dir / "claude_final.md").exists() else None,
+                "claude_final_path": (
+                    "logs/claude_final.md"
+                    if (self.workspace.logs_dir / "claude_final.md").exists()
+                    else None
+                ),
             }
         )
-        self.workspace.finalize(status=status, result=runtime_final, error=error)
+        self.workspace.finalize(
+            status=status,
+            result=runtime_final,
+            error=error,
+        )
         return runtime_final
+
+
 def _required_preflight_packages(config: ClaudeRuntimeOptions) -> tuple[str, ...]:
     if config.python_preflight_packages is not None:
         return tuple(config.python_preflight_packages)
@@ -160,6 +238,18 @@ def _required_preflight_packages(config: ClaudeRuntimeOptions) -> tuple[str, ...
         return ("anndata", "pandas", "numpy")
     return tuple(SCIENCE_PACKAGES)
 
+
 def _sdk_result_error(manifest: ClaudeRunManifest) -> str:
     detail = manifest.result_text or manifest.result_subtype or "unknown"
     return f"Claude SDK result error: {detail}"
+
+
+def _validate_sdk_skill_surface(
+    expected: tuple[str, ...],
+    observed: tuple[str, ...],
+) -> None:
+    if observed != expected:
+        raise RuntimeError(
+            "Claude Agent SDK initialized an unexpected skill surface; "
+            f"expected={list(expected)!r}, observed={list(observed)!r}"
+        )

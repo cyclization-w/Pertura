@@ -602,5 +602,3 @@ def _status(result: ResultEnvelope) -> str:
 
 def _norm(value: Any) -> str:
     return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-
-\n

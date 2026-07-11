@@ -1,0 +1,8 @@
+{
+  "name": "pertura",
+  "version": "0.2.0-alpha.5",
+  "description": "Provider-neutral Perturb-seq analysis skills for the Pertura runtime",
+  "author": {
+    "name": "Pertura Team"
+  }
+}

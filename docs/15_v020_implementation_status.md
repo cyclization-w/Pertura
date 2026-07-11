@@ -1,6 +1,6 @@
 # v0.2 capability-first implementation status
 
-This file records the `0.2.0a4` pre-benchmark consolidation checkpoint. It is not the final `0.2.0` scientific release.
+This file records the `0.2.0a5` provider-neutral agent-skills checkpoint. It is not the final `0.2.0` scientific release.
 
 ## Code checkpoint
 
@@ -14,17 +14,25 @@ This file records the `0.2.0a4` pre-benchmark consolidation checkpoint. It is no
 - Twenty granular `0.1.0` candidate capabilities cover P0-P3 intake/design, guide assignment/QC, state/module reference, target reliability, SCEPTRE, Propeller, sensitivity, and null calibration.
 - Existing composite capabilities remain deprecated compatibility wrappers.
 - PerturaBench stores versioned case specifications and executes synthetic cases through the product path. Optional environment integrations explicitly report when they were not run.
-- Wheel and sdist checks cover capability specs, scientific runners, environment profiles, dashboard assets, benchmark cases/schemas, and compatibility snapshots.
+- Wheel and sdist checks cover capability specs, scientific runners, environment profiles, dashboard assets, benchmark cases/schemas, compatibility snapshots, and the complete agent skill bundle.
+- Product-tool definitions and handlers are provider-neutral; the Claude MCP wrapper is a thin adapter over the same frozen five-tool surface.
+- Four bundled Perturb-seq skills provide operational, design, screen-diagnostic, and interpretation guidance without entering receipts, dependencies, or promotion.
+- Claude loads only the bundled skills plus explicitly supplied plugin roots. User and project-global skills are excluded by default, while Read/Glob/Grep/Bash/Write/Edit/NotebookEdit remain available.
+- The OpenAI Agents SDK adapter is an import-safe contract and schema projection only. It makes no API request and reports `openai_adapter_ready: false`.
 
 Expected audit state:
 
 ```text
-build_version: 0.2.0a4
+build_version: 0.2.0a5
 repository_ready: true
 runtime_spine_ready: true
 code_ready: true
 local_fixture_ready: true
 real_benchmark_ready: false
+skill_bundle_ready: true
+claude_skill_adapter_ready: true
+openai_adapter_ready: false
+skill_behavior_benchmark_ready: false
 release_ready: false
 default Pertura domain tools: 5
 ```

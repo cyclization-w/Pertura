@@ -42,6 +42,9 @@ def _exit_code(command: str, payload: object) -> int:
         return 0 if payload.get("valid") is True else 1
     if command == "validate-cases" and isinstance(payload, dict):
         return 0 if payload.get("ok") is True else 1
+    if command == "skills" and isinstance(payload, dict):
+        ready = payload.get("ok", payload.get("skill_bundle_ready"))
+        return 0 if ready is True else 1
     if command == "run-matrix" and isinstance(payload, dict) and "ready" in payload:
         return 0 if payload.get("ready") is True else 1
     if command in {"run", "run-matrix"}:
@@ -98,6 +101,13 @@ def main(argv: list[str] | None = None) -> int:
     matrix = capability_sub.add_parser("matrix")
     matrix.add_argument("--repo", type=Path, default=Path.cwd())
 
+    skills = sub.add_parser("skills")
+    skill_sub = skills.add_subparsers(dest="skill_command", required=True)
+    skill_validate = skill_sub.add_parser("validate")
+    skill_validate.add_argument("--repo", type=Path, default=Path.cwd())
+    skill_matrix = skill_sub.add_parser("matrix")
+    skill_matrix.add_argument("--repo", type=Path, default=Path.cwd())
+
     cases = sub.add_parser("validate-cases")
     cases.add_argument("--repo", type=Path, default=Path.cwd())
 
@@ -138,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         "run-matrix",
         "export-server-plan",
         "edger-golden",
+        "skills",
     }
     repo = None
     if args.command in commands_with_repo or (
@@ -282,6 +293,17 @@ def main(argv: list[str] | None = None) -> int:
             {"capabilities": list(CANDIDATE_CAPABILITIES)}
             if args.capability_command == "list"
             else coverage_matrix(repo).model_dump(mode="json")
+        )
+    elif args.command == "skills":
+        from pertura_bench.skill_bench import (
+            skill_benchmark_matrix,
+            validate_skill_bundle_static,
+        )
+
+        payload = (
+            validate_skill_bundle_static(repo)
+            if args.skill_command == "validate"
+            else skill_benchmark_matrix(repo)
         )
     elif args.command == "validate-cases":
         from pertura_bench.capability_bench import validate_cases

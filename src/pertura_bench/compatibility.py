@@ -18,7 +18,7 @@ from pertura_core import (
     ScientificStatement,
     ScopeKey,
 )
-from pertura_runtime.claude.tools.product_tools import PRODUCT_TOOL_CONTRACTS, PRODUCT_TOOL_NAMES
+from pertura_runtime.product_tools import PRODUCT_TOOL_CONTRACTS, PRODUCT_TOOL_NAMES
 from pertura_workflow.capabilities import CapabilityRegistry
 
 

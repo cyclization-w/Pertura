@@ -6,7 +6,7 @@ This repository root is the authoritative Pertura source checkout. The enclosing
 
 - `src/pertura_core/`: frozen contracts, canonical scope, promotion policy, and receipt verification.
 - `src/pertura_workflow/`: capability specifications, planners, validators, scientific runners, and environment profiles.
-- `src/pertura_runtime/`: product CLI, five MCP tools, Claude adapter, authority/session store, and dashboard bundle.
+- `src/pertura_runtime/`: product CLI, provider-neutral five-tool handlers, shared agent skills, Claude/OpenAI adapters, authority/session store, and dashboard bundle.
 - `src/pertura_bench/`: benchmark schemas, case specifications, protocol runner, metrics, and server-plan export.
 - `compatibility/v0.2/`: repository compatibility snapshots; packaged mirror under `src/pertura_core/compatibility/v0.2/`.
 - `benchmarks/`: small manifests, schemas, license notes, and deterministic goldens only.
@@ -20,6 +20,7 @@ This repository root is the authoritative Pertura source checkout. The enclosing
 - `src/pertura_core/compatibility/v0.2/`
 - `src/pertura_bench/schemas/`
 - deterministic benchmark golden verdicts
+- `src/pertura_runtime/agent_bundle/bundle.json` with canonical skill content hashes
 
 These outputs require drift checks against their source generators.
 

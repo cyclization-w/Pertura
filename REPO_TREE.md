@@ -1,6 +1,6 @@
 # Repository tree
 
-This is the intended `0.2.0a4` capability-first layout. It is a boundary map, not an exhaustive generated file listing.
+This is the intended `0.2.0a5` capability-first layout. It is a boundary map, not an exhaustive generated file listing.
 
 ```text
 pertura/
@@ -21,7 +21,10 @@ pertura/
 |   |   `-- compatibility/v0.2/  # wheel-packaged snapshot mirror
 |   |-- pertura_workflow/        # capabilities, planner, runners, envs
 |   |-- pertura_runtime/         # product CLI, five tools, sessions, UI API
-|   |   `-- dashboard_static/    # generated dashboard bundle
+|   |   |-- product_tools/      # provider-neutral definitions and handlers
+|   |   |-- agent_bundle/       # four shared skills and Claude plugin manifest
+|   |   |-- adapters/           # provider contracts and OpenAI skeleton
+|   |   `-- dashboard_static/   # generated dashboard bundle
 |   |-- pertura_bench/           # cases, schemas, runners, server plans
 |   `-- pertura_gate/            # legacy compatibility/regression only
 |-- tests/

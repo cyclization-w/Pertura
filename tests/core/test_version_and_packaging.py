@@ -75,12 +75,19 @@ def test_package_data_and_sdist_manifest_cover_product_resources() -> None:
     assert "cases/*.json" in package_data["pertura_bench"]
     assert "planner_routes.json" in package_data["pertura_workflow.capabilities"]
     assert "dashboard_static/**/*" in package_data["pertura_runtime"]
+    assert "agent_bundle/bundle.json" in package_data["pertura_runtime"]
+    assert (
+        "agent_bundle/.claude-plugin/plugin.json"
+        in package_data["pertura_runtime"]
+    )
+    assert "agent_bundle/skills/*/SKILL.md" in package_data["pertura_runtime"]
     assert "compatibility/v0.2/*.json" in package_data["pertura_core"]
 
     manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
     for required in (
         "src/pertura_bench/cases",
         "src/pertura_runtime/dashboard_static",
+        "src/pertura_runtime/agent_bundle",
         "src/pertura_core/compatibility/v0.2",
         "src/pertura_workflow/capabilities/planner_routes.json",
         "ui *.html *.json *.ts *.tsx *.css",
@@ -95,6 +102,14 @@ def test_distribution_checker_declares_wheel_and_sdist_contracts() -> None:
         "pertura_workflow/capabilities/planner_routes.json" in script["WHEEL_REQUIRED"]
     )
     assert "ui/package-lock.json" in script["SDIST_REQUIRED"]
+    assert (
+        "pertura_runtime/agent_bundle/bundle.json"
+        in script["WHEEL_REQUIRED"]
+    )
+    assert (
+        "pertura_bench/cases/skill_cases.v1.json"
+        in script["WHEEL_REQUIRED"]
+    )
 
 
 def test_distribution_checker_rejects_scientific_data_inside_wheel(

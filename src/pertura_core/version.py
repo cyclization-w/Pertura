@@ -10,5 +10,3 @@ def package_version() -> str:
         return version("pertura")
     except PackageNotFoundError:
         return "0+unknown"
-
-\n

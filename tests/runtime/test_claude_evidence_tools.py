@@ -4,7 +4,7 @@ import asyncio
 import json
 import sys
 import types
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -19,6 +19,9 @@ class FakeClaudeAgentOptions:
     system_prompt: str
     allowed_tools: list[str]
     mcp_servers: dict
+    plugins: list[dict] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
+    setting_sources: list[str] = field(default_factory=list)
 
 
 def _install_fake_sdk(monkeypatch, calls: dict) -> None:
@@ -71,6 +74,35 @@ def test_default_claude_options_expose_exactly_five_product_tools(monkeypatch, t
         "mcp__pertura__finalize_report",
     }
     assert {"Read", "Glob", "Grep", "Bash", "Write", "Edit", "NotebookEdit"}.issubset(options.allowed_tools)
+    assert options.setting_sources == []
+    assert options.skills == [
+        "pertura:operate-pertura-workflow",
+        "pertura:inspect-perturb-seq-design",
+        "pertura:diagnose-perturb-seq-screen",
+        "pertura:interpret-perturb-seq-results",
+    ]
+    assert options.plugins[0]["type"] == "local"
+
+
+def test_bundled_skills_can_be_disabled_without_changing_codeact(
+    monkeypatch, tmp_path: Path
+) -> None:
+    calls = {}
+    _install_fake_sdk(monkeypatch, calls)
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="no-skills")
+
+    options = build_agent_options(
+        workspace=workspace,
+        system_prompt="prompt",
+        config=ClaudeRuntimeOptions(
+            enable_audit_hooks=False,
+            enable_bundled_skills=False,
+        ),
+    )
+
+    assert options.plugins == []
+    assert options.skills == []
+    assert {"Read", "Bash", "Write", "Edit"}.issubset(options.allowed_tools)
 
 
 def test_legacy_tool_surface_is_not_available_in_production(monkeypatch, tmp_path: Path) -> None:

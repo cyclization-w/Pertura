@@ -297,7 +297,7 @@ def audit_v020(
         validate_cases,
     )
     from pertura_bench.operations import require_repo_root
-    from pertura_runtime.claude.tools.product_tools import PRODUCT_TOOL_NAMES
+    from pertura_runtime.product_tools import PRODUCT_TOOL_NAMES
 
     root = require_repo_root(repo_root)
     checks = _repository_checks(root, require_clean_worktree=require_clean_worktree)
@@ -345,6 +345,38 @@ def audit_v020(
             not drift,
             f"drift: {drift}",
             "runtime",
+        )
+    )
+
+    from pertura_bench.skill_bench import skill_benchmark_matrix
+
+    skill_state = skill_benchmark_matrix(root)
+    checks.extend(
+        (
+            ReleaseCheck(
+                "skill_bundle_ready",
+                bool(skill_state["skill_bundle_ready"]),
+                str(skill_state["static"]),
+                "code",
+            ),
+            ReleaseCheck(
+                "claude_skill_adapter_ready",
+                bool(skill_state["claude_skill_adapter_ready"]),
+                "bundled plugin, allowlist, and neutral tools are configured",
+                "code",
+            ),
+            ReleaseCheck(
+                "openai_adapter_ready",
+                bool(skill_state["openai_adapter_ready"]),
+                "OpenAI Agents SDK execution is intentionally not implemented",
+                "agent_optional",
+            ),
+            ReleaseCheck(
+                "skill_behavior_benchmark_ready",
+                bool(skill_state["skill_behavior_benchmark_ready"]),
+                str(skill_state["behavior_status"]),
+                "agent_optional",
+            ),
         )
     )
     case_validation = validate_cases()
@@ -503,10 +535,22 @@ def audit_v020(
         "optional_environment_ready": optional_environment_ready,
         "local_environment_ready": optional_environment_ready,
         "real_benchmark_ready": real_benchmark_ready,
+        "skill_bundle_ready": bool(skill_state["skill_bundle_ready"]),
+        "claude_skill_adapter_ready": bool(
+            skill_state["claude_skill_adapter_ready"]
+        ),
+        "openai_adapter_ready": bool(skill_state["openai_adapter_ready"]),
+        "skill_behavior_benchmark_ready": bool(
+            skill_state["skill_behavior_benchmark_ready"]
+        ),
         "release_ready": release_ready,
         "ready": release_ready,
         "checks": [item.to_dict() for item in checks],
-        "blocking_checks": [item.check_id for item in checks if not item.passed],
+        "blocking_checks": [
+            item.check_id
+            for item in checks
+            if not item.passed and item.category != "agent_optional"
+        ],
         "remaining_blockers": remaining,
     }
 

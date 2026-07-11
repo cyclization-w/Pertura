@@ -99,5 +99,3 @@ def test_barcode_suffix_collision_blocks_assignment(tmp_path: Path) -> None:
     )
     assert result.status.value == "blocked"
     assert any("collisions" in blocker for blocker in result.blockers)
-
-\n

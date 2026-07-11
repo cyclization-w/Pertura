@@ -1,0 +1,4 @@
+interface:
+  display_name: "Diagnose Perturb-seq Screen"
+  short_description: "Troubleshoot guide assignment and QC"
+  default_prompt: "Use -perturb-seq-screen to diagnose the guide and screen QC failures."

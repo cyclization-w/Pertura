@@ -366,5 +366,3 @@ def test_trusted_effect_resolution_flattens_scientific_dependencies() -> None:
         "calibration",
     }
     assert all(item["usable"] for item in resolution.dependency_verdicts)
-
-\n

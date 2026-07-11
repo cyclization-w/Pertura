@@ -12,6 +12,7 @@ recursive-include src/pertura_workflow/capabilities/profiles *.yaml
 recursive-include src/pertura_workflow/capabilities/runners *.R
 recursive-include src/pertura_workflow/environments *.yml *.R
 recursive-include src/pertura_runtime/dashboard_static *
+recursive-include src/pertura_runtime/agent_bundle *
 recursive-include src/pertura_bench/runners *.R
 recursive-include src/pertura_bench/schemas *.json
 recursive-include src/pertura_bench/cases *.json

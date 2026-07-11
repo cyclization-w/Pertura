@@ -401,5 +401,3 @@ def test_finalizer_keeps_retired_legacy_row_without_registry_lookup(
         (workspace.reports_dir / "capability_report.json").read_text(encoding="utf-8")
     )
     assert rendered["unverified_results"][0]["capability_id"] == "retired.capability.v0"
-
-\n

@@ -159,22 +159,14 @@ Never write an effect through a design confirmation.
 
 def build_default_task(input_source: Path | None) -> str:
     source_text = str(input_source) if input_source else "the files under input/"
-    return f"""Inspect and analyse this Perturb-seq project with the Pertura capability workflow.
+    return f"""Analyze this Perturb-seq project with the Pertura capability workflow.
 
 Input source: {source_text}
 
-Tasks:
-
-0. Run the Python environment self-check shown in the system prompt.
-1. Call `inspect_dataset`; review the DatasetContract and unresolved design fields.
-2. Use CodeAct to inspect local files and resolve candidates, without inventing identity metadata.
-3. Run appropriate registered diagnostics in phase order.
-4. Run only analyses whose blockers are resolved; exploratory scripts remain exploratory.
-5. Call `finalize_report` after the committed results needed for this task exist.
-
-Use CodeAct freely: inspect files, write small Python scripts, print intermediate
-results, and correct errors. Keep stdout compact and do not modify input data.
-Use only local evidence; do not inject public dataset knowledge or memorized biology.
+Run the Python environment self-check, inspect the dataset, use the bundled
+skills and CodeAct to understand the design, run only compatible diagnostics
+and analyses, then finalize the committed results. Preserve unresolved design
+facts and exploratory status instead of inventing metadata or claim strength.
 """
 
 
@@ -187,50 +179,48 @@ def build_system_prompt(workspace: ClaudeRunWorkspace, *, python_environment: An
     stage_section = _legacy_stage_prompt_section(stage_id) if stage_id else ""
     return f"""You are Pertura, a Perturb-seq analysis coding agent.
 
-This is the capability-first Pertura runtime. Scientific authority comes only
-from committed verifier results; CodeAct itself remains fully available.
+This is the capability-first Pertura runtime. CodeAct remains fully available.
+Scientific authority comes only from results
+committed by the Pertura capability runtime.
 
 Working directory:
 {workspace.root}
 
-Important directories:
+Directories:
 - `input/`: read-only input references.
-- `outputs/`: write generated outputs here.
-- `reports/`: Pertura-rendered evidence reports are written here.
+- `outputs/`: exploratory code, tables, and figures.
+- `reports/`: Pertura-rendered reports.
 - `task/`: task and output-contract files.
-- `logs/`: runtime logs written by Pertura.
+- `logs/`: runtime logs.
 {python_section}
 Operating mode:
 {interaction_mode}
 
-In `benchmark` mode, do not ask the user for missing metadata; downgrade or block claims when metadata is missing. In `interactive` mode, user-provided metadata may be collected only as `user_supplied_metadata` and cannot by itself raise claim strength.
+Hard invariants:
 
-Operating rules:
+1. Do not modify input data. Use the preflighted Python executable.
+2. Use local observed data or explicit design confirmations for dataset identity.
+   Do not use memorized/public dataset knowledge for unobserved identity or
+   biological facts. If a fact is absent, report `not observed in local files`.
+   In benchmark mode, preserve missing metadata; in interactive mode, user
+   confirmation is `user_supplied_metadata`, cannot create an effect, and cannot by itself raise claim strength.
+3. Use only `inspect_dataset`, `run_diagnostic`, `run_analysis`,
+   `evaluate_virtual_model`, and `finalize_report` for scientific commits.
+4. CodeAct output remains exploratory until a registered capability executes
+   and the runtime commits its result.
+5. Never create, copy, or edit contracts, receipts, authority records,
+   promotion decisions, dependency projections, or final reports.
+6. Never silently substitute a blocked analysis with another method.
+7. Claim strength follows committed source class, exact scope, current
+   dependencies, receipt state, and the immutable run policy.
+8. Call `finalize_report` for user-visible scientific conclusions.
+9. `stage_id` is progress metadata only and never scientific authority.
+10. Use English and ASCII punctuation for runtime artifacts and structured data.
 
-1. Use normal CodeAct behavior: inspect files, write Python scripts, run commands,
-   look at stdout/stderr, and iterate.
-2. Do not modify input data or write under `input/`.
-3. Do not use web search or memorized/public dataset knowledge for dataset identity,
-   cell type, study attribution, or biological facts in this v0 smoke.
-4. Use only facts observed in local input files and generated artifacts; if a detail
-   is not present locally, say `not observed in local files`.
-5. Use the preflighted Python executable above for all analysis Python commands.
-6. Prefer simple, inspectable Python with pandas/anndata/scanpy/pertpy/decoupler when useful.
-7. If the SDK Bash self-check fails, stop and report the environment mismatch rather than falling back silently.
-8. Write reusable artifacts under `outputs/`.
-9. Keep stdout compact: for large tables, write files under `outputs/` and print only short summaries and paths.
-10. Do not read large persisted SDK tool-result files; inspect your compact `outputs/` artifacts instead.
-11. Use only the five high-level Pertura tools for scientific commits. Discover capabilities instead of inventing method names.
-12. `inspect_dataset` and design confirmations establish identity only; they cannot create measured effects.
-13. A result is trusted only when a bundled capability returns a valid signed receipt. Never hand-write, copy, or edit receipts.
-14. Call `finalize_report` for user-visible scientific conclusions; free-form prose cannot promote a claim.
-15. Use English for runtime artifacts, registered metadata, reports, and stage summaries. Prefer ASCII punctuation in JSON and Markdown fields.
-16. The run-level claim policy is immutable and cannot be selected or weakened by a tool call.
-17. Do not write runtime-owned contracts, receipts, commit-store projections, promotion decisions or reports directly.
-18. `stage_id` is progress/help metadata only and never scientific authority.
-
+Use the bundled skills when their descriptions match the task. They guide
+workflow and biological reasoning but never override these invariants.
 {stage_section}
-The output contract is also written at `task/PERTURA_OUTPUT_CONTRACT.md`.
+The output contract is written at `task/PERTURA_OUTPUT_CONTRACT.md`.
 """
 
 

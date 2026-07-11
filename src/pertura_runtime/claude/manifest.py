@@ -14,9 +14,9 @@ def _safe_payload(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, dict):
-        return {str(k): _safe_payload(v) for k, v in value.items()}
+        return {str(key): _safe_payload(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
-        return [_safe_payload(v) for v in value]
+        return [_safe_payload(item) for item in value]
     return repr(value)
 
 
@@ -31,6 +31,9 @@ class ClaudeRunManifest:
     models: set[str] = field(default_factory=set)
     is_error: bool = False
     result_subtype: str | None = None
+    init_seen: bool = False
+    init_skills: tuple[str, ...] = ()
+    init_plugins: tuple[str, ...] = ()
 
     def capture(self, message: Any) -> None:
         self.message_count += 1
@@ -39,7 +42,10 @@ class ClaudeRunManifest:
             self.session_id = str(getattr(message, "session_id"))
         if hasattr(message, "model") and getattr(message, "model"):
             self.models.add(str(getattr(message, "model")))
-        if hasattr(message, "total_cost_usd") and getattr(message, "total_cost_usd") is not None:
+        if (
+            hasattr(message, "total_cost_usd")
+            and getattr(message, "total_cost_usd") is not None
+        ):
             self.total_cost_usd = float(getattr(message, "total_cost_usd"))
         if hasattr(message, "num_turns") and getattr(message, "num_turns") is not None:
             self.num_turns = int(getattr(message, "num_turns"))
@@ -49,7 +55,19 @@ class ClaudeRunManifest:
             self.result_subtype = str(getattr(message, "subtype"))
         if hasattr(message, "result") and getattr(message, "result") is not None:
             self.result_text = str(getattr(message, "result"))
-            self.workspace.write_text(self.workspace.logs_dir / "claude_final.md", self.result_text)
+            self.workspace.write_text(
+                self.workspace.logs_dir / "claude_final.md",
+                self.result_text,
+            )
+
+        data = getattr(message, "data", None)
+        if isinstance(data, dict) and str(data.get("subtype") or "") == "init":
+            self._capture_init(data)
+        elif (
+            isinstance(data, dict)
+            and str(getattr(message, "subtype", "")) == "init"
+        ):
+            self._capture_init(data)
 
         event = {
             "time_utc": datetime.now(timezone.utc).isoformat(),
@@ -58,6 +76,17 @@ class ClaudeRunManifest:
             "payload": _message_payload(message),
         }
         self.workspace.append_jsonl(self.workspace.logs_dir / "events.jsonl", event)
+
+    def _capture_init(self, data: dict[str, Any]) -> None:
+        self.init_seen = True
+        self.init_skills = tuple(sorted(str(item) for item in data.get("skills", [])))
+        plugins = []
+        for item in data.get("plugins", []):
+            if isinstance(item, dict):
+                plugins.append(str(item.get("name") or item.get("path") or ""))
+            else:
+                plugins.append(str(item))
+        self.init_plugins = tuple(sorted(item for item in plugins if item))
 
     def flush(self, *, status: str = "completed") -> None:
         self.workspace.update_manifest(
@@ -70,6 +99,9 @@ class ClaudeRunManifest:
                 "models": sorted(self.models),
                 "is_error": self.is_error,
                 "result_subtype": self.result_subtype,
+                "sdk_init_seen": self.init_seen,
+                "sdk_available_skills": list(self.init_skills),
+                "sdk_plugins": list(self.init_plugins),
             }
         )
 
@@ -78,6 +110,7 @@ def _message_payload(message: Any) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     for attr in [
         "content",
+        "data",
         "result",
         "subtype",
         "is_error",

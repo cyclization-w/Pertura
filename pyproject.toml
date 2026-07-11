@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pertura"
-version = "0.2.0a4"
+version = "0.2.0a5"
 description = "Execution-grounded evidence runtime for Perturb-seq CodeAct agents."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -52,7 +52,7 @@ advanced = [
 llm = [
   "openai>=1",
   "anthropic>=0.34",
-  "claude-agent-sdk>=0.1.60",
+  "claude-agent-sdk>=0.1.62,<0.3",
 ]
 dev = [
   "pytest>=8",
@@ -68,7 +68,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "pertura_workflow.capabilities" = ["specs/*.yaml", "profiles/*.yaml", "runners/*.R", "planner_routes.json"]
 "pertura_workflow" = ["environments/*.yml", "environments/*.R"]
-"pertura_runtime" = ["dashboard_static/**/*"]
+"pertura_runtime" = ["dashboard_static/**/*", "agent_bundle/bundle.json", "agent_bundle/.claude-plugin/plugin.json", "agent_bundle/skills/*/SKILL.md", "agent_bundle/skills/*/agents/*.yaml", "agent_bundle/skills/*/references/*.md"]
 "pertura_bench" = ["runners/*.R", "schemas/*.json", "cases/*.json"]
 "pertura_core" = ["compatibility/v0.2/*.json"]
 

@@ -1,0 +1,50 @@
+{
+  "bundle_hash": "sha256:9a41ca29007c1e8e84a9ba8282045252b469a91b92080d71b65753700cd25b3e",
+  "bundle_id": "pertura",
+  "bundle_version": "0.1.0",
+  "schema_version": "pertura-agent-skill-bundle-v1",
+  "skills": [
+    {
+      "content_hash": "sha256:d5e6e1a1b14a02cce796b6c28487cc98430118cb4af541df3a79a3fb3ca83e38",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml"
+      ],
+      "name": "operate-pertura-workflow",
+      "version": "0.1.0"
+    },
+    {
+      "content_hash": "sha256:9840d3f74f9123b22ac078fd014188b706c4638dee7662ab5c3b5f2d4954cef0",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/design-facts.md",
+        "references/estimands.md"
+      ],
+      "name": "inspect-perturb-seq-design",
+      "version": "0.1.0"
+    },
+    {
+      "content_hash": "sha256:e9a53450f4ac784d1115cf9ae78d9cf38e2c339c97f3287dd0430510f4a09322",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/guide-qc.md",
+        "references/target-reliability.md"
+      ],
+      "name": "diagnose-perturb-seq-screen",
+      "version": "0.1.0"
+    },
+    {
+      "content_hash": "sha256:fdba5e61b5c50ee94767928d6c15d5ecb668b883758d3d43d56840d2aff969e6",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/claim-language.md",
+        "references/effect-interpretation.md"
+      ],
+      "name": "interpret-perturb-seq-results",
+      "version": "0.1.0"
+    }
+  ]
+}

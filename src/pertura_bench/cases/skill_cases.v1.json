@@ -1,0 +1,273 @@
+{
+  "schema_version": "pertura-skill-case-catalog-v1",
+  "cases": [
+    {
+      "case_id": "operate_intake",
+      "kind": "single_positive",
+      "prompt": "Inspect this Perturb-seq workspace, run the appropriate diagnostics, and produce a final report.",
+      "expected_skills": [
+        "operate-pertura-workflow"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_dataset"
+    },
+    {
+      "case_id": "operate_blocker",
+      "kind": "single_positive",
+      "prompt": "Pertura says the analysis is blocked. Work out the next safe action without inventing metadata.",
+      "expected_skills": [
+        "operate-pertura-workflow"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_committed_blockers"
+    },
+    {
+      "case_id": "operate_outputs",
+      "kind": "single_positive",
+      "prompt": "Continue the Pertura run, inspect its Parquet outputs, and finalize only when the required results exist.",
+      "expected_skills": [
+        "operate-pertura-workflow"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_output_paths"
+    },
+    {
+      "case_id": "design_replicates",
+      "kind": "single_positive",
+      "prompt": "Determine whether cells, guides, donors, or samples are the independent units in this CRISPRi screen.",
+      "expected_skills": [
+        "inspect-perturb-seq-design"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_dataset_contract"
+    },
+    {
+      "case_id": "design_high_moi",
+      "kind": "single_positive",
+      "prompt": "Frame the estimand for this high-MOI combinatorial Perturb-seq experiment.",
+      "expected_skills": [
+        "inspect-perturb-seq-design"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_design_balance"
+    },
+    {
+      "case_id": "design_confounding",
+      "kind": "single_positive",
+      "prompt": "Check whether condition is confounded with donor, batch, state, dose, or time.",
+      "expected_skills": [
+        "inspect-perturb-seq-design"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_design_balance"
+    },
+    {
+      "case_id": "diagnose_barcodes",
+      "kind": "single_positive",
+      "prompt": "The guide and RNA barcodes barely overlap; check suffix collisions and reverse-complement orientation.",
+      "expected_skills": [
+        "diagnose-perturb-seq-screen"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "run_diagnostic"
+    },
+    {
+      "case_id": "diagnose_moi_doublet",
+      "kind": "single_positive",
+      "prompt": "Separate multi-guide and high-MOI cells from transcriptomic doublets in this screen.",
+      "expected_skills": [
+        "diagnose-perturb-seq-screen"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "run_diagnostic"
+    },
+    {
+      "case_id": "diagnose_guide_disagreement",
+      "kind": "single_positive",
+      "prompt": "Guides targeting the same gene disagree and many guide-bearing cells look like escape cells.",
+      "expected_skills": [
+        "diagnose-perturb-seq-screen"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "run_diagnostic"
+    },
+    {
+      "case_id": "interpret_composition",
+      "kind": "single_positive",
+      "prompt": "Explain this state-composition association without claiming fate conversion.",
+      "expected_skills": [
+        "interpret-perturb-seq-results"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_committed_results"
+    },
+    {
+      "case_id": "interpret_candidate",
+      "kind": "single_positive",
+      "prompt": "Write a conclusion from this validated-untrusted candidate effect and its limitations.",
+      "expected_skills": [
+        "interpret-perturb-seq-results"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_committed_results"
+    },
+    {
+      "case_id": "interpret_prediction",
+      "kind": "single_positive",
+      "prompt": "Compare a virtual perturbation prediction with the measured effect without relabeling the prediction as measurement.",
+      "expected_skills": [
+        "interpret-perturb-seq-results"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_committed_results"
+    },
+    {
+      "case_id": "combo_intake_design",
+      "kind": "multi_positive",
+      "prompt": "Inspect this new CRISPRa dataset and identify the design facts needed before analysis.",
+      "expected_skills": [
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_dataset"
+    },
+    {
+      "case_id": "combo_design_qc",
+      "kind": "multi_positive",
+      "prompt": "The high-MOI design has barcode and ambient-guide problems; determine the estimand and diagnose the screen.",
+      "expected_skills": [
+        "inspect-perturb-seq-design",
+        "diagnose-perturb-seq-screen"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_committed_diagnostics"
+    },
+    {
+      "case_id": "combo_qc_interpret",
+      "kind": "multi_positive",
+      "prompt": "Guide disagreement and escape cells were detected; explain how they limit the target effect.",
+      "expected_skills": [
+        "diagnose-perturb-seq-screen",
+        "interpret-perturb-seq-results"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_committed_results"
+    },
+    {
+      "case_id": "combo_operate_interpret",
+      "kind": "multi_positive",
+      "prompt": "Inspect the committed Pertura results, draft cautious conclusions, and finalize the report.",
+      "expected_skills": [
+        "operate-pertura-workflow",
+        "interpret-perturb-seq-results"
+      ],
+      "forbidden_skills": [],
+      "expected_first_action": "inspect_committed_results"
+    },
+    {
+      "case_id": "negative_python_bug",
+      "kind": "negative",
+      "prompt": "Fix the off-by-one error in this Python iterator.",
+      "expected_skills": [],
+      "forbidden_skills": [
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "diagnose-perturb-seq-screen",
+        "interpret-perturb-seq-results"
+      ],
+      "expected_first_action": "none"
+    },
+    {
+      "case_id": "negative_readme",
+      "kind": "negative",
+      "prompt": "Rewrite the installation section of this README.",
+      "expected_skills": [],
+      "forbidden_skills": [
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "diagnose-perturb-seq-screen",
+        "interpret-perturb-seq-results"
+      ],
+      "expected_first_action": "none"
+    },
+    {
+      "case_id": "negative_bulk_rna",
+      "kind": "negative",
+      "prompt": "Explain the difference between TPM and counts in bulk RNA-seq.",
+      "expected_skills": [],
+      "forbidden_skills": [
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "diagnose-perturb-seq-screen",
+        "interpret-perturb-seq-results"
+      ],
+      "expected_first_action": "none"
+    },
+    {
+      "case_id": "negative_microscopy",
+      "kind": "negative",
+      "prompt": "Segment nuclei in this fluorescence microscopy image.",
+      "expected_skills": [],
+      "forbidden_skills": [
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "diagnose-perturb-seq-screen",
+        "interpret-perturb-seq-results"
+      ],
+      "expected_first_action": "none"
+    },
+    {
+      "case_id": "negative_git",
+      "kind": "negative",
+      "prompt": "Review the staged Git diff for formatting issues.",
+      "expected_skills": [],
+      "forbidden_skills": [
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "diagnose-perturb-seq-screen",
+        "interpret-perturb-seq-results"
+      ],
+      "expected_first_action": "none"
+    },
+    {
+      "case_id": "negative_statistics",
+      "kind": "negative",
+      "prompt": "Derive the variance of a binomial random variable.",
+      "expected_skills": [],
+      "forbidden_skills": [
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "diagnose-perturb-seq-screen",
+        "interpret-perturb-seq-results"
+      ],
+      "expected_first_action": "none"
+    },
+    {
+      "case_id": "negative_web",
+      "kind": "negative",
+      "prompt": "Summarize today's technology news.",
+      "expected_skills": [],
+      "forbidden_skills": [
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "diagnose-perturb-seq-screen",
+        "interpret-perturb-seq-results"
+      ],
+      "expected_first_action": "none"
+    },
+    {
+      "case_id": "negative_cell_annotation",
+      "kind": "negative",
+      "prompt": "List canonical markers for major PBMC cell types.",
+      "expected_skills": [],
+      "forbidden_skills": [
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "diagnose-perturb-seq-screen",
+        "interpret-perturb-seq-results"
+      ],
+      "expected_first_action": "none"
+    }
+  ]
+}

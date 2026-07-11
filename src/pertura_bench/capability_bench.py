@@ -551,6 +551,8 @@ def _write_text_lf(path: Path, text: str) -> None:
 def write_synthetic_verdicts(
     output: str | Path | None = None,
 ) -> dict[str, Any]:
+    if output is not None and Path(output).exists() and Path(output).is_dir():
+        raise ValueError("synthetic verdict output must be a file path, not a directory")
     verdicts = []
     for capability_id in CANDIDATE_CAPABILITIES:
         verdicts.extend(
