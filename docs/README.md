@@ -1,6 +1,6 @@
 # Pertura documentation
 
-This index describes the capability-first product implemented by the `0.2.0a5` provider-neutral agent-skills checkpoint. Historical evidence-lattice, stage, smoke, and paper-facing material remains available for regression context but is not the current product architecture.
+This index describes the capability-first product implemented by the `0.2.0a7` server-benchmark preflight product checkpoint. Historical evidence-lattice, stage, smoke, and paper-facing material remains available for regression context but is not the current product architecture.
 
 ## Current product reading order
 
@@ -30,14 +30,14 @@ adapters      -> Claude runtime plus import-safe future OpenAI contract
 pertura_gate  -> legacy compatibility and regression only
 ```
 
-The four bundled skills influence agent behavior only; their hash is provenance, not scientific authority. The Claude adapter is runnable, while the OpenAI adapter is an import-safe schema skeleton and reports not ready. Exploratory capability results may be committed to the dependency DAG, but they have no trusted receipt and cannot support a strong measured statement. Synthetic fixtures establish code readiness only; they never change capability trust.
+The five bundled skills influence agent behavior only; their hash is provenance, not scientific authority. The Claude adapter is runnable, while the OpenAI adapter is an import-safe schema skeleton and reports not ready. Exploratory capability results may be committed to the dependency DAG, but they have no trusted receipt and cannot support a strong measured statement. Synthetic fixtures establish code readiness only; they never change capability trust.
 
 ## Release boundary
 
 The expected local checkpoint is:
 
 ```text
-build_version: 0.2.0a5
+build_version: 0.2.0a7
 repository_ready: true
 runtime_spine_ready: true
 code_ready: true

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 from importlib import resources
 from pathlib import Path
 from typing import Any, Mapping
@@ -14,7 +15,14 @@ _BINDING_FIELDS = (
     "git_commit",
     "wheel_sha256",
     "case_catalog_hash",
+    "agent_case_catalog_hash",
+    "skill_bundle_hash",
+    "capability_spec_hash",
+    "judge_manifest_hash",
+    "report_turn_schema_hash",
     "template_digest",
+    "resource_lock_set_hash",
+    "prediction_bundle_set_hash",
     "server_plan_hash",
 )
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -331,6 +339,63 @@ def build_server_plan(
                         }
                     )
 
+    agent_catalog_path = root / "src" / "pertura_bench" / "cases" / "server_agent_cases.v1.json"
+    agent_catalog = json.loads(agent_catalog_path.read_text(encoding="utf-8"))
+    for case in agent_catalog["cases"]:
+        dataset_id = case["dataset_id"]
+        if dataset_id not in artifact_ids_by_dataset:
+            raise ValueError(f"agent case lacks prepared dataset: {dataset_id}")
+        job_id = f"agent:{case['case_id']}"
+        jobs.append({
+            "job_id": job_id,
+            "kind": "agent_workflow",
+            "dataset_id": dataset_id,
+            "case_id": case["case_id"],
+            "objective": case["objective"],
+            "depends_on": [subset_jobs[(dataset_id, "evaluation")]],
+            "fresh_namespace": {
+                "project_id": True,
+                "analysis_run_id": True,
+                "conversation_id": True,
+                "provider_session": True,
+                "authority_namespace": True,
+                "workspace_binding": True,
+            },
+            "command": {
+                "argv": [
+                    "python", "-m", "pertura_bench", "agent", "run-server",
+                    case["case_id"], "--cache", "$PERTURA_BENCH_CACHE",
+                    "--output", "$PERTURA_BENCH_OUTPUT", "--repo", "$PERTURA_REPO",
+                ]
+            },
+            "consumes": [artifact_ids_by_dataset[dataset_id]["evaluation"]],
+            "produces": [
+                f"agent-verdict:{case['case_id']}",
+                f"agent-grade:{case['case_id']}",
+            ],
+            "judge": {
+                "provider": "deepseek",
+                "model": "deepseek-v4-pro",
+                "fallback_allowed": False,
+                "unavailable_status": "judge_unavailable",
+            },
+            "checkpoint_requirement": {
+                "required": True,
+                "binding_fields": list(_BINDING_FIELDS),
+                "binding_source": "server_plan.checkpoint_binding",
+            },
+            "resources": {
+                "cpus": 8,
+                "memory_gb": 64 if dataset_id in {"replogle_k562_essential_2022", "norman_k562_crispra_2019"} else 32,
+                "walltime_minutes": 720,
+            },
+            "failure_policy": {
+                "missing_lock": "not_available",
+                "judge_unavailable": "failed_no_fallback",
+                "timeout": "failed_no_fallback",
+            },
+        })
+
     case_catalog_hash = _case_catalog_hash(root)
     template_digest = _template_digest(
         artifacts=artifacts,
@@ -338,6 +403,19 @@ def build_server_plan(
         datasets=datasets,
         case_catalog_hash=case_catalog_hash,
     )
+    from pertura_runtime.agent_bundle.bundle import bundled_skill_manifest
+    from pertura_runtime.project.models import ReportRevision, TurnDraft, TurnFinal
+    agent_case_catalog_hash = file_sha256(agent_catalog_path)
+    skill_bundle_hash = bundled_skill_manifest()["bundle_hash"]
+    capability_spec_hash = canonical_hash([
+        item.model_dump(mode="json") for item in registry.specs()
+    ])
+    judge_manifest_hash = canonical_hash(agent_catalog["judge"])
+    report_turn_schema_hash = canonical_hash({
+        "TurnDraft": TurnDraft.model_json_schema(),
+        "TurnFinal": TurnFinal.model_json_schema(),
+        "ReportRevision": ReportRevision.model_json_schema(),
+    })
     return ServerBenchmarkPlan(
         artifacts=tuple(artifacts),
         jobs=tuple(jobs),
@@ -346,7 +424,14 @@ def build_server_plan(
             "git_commit": None,
             "wheel_sha256": None,
             "case_catalog_hash": case_catalog_hash,
+            "agent_case_catalog_hash": agent_case_catalog_hash,
+            "skill_bundle_hash": skill_bundle_hash,
+            "capability_spec_hash": capability_spec_hash,
+            "judge_manifest_hash": judge_manifest_hash,
+            "report_turn_schema_hash": report_turn_schema_hash,
             "template_digest": template_digest,
+            "resource_lock_set_hash": None,
+            "prediction_bundle_set_hash": None,
             "server_plan_hash": None,
         },
         executable=False,
@@ -358,6 +443,8 @@ def bind_server_plan(
     *,
     git_commit: str,
     wheel_sha256: str,
+    resource_lock_set_hash: str,
+    prediction_bundle_set_hash: str,
 ) -> ServerBenchmarkPlan:
     """Bind an immutable checkpoint without hashing a field into itself.
 
@@ -371,6 +458,8 @@ def bind_server_plan(
         {
             "git_commit": git_commit.lower(),
             "wheel_sha256": wheel_sha256.lower(),
+            "resource_lock_set_hash": resource_lock_set_hash.lower(),
+            "prediction_bundle_set_hash": prediction_bundle_set_hash.lower(),
         }
     )
     binding["server_plan_hash"] = _bound_plan_digest(binding)
@@ -399,7 +488,12 @@ def assert_server_plan_executable(plan: ServerBenchmarkPlan) -> None:
     git_commit = str(binding.get("git_commit") or "")
     if not _GIT_COMMIT.fullmatch(git_commit):
         raise ValueError("checkpoint git_commit must be a 40- or 64-character lowercase hex digest")
-    for name in ("wheel_sha256", "case_catalog_hash", "template_digest", "server_plan_hash"):
+    for name in (
+        "wheel_sha256", "case_catalog_hash", "agent_case_catalog_hash",
+        "skill_bundle_hash", "capability_spec_hash", "judge_manifest_hash",
+        "report_turn_schema_hash", "template_digest", "resource_lock_set_hash",
+        "prediction_bundle_set_hash", "server_plan_hash",
+    ):
         value = str(binding.get(name) or "")
         if not _SHA256.fullmatch(value):
             raise ValueError(f"checkpoint {name} must be a canonical sha256 digest")
@@ -423,6 +517,8 @@ def validate_checkpoint_binding(
         template,
         git_commit=str(binding.get("git_commit") or ""),
         wheel_sha256=str(binding.get("wheel_sha256") or ""),
+        resource_lock_set_hash=str(binding.get("resource_lock_set_hash") or ""),
+        prediction_bundle_set_hash=str(binding.get("prediction_bundle_set_hash") or ""),
     )
     expected_binding = expected.checkpoint_binding
     for name in _BINDING_FIELDS:
@@ -570,6 +666,13 @@ def _bound_plan_digest(binding: Mapping[str, Any]) -> str:
             "git_commit": binding.get("git_commit"),
             "wheel_sha256": binding.get("wheel_sha256"),
             "case_catalog_hash": binding.get("case_catalog_hash"),
+            "agent_case_catalog_hash": binding.get("agent_case_catalog_hash"),
+            "skill_bundle_hash": binding.get("skill_bundle_hash"),
+            "capability_spec_hash": binding.get("capability_spec_hash"),
+            "judge_manifest_hash": binding.get("judge_manifest_hash"),
+            "report_turn_schema_hash": binding.get("report_turn_schema_hash"),
             "template_digest": binding.get("template_digest"),
+            "resource_lock_set_hash": binding.get("resource_lock_set_hash"),
+            "prediction_bundle_set_hash": binding.get("prediction_bundle_set_hash"),
         }
     )

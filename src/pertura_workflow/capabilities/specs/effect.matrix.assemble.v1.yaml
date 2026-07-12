@@ -1,0 +1,101 @@
+schema_version: pertura-capability-spec-v2
+capability_id: effect.matrix.assemble.v1
+version: 0.1.0
+phase: 6
+kind: analysis
+summary: Assemble committed gene-level effects into a signed matrix without zero-filling
+  missing results.
+trust_level: exploratory
+executor: effect_matrix_assemble
+validator: candidate_standard
+input_requirements:
+- committed_gene_effect_results
+depends_on: []
+dependency_kinds: []
+output_kind: effect_matrix
+source_class: measured_result
+claim_permissions: []
+timeout_seconds: 900
+parameters_schema:
+  type: object
+  properties:
+    activity_threshold:
+      type: number
+    bootstraps:
+      type: string
+    chunk_rows:
+      type: integer
+    effect_threshold:
+      type: number
+    fdr_threshold:
+      type: number
+    max_gene_set_size:
+      type: integer
+    max_iter:
+      type: integer
+    max_memory_gb:
+      type: integer
+    max_records:
+      type: integer
+    min_features:
+      type: integer
+    min_gene_set_size:
+      type: integer
+    min_perturbations:
+      type: integer
+    minimum_feature_coverage:
+      type: integer
+    minimum_targets:
+      type: integer
+    missing_fraction_caution:
+      type: string
+    n_jobs:
+      type: integer
+    n_seeds:
+      type: integer
+    permutation_num:
+      type: integer
+    query:
+      type: string
+    ranks:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    records:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    seed:
+      type: integer
+    stability_threshold:
+      type: number
+  additionalProperties: false
+  examples:
+  - {}
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true
+  derived_only: true
+  dependency_sets:
+  - name: effect_results
+    result_kinds:
+    - differential_expression
+    - conditional_association
+    - gene_effect
+    source_classes:
+    - measured_result
+    accepted_statuses:
+    - completed
+    - completed_with_caution
+    scope_rule: same_dataset_context
+    min_count: 2
+    selection: all_compatible

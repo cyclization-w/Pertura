@@ -1,0 +1,143 @@
+{
+  "$defs": {
+    "AgentHardGateResult": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "gate_id": {
+          "title": "Gate Id",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "gate_id",
+        "passed",
+        "detail"
+      ],
+      "title": "AgentHardGateResult",
+      "type": "object"
+    },
+    "AgentNarrativeScore": {
+      "additionalProperties": false,
+      "properties": {
+        "actionability": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Actionability",
+          "type": "integer"
+        },
+        "clarity": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Clarity",
+          "type": "integer"
+        },
+        "limitations_uncertainty": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Limitations Uncertainty",
+          "type": "integer"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "scientific_completeness": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Scientific Completeness",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scientific_completeness",
+        "clarity",
+        "limitations_uncertainty",
+        "actionability",
+        "rationale"
+      ],
+      "title": "AgentNarrativeScore",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "case_hash": {
+      "title": "Case Hash",
+      "type": "string"
+    },
+    "case_id": {
+      "title": "Case Id",
+      "type": "string"
+    },
+    "failure_reasons": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Failure Reasons",
+      "type": "array"
+    },
+    "hard_gates": {
+      "items": {
+        "$ref": "#/$defs/AgentHardGateResult"
+      },
+      "title": "Hard Gates",
+      "type": "array"
+    },
+    "narrative_score": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AgentNarrativeScore"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "output_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Output Hash"
+    },
+    "schema_version": {
+      "const": "pertura-agent-workflow-verdict-v1",
+      "default": "pertura-agent-workflow-verdict-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed",
+        "not_available",
+        "judge_unavailable"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "case_id",
+    "case_hash",
+    "status",
+    "hard_gates"
+  ],
+  "title": "AgentWorkflowVerdict",
+  "type": "object"
+}

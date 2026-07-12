@@ -14,9 +14,9 @@ Use Pertura as the scientific commit path while keeping CodeAct available for ex
 3. Run the relevant diagnostics with `run_diagnostic`. Treat `blocked` and `unresolved` as information about missing design or data, not as permission to guess.
 4. Call `run_analysis` with the scientific objective. Let the runtime select or validate the capability; do not silently replace a blocked method.
 5. Inspect returned JSON, Parquet, tables, and figures at their output paths. Keep large data out of chat.
-6. Call `finalize_report` after the needed committed results exist.
+6. Call `finalize_report` only when the user explicitly asks for a durable report revision. Ordinary turns are checkpointed automatically.
 
-Use `evaluate_virtual_model` only when a supported evaluator exists. An out-of-scope response is not a model result.
+Use `run_analysis` to freeze a virtual split and ingest predictions, then use `evaluate_virtual_model` for leakage audit, mandatory baselines, and comprehensive evaluation. An out-of-scope response is not model support.
 
 ## Decision Rules
 
@@ -24,7 +24,7 @@ Use `evaluate_virtual_model` only when a supported evaluator exists. An out-of-s
 - Keep exploratory calculations clearly labeled. They do not become committed results because their filenames resemble capability outputs.
 - Follow result status, blockers, cautions, scope, and dependencies from the runtime.
 - Ask for a design confirmation in interactive work when it would resolve a material ambiguity. In benchmark work, preserve the ambiguity and downgrade or block.
-- Use the final report as the user-visible claim surface.
+- Use runtime-rendered TurnFinal output for ordinary conversation and the versioned final report for an explicit reporting request.
 
 ## Boundaries
 

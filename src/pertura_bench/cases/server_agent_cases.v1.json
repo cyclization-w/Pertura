@@ -1,0 +1,14 @@
+{
+  "schema_version": "pertura-server-agent-case-catalog-v1",
+  "judge": {"provider":"deepseek","model":"deepseek-v4-pro","temperature":0.0,"fallback_allowed":false},
+  "cases": [
+    {"case_id":"agent_replogle_qc","dataset_id":"replogle_k562_essential_2022","objective":"guide and screen QC"},
+    {"case_id":"agent_replogle_target","dataset_id":"replogle_k562_essential_2022","objective":"target reliability follow-up"},
+    {"case_id":"agent_papalexi_state","dataset_id":"papalexi_thp1_eccite","objective":"state and Mixscape"},
+    {"case_id":"agent_papalexi_stale","dataset_id":"papalexi_thp1_eccite","objective":"label confirmation and stale handling"},
+    {"case_id":"agent_norman_sceptre","dataset_id":"norman_k562_crispra_2019","objective":"high-MOI SCEPTRE"},
+    {"case_id":"agent_norman_virtual","dataset_id":"norman_k562_crispra_2019","objective":"virtual evaluator and next panel"},
+    {"case_id":"agent_kang_edger","dataset_id":"kang18_8vs8_pbmc","objective":"replicated edgeR effect; state explicitly that Kang is not Perturb-seq"},
+    {"case_id":"agent_kang_propeller","dataset_id":"kang18_8vs8_pbmc","objective":"Propeller composition; state explicitly that Kang is not Perturb-seq"}
+  ]
+}

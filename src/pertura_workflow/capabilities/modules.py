@@ -7,6 +7,7 @@ from typing import Any
 
 from pertura_core import AnalysisStatus, CapabilityRunRequest, CapabilitySpec, DatasetContract, ResultEnvelope
 from pertura_core.hashing import file_sha256
+from pertura_workflow.capabilities.candidate_common import resource_budget
 
 
 def run_gmt_import(spec: CapabilitySpec, request: CapabilityRunRequest, contract: DatasetContract, staging: Path) -> ResultEnvelope:
@@ -57,7 +58,8 @@ def run_gmt_import(spec: CapabilitySpec, request: CapabilityRunRequest, contract
         "schema_version": "pertura-gmt-module-reference-v1",
         "species": species,
         "identifier_namespace": namespace,
-        "source_path": str(path),
+        "source_name": path.name,
+        "source_sha256": file_sha256(path),
         "modules": modules,
         "duplicate_module_names": sorted(set(duplicates)),
         "repeated_genes": repeated_genes,
@@ -84,7 +86,7 @@ def run_nmf_modules(spec: CapabilitySpec, request: CapabilityRunRequest, contrac
         import numpy as np
         import pandas as pd
         from scipy import sparse
-        from sklearn.decomposition import NMF
+        from sklearn.decomposition import MiniBatchNMF
         from sklearn.metrics import adjusted_rand_score
     except ModuleNotFoundError as exc:
         return _blocked(spec, request, contract, (f"NMF dependency is missing: {exc.name}",))
@@ -94,18 +96,51 @@ def run_nmf_modules(spec: CapabilitySpec, request: CapabilityRunRequest, contrac
     control_values = {str(item) for item in params.get("control_values") or []}
     if not control_column or not control_values:
         return _blocked(spec, request, contract, ("confirmed control_column and control_values are required",))
-    data = ad.read_h5ad(path)
+    budget = resource_budget(params)
+    data = ad.read_h5ad(path, backed="r")
     if control_column not in data.obs.columns:
+        if getattr(data, "file", None):
+            data.file.close()
         return _blocked(spec, request, contract, (f"control column is missing: {control_column}",))
     mask = data.obs[control_column].astype(str).isin(control_values).to_numpy()
-    matrix = data.X[mask]
-    matrix = matrix.toarray() if sparse.issparse(matrix) else np.asarray(matrix)
-    if np.any(matrix < 0):
-        return _blocked(spec, request, contract, ("NMF requires a nonnegative matrix",))
-    library = matrix.sum(axis=1)
-    matrix = np.divide(matrix, library[:, None], out=np.zeros_like(matrix, dtype=float), where=library[:, None] > 0) * 1e4
-    matrix = np.log1p(matrix)
+    control_indices = np.flatnonzero(mask)
     genes = np.asarray([str(item) for item in data.var_names])
+    obs_names = np.asarray([str(item) for item in data.obs_names])
+    dense_bytes = budget.dense_bytes(len(control_indices), int(data.n_vars))
+    source_is_sparse = sparse.issparse(data.X) or "SparseDataset" in type(data.X).__name__
+    if not source_is_sparse and dense_bytes > budget.max_bytes:
+        if getattr(data, "file", None):
+            data.file.close()
+        return _blocked(spec, request, contract, (f"dense control slice requires {dense_bytes / 1024**3:.3f} GB, exceeding max_memory_gb={budget.max_memory_gb}",))
+    matrix = data.X[control_indices, :]
+    matrix = matrix.to_memory() if hasattr(matrix, "to_memory") else matrix
+    if getattr(data, "file", None):
+        data.file.close()
+    if sparse.issparse(matrix):
+        matrix = matrix.tocsr().astype(float)
+        if matrix.data.size and np.any(matrix.data < 0):
+            return _blocked(spec, request, contract, ("NMF requires a nonnegative matrix",))
+        library = np.asarray(matrix.sum(axis=1)).ravel()
+        scale = np.divide(1e4, library, out=np.zeros_like(library, dtype=float), where=library > 0)
+        matrix = sparse.diags(scale) @ matrix
+        matrix.data = np.log1p(matrix.data)
+        mean = np.asarray(matrix.mean(axis=0)).ravel()
+        variance = np.maximum(0.0, np.asarray(matrix.power(2).mean(axis=0)).ravel() - mean**2)
+    else:
+        matrix = np.asarray(matrix, dtype=float)
+        if np.any(matrix < 0):
+            return _blocked(spec, request, contract, ("NMF requires a nonnegative matrix",))
+        budget.require_dense(matrix.shape[0], matrix.shape[1], arrays=2, label="control NMF normalization")
+        library = matrix.sum(axis=1)
+        matrix = np.divide(matrix, library[:, None], out=np.zeros_like(matrix, dtype=float), where=library[:, None] > 0) * 1e4
+        matrix = np.log1p(matrix)
+        variance = matrix.var(axis=0)
+    n_hvg = min(2000, int((variance > 0).sum()))
+    if n_hvg < 2:
+        return _blocked(spec, request, contract, ("fewer than two variable control genes are available",))
+    hvg_index = np.argsort(variance)[-n_hvg:]
+    matrix = matrix[:, hvg_index]
+    genes = genes[hvg_index]
     ranks = [int(item) for item in params.get("ranks") or [5, 10, 15, 20]]
     seeds = [int(item) for item in params.get("seeds") or [0, 1, 2, 3, 4]]
     ranks = [rank for rank in ranks if 2 <= rank < min(matrix.shape)]
@@ -118,7 +153,13 @@ def run_nmf_modules(spec: CapabilitySpec, request: CapabilityRunRequest, contrac
         errors = []
         models = []
         for seed in seeds:
-            model = NMF(n_components=rank, init="nndsvda", random_state=seed, max_iter=1000)
+            model = MiniBatchNMF(
+                n_components=rank,
+                init="nndsvda",
+                random_state=seed,
+                max_iter=1000,
+                batch_size=max(rank, min(budget.chunk_rows, matrix.shape[0])),
+            )
             scores = model.fit_transform(matrix)
             assignments.append(model.components_.argmax(axis=0))
             errors.append(float(model.reconstruction_err_))
@@ -152,7 +193,7 @@ def run_nmf_modules(spec: CapabilitySpec, request: CapabilityRunRequest, contrac
         "leakage": {"perturbation_labels_used": False, "test_split_used": False},
     }
     module_path.write_text(json.dumps(module_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    pd.DataFrame(scores, index=data.obs_names[mask], columns=list(modules)).rename_axis("cell_id").reset_index().to_parquet(score_path, index=False)
+    pd.DataFrame(scores, index=obs_names[control_indices], columns=list(modules)).rename_axis("cell_id").reset_index().to_parquet(score_path, index=False)
     outputs = (module_path.name, score_path.name)
     status = AnalysisStatus.completed_with_caution if cautions else AnalysisStatus.completed
     return ResultEnvelope(

@@ -27,16 +27,19 @@ def test_candidate_matrix_uses_current_verdicts_not_code_presence() -> None:
     validation = validate_cases()
     matrix = coverage_matrix()
     assert validation["ok"] is True
-    assert validation["candidate_count"] == 20
-    assert validation["case_count"] == 120
-    assert len(CANDIDATE_CAPABILITIES) == 20
-    assert len(matrix.entries) == 20
+    assert validation["candidate_count"] == 35
+    assert validation["case_count"] == 210
+    assert len(CANDIDATE_CAPABILITIES) == 35
+    assert len(matrix.entries) == 35
     assert matrix.code_ready is True
-    assert matrix.local_fixture_ready is True
+    assert matrix.local_fixture_ready is all(
+        entry.local_fixture_ready for entry in matrix.entries
+    )
     assert matrix.real_benchmark_ready is False
     assert matrix.release_ready is False
     assert all(len(spec.cases) == 6 for spec in benchmark_specs())
-    assert all(len(entry.current_verdict_ids) == 6 for entry in matrix.entries)
+    assert (all(len(entry.current_verdict_ids) == 6 for entry in matrix.entries)
+            is matrix.local_fixture_ready)
 
 
 def test_case_catalog_uses_explicit_narrow_expectations() -> None:
@@ -67,11 +70,11 @@ def test_case_catalog_uses_explicit_narrow_expectations() -> None:
         for capability in catalog["capabilities"]
         for case in capability["cases"]
     ]
-    assert len(raw_cases) == 120
+    assert len(raw_cases) == 210
     assert all(explicit_fields <= set(case) for case in raw_cases)
 
     cases = [case for spec in benchmark_specs() for case in spec.cases]
-    assert len(cases) == 120
+    assert len(cases) == 210
     for case in cases:
         assert len(case.expected_statuses) == 1
         assert case.parameters["fixture_profile"]

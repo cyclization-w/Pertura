@@ -16,6 +16,7 @@ BUNDLED_SKILL_NAMES = (
     "inspect-perturb-seq-design",
     "diagnose-perturb-seq-screen",
     "interpret-perturb-seq-results",
+    "evaluate-virtual-perturb-seq-model",
 )
 BUNDLED_CLAUDE_SKILL_NAMES = tuple(
     f"pertura:{name}" for name in BUNDLED_SKILL_NAMES

@@ -169,6 +169,21 @@ class AuthorityStore:
             )
             return stale
 
+    def get_runtime_object(self, object_id: str) -> dict[str, Any] | None:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT kind, object_hash, payload_json FROM runtime_objects WHERE object_id = ?",
+                (object_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "kind": row["kind"],
+            "object_id": object_id,
+            "object_hash": row["object_hash"],
+            "payload": json.loads(row["payload_json"]),
+        }
+
     def validate_dependencies(self, dependencies: tuple[DependencyRef, ...]) -> list[str]:
         issues: list[str] = []
         with self._connect() as db:
@@ -184,7 +199,7 @@ class AuthorityStore:
                         issues.append(f"dependency does not exist in authority store: {dependency.object_id}")
                     elif row["contract_hash"] != dependency.object_hash:
                         issues.append(f"dependency hash mismatch: {dependency.object_id}")
-                elif dependency.kind == "environment":
+                elif dependency.kind in {"environment", "knowledge_resource"}:
                     row = db.execute(
                         "SELECT object_hash FROM runtime_objects WHERE object_id = ?", (dependency.object_id,)
                     ).fetchone()

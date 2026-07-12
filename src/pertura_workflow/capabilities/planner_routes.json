@@ -164,6 +164,144 @@
         "controls_defined",
         "guide_assignment_validated"
       ]
+    },
+    {
+      "capability_id": "effect.matrix.assemble.v1",
+      "contains_any": [
+        "assemble effect matrix"
+      ],
+      "objectives": [
+        "effect_matrix",
+        "assemble_effect_matrix"
+      ],
+      "priority": 130
+    },
+    {
+      "capability_id": "program.response.signed_nmf.v1",
+      "contains_any": [
+        "response program"
+      ],
+      "objectives": [
+        "response_program",
+        "signed_nmf",
+        "response_programs"
+      ],
+      "priority": 130
+    },
+    {
+      "capability_id": "program.perturbation.cluster.v1",
+      "contains_any": [
+        "perturbation cluster"
+      ],
+      "objectives": [
+        "perturbation_cluster",
+        "cluster_perturbations"
+      ],
+      "priority": 130
+    },
+    {
+      "capability_id": "enrichment.ora.v1",
+      "contains_any": [
+        "over representation"
+      ],
+      "objectives": [
+        "ora",
+        "over_representation",
+        "pathway_ora"
+      ],
+      "priority": 135
+    },
+    {
+      "capability_id": "enrichment.gsea_prerank.v1",
+      "contains_any": [
+        "preranked gsea"
+      ],
+      "objectives": [
+        "gsea",
+        "gsea_prerank",
+        "pathway_gsea"
+      ],
+      "priority": 140
+    },
+    {
+      "capability_id": "regulator.activity.ulm.v1",
+      "contains_any": [
+        "regulator activity"
+      ],
+      "objectives": [
+        "regulator_activity",
+        "ulm"
+      ],
+      "priority": 140
+    },
+    {
+      "capability_id": "network.perturbation_regulator.v1",
+      "contains_any": [
+        "regulator network"
+      ],
+      "objectives": [
+        "regulator_network",
+        "perturbation_regulator_network"
+      ],
+      "priority": 145
+    },
+    {
+      "capability_id": "literature.europepmc.v1",
+      "contains_any": [
+        "europe pmc",
+        "literature search"
+      ],
+      "objectives": [
+        "literature",
+        "europe_pmc",
+        "literature_support"
+      ],
+      "priority": 130
+    },
+    {
+      "capability_id": "interpretation.evidence_map.v1",
+      "contains_any": [
+        "evidence map"
+      ],
+      "objectives": [
+        "evidence_map",
+        "interpret_results",
+        "interpretation"
+      ],
+      "priority": 130
+    },
+    {
+      "capability_id": "virtual.split.contract.v1",
+      "contains_any": [
+        "virtual split"
+      ],
+      "objectives": [
+        "virtual_split",
+        "evaluation_split"
+      ],
+      "priority": 130
+    },
+    {
+      "capability_id": "virtual.prediction.ingest.v1",
+      "contains_any": [
+        "prediction bundle"
+      ],
+      "objectives": [
+        "prediction_ingest",
+        "ingest_predictions"
+      ],
+      "priority": 130
+    },
+    {
+      "capability_id": "design.next_panel.v1",
+      "contains_any": [
+        "next panel"
+      ],
+      "objectives": [
+        "next_panel",
+        "next_experiment_design"
+      ],
+      "priority": 140
     }
   ],
   "schema_version": "pertura-capability-planner-routes-v1"

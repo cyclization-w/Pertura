@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
+
 from pertura_core import CapabilityRunRequest, DatasetContract, ScopeKey
 from pertura_workflow.capabilities import CapabilityRegistry
 from pertura_workflow.capabilities.executors import execute_capability
@@ -344,16 +346,45 @@ def test_pure_python_effect_sensitivity_module_and_null_calibration(tmp_path: Pa
     )
     assert sensitivity.metrics["n_targets"] == 2
     assert sensitivity.metrics["unstable_target_count"] == 1
+    module_stage = tmp_path / "module"
+    module_stage.mkdir()
+    effect_bundle = tmp_path / "effect_matrix.npz"
+    np.savez_compressed(
+        effect_bundle,
+        effects=np.asarray([[-1.0, -0.5, 0.2]]),
+        observed_mask=np.asarray([[True, True, True]]),
+        perturbations=np.asarray(["P1"]),
+        features=np.asarray(["A", "B", "C"]),
+    )
+    module_reference = tmp_path / "gmt_modules.json"
+    module_reference.write_text(
+        json.dumps({"modules": {"M1": ["A", "B"], "M2": ["C"]}}),
+        encoding="utf-8",
+    )
+    (module_stage / "_dependency_results.json").write_text(
+        json.dumps({
+            "results": [
+                {
+                    "result_id": "effect_matrix_result",
+                    "result_kind": "effect_matrix",
+                    "local_output_paths": [str(effect_bundle)],
+                },
+                {
+                    "result_id": "module_reference_result",
+                    "result_kind": "module_reference",
+                    "local_output_paths": [str(module_reference)],
+                },
+            ]
+        }),
+        encoding="utf-8",
+    )
     module = _run(
         "effect.module_global.v1",
         contract,
-        tmp_path / "module",
-        {
-            "effect_table_path": str(gene_effects),
-            "module_gmt_path": str(modules),
-        },
+        module_stage,
+        {},
     )
-    assert module.metrics["n_modules"] == 2
+    assert module.metrics["n_module_summaries"] == 2
     assert module.metadata["new_significance_tests_performed"] is False
     calibration = _run(
         "calibration.method_null.v1",

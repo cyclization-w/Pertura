@@ -1,0 +1,929 @@
+{
+  "models": {
+    "AnalysisRunRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "active_turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Turn Id"
+        },
+        "contract_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contract Id"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "logical_name": {
+          "title": "Logical Name",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "pertura-analysis-run-v1",
+          "default": "pertura-analysis-run-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "default": "active",
+          "enum": [
+            "active",
+            "completed",
+            "legacy_unverified"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "logical_name"
+      ],
+      "title": "AnalysisRunRecord",
+      "type": "object"
+    },
+    "AssetBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "binding_id": {
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "pertura-asset-binding-v1",
+          "default": "pertura-asset-binding-v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "asset_id",
+        "role"
+      ],
+      "title": "AssetBinding",
+      "type": "object"
+    },
+    "AssetLocation": {
+      "additionalProperties": false,
+      "properties": {
+        "absolute_path": {
+          "title": "Absolute Path",
+          "type": "string"
+        },
+        "asset_id": {
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "checked_at": {
+          "format": "date-time",
+          "title": "Checked At",
+          "type": "string"
+        },
+        "location_id": {
+          "title": "Location Id",
+          "type": "string"
+        },
+        "observed_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed Sha256"
+        },
+        "observed_size_bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed Size Bytes"
+        },
+        "schema_version": {
+          "const": "pertura-asset-location-v1",
+          "default": "pertura-asset-location-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "storage_mode": {
+          "enum": [
+            "reference",
+            "object",
+            "hardlink",
+            "copy",
+            "logical_binding"
+          ],
+          "title": "Storage Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset_id",
+        "absolute_path",
+        "storage_mode"
+      ],
+      "title": "AssetLocation",
+      "type": "object"
+    },
+    "ConversationRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "title": "Conversation Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "pertura-conversation-v1",
+          "default": "pertura-conversation-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "default": "active",
+          "enum": [
+            "active",
+            "closed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "default": "Pertura analysis",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "run_id"
+      ],
+      "title": "ConversationRecord",
+      "type": "object"
+    },
+    "DataAssetRef": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "content_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Sha256"
+        },
+        "created_by_turn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created By Turn"
+        },
+        "dependencies": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "format": {
+          "title": "Format",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "observed",
+            "external_resource",
+            "exploratory",
+            "derived"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "logical_name": {
+          "title": "Logical Name",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "pertura-data-asset-v1",
+          "default": "pertura-data-asset-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "source_class": {
+          "enum": [
+            "observed_metadata",
+            "measured_result",
+            "prediction",
+            "curated_prior",
+            "hypothesis"
+          ],
+          "title": "Source Class",
+          "type": "string"
+        },
+        "status": {
+          "default": "current",
+          "enum": [
+            "current",
+            "missing",
+            "drifted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "upstream_lock_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upstream Lock Hash"
+        }
+      },
+      "required": [
+        "asset_id",
+        "project_id",
+        "kind",
+        "role",
+        "format",
+        "logical_name",
+        "size_bytes",
+        "source_class"
+      ],
+      "title": "DataAssetRef",
+      "type": "object"
+    },
+    "ProjectRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "active_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Run Id"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "logical_name": {
+          "title": "Logical Name",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "pertura-project-v1",
+          "default": "pertura-project-v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_name"
+      ],
+      "title": "ProjectRecord",
+      "type": "object"
+    },
+    "ProviderSessionBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "default": true,
+          "title": "Active",
+          "type": "boolean"
+        },
+        "binding_id": {
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "configuration_hash": {
+          "title": "Configuration Hash",
+          "type": "string"
+        },
+        "continuity_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Continuity Reason"
+        },
+        "conversation_id": {
+          "title": "Conversation Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "provider_id": {
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "provider_session_id": {
+          "title": "Provider Session Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "pertura-provider-binding-v1",
+          "default": "pertura-provider-binding-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "skill_bundle_hash": {
+          "title": "Skill Bundle Hash",
+          "type": "string"
+        },
+        "tool_hash": {
+          "title": "Tool Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversation_id",
+        "provider_id",
+        "provider_session_id",
+        "tool_hash",
+        "skill_bundle_hash",
+        "configuration_hash"
+      ],
+      "title": "ProviderSessionBinding",
+      "type": "object"
+    },
+    "ReportRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "digest": {
+          "title": "Digest",
+          "type": "string"
+        },
+        "json_path": {
+          "title": "Json Path",
+          "type": "string"
+        },
+        "markdown_path": {
+          "title": "Markdown Path",
+          "type": "string"
+        },
+        "report_id": {
+          "title": "Report Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "pertura-report-revision-v1",
+          "default": "pertura-report-revision-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "turn_final_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Turn Final Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "report_id",
+        "run_id",
+        "revision",
+        "digest",
+        "json_path",
+        "markdown_path"
+      ],
+      "title": "ReportRevision",
+      "type": "object"
+    },
+    "TurnDraft": {
+      "$defs": {
+        "TurnFindingDraft": {
+          "additionalProperties": false,
+          "properties": {
+            "declared_role": {
+              "default": "hypothesis",
+              "enum": [
+                "measured",
+                "derived",
+                "prediction",
+                "prior",
+                "contradiction",
+                "hypothesis"
+              ],
+              "title": "Declared Role",
+              "type": "string"
+            },
+            "finding_id": {
+              "title": "Finding Id",
+              "type": "string"
+            },
+            "limitations": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Limitations",
+              "type": "array"
+            },
+            "result_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Result Ids",
+              "type": "array"
+            },
+            "text": {
+              "title": "Text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "finding_id",
+            "text"
+          ],
+          "title": "TurnFindingDraft",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "artifact_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Refs",
+          "type": "array"
+        },
+        "findings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TurnFindingDraft"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "headline": {
+          "title": "Headline",
+          "type": "string"
+        },
+        "hypotheses": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Hypotheses",
+          "type": "array"
+        },
+        "language": {
+          "default": "en",
+          "title": "Language",
+          "type": "string"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "next_steps": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Next Steps",
+          "type": "array"
+        },
+        "questions_for_user": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Questions For User",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "pertura-turn-draft-v1",
+          "default": "pertura-turn-draft-v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "headline"
+      ],
+      "title": "TurnDraft",
+      "type": "object"
+    },
+    "TurnFinal": {
+      "$defs": {
+        "TurnStatus": {
+          "enum": [
+            "running",
+            "completed",
+            "needs_input",
+            "blocked",
+            "failed",
+            "cancelled"
+          ],
+          "title": "TurnStatus",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "artifact_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Ids",
+          "type": "array"
+        },
+        "artifact_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Refs",
+          "type": "array"
+        },
+        "claim_authority": {
+          "default": false,
+          "title": "Claim Authority",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "findings": {
+          "default": [],
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "format_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format Error"
+        },
+        "headline": {
+          "title": "Headline",
+          "type": "string"
+        },
+        "hypotheses": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Hypotheses",
+          "type": "array"
+        },
+        "language": {
+          "default": "en",
+          "title": "Language",
+          "type": "string"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "markdown": {
+          "title": "Markdown",
+          "type": "string"
+        },
+        "next_steps": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Next Steps",
+          "type": "array"
+        },
+        "questions_for_user": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Questions For User",
+          "type": "array"
+        },
+        "result_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Result Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "pertura-turn-final-v1",
+          "default": "pertura-turn-final-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TurnStatus"
+        },
+        "structured": {
+          "default": true,
+          "title": "Structured",
+          "type": "boolean"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "status",
+        "headline",
+        "markdown"
+      ],
+      "title": "TurnFinal",
+      "type": "object"
+    },
+    "TurnRecord": {
+      "$defs": {
+        "TurnStatus": {
+          "enum": [
+            "running",
+            "completed",
+            "needs_input",
+            "blocked",
+            "failed",
+            "cancelled"
+          ],
+          "title": "TurnStatus",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "artifact_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Ids",
+          "type": "array"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "conversation_id": {
+          "title": "Conversation Id",
+          "type": "string"
+        },
+        "provider_binding_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Binding Id"
+        },
+        "provider_final": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Final"
+        },
+        "result_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Result Ids",
+          "type": "array"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "pertura-turn-record-v1",
+          "default": "pertura-turn-record-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TurnStatus",
+          "default": "running"
+        },
+        "trace": {
+          "additionalProperties": true,
+          "title": "Trace",
+          "type": "object"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "usage": {
+          "additionalProperties": true,
+          "title": "Usage",
+          "type": "object"
+        },
+        "user_input": {
+          "title": "User Input",
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversation_id",
+        "run_id",
+        "sequence",
+        "user_input"
+      ],
+      "title": "TurnRecord",
+      "type": "object"
+    }
+  },
+  "schema_version": "pertura-project-lifecycle-schema-bundle-v1"
+}

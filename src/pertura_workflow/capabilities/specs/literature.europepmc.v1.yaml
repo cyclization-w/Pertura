@@ -1,0 +1,93 @@
+schema_version: pertura-capability-spec-v2
+capability_id: literature.europepmc.v1
+version: 0.1.0
+phase: 6
+kind: analysis
+summary: Retrieve versioned Europe PMC search records only under explicit runtime
+  network authorization.
+trust_level: exploratory
+executor: literature_europepmc
+validator: candidate_standard
+input_requirements:
+- explicit_query
+- network_opt_in
+depends_on: []
+dependency_kinds: []
+output_kind: literature_prior
+source_class: curated_prior
+claim_permissions: []
+timeout_seconds: 120
+parameters_schema:
+  type: object
+  properties:
+    activity_threshold:
+      type: number
+    bootstraps:
+      type: string
+    chunk_rows:
+      type: integer
+    effect_threshold:
+      type: number
+    fdr_threshold:
+      type: number
+    max_gene_set_size:
+      type: integer
+    max_iter:
+      type: integer
+    max_memory_gb:
+      type: integer
+    max_records:
+      type: integer
+    min_features:
+      type: integer
+    min_gene_set_size:
+      type: integer
+    min_perturbations:
+      type: integer
+    minimum_feature_coverage:
+      type: integer
+    minimum_targets:
+      type: integer
+    missing_fraction_caution:
+      type: string
+    n_jobs:
+      type: integer
+    n_seeds:
+      type: integer
+    permutation_num:
+      type: integer
+    query:
+      type: string
+    ranks:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    records:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    seed:
+      type: integer
+    stability_threshold:
+      type: number
+  additionalProperties: false
+  examples:
+  - {}
+  required:
+  - query
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true
+  network_required: true
+  network_host: www.ebi.ac.uk
+  network_default: disabled
+  api_version: '6.9'

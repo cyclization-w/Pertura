@@ -1,0 +1,27 @@
+{
+  "schema_version": "pertura-knowledge-resource-profile-v1",
+  "profile": "pathway-knowledge-v1",
+  "resource_version": "GO-2026-06-15__Reactome-97",
+  "license": {
+    "go": "CC BY 4.0",
+    "reactome": "CC0"
+  },
+  "artifacts": [
+    {
+      "artifact_id": "go_basic_obo",
+      "name": "go-basic.obo",
+      "url": "https://release.geneontology.org/2026-06-15/ontology/go-basic.obo"
+    },
+    {
+      "artifact_id": "goa_human_gaf",
+      "name": "goa_human.gaf.gz",
+      "url": "https://release.geneontology.org/2026-06-15/annotations/goa_human.gaf.gz"
+    },
+    {
+      "artifact_id": "reactome_pathways",
+      "name": "ReactomePathways.gmt.zip",
+      "url": "https://reactome.org/download/97/ReactomePathways.gmt.zip"
+    }
+  ],
+  "generated_artifacts": []
+}

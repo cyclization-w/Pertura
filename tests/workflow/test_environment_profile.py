@@ -55,8 +55,13 @@ def test_candidate_environment_profiles_are_explicit_and_hash_bound(monkeypatch,
         "perturbseq-python-v1",
         "sceptre-v1",
         "composition-v1",
+        "interpretation-v1",
+        "virtual-eval-v1",
     }
-    for profile in ("perturbseq-python-v1", "sceptre-v1", "composition-v1"):
+    for profile in (
+        "python-science-v1", "perturbseq-python-v1", "sceptre-v1",
+        "composition-v1", "interpretation-v1", "virtual-eval-v1",
+    ):
         result = doctor_environment(profile)
         assert result["ok"] is False
         assert any(f"pertura env setup {profile}" in item for item in result["problems"])
@@ -64,3 +69,8 @@ def test_candidate_environment_profiles_are_explicit_and_hash_bound(monkeypatch,
         assert "environment_spec" in hashes
         if profile in {"sceptre-v1", "composition-v1"}:
             assert set(hashes) == {"environment_spec", "installer", "runner"}
+        if profile in {
+            "python-science-v1", "perturbseq-python-v1",
+            "interpretation-v1", "virtual-eval-v1",
+        }:
+            assert any(key.startswith("python_runner:") for key in hashes)

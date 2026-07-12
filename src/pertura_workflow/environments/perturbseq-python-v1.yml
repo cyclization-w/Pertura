@@ -4,6 +4,8 @@ channels:
 channel_priority: strict
 dependencies:
   - python=3.12
+  - pydantic=2
+  - cryptography
   - pip
   - numpy=2.1
   - pandas=2.2

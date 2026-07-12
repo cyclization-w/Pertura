@@ -1,25 +1,82 @@
 schema_version: pertura-capability-spec-v2
 capability_id: de.pseudobulk.edger.v1
-version: "1.0.0"
+version: 1.0.0
 phase: 5
 kind: analysis
 summary: Run replicate-aware edgeR quasi-likelihood pseudobulk differential expression.
 trust_level: builtin_trusted
 executor: edger_pseudobulk
 validator: standard
-input_requirements: [raw_integer_counts, confirmed_replicates, retained_cells]
-depends_on: [target.reliability.v2, calibration.replicate_null.v1]
-dependency_kinds: [contract, retained_cell_manifest, target_reliability, calibration]
+input_requirements:
+- raw_integer_counts
+- confirmed_replicates
+- retained_cells
+depends_on:
+- target.reliability.v2
+- calibration.replicate_null.v1
+dependency_kinds:
+- contract
+- retained_cell_manifest
+- target_reliability
+- calibration
 output_kind: differential_expression
 source_class: measured_result
-claim_permissions: [measured_association]
+claim_permissions:
+- measured_association
 timeout_seconds: 7200
-parameters_schema: {type: object}
+parameters_schema:
+  type: object
+  properties:
+    baseline_condition:
+      type: string
+    cell_column:
+      type: string
+    chunk_rows:
+      type: integer
+    condition_column:
+      type: string
+    counts_path:
+      type: string
+      x-pertura-asset-role: primary_dataset
+      description: Registered asset ID with role primary_dataset.
+    covariates:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    gene_column:
+      type: string
+    max_memory_gb:
+      type: integer
+    metadata_path:
+      type: string
+      x-pertura-asset-role: cell_metadata
+      description: Registered asset ID with role cell_metadata.
+    minimum_cells_per_pseudobulk:
+      type: integer
+    n_jobs:
+      type: integer
+    paired:
+      type: boolean
+    replicate_column:
+      type: string
+    state_column:
+      type: string
+    target_condition:
+      type: string
+  additionalProperties: false
+  examples:
+  - {}
 implemented: true
 metadata:
   environment_profile: edger-v1
   dependency_policy:
     target.reliability.v2:
-      accepted_statuses: [screen_passed]
+      accepted_statuses:
+      - screen_passed
     calibration.replicate_null.v1:
-      accepted_statuses: [completed]
+      accepted_statuses:
+      - completed

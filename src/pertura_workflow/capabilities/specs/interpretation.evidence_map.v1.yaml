@@ -1,0 +1,108 @@
+schema_version: pertura-capability-spec-v2
+capability_id: interpretation.evidence_map.v1
+version: 0.1.0
+phase: 6
+kind: analysis
+summary: Validate explicit measured, derived, prior, contradiction, hypothesis and
+  next-experiment records against committed provenance.
+trust_level: exploratory
+executor: interpretation_evidence_map
+validator: candidate_standard
+input_requirements:
+- structured_interpretation_records
+- committed_provenance
+depends_on: []
+dependency_kinds: []
+output_kind: interpretation_evidence_map
+source_class: hypothesis
+claim_permissions: []
+timeout_seconds: 900
+parameters_schema:
+  type: object
+  properties:
+    activity_threshold:
+      type: number
+    bootstraps:
+      type: string
+    chunk_rows:
+      type: integer
+    effect_threshold:
+      type: number
+    fdr_threshold:
+      type: number
+    max_gene_set_size:
+      type: integer
+    max_iter:
+      type: integer
+    max_memory_gb:
+      type: integer
+    max_records:
+      type: integer
+    min_features:
+      type: integer
+    min_gene_set_size:
+      type: integer
+    min_perturbations:
+      type: integer
+    minimum_feature_coverage:
+      type: integer
+    minimum_targets:
+      type: integer
+    missing_fraction_caution:
+      type: string
+    n_jobs:
+      type: integer
+    n_seeds:
+      type: integer
+    permutation_num:
+      type: integer
+    query:
+      type: string
+    ranks:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    records:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    seed:
+      type: integer
+    stability_threshold:
+      type: number
+  additionalProperties: false
+  examples:
+  - {}
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true
+  promotion_effect: none
+  dependency_sets:
+  - name: provenance_results
+    result_kinds:
+    - differential_expression
+    - conditional_association
+    - target_reliability
+    - effect_matrix
+    - response_programs
+    - pathway_enrichment_ora
+    - pathway_enrichment_gsea
+    - regulator_activity
+    - literature_prior
+    accepted_statuses:
+    - completed
+    - completed_with_caution
+    - screen_passed
+    - caution
+    scope_rule: same_dataset_context
+    min_count: 1
+    selection: all_compatible

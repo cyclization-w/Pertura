@@ -322,6 +322,119 @@ def resolve_dependencies(
                 ),
             )
 
+    for group in spec.metadata.get("dependency_sets", ()):
+        if not isinstance(group, Mapping):
+            blockers.append("capability dependency set metadata is invalid")
+            continue
+        name = str(group.get("name") or "").strip()
+        if not name:
+            blockers.append("capability dependency set is missing a name")
+            continue
+        accepted_kinds = {
+            str(item) for item in group.get("result_kinds") or ()
+        }
+        accepted_capabilities = {
+            str(item) for item in group.get("capability_ids") or ()
+        }
+        accepted_sources = {
+            str(item) for item in group.get("source_classes") or ()
+        }
+        accepted_statuses = {
+            str(item)
+            for item in group.get("accepted_statuses")
+            or _SUCCESS_STATUSES
+        }
+        scope_rule = str(group.get("scope_rule") or "exact")
+        minimum = int(group.get("min_count", 1 if group.get("required", True) else 0))
+        maximum = int(group.get("max_count") or 0)
+        required_group = bool(group.get("required", True))
+        selection = str(group.get("selection") or "explicit_result_ids")
+        compatible: list[ResultEnvelope] = []
+        for item in results:
+            issues: list[str] = []
+            if accepted_kinds and item.result_kind not in accepted_kinds:
+                continue
+            if accepted_capabilities and item.capability_id not in accepted_capabilities:
+                continue
+            if accepted_sources and item.source_class.value not in accepted_sources:
+                continue
+            if (
+                item.contract_id != contract.contract_id
+                or item.contract_hash != contract.canonical_hash
+            ):
+                issues.append("contract_mismatch")
+            if item.stale:
+                issues.append("stale")
+            if _status(item) not in accepted_statuses:
+                issues.append("status_not_accepted")
+            if any(
+                dependency.required and dependency.state != "current"
+                for dependency in item.dependencies
+            ):
+                issues.append("upstream_dependency_not_current")
+            if not _dependency_set_scope_ok(
+                required_scope,
+                item.scope,
+                scope_rule,
+            ):
+                issues.append("scope_mismatch")
+            if spec.trust_level == CapabilityTrust.builtin_trusted:
+                if item.capability_trust != CapabilityTrust.builtin_trusted:
+                    issues.append("untrusted_dependency")
+                if item.result_id not in trusted_ids:
+                    issues.append("missing_trusted_receipt")
+            dependency_verdicts.append(
+                {
+                    "dependency_set": name,
+                    "result_id": item.result_id,
+                    "result_kind": item.result_kind,
+                    "status": _status(item),
+                    "scope_id": item.scope.scope_id,
+                    "trust_level": item.capability_trust.value,
+                    "usable": not issues,
+                    "reasons": list(issues),
+                }
+            )
+            candidate_ids.add(item.result_id)
+            if not issues:
+                compatible.append(item)
+
+        selected = [item for item in compatible if item.result_id in hint_ids]
+        if selection == "all_compatible" and not selected:
+            selected = compatible
+        elif selection == "auto_single" and not selected and len(compatible) == 1:
+            selected = compatible
+        elif selection == "explicit_result_ids" and compatible and not selected:
+            blockers.append(
+                f"dependency set {name} requires explicit committed result IDs"
+            )
+
+        if len(selected) < minimum:
+            if required_group or selected:
+                blockers.append(
+                    f"dependency set {name} requires at least {minimum} usable results"
+                )
+            continue
+        if maximum and len(selected) > maximum:
+            blockers.append(
+                f"dependency set {name} accepts at most {maximum} usable results"
+            )
+            ambiguous.extend(item.result_id for item in selected)
+            continue
+        for item in sorted(selected, key=lambda value: value.result_id):
+            _append_dependency(
+                resolved,
+                DependencyRef(
+                    kind=item.result_kind,
+                    object_id=item.result_id,
+                    object_hash=item.canonical_hash,
+                    role=f"dependency_set:{name}",
+                ),
+            )
+            for transitive in item.dependencies:
+                if transitive.required and transitive.state == "current":
+                    _append_dependency(resolved, transitive)
+
     return DependencyResolution(
         status="blocked" if blockers else "resolved",
         dependencies=tuple(resolved),
@@ -559,6 +672,36 @@ def _candidate_issues(
         if result.result_id not in trusted_ids:
             issues.append("missing_trusted_receipt")
     return tuple(dict.fromkeys(issues))
+
+
+def _dependency_set_scope_ok(
+    required: ScopeKey,
+    candidate: ScopeKey,
+    mode: str,
+) -> bool:
+    if required.unresolved_fields or candidate.unresolved_fields:
+        return False
+    if mode == "dataset":
+        return required.dataset_id == candidate.dataset_id
+    if mode == "same_dataset_context":
+        return (
+            required.dataset_id == candidate.dataset_id
+            and required.control_ids == candidate.control_ids
+            and required.state_ids == candidate.state_ids
+            and required.donor_ids == candidate.donor_ids
+            and required.replicate_ids == candidate.replicate_ids
+            and required.batch_ids == candidate.batch_ids
+            and required.dose == candidate.dose
+            and required.timepoint == candidate.timepoint
+            and required.estimand == candidate.estimand
+        )
+    comparison = compare_scope_keys(required, candidate)
+    if mode == "compatible":
+        return comparison in {
+            ScopeComparison.exact,
+            ScopeComparison.compatible_by_declared_rule,
+        }
+    return comparison == ScopeComparison.exact
 
 
 def _accepted_statuses(kind: str) -> tuple[str, ...]:

@@ -1,20 +1,88 @@
 schema_version: pertura-capability-spec-v2
 capability_id: target.reliability.v2
-version: "2.0.0"
+version: 2.0.0
 phase: 4
 kind: diagnostic
-summary: Evaluate target efficacy, guide consistency, heterogeneity, responder fraction and replicate overlap.
+summary: Evaluate target efficacy, guide consistency, heterogeneity, responder fraction
+  and replicate overlap.
 trust_level: builtin_trusted
 executor: target_reliability_v2
 validator: standard
-input_requirements: [dataset_contract, retained_cells]
-depends_on: [diagnostic.guide_assignment.v1]
-dependency_kinds: [contract, retained_cell_manifest]
+input_requirements:
+- dataset_contract
+- retained_cells
+depends_on:
+- diagnostic.guide_assignment.v1
+dependency_kinds:
+- contract
+- retained_cell_manifest
 output_kind: target_reliability
 source_class: measured_result
-claim_permissions: [screen_passed]
+claim_permissions:
+- screen_passed
 timeout_seconds: 3600
-parameters_schema: {type: object}
+parameters_schema:
+  type: object
+  properties:
+    batch_column:
+      type: string
+    bootstrap_iterations:
+      type: integer
+    cell_column:
+      type: string
+    chunk_rows:
+      type: integer
+    condition_column:
+      type: string
+    control_uid:
+      type: string
+    expected_direction:
+      type: string
+    expression_path:
+      type: string
+      x-pertura-asset-role: primary_dataset
+      description: Registered asset ID with role primary_dataset.
+    guide_column:
+      type: string
+    layer_scale:
+      type: string
+    max_memory_gb:
+      type: integer
+    metadata_path:
+      type: string
+      x-pertura-asset-role: cell_metadata
+      description: Registered asset ID with role cell_metadata.
+    mixscape_class_column:
+      type: string
+    n_jobs:
+      type: integer
+    profile:
+      type: string
+    replicate_column:
+      type: string
+    responder_labels:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    signature_genes:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    target_gene:
+      type: string
+    target_uid:
+      type: string
+  additionalProperties: false
+  examples:
+  - {}
 implemented: true
 metadata:
   deprecated: true

@@ -1,0 +1,47 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "fallback_allowed": {
+      "const": false,
+      "default": false,
+      "title": "Fallback Allowed",
+      "type": "boolean"
+    },
+    "model": {
+      "const": "deepseek-v4-pro",
+      "default": "deepseek-v4-pro",
+      "title": "Model",
+      "type": "string"
+    },
+    "prompt_hash": {
+      "title": "Prompt Hash",
+      "type": "string"
+    },
+    "provider": {
+      "title": "Provider",
+      "type": "string"
+    },
+    "rubric_hash": {
+      "title": "Rubric Hash",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "pertura-agent-judge-manifest-v1",
+      "default": "pertura-agent-judge-manifest-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "temperature": {
+      "default": 0.0,
+      "title": "Temperature",
+      "type": "number"
+    }
+  },
+  "required": [
+    "provider",
+    "prompt_hash",
+    "rubric_hash"
+  ],
+  "title": "JudgeManifest",
+  "type": "object"
+}

@@ -69,6 +69,6 @@ def test_prediction_stays_prediction_and_cannot_promote_to_measured() -> None:
 def test_exploratory_contracts_do_not_change_product_surface() -> None:
     assert len(PRODUCT_TOOL_NAMES) == 5
     registry = CapabilityRegistry.load_default(include_external=False)
-    assert len(registry.list()) == 25
-    assert len(registry.list(include_deprecated=True)) == 29
+    assert len(registry.list()) == 39
+    assert len(registry.list(include_deprecated=True)) == 44
     assert all(not item.deprecated for item in registry.list())

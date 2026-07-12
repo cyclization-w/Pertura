@@ -7,6 +7,7 @@ from pathlib import Path
 from pertura_runtime.claude.agent import ClaudePerturaAgent
 from pertura_runtime.claude.options import ClaudeRuntimeOptions
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
+from pertura_runtime.project.workspace import ProjectWorkspace
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -14,6 +15,10 @@ def main(argv: list[str] | None = None) -> int:
         prog="pertura-claude",
         description="Run the claim-free Pertura Claude Agent SDK runtime.",
     )
+    parser.add_argument("project", type=Path, nargs="?", default=None, help="Persistent Pertura project root.")
+    parser.add_argument("--run", dest="analysis_run_id", default=None, help="Analysis run inside the project.")
+    parser.add_argument("--conversation", dest="conversation_id", default=None)
+    parser.add_argument("--new-conversation", action="store_true")
     parser.add_argument(
         "--input", type=Path, default=None, help="Input dataset directory or file."
     )
@@ -93,9 +98,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Do not disallow WebFetch/WebSearch.",
     )
     parser.add_argument(
+        "--allow-literature-network",
+        action="store_true",
+        help=(
+            "Allow the Pertura Europe PMC capability to access its single "
+            "allowlisted host; all other capability networking remains disabled."
+        ),
+    )
+    parser.add_argument(
         "--no-bundled-skills",
         action="store_true",
-        help="Disable the four bundled Pertura analysis skills.",
+        help="Disable the five bundled Pertura analysis skills.",
     )
     parser.add_argument(
         "--skill-plugin",
@@ -113,11 +126,31 @@ def main(argv: list[str] | None = None) -> int:
     if args.task_file is not None:
         task = args.task_file.read_text(encoding="utf-8")
 
-    workspace = ClaudeRunWorkspace.create(
-        root=args.root,
-        input_source=args.input,
-        run_id=args.run_id,
-    )
+    project_workspace = None
+    analysis_run_id = None
+    conversation_id = None
+    if args.project is not None:
+        project_root = args.project.expanduser().resolve()
+        project_workspace = (
+            ProjectWorkspace.open(project_root)
+            if (project_root / ".pertura" / "project.sqlite").is_file()
+            else ProjectWorkspace.initialize(project_root)
+        )
+        run = (
+            project_workspace.store.get_run(args.analysis_run_id)
+            if args.analysis_run_id
+            else project_workspace.active_run()
+        )
+        if run is None:
+            raise SystemExit(f"unknown analysis run: {args.analysis_run_id}")
+        analysis_run_id = run.run_id
+        if args.new_conversation:
+            conversation_id = project_workspace.create_conversation(run.run_id).conversation_id
+        else:
+            conversation_id = args.conversation_id
+        workspace = project_workspace.run_workspace(run.run_id, input_source=args.input)
+    else:
+        workspace = ClaudeRunWorkspace.create(root=args.root, input_source=args.input, run_id=args.run_id)
     config = ClaudeRuntimeOptions(
         model=args.model,
         permission_mode=args.permission_mode,
@@ -127,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         disallowed_tools=[] if args.allow_web else ["WebFetch", "WebSearch"],
         enable_bundled_skills=not args.no_bundled_skills,
         additional_skill_plugins=tuple(args.skill_plugin),
+        allow_literature_network=args.allow_literature_network,
         python_exe=args.python_exe,
         python_preflight_timeout_s=args.python_preflight_timeout_s,
         python_preflight_packages=(
@@ -145,6 +179,9 @@ def main(argv: list[str] | None = None) -> int:
         workspace=workspace,
         config=config,
         verbose=not args.quiet,
+        project_workspace=project_workspace,
+        run_id=analysis_run_id,
+        conversation_id=conversation_id,
     )
     result = asyncio.run(agent.run(task))
     print(f"\nrun: {result.workspace}")

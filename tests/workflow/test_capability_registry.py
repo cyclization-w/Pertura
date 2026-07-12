@@ -14,7 +14,7 @@ def test_bundled_capabilities_are_discoverable_without_loading_runners() -> None
     assert {item.capability_id for item in summaries} >= {
         "diagnostic.contract_integrity.v1",
         "de.pseudobulk.edger.v1",
-        "virtual.evaluate.v1",
+        "virtual.evaluate.comprehensive.v1",
     }
     assert all(not item.deprecated for item in summaries)
 
@@ -76,3 +76,14 @@ def test_installed_capability_is_discovery_only_without_local_runner(monkeypatch
         item for item in registry.list() if item.capability_id == spec.capability_id
     )
     assert summary.broker_executable is False
+
+
+def test_capability_static_audit_passes() -> None:
+    from pathlib import Path
+
+    from pertura_bench.capability_audit import audit_capabilities
+
+    verdict = audit_capabilities(Path(__file__).resolve().parents[2])
+    assert verdict["passed"] is True
+    assert verdict["capability_count"] == 44
+    assert verdict["domain_tool_count"] == 5

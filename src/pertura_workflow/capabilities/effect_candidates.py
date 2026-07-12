@@ -10,6 +10,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from pertura_core import AnalysisStatus, CapabilityRunRequest, CapabilitySpec, DatasetContract
 
 from pertura_workflow.capabilities.candidate_common import (
@@ -369,72 +371,72 @@ def run_module_global_effect(
     contract: DatasetContract,
     staging: Path,
 ):
-    effect_path = _parameter_or_dependency_table(
-        contract,
-        staging,
-        request.parameters.get("effect_table_path"),
-        preferred_names=("edger_results.csv", "sceptre_results.csv"),
-    )
-    module_path = resolve_input(
-        contract,
-        request.parameters.get("module_gmt_path"),
-        label="module_gmt_path",
-    )
-    fields, effect_rows = read_rows(effect_path)
-    gene_column = next((name for name in ("gene", "gene_id", "response_id") if name in fields), None)
-    effect_column = next((name for name in ("logFC", "log_2_fold_change", "effect") if name in fields), None)
-    fdr_column = next((name for name in ("FDR", "fdr") if name in fields), None)
-    if not gene_column or not effect_column:
-        return blocked(spec, request, contract, "effect table lacks gene and signed effect columns")
-    effects = {
-        row[gene_column]: {
-            "effect": float(row[effect_column]),
-            "fdr": float(row[fdr_column]) if fdr_column and row.get(fdr_column) else None,
-        }
-        for row in effect_rows
-        if row.get(gene_column) and row.get(effect_column) not in {"", None}
-    }
-    modules = []
-    with module_path.open("r", encoding="utf-8-sig") as handle:
-        for line in handle:
-            parts = line.rstrip("\n").split("\t")
-            if len(parts) >= 3:
-                modules.append((parts[0], parts[2:]))
-    summaries = []
-    for name, genes in modules:
-        observed = [effects[gene] for gene in genes if gene in effects]
-        if not observed:
-            continue
-        signed = [item["effect"] for item in observed]
-        mean_effect = sum(signed) / len(signed)
-        summaries.append(
-            {
-                "module": name,
-                "n_genes": len(observed),
-                "mean_signed_effect": mean_effect,
-                "direction_consistency": max(
-                    sum(value >= 0 for value in signed),
-                    sum(value <= 0 for value in signed),
-                ) / len(signed),
-                "significant_fraction": (
-                    sum(item["fdr"] is not None and item["fdr"] <= 0.05 for item in observed)
-                    / len(observed)
-                ),
-                "new_significance_test_performed": False,
-            }
+    effect_path = None
+    module_path = None
+    for result in dependency_results(staging):
+        for output in result.get("local_output_paths") or ():
+            path = Path(output)
+            if not path.is_file():
+                continue
+            if result.get("result_kind") == "effect_matrix" and path.name == "effect_matrix.npz":
+                effect_path = path
+            if result.get("result_kind") == "module_reference" and path.name == "gmt_modules.json":
+                module_path = path
+    if effect_path is None or module_path is None:
+        return blocked(
+            spec, request, contract,
+            "committed effect matrix and imported GMT module reference are required",
         )
-    global_effect = {
-        "n_tested_genes": len(effects),
-        "mean_absolute_effect": (
-            sum(abs(item["effect"]) for item in effects.values()) / len(effects)
-            if effects else None
-        ),
-        "significant_fraction": (
-            sum(item["fdr"] is not None and item["fdr"] <= 0.05 for item in effects.values())
-            / len(effects)
-            if effects else None
-        ),
-    }
+    try:
+        data = np.load(effect_path, allow_pickle=False)
+        matrix = np.asarray(data["effects"], float)
+        observed = np.asarray(data["observed_mask"], bool)
+        perturbations = np.asarray(data["perturbations"], str)
+        features = np.asarray(data["features"], str)
+        module_payload = json.loads(module_path.read_text(encoding="utf-8"))
+        modules = module_payload["modules"]
+    except (OSError, KeyError, ValueError, json.JSONDecodeError) as exc:
+        return blocked(spec, request, contract, f"effect or module dependency is invalid: {exc}")
+    if (
+        matrix.shape != observed.shape
+        or matrix.shape != (len(perturbations), len(features))
+        or not isinstance(modules, dict)
+    ):
+        return blocked(spec, request, contract, "effect or module dependency dimensions are invalid")
+    feature_index = {gene: index for index, gene in enumerate(features)}
+    summaries = []
+    global_effects = []
+    for row_index, perturbation in enumerate(perturbations):
+        tested = observed[row_index]
+        tested_values = matrix[row_index, tested]
+        global_effects.append({
+            "perturbation_id": str(perturbation),
+            "n_tested_genes": int(tested.sum()),
+            "mean_absolute_effect": (
+                float(np.mean(np.abs(tested_values))) if len(tested_values) else None
+            ),
+        })
+        for name, genes in sorted(modules.items()):
+            indices = [
+                feature_index[str(gene)]
+                for gene in genes
+                if str(gene) in feature_index
+                and observed[row_index, feature_index[str(gene)]]
+            ]
+            if not indices:
+                continue
+            signed = matrix[row_index, indices]
+            summaries.append({
+                "perturbation_id": str(perturbation),
+                "module": str(name),
+                "n_genes": len(indices),
+                "mean_signed_effect": float(np.mean(signed)),
+                "direction_consistency": float(max(
+                    np.mean(signed >= 0),
+                    np.mean(signed <= 0),
+                )),
+                "new_significance_test_performed": False,
+            })
     output = write_json(
         staging,
         "module_global_effect.json",
@@ -442,21 +444,27 @@ def run_module_global_effect(
             "schema_version": "pertura-module-global-effect-v1",
             "source_class": "derived",
             "modules": summaries,
-            "global_effect": global_effect,
+            "global_effects": global_effects,
             "new_significance_tests_performed": False,
         },
     )
-    caution = ()
+    cautions = ()
     if not summaries:
-        caution = ("no imported reference modules overlapped the committed effect table",)
+        cautions = ("no imported reference modules overlapped the committed effect matrix",)
     return envelope(
         spec,
         request,
         contract,
-        status=AnalysisStatus.completed_with_caution if caution else AnalysisStatus.completed,
-        summary=f"Derived global and module summaries for {len(summaries)} modules.",
-        cautions=caution,
-        metrics={"n_modules": len(summaries), **global_effect},
+        status=AnalysisStatus.completed_with_caution if cautions else AnalysisStatus.completed,
+        summary=(
+            f"Derived {len(summaries)} perturbation-module summaries "
+            f"for {len(perturbations)} perturbations."
+        ),
+        cautions=cautions,
+        metrics={
+            "n_perturbations": len(perturbations),
+            "n_module_summaries": len(summaries),
+        },
         outputs=(output,),
         metadata={"derived_only": True, "new_significance_tests_performed": False},
     )

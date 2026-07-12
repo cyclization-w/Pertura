@@ -1,15 +1,20 @@
 schema_version: pertura-capability-spec-v2
 capability_id: effect.module_global.v1
-version: "0.1.0"
+version: 0.1.0
 phase: 5
 kind: analysis
-summary: Derive module and global summaries from committed gene-level effects.
+summary: Derive per-perturbation module and global summaries from a committed effect
+  matrix.
 trust_level: exploratory
 executor: module_global_effect
 validator: candidate_standard
-input_requirements: [effect_table, reference_modules]
-depends_on: [module.import.gmt.v1, target.reliability.aggregate.v1]
-dependency_kinds: [reference_modules, target_reliability]
+input_requirements:
+- effect_matrix
+- reference_modules
+depends_on:
+- module.import.gmt.v1
+dependency_kinds:
+- module_reference
 output_kind: module_global_effect
 source_class: measured_result
 claim_permissions: []
@@ -17,10 +22,87 @@ timeout_seconds: 900
 parameters_schema:
   type: object
   properties:
-    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
-    n_jobs: {type: integer, default: 1, minimum: 1}
+    alpha:
+      type: number
+    assignment_method:
+      type: string
+    batch_column:
+      type: string
+    calibration_group_size:
+      type: number
+    calibration_type1_threshold:
+      type: number
+    chunk_rows:
+      type: integer
+    condition_column:
+      type: string
+    contrast:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    effect_table_path:
+      type: string
+    grna_integration_strategy:
+      type: number
+    max_memory_gb:
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
+    maximum_type1_rate:
+      type: string
+    metadata_path:
+      type: string
+      x-pertura-asset-role: cell_metadata
+      description: Registered asset ID with role cell_metadata.
+    method:
+      type: string
+    moi:
+      type: string
+    multiple_testing_alpha:
+      type: number
+    n_calibration_pairs:
+      type: integer
+    n_jobs:
+      type: integer
+      default: 1
+      minimum: 1
+    null_results_path:
+      type: string
+    permutation_unit:
+      type: string
+    sample_column:
+      type: string
+    side:
+      type: string
+    state_column:
+      type: string
+    timeout_seconds:
+      type: integer
+  additionalProperties: false
+  examples:
+  - {}
 implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
   derived_only: true
+  dependency_policy:
+    module.import.gmt.v1:
+      scope: dataset
+  dependency_sets:
+  - name: effect_matrix
+    result_kinds:
+    - effect_matrix
+    source_classes:
+    - measured_result
+    accepted_statuses:
+    - completed
+    - completed_with_caution
+    scope_rule: same_dataset_context
+    min_count: 1
+    max_count: 1
+    selection: all_compatible

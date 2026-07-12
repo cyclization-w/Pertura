@@ -1,15 +1,20 @@
 schema_version: pertura-capability-spec-v2
 capability_id: guide.integrity.v1
-version: "0.1.0"
+version: 0.1.0
 phase: 2
 kind: diagnostic
 summary: Check guide barcodes, orientation and guide-target mapping.
 trust_level: exploratory
 executor: guide_integrity
 validator: candidate_standard
-input_requirements: [guide_matrix, rna_barcodes, guide_map]
-depends_on: [diagnostic.dataset_integrity.v1]
-dependency_kinds: [contract]
+input_requirements:
+- guide_matrix
+- rna_barcodes
+- guide_map
+depends_on:
+- diagnostic.dataset_integrity.v1
+dependency_kinds:
+- contract
 output_kind: guide_integrity
 source_class: observed_metadata
 claim_permissions: []
@@ -17,8 +22,69 @@ timeout_seconds: 900
 parameters_schema:
   type: object
   properties:
-    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
-    n_jobs: {type: integer, default: 1, minimum: 1}
+    assignment_path:
+      type: string
+    barcode_column:
+      type: string
+    chunk_rows:
+      type: integer
+    design_moi:
+      type: string
+    doublet_score_column:
+      type: string
+    doublet_threshold:
+      type: number
+    filtered_guide_counts_path:
+      type: string
+      x-pertura-asset-role: guide_matrix
+      description: Registered asset ID with role guide_matrix.
+    guide_counts_path:
+      type: string
+      x-pertura-asset-role: guide_matrix
+      description: Registered asset ID with role guide_matrix.
+    guide_map_path:
+      type: string
+      x-pertura-asset-role: guide_map
+      description: Registered asset ID with role guide_map.
+    h5ad_path:
+      type: string
+      x-pertura-asset-role: primary_dataset
+      description: Registered asset ID with role primary_dataset.
+    max_iterations:
+      type: integer
+    max_memory_gb:
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
+    metadata_barcode_column:
+      type: string
+    metadata_path:
+      type: string
+      x-pertura-asset-role: cell_metadata
+      description: Registered asset ID with role cell_metadata.
+    moi_doublet_path:
+      type: string
+    n_jobs:
+      type: integer
+      default: 1
+      minimum: 1
+    posterior_threshold:
+      type: number
+    raw_guide_counts_path:
+      type: string
+      x-pertura-asset-role: guide_matrix
+      description: Registered asset ID with role guide_matrix.
+    rna_barcode_column:
+      type: string
+    rna_barcodes_path:
+      type: string
+      x-pertura-asset-role: rna_barcodes
+      description: Registered asset ID with role rna_barcodes.
+    tolerance:
+      type: number
+  additionalProperties: false
+  examples:
+  - {}
 implemented: true
 metadata:
   validation_status: synthetic_only

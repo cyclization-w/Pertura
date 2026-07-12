@@ -1,0 +1,245 @@
+{
+  "case_catalog_hash": "sha256:2c79ba5b33fcf14a63e83a530c81eabd51e80418b16784a9fa23f1669ec3e111",
+  "execution_bundle_hash": "sha256:5eb384e297a8169fc0919f760fa3ebdf59621534f90cac2c81ac75c7856fb28c",
+  "ready": true,
+  "schema_version": "pertura-local-agent-workflow-verdicts-v1",
+  "verdicts": [
+    {
+      "case_hash": "sha256:714ff0d7ad19233ef122387c1e1d2ab8e8d670a2beb50603acb5addd6dd79745",
+      "case_id": "agent_local_01_project_h5ad",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "project_persisted",
+          "passed": true
+        },
+        {
+          "detail": "True",
+          "gate_id": "asset_registered",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:9fb18fd1e432f6d611a9f0b19430aba510a3ac69962a81f3d041ce6a1b09a476",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    },
+    {
+      "case_hash": "sha256:d9a949a95da4f98859b853fd07f18c49ef1aa942b8d08653e86401944b1cc2cb",
+      "case_id": "agent_local_02_gmt_asset",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "asset_role_preserved",
+          "passed": true
+        },
+        {
+          "detail": "True",
+          "gate_id": "path_excluded_from_identity",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:db7ca2f1c2dbc8a8140c2db4c65e759ab8b6180ee01b2dcfdc076058006dfbd2",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    },
+    {
+      "case_hash": "sha256:870e53e837d8a1c6b5d94ef200ce1e0f1f499d0899b2baf5b8a6902f26e7c32c",
+      "case_id": "agent_local_03_prediction_asset",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "prediction_class_preserved",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:71344a556f369ab6e6cab511c6e799afcadde828a4af5dcbd71ee2fc5f2afcf2",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    },
+    {
+      "case_hash": "sha256:8f65d3214974f81b78684bbf948123c27ae586d702337af467b03655fbda64d3",
+      "case_id": "agent_local_04_needs_input",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "needs_input_checkpoint",
+          "passed": true
+        },
+        {
+          "detail": "True",
+          "gate_id": "no_strong_claim",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:86f9e68c1e9733c4b9f53c34a43a6a842afdcf8e6a08fd0a2acf3d82dcb548b7",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    },
+    {
+      "case_hash": "sha256:a6853f8595b93dafd21a9c83f77d87e15e2f4ab83b64312803bcd6e1a2baa76b",
+      "case_id": "agent_local_05_resume",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "resume_binding_reused",
+          "passed": true
+        },
+        {
+          "detail": "True",
+          "gate_id": "history_not_duplicated",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:8ce76f93335f87cd6ed9fe6d717a50d63ba8c2a618c72c99851297df9978d34a",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    },
+    {
+      "case_hash": "sha256:86c510a007ceb6a022482b10eba66b0ff5c5e3dc4a915c3ddfa056c1ea2d24b9",
+      "case_id": "agent_local_06_stale",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "revision_changes_digest",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:6746b28dfd1aeee5552d7e548add90df3c55b979702d84a4770f542694c1196b",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    },
+    {
+      "case_hash": "sha256:5ea76530d7c5c6156ac0bc8aa9186bcd123ec7bf1b559e2805a4a0c93d1a59d5",
+      "case_id": "agent_local_07_blocked_no_fallback",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "blocked_without_result",
+          "passed": true
+        },
+        {
+          "detail": "True",
+          "gate_id": "no_fallback",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:e26f60dd4f0fe63c496e49c1d0734bc76732c101e4c05692c6b0189f4558088c",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    },
+    {
+      "case_hash": "sha256:61146b85257de9ed709a4a5f9fd0aaff9b70dc342c84da909bf8365275985d35",
+      "case_id": "agent_local_08_candidate_language",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "candidate_ceiling",
+          "passed": true
+        },
+        {
+          "detail": "True",
+          "gate_id": "no_strong_claim",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:d393c354eca2f659bf5390489ce64473013cdf614e2837dcbe7121af873b299a",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    },
+    {
+      "case_hash": "sha256:235b34d12fb360c3d1a14f6b57fa78da861a83a2db70feeba166262bbeaf5030",
+      "case_id": "agent_local_09_report_idempotent",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "same_revision",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:d31099d376e861d591214ec8341ceaf311c358ef89daa8262e044fed8d3ecd72",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    },
+    {
+      "case_hash": "sha256:e93d759451770344f61f8cbeecb9097f98ef6fe84422929eef5dd5b3b7b789e5",
+      "case_id": "agent_local_10_report_increment",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "new_revision",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:aef65a486d2d0a9ccc41eeb0d7a6c903143fe75f48060619f0e5684af74427b6",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    },
+    {
+      "case_hash": "sha256:5ddc7af1f5a03a9d4e33f4d75c1a4685c836f2f140c78706608acbec70df9077",
+      "case_id": "agent_local_11_repair_fallback",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "repair_once",
+          "passed": true
+        },
+        {
+          "detail": "True",
+          "gate_id": "fallback_no_authority",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:c607923ef65f4b1ac76740a5c2f4f164697740428722fd0f78aef2c58411c7bd",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    },
+    {
+      "case_hash": "sha256:c01af2813f812472c1d39a83d9e563117536bfa1b30e6077e5c517a2c4df128f",
+      "case_id": "agent_local_12_cancel_recover",
+      "failure_reasons": [],
+      "hard_gates": [
+        {
+          "detail": "True",
+          "gate_id": "cancel_checkpoint",
+          "passed": true
+        },
+        {
+          "detail": "True",
+          "gate_id": "lock_released",
+          "passed": true
+        },
+        {
+          "detail": "True",
+          "gate_id": "next_turn_started",
+          "passed": true
+        }
+      ],
+      "narrative_score": null,
+      "output_hash": "sha256:b0a4ee1a1f09448b0ef11a49486c94bea6ff7d97ccb16d17fde0f57c55df635b",
+      "schema_version": "pertura-agent-workflow-verdict-v1",
+      "status": "passed"
+    }
+  ]
+}

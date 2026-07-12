@@ -231,7 +231,14 @@ class ServerBenchmarkPlan(CanonicalModel):
             "git_commit": None,
             "wheel_sha256": None,
             "case_catalog_hash": None,
+            "agent_case_catalog_hash": None,
+            "skill_bundle_hash": None,
+            "capability_spec_hash": None,
+            "judge_manifest_hash": None,
+            "report_turn_schema_hash": None,
             "template_digest": None,
+            "resource_lock_set_hash": None,
+            "prediction_bundle_set_hash": None,
             "server_plan_hash": None,
         }
     )
@@ -246,7 +253,14 @@ class ServerBenchmarkPlan(CanonicalModel):
             "git_commit",
             "wheel_sha256",
             "case_catalog_hash",
+            "agent_case_catalog_hash",
+            "skill_bundle_hash",
+            "capability_spec_hash",
+            "judge_manifest_hash",
+            "report_turn_schema_hash",
             "template_digest",
+            "resource_lock_set_hash",
+            "prediction_bundle_set_hash",
             "server_plan_hash",
         }
         if set(self.checkpoint_binding) != required:

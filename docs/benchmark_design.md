@@ -1,5 +1,21 @@
 # PerturaBench Design Principles
 
+## Current capability benchmark protocol (0.2.0a7)
+
+PerturaBench currently covers 35 exploratory capabilities with 210 versioned cases: happy, caution/unresolved, blocked, planted failure, determinism, and stale propagation for every capability. Synthetic cases establish code and protocol readiness only. They cannot issue a trusted receipt, change a capability trust level, or satisfy a real-data release gate.
+
+Cases execute by one of three explicit routes:
+
+- `product_path`: contract, planner, runtime-owned dependency resolution, broker, commit, finalizer, and exploratory report projection;
+- `protocol_fake`: the production serializer and parser for an unavailable scientific environment, with malformed output attacks;
+- `stale_audit`: an upstream scientific hash change propagated through the authority store and finalizer.
+
+P4/P5 benchmarks cover signed effect compatibility, response-program stability, clustering, ORA/GSEA, regulator inference, provenance roles, row-level multi-axis splits, leakage, baseline wins, collapse, uncertainty coverage, and next-panel input bounds. Prediction remains prediction and next-panel output remains hypothesis.
+
+Server execution adds `frozen_subset` and `full_dataset` tiers. A bound server plan includes the Git commit, wheel SHA-256, case-catalog hash, template digest, knowledge-resource lock-set hash, prediction-bundle lock-set hash, and server-plan hash. Dataset, environment, resource, or prediction drift invalidates the verdict rather than silently migrating it.
+
+The decision-level principles below remain relevant to the legacy claim-control comparisons, but current capability verdicts are expressed through `ResultEnvelope`, receipts/session seals, and promotion decisions rather than the old stage/registrar path.
+
 PerturaBench evaluates whether Pertura preserves valid scientific claims while preventing unsupported overclaims. The benchmark is decision-level first: it evaluates `ClaimDecision` strength, predicate, scope, and support, not only surface keywords.
 
 ## 1. What the Benchmark Proves

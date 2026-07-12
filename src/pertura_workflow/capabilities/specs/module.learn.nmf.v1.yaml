@@ -1,20 +1,84 @@
 schema_version: pertura-capability-spec-v2
 capability_id: module.learn.nmf.v1
-version: "1.0.0"
+version: 1.0.0
 phase: 3
 kind: analysis
 summary: Learn consensus-stable NMF modules from confirmed control cells.
 trust_level: builtin_trusted
 executor: nmf_modules
 validator: standard
-input_requirements: [dataset_contract, confirmed_controls, retained_cells]
-depends_on: [diagnostic.guide_assignment.v1]
-dependency_kinds: [contract, retained_cell_manifest]
+input_requirements:
+- dataset_contract
+- confirmed_controls
+- retained_cells
+depends_on:
+- diagnostic.guide_assignment.v1
+dependency_kinds:
+- contract
+- retained_cell_manifest
 output_kind: module_reference
 source_class: measured_result
-claim_permissions: [derived_module_definition]
+claim_permissions:
+- derived_module_definition
 timeout_seconds: 3600
-parameters_schema: {type: object}
+parameters_schema:
+  type: object
+  properties:
+    chunk_rows:
+      type: integer
+    control_column:
+      type: string
+    control_values:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    gene_universe:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    gmt_path:
+      type: string
+      x-pertura-asset-role: gene_modules
+      description: Registered asset ID with role gene_modules.
+    h5ad_path:
+      type: string
+      x-pertura-asset-role: primary_dataset
+      description: Registered asset ID with role primary_dataset.
+    identifier_namespace:
+      type: string
+    max_memory_gb:
+      type: integer
+    n_jobs:
+      type: integer
+    ranks:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    seeds:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    species:
+      type: string
+  additionalProperties: false
+  examples:
+  - {}
 implemented: true
 metadata:
   deprecated: true

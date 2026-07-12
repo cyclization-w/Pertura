@@ -57,6 +57,31 @@ print(json.dumps(sorted(blocked)))
     assert json.loads(completed.stdout) == []
 
 
+def test_executor_registry_does_not_import_optional_scientific_modules() -> None:
+    script = """
+import json
+import sys
+import pertura_workflow.capabilities.executors
+blocked = [
+    name for name in sys.modules
+    if name in {
+        'pertura_workflow.capabilities.p4_candidates',
+        'pertura_workflow.capabilities.p5_candidates',
+        'pertura_workflow.capabilities.state_candidates',
+        'pertura_workflow.capabilities.target_candidates',
+        'pertura_workflow.capabilities.effect_candidates',
+    }
+]
+print(json.dumps(sorted(blocked)))
+"""
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(ROOT / "src")
+    completed = subprocess.run(
+        [sys.executable, "-c", script], check=True, capture_output=True, text=True, env=env
+    )
+    assert json.loads(completed.stdout) == []
+
+
 def test_capability_options_reject_stage_and_legacy_surface(tmp_path: Path) -> None:
     from pertura_runtime.claude.prompt import build_system_prompt
     from pertura_runtime.claude.workspace import ClaudeRunWorkspace

@@ -15,7 +15,8 @@ from typing import Any
 from uuid import uuid4
 
 from pertura_core import CapabilityRunRequest, CapabilityTrust, DatasetContract, DesignConfirmation, PromotionDecision, ResultEnvelope, ScientificStatement
-from pertura_core.hashing import canonical_json, file_sha256
+from pertura_core.hashing import canonical_json, path_sha256
+from pertura_runtime.network_policy import NetworkAccessPolicy
 from pertura_runtime.verifier.receipts import ReceiptSigner, verify_receipt
 from pertura_runtime.verifier.session_store import AuthoritySessionStore
 from pertura_runtime.verifier.store import AuthorityStore
@@ -28,10 +29,21 @@ class VerifierBrokerError(RuntimeError):
 class VerifierBroker:
     """Lifecycle wrapper for the local, separately keyed verifier process."""
 
-    def __init__(self, *, authority_dir: str | Path, policy_hash: str, run_id: str | None = None, export_dir: str | Path | None = None, output_root: str | Path | None = None, workspace_root: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        authority_dir: str | Path,
+        policy_hash: str,
+        run_id: str | None = None,
+        export_dir: str | Path | None = None,
+        output_root: str | Path | None = None,
+        workspace_root: str | Path | None = None,
+        network_policy: NetworkAccessPolicy | None = None,
+    ) -> None:
         self.authority_dir = Path(authority_dir).resolve()
         self.policy_hash = policy_hash
         self.run_id = run_id
+        self.network_policy = network_policy or NetworkAccessPolicy.offline()
         self.export_dir = Path(export_dir).resolve() if export_dir else None
         self.output_root = Path(output_root).resolve() if output_root else (self.authority_dir / "published")
         self.workspace_root = Path(workspace_root).resolve() if workspace_root else None
@@ -223,6 +235,7 @@ class VerifierBroker:
                 str(self.workspace_root) if self.workspace_root else None,
                 self.run_id,
                 self._launch_instance_id,
+                self.network_policy.to_dict(),
             ),
             name="pertura-verifier",
             daemon=True,
@@ -266,7 +279,18 @@ class VerifierBroker:
                 pass
 
 
-def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_hash: str, output_root: str, workspace_root: str | None, initial_run_id: str | None, instance_id: str) -> None:
+def _serve(
+    address: Any,
+    family: str,
+    authkey: bytes,
+    store_path: str,
+    policy_hash: str,
+    output_root: str,
+    workspace_root: str | None,
+    initial_run_id: str | None,
+    instance_id: str,
+    network_policy_payload: dict[str, Any] | None,
+) -> None:
     from pertura_workflow.capabilities import CapabilityRegistry
     from pertura_workflow.capabilities.executors import execute_capability
 
@@ -276,6 +300,7 @@ def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_ha
     store = AuthorityStore(store_path)
     session_store = AuthoritySessionStore(store_path)
     sessions: dict[str, str] = {}
+    network_policy = NetworkAccessPolicy.from_dict(network_policy_payload)
 
     def ensure_session(run_id: str) -> str:
         current_id = sessions.get(run_id)
@@ -333,6 +358,13 @@ def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_ha
                     request = CapabilityRunRequest.model_validate(message["request"])
                     session_id = ensure_session(request.run_id)
                     spec = registry.get(request.capability_id, request.capability_version)
+                    if spec.metadata.get("network_required"):
+                        host = str(spec.metadata.get("network_host") or "")
+                        if not host or not network_policy.allows(spec.capability_id, host):
+                            raise PermissionError(
+                                "capability network access is disabled; restart the runtime "
+                                "with explicit literature-network authorization"
+                            )
                     contract = store.get_contract(request.contract_id)
                     if contract is None or contract.canonical_hash != request.contract_hash:
                         raise ValueError("unknown or stale dataset contract")
@@ -359,7 +391,25 @@ def _serve(address: Any, family: str, authkey: bytes, store_path: str, policy_ha
                     else:
                         with tempfile.TemporaryDirectory(prefix="pertura-verify-") as staging:
                             _write_dependency_projection(store, request, Path(staging), Path(workspace_root) if workspace_root else None)
-                            result = execute_capability(spec, request, contract, staging)
+                            authorized_asset_paths = []
+                            for dependency in request.dependencies:
+                                runtime_object = store.get_runtime_object(dependency.object_id)
+                                if runtime_object and runtime_object.get("kind") == "data_asset":
+                                    resolved_path = (runtime_object.get("payload") or {}).get("resolved_path")
+                                    if resolved_path:
+                                        authorized_asset_paths.append(str(resolved_path))
+                            result = execute_capability(
+                                spec,
+                                request,
+                                contract,
+                                staging,
+                                runtime_context={
+                                    "network_policy": network_policy.to_dict(),
+                                    "broker_instance_id": instance_id,
+                                    "enforce_environment_execution": True,
+                                    "authorized_asset_paths": sorted(set(authorized_asset_paths)),
+                                },
+                            )
                             result = _publish_outputs(result, Path(staging), Path(output_root), Path(workspace_root) if workspace_root else None)
                         if spec.trust_level != CapabilityTrust.builtin_trusted:
                             result = _with_verification_state(result, "validated_untrusted")
@@ -477,14 +527,17 @@ def _publish_outputs(result: ResultEnvelope, staging: Path, output_root: Path, w
         if relative.is_absolute() or ".." in relative.parts:
             raise ValueError("capability output path must be staging-relative")
         source = (staging / relative).resolve()
-        if not source.is_file() or staging.resolve() not in source.parents:
+        if not source.exists() or staging.resolve() not in source.parents:
             raise ValueError(f"capability output is missing from verifier staging: {name}")
         destination = (destination_root / relative).resolve()
         if destination_root.resolve() not in destination.parents:
             raise ValueError("capability output escaped the fixed output root")
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
-        digest = file_sha256(destination)
+        if source.is_dir():
+            shutil.copytree(source, destination, dirs_exist_ok=False)
+        else:
+            shutil.copy2(source, destination)
+        digest = path_sha256(destination)
         expected = result.output_hashes.get(str(name))
         if expected and expected != digest:
             raise ValueError(f"capability output hash changed during publish: {name}")
@@ -535,10 +588,14 @@ def _write_dependency_projection(
     workspace_root: Path | None,
 ) -> None:
     results_by_id: dict[str, dict[str, Any]] = {}
+    runtime_dependencies: list[dict[str, Any]] = []
     dependency_root = staging / "_dependencies"
     for dependency in request.dependencies:
         result = store.get_result(dependency.object_id)
         if result is None:
+            runtime_object = store.get_runtime_object(dependency.object_id)
+            if runtime_object is not None:
+                runtime_dependencies.append(runtime_object)
             continue
         payload = results_by_id.get(result.result_id)
         if payload is None:
@@ -549,16 +606,28 @@ def _write_dependency_projection(
                 if not source.is_absolute() and workspace_root is not None:
                     source = workspace_root / source
                 source = source.resolve()
-                if not source.is_file():
+                if not source.exists():
                     continue
                 destination = dependency_root / result.result_id / source.name
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, destination)
+                if source.is_dir():
+                    shutil.copytree(source, destination, dirs_exist_ok=False)
+                else:
+                    shutil.copy2(source, destination)
                 local_paths.append(str(destination))
             payload["local_output_paths"] = local_paths
             payload["dependency_refs"] = []
             results_by_id[result.result_id] = payload
         payload["dependency_refs"].append(dependency.model_dump(mode="json"))
+    (staging / "_runtime_dependencies.json").write_text(
+        json.dumps(
+            {"dependencies": sorted(runtime_dependencies, key=lambda item: item["object_id"])},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     (staging / "_dependency_results.json").write_text(
         json.dumps(
             {"results": [results_by_id[key] for key in sorted(results_by_id)]},

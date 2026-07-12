@@ -1,0 +1,14 @@
+name: pertura-virtual-eval-v1
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pydantic=2
+  - cryptography
+  - anndata=0.11.4
+  - numpy=2.1
+  - pandas=2.2
+  - scipy=1.15
+  - scikit-learn=1.6
+  - pyarrow=19
+  - zarr=3.1

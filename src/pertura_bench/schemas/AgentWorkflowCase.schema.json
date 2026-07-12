@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "AgentWorkflowTurn": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_status": {
+          "enum": [
+            "completed",
+            "needs_input",
+            "blocked",
+            "failed",
+            "cancelled"
+          ],
+          "title": "Expected Status",
+          "type": "string"
+        },
+        "provider_output": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Provider Output"
+        },
+        "user_input": {
+          "title": "User Input",
+          "type": "string"
+        }
+      },
+      "required": [
+        "user_input",
+        "provider_output",
+        "expected_status"
+      ],
+      "title": "AgentWorkflowTurn",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "title": "Case Id",
+      "type": "string"
+    },
+    "dataset_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dataset Id"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "expected_hard_gates": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Expected Hard Gates",
+      "type": "array"
+    },
+    "max_memory_gb": {
+      "default": 4.0,
+      "title": "Max Memory Gb",
+      "type": "number"
+    },
+    "scenario": {
+      "title": "Scenario",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "pertura-agent-workflow-case-v1",
+      "default": "pertura-agent-workflow-case-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tier": {
+      "enum": [
+        "deterministic_local",
+        "server_agent"
+      ],
+      "title": "Tier",
+      "type": "string"
+    },
+    "timeout_seconds": {
+      "default": 300,
+      "title": "Timeout Seconds",
+      "type": "integer"
+    },
+    "turns": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/AgentWorkflowTurn"
+      },
+      "title": "Turns",
+      "type": "array"
+    }
+  },
+  "required": [
+    "case_id",
+    "scenario",
+    "description",
+    "tier",
+    "expected_hard_gates"
+  ],
+  "title": "AgentWorkflowCase",
+  "type": "object"
+}

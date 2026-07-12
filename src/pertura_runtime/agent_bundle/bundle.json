@@ -1,11 +1,11 @@
 {
-  "bundle_hash": "sha256:9a41ca29007c1e8e84a9ba8282045252b469a91b92080d71b65753700cd25b3e",
+  "bundle_hash": "sha256:59d1d4435f5297c37e28a52de2250f96b03692b99f8ee02df905542494cf71ea",
   "bundle_id": "pertura",
   "bundle_version": "0.1.0",
   "schema_version": "pertura-agent-skill-bundle-v1",
   "skills": [
     {
-      "content_hash": "sha256:d5e6e1a1b14a02cce796b6c28487cc98430118cb4af541df3a79a3fb3ca83e38",
+      "content_hash": "sha256:eff268ca3e902b4b9dbce2af1bafe5caae14c9761e294742bd797d6606839dea",
       "files": [
         "SKILL.md",
         "agents/openai.yaml"
@@ -36,7 +36,7 @@
       "version": "0.1.0"
     },
     {
-      "content_hash": "sha256:fdba5e61b5c50ee94767928d6c15d5ecb668b883758d3d43d56840d2aff969e6",
+      "content_hash": "sha256:3f47bff442163662c953ad2acb3e8a8fc66ad9102c09fa5e3cfad57c4347d927",
       "files": [
         "SKILL.md",
         "agents/openai.yaml",
@@ -44,6 +44,16 @@
         "references/effect-interpretation.md"
       ],
       "name": "interpret-perturb-seq-results",
+      "version": "0.1.0"
+    },
+    {
+      "content_hash": "sha256:978964a9e6fdc999478608f7d29a6d67659fcb9574b3b39bf4b9bd4229df7a3a",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/virtual-evaluation.md"
+      ],
+      "name": "evaluate-virtual-perturb-seq-model",
       "version": "0.1.0"
     }
   ]

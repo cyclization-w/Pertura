@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evaluate virtual Perturb-seq model"
+  short_description: "Audit splits, baselines, leakage, collapse, and uncertainty."
+  default_prompt: "Evaluate this virtual Perturb-seq model without confusing predictions with measurements."

@@ -1,15 +1,27 @@
 schema_version: pertura-capability-spec-v2
 capability_id: target.reliability.aggregate.v1
-version: "0.1.0"
+version: 0.1.0
 phase: 4
 kind: diagnostic
 summary: Aggregate explicit committed reliability dependencies without raw recomputation.
 trust_level: exploratory
 executor: target_reliability_aggregate
 validator: candidate_standard
-input_requirements: [retained_cells, design_balance, guide_efficacy, mixscape]
-depends_on: [screen.retained_cells.v1, diagnostic.design_balance.v1, target.guide_efficacy.v1, target.responder.mixscape.v1]
-dependency_kinds: [retained_cell_manifest, design_balance, target_guide_efficacy, mixscape_responder]
+input_requirements:
+- retained_cells
+- design_balance
+- guide_efficacy
+- mixscape
+depends_on:
+- screen.retained_cells.v1
+- diagnostic.design_balance.v1
+- target.guide_efficacy.v1
+- target.responder.mixscape.v1
+dependency_kinds:
+- retained_cell_manifest
+- design_balance
+- target_guide_efficacy
+- mixscape_responder
 output_kind: target_reliability
 source_class: measured_result
 claim_permissions: []
@@ -17,8 +29,97 @@ timeout_seconds: 900
 parameters_schema:
   type: object
   properties:
-    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
-    n_jobs: {type: integer, default: 1, minimum: 1}
+    batch_column:
+      type: string
+    bootstrap_iterations:
+      type: integer
+    cell_column:
+      type: string
+    chunk_rows:
+      type: integer
+    condition_column:
+      type: string
+    control:
+      type: string
+    control_uid:
+      type: string
+    expected_direction:
+      type: string
+    expression_path:
+      type: string
+      x-pertura-asset-role: primary_dataset
+      description: Registered asset ID with role primary_dataset.
+    guide_bootstrap_iterations:
+      type: integer
+    guide_column:
+      type: string
+    h5ad_path:
+      type: string
+      x-pertura-asset-role: primary_dataset
+      description: Registered asset ID with role primary_dataset.
+    iter_num:
+      type: integer
+    layer_scale:
+      type: string
+    logfc_threshold:
+      type: number
+    max_memory_gb:
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
+    metadata_path:
+      type: string
+      x-pertura-asset-role: cell_metadata
+      description: Registered asset ID with role cell_metadata.
+    min_de_genes:
+      type: integer
+    n_dims:
+      type: integer
+    n_jobs:
+      type: integer
+      default: 1
+      minimum: 1
+    n_neighbors:
+      type: integer
+    new_class_name:
+      type: string
+    pert_key:
+      type: string
+    perturbation_type:
+      type: string
+    profile:
+      type: string
+    pval_cutoff:
+      type: string
+    ref_selection_mode:
+      type: string
+    replicate_column:
+      type: string
+    scale:
+      type: boolean
+    signature_genes:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    signature_learned_from_same_perturbation:
+      type: boolean
+    signature_test_split_used:
+      type: boolean
+    split_by:
+      type: string
+    target_gene:
+      type: string
+    target_uid:
+      type: string
+    use_rep:
+      type: string
+  additionalProperties: false
+  examples:
+  - {}
 implemented: true
 metadata:
   validation_status: synthetic_only

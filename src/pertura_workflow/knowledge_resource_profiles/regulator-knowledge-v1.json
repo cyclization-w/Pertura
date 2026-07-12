@@ -1,0 +1,14 @@
+{
+  "schema_version": "pertura-knowledge-resource-profile-v1",
+  "profile": "regulator-knowledge-v1",
+  "resource_version": "CollecTRI-decoupler-2.1.6",
+  "license": {
+    "resource": "CollecTRI license must be reviewed for intended use",
+    "usage_classes": ["academic", "nonprofit", "commercial-review-required"]
+  },
+  "artifacts": [],
+  "generated_artifacts": [
+    {"artifact_id": "collectri_human"},
+    {"artifact_id": "collectri_mouse"}
+  ]
+}

@@ -1,15 +1,19 @@
 schema_version: pertura-capability-spec-v2
 capability_id: diagnostic.design_balance.v1
-version: "0.1.0"
+version: 0.1.0
 phase: 1
 kind: diagnostic
 summary: Check independent units, overlap, estimability and confounding.
 trust_level: exploratory
 executor: design_balance
 validator: candidate_standard
-input_requirements: [dataset_contract, metadata]
-depends_on: [diagnostic.dataset_integrity.v1]
-dependency_kinds: [contract]
+input_requirements:
+- dataset_contract
+- metadata
+depends_on:
+- diagnostic.dataset_integrity.v1
+dependency_kinds:
+- contract
 output_kind: design_balance
 source_class: observed_metadata
 claim_permissions: []
@@ -17,8 +21,51 @@ timeout_seconds: 900
 parameters_schema:
   type: object
   properties:
-    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
-    n_jobs: {type: integer, default: 1, minimum: 1}
+    batch_column:
+      type: string
+    cell_column:
+      type: string
+    chunk_rows:
+      type: integer
+    condition_column:
+      type: string
+    donor_column:
+      type: string
+    guide_barcode_column:
+      type: string
+    guide_counts_path:
+      type: string
+      x-pertura-asset-role: guide_matrix
+      description: Registered asset ID with role guide_matrix.
+    input_path:
+      type: string
+      x-pertura-asset-role: primary_dataset
+      description: Registered asset ID with role primary_dataset.
+    layer:
+      type: string
+    max_memory_gb:
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
+    metadata_path:
+      type: string
+      x-pertura-asset-role: cell_metadata
+      description: Registered asset ID with role cell_metadata.
+    modality:
+      type: string
+    n_jobs:
+      type: integer
+      default: 1
+      minimum: 1
+    paired:
+      type: boolean
+    replicate_column:
+      type: string
+    state_column:
+      type: string
+  additionalProperties: false
+  examples:
+  - {}
 implemented: true
 metadata:
   validation_status: synthetic_only

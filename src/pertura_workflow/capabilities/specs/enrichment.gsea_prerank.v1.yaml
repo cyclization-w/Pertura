@@ -1,0 +1,91 @@
+schema_version: pertura-capability-spec-v2
+capability_id: enrichment.gsea_prerank.v1
+version: 0.1.0
+phase: 6
+kind: analysis
+summary: Run deterministic preranked GSEA through GSEApy with locked gene sets.
+trust_level: exploratory
+executor: enrichment_gsea_prerank
+validator: candidate_standard
+input_requirements:
+- effect_matrix
+- gene_sets
+depends_on:
+- effect.matrix.assemble.v1
+dependency_kinds:
+- effect_matrix
+output_kind: pathway_enrichment_gsea
+source_class: measured_result
+claim_permissions: []
+timeout_seconds: 7200
+parameters_schema:
+  type: object
+  properties:
+    activity_threshold:
+      type: number
+    bootstraps:
+      type: string
+    chunk_rows:
+      type: integer
+    effect_threshold:
+      type: number
+    fdr_threshold:
+      type: number
+    max_gene_set_size:
+      type: integer
+    max_iter:
+      type: integer
+    max_memory_gb:
+      type: integer
+    max_records:
+      type: integer
+    min_features:
+      type: integer
+    min_gene_set_size:
+      type: integer
+    min_perturbations:
+      type: integer
+    minimum_feature_coverage:
+      type: integer
+    minimum_targets:
+      type: integer
+    missing_fraction_caution:
+      type: string
+    n_jobs:
+      type: integer
+    n_seeds:
+      type: integer
+    permutation_num:
+      type: integer
+    query:
+      type: string
+    ranks:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    records:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    seed:
+      type: integer
+    stability_threshold:
+      type: number
+  additionalProperties: false
+  examples:
+  - {}
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true
+  derived_only: true
+  environment_profile: interpretation-v1
+  resource_profile: pathway-knowledge-v1

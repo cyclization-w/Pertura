@@ -14,6 +14,7 @@ from pertura_runtime.claude.tools.product_tools import (
     create_product_mcp_server,
 )
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
+from pertura_runtime.network_policy import NetworkAccessPolicy
 from pertura_runtime.product import PerturaProductRuntime
 
 
@@ -33,6 +34,7 @@ DEFAULT_CODEACT_ALLOWED_TOOLS = [
 @dataclass(frozen=True)
 class ClaudeRuntimeOptions:
     model: str | None = None
+    resume_session_id: str | None = None
     permission_mode: str = "default"
     max_turns: int | None = 20
     max_budget_usd: float | None = None
@@ -47,6 +49,7 @@ class ClaudeRuntimeOptions:
     )
     enable_bundled_skills: bool = True
     additional_skill_plugins: tuple[Path, ...] = ()
+    allow_literature_network: bool = False
     env: dict[str, str] = field(default_factory=dict)
     python_exe: str | None = None
     python_preflight_timeout_s: float = 240.0
@@ -90,7 +93,15 @@ def build_agent_options(
         raise ValueError(
             "Claude runtime policy conflicts with the workspace-bound product policy"
         )
-    runtime = product_runtime or PerturaProductRuntime(workspace, policy=policy)
+    runtime = product_runtime or PerturaProductRuntime(
+        workspace,
+        policy=policy,
+        network_policy=(
+            NetworkAccessPolicy.literature_europepmc()
+            if config.allow_literature_network
+            else NetworkAccessPolicy.offline()
+        ),
+    )
     mcp_servers = {"pertura": create_product_mcp_server(runtime)}
     skill_config = resolve_skill_configuration(
         enable_bundled=config.enable_bundled_skills,
@@ -100,6 +111,7 @@ def build_agent_options(
     requested = {
         "cwd": str(workspace.root),
         "model": config.model,
+        "resume": config.resume_session_id,
         "system_prompt": system_prompt,
         "tools": {"type": "preset", "preset": "claude_code"},
         "allowed_tools": list(config.allowed_tools),
@@ -164,6 +176,7 @@ def describe_options(config: ClaudeRuntimeOptions) -> dict[str, Any]:
     )
     return {
         "model": config.model,
+        "resume_session_id": config.resume_session_id,
         "permission_mode": config.permission_mode,
         "max_turns": config.max_turns,
         "max_budget_usd": config.max_budget_usd,
@@ -173,6 +186,7 @@ def describe_options(config: ClaudeRuntimeOptions) -> dict[str, Any]:
         "disallowed_tools": list(config.disallowed_tools),
         "allowed_tools": list(config.allowed_tools),
         "enable_bundled_skills": config.enable_bundled_skills,
+        "allow_literature_network": config.allow_literature_network,
         "available_skills": list(skill_config.skill_names),
         "skill_bundle_hash": skill_config.provenance["skill_bundle_hash"],
         "additional_skill_plugin_hashes": skill_config.provenance[

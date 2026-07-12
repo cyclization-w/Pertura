@@ -1,18 +1,66 @@
 schema_version: pertura-capability-spec-v2
 capability_id: calibration.replicate_null.v1
-version: "1.0.0"
+version: 1.0.0
 phase: 5
 kind: analysis
-summary: Calibrate NTC-vs-NTC and condition-label nulls at the independent replicate level.
+summary: Calibrate NTC-vs-NTC and condition-label nulls at the independent replicate
+  level.
 trust_level: builtin_trusted
 executor: replicate_null_calibration
 validator: standard
-input_requirements: [raw_integer_counts, confirmed_replicates, confirmed_controls]
-depends_on: [diagnostic.guide_assignment.v1]
-dependency_kinds: [contract, retained_cell_manifest]
+input_requirements:
+- raw_integer_counts
+- confirmed_replicates
+- confirmed_controls
+depends_on:
+- diagnostic.guide_assignment.v1
+dependency_kinds:
+- contract
+- retained_cell_manifest
 output_kind: calibration
 source_class: measured_result
 claim_permissions: []
 timeout_seconds: 3600
-parameters_schema: {type: object}
+parameters_schema:
+  type: object
+  properties:
+    baseline_condition:
+      type: string
+    cell_column:
+      type: string
+    chunk_rows:
+      type: integer
+    condition_column:
+      type: string
+    counts_path:
+      type: string
+      x-pertura-asset-role: primary_dataset
+      description: Registered asset ID with role primary_dataset.
+    gene_column:
+      type: string
+    max_memory_gb:
+      type: integer
+    metadata_path:
+      type: string
+      x-pertura-asset-role: cell_metadata
+      description: Registered asset ID with role cell_metadata.
+    n_jobs:
+      type: integer
+    negative_control_conditions:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    permutations:
+      type: integer
+    replicate_column:
+      type: string
+    target_condition:
+      type: string
+  additionalProperties: false
+  examples:
+  - {}
 implemented: true

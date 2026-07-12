@@ -9,8 +9,9 @@ recursive-include docs *.md *.json *.yaml
 recursive-include src/pertura_workflow/capabilities/specs *.yaml
 include src/pertura_workflow/capabilities/planner_routes.json
 recursive-include src/pertura_workflow/capabilities/profiles *.yaml
-recursive-include src/pertura_workflow/capabilities/runners *.R
+recursive-include src/pertura_workflow/capabilities/runners *.R *.py
 recursive-include src/pertura_workflow/environments *.yml *.R
+recursive-include src/pertura_workflow/knowledge_resource_profiles *.json
 recursive-include src/pertura_runtime/dashboard_static *
 recursive-include src/pertura_runtime/agent_bundle *
 recursive-include src/pertura_bench/runners *.R
@@ -18,6 +19,7 @@ recursive-include src/pertura_bench/schemas *.json
 recursive-include src/pertura_bench/cases *.json
 recursive-include src/pertura_core/compatibility/v0.2 *.json
 prune ui/node_modules
+prune ui/node_modules.disabled-*
 prune build
 prune dist
 global-exclude __pycache__

@@ -1,17 +1,30 @@
 schema_version: pertura-capability-spec-v2
 capability_id: diagnostic.contract_integrity.v1
-version: "1.0.0"
+version: 1.0.0
 phase: 1
 kind: diagnostic
 summary: Validate the authoritative dataset contract and unresolved design fields.
 trust_level: builtin_trusted
 executor: contract_integrity
 validator: standard
-input_requirements: [dataset_contract]
-dependency_kinds: [contract]
+input_requirements:
+- dataset_contract
+dependency_kinds:
+- contract
 output_kind: contract_integrity
 source_class: observed_metadata
 claim_permissions: []
 timeout_seconds: 30
-parameters_schema: {type: object, additionalProperties: false}
+parameters_schema:
+  type: object
+  properties:
+    chunk_rows:
+      type: integer
+    max_memory_gb:
+      type: integer
+    n_jobs:
+      type: integer
+  additionalProperties: false
+  examples:
+  - {}
 implemented: true

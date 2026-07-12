@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from pertura_core.hashing import canonical_hash
 
 from pertura_bench.models import BenchmarkSubsetSpec
 from pertura_bench.operations import (
@@ -46,6 +47,8 @@ def _exit_code(command: str, payload: object) -> int:
         ready = payload.get("ok", payload.get("skill_bundle_ready"))
         return 0 if ready is True else 1
     if command == "run-matrix" and isinstance(payload, dict) and "ready" in payload:
+        return 0 if payload.get("ready") is True else 1
+    if command == "agent" and isinstance(payload, dict) and "ready" in payload:
         return 0 if payload.get("ready") is True else 1
     if command in {"run", "run-matrix"}:
         if not payload or _contains_failed_verdict(payload):
@@ -108,6 +111,22 @@ def main(argv: list[str] | None = None) -> int:
     skill_matrix = skill_sub.add_parser("matrix")
     skill_matrix.add_argument("--repo", type=Path, default=Path.cwd())
 
+    agent = sub.add_parser("agent", help="Run the provider-neutral agent workflow benchmark.")
+    agent_sub = agent.add_subparsers(dest="agent_command", required=True)
+    agent_sub.add_parser("list")
+    agent_run = agent_sub.add_parser("run-local")
+    agent_run.add_argument("--output", type=Path, required=True)
+    agent_server = agent_sub.add_parser("run-server")
+    agent_server.add_argument("case_id")
+    agent_server.add_argument("--cache", type=Path, required=True)
+    agent_server.add_argument("--output", type=Path, required=True)
+    agent_server.add_argument("--repo", type=Path, default=Path.cwd())
+    agent_regrade = agent_sub.add_parser("regrade")
+    agent_regrade.add_argument("execution_root", type=Path)
+    agent_sub.add_parser("server-cases")
+    agent_run.add_argument("--write-frozen-verdicts", action="store_true")
+
+    agent_run.add_argument("--repo", type=Path, default=Path.cwd())
     cases = sub.add_parser("validate-cases")
     cases.add_argument("--repo", type=Path, default=Path.cwd())
 
@@ -151,6 +170,8 @@ def main(argv: list[str] | None = None) -> int:
         "skills",
     }
     repo = None
+    if args.command == "agent" and args.agent_command == "run-local":
+        commands_with_repo.add("agent")
     if args.command in commands_with_repo or (
         args.command == "capabilities" and args.capability_command == "matrix"
     ):
@@ -305,6 +326,50 @@ def main(argv: list[str] | None = None) -> int:
             if args.skill_command == "validate"
             else skill_benchmark_matrix(repo)
         )
+    elif args.command == "agent":
+        from importlib import resources
+        from pertura_bench.agent_execution import (
+            agent_execution_bundle_hash, load_agent_cases, run_local_agent_matrix,
+        )
+        if args.agent_command == "list":
+            payload = {"cases": [item.model_dump(mode="json") for item in load_agent_cases()]}
+        elif args.agent_command == "run-local":
+            verdicts = run_local_agent_matrix(args.output)
+            payload = {
+                "benchmark": "agent_workflow",
+                "ready": all(item.status == "passed" for item in verdicts),
+                "case_catalog_hash": canonical_hash([item.model_dump(mode="json") for item in load_agent_cases()]),
+                "execution_bundle_hash": agent_execution_bundle_hash(repo),
+                "verdicts": [item.model_dump(mode="json") for item in verdicts],
+            }
+            if args.write_frozen_verdicts:
+                if not payload["ready"]:
+                    parser.error("refusing to freeze agent verdicts because one or more cases failed")
+                frozen = {
+                    "schema_version": "pertura-local-agent-workflow-verdicts-v1",
+                    "case_catalog_hash": payload["case_catalog_hash"],
+                    "execution_bundle_hash": payload["execution_bundle_hash"],
+                    "ready": True,
+                    "verdicts": payload["verdicts"],
+                }
+                destination = repo / "src/pertura_bench/cases/agent_workflow_verdicts.v1.json"
+                destination.write_text(json.dumps(frozen, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                payload["frozen_verdict_path"] = str(destination)
+        elif args.agent_command == "run-server":
+            from pertura_bench.agent_server_execution import run_server_agent_case
+            try:
+                agent_repo = require_repo_root(args.repo)
+            except ValueError as exc:
+                parser.error(str(exc))
+            payload = run_server_agent_case(
+                args.case_id, repo_root=agent_repo, cache=args.cache, output=args.output
+            )
+        elif args.agent_command == "regrade":
+            from pertura_bench.agent_server_execution import regrade_server_agent_case
+            payload = regrade_server_agent_case(args.execution_root)
+        else:
+            path = resources.files("pertura_bench").joinpath("cases/server_agent_cases.v1.json")
+            payload = json.loads(path.read_text(encoding="utf-8"))
     elif args.command == "validate-cases":
         from pertura_bench.capability_bench import validate_cases
 

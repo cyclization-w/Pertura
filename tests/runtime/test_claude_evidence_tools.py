@@ -80,6 +80,7 @@ def test_default_claude_options_expose_exactly_five_product_tools(monkeypatch, t
         "pertura:inspect-perturb-seq-design",
         "pertura:diagnose-perturb-seq-screen",
         "pertura:interpret-perturb-seq-results",
+        "pertura:evaluate-virtual-perturb-seq-model",
     ]
     assert options.plugins[0]["type"] == "local"
 

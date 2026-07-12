@@ -42,7 +42,7 @@ def run_state_reference_fit(
         import numpy as np
         import pandas as pd
         from scipy import sparse
-        from sklearn.decomposition import PCA
+        from sklearn.decomposition import IncrementalPCA
         from sklearn.metrics import adjusted_rand_score
         from sklearn.neighbors import NearestNeighbors
     except ModuleNotFoundError as exc:
@@ -53,7 +53,8 @@ def run_state_reference_fit(
             f"state reference dependency is missing: {exc.name}",
             metadata={"setup_command": "pertura env setup perturbseq-python-v1"},
         )
-    max_memory_gb, n_jobs = resource_budget(request.parameters)
+    budget = resource_budget(request.parameters)
+    max_memory_gb, n_jobs = budget
     h5ad_path = resolve_input(contract, request.parameters.get("h5ad_path"), label="h5ad_path")
     control_column = str(request.parameters.get("control_column") or "")
     control_values = {str(item) for item in request.parameters.get("control_values") or []}
@@ -72,40 +73,50 @@ def run_state_reference_fit(
                 contract,
                 f"fewer than {minimum_controls} confirmed control cells are available",
             )
-        estimate_gb = int(data.n_obs) * int(data.n_vars) * 8 / 1024**3
-        if estimate_gb > max_memory_gb:
-            return blocked(
-                spec,
-                request,
-                contract,
-                f"dense PCA input estimate {estimate_gb:.3f} GB exceeds max_memory_gb={max_memory_gb}",
-            )
-        matrix = data.X[:]
-        matrix = matrix.toarray() if sparse.issparse(matrix) else np.asarray(matrix)
+        control_indices = np.flatnonzero(control_mask)
         obs_names = np.asarray([str(item) for item in data.obs_names])
         genes = np.asarray([str(item) for item in data.var_names])
+        control_dense_bytes = budget.dense_bytes(len(control_indices), int(data.n_vars))
+        source_is_sparse = sparse.issparse(data.X) or "SparseDataset" in type(data.X).__name__
+        if not source_is_sparse and control_dense_bytes > budget.max_bytes:
+            return blocked(
+                spec, request, contract,
+                f"dense control slice requires {control_dense_bytes / 1024**3:.3f} GB, exceeding max_memory_gb={max_memory_gb}",
+            )
+        matrix = data.X[control_indices, :]
+        matrix = matrix.to_memory() if hasattr(matrix, "to_memory") else matrix
     finally:
         if getattr(data, "file", None):
             data.file.close()
-    if np.any(matrix < 0):
-        return blocked(spec, request, contract, "state reference requires nonnegative expression input")
-    library = matrix.sum(axis=1)
-    normalized = np.divide(
-        matrix,
-        library[:, None],
-        out=np.zeros_like(matrix, dtype=float),
-        where=library[:, None] > 0,
-    ) * 1e4
-    normalized = np.log1p(normalized)
-    controls = normalized[control_mask]
-    variances = controls.var(axis=0)
+    if sparse.issparse(matrix):
+        matrix = matrix.tocsr().astype(float)
+        if matrix.data.size and np.any(matrix.data < 0):
+            return blocked(spec, request, contract, "state reference requires nonnegative expression input")
+        library = np.asarray(matrix.sum(axis=1)).ravel()
+        scale = np.divide(1e4, library, out=np.zeros_like(library, dtype=float), where=library > 0)
+        normalized_sparse = sparse.diags(scale) @ matrix
+        normalized_sparse.data = np.log1p(normalized_sparse.data)
+        means = np.asarray(normalized_sparse.mean(axis=0)).ravel()
+        squared_means = np.asarray(normalized_sparse.power(2).mean(axis=0)).ravel()
+        variances = np.maximum(0.0, squared_means - means**2)
+    else:
+        matrix = np.asarray(matrix)
+        if np.any(matrix < 0):
+            return blocked(spec, request, contract, "state reference requires nonnegative expression input")
+        budget.require_dense(matrix.shape[0], matrix.shape[1], arrays=2, label="control normalization")
+        library = matrix.sum(axis=1)
+        normalized_dense = np.divide(matrix, library[:, None], out=np.zeros_like(matrix, dtype=float), where=library[:, None] > 0) * 1e4
+        normalized_dense = np.log1p(normalized_dense)
+        variances = normalized_dense.var(axis=0)
     n_hvg = min(2000, int((variances > 0).sum()))
     if n_hvg < 2:
         return blocked(spec, request, contract, "fewer than two variable genes are available in controls")
     hvg_index = np.argsort(variances)[-n_hvg:]
-    n_pcs = min(50, controls.shape[0] - 1, n_hvg)
-    pca = PCA(n_components=n_pcs, random_state=1729)
-    control_pcs = pca.fit_transform(controls[:, hvg_index])
+    n_pcs = min(50, len(control_indices) - 1, n_hvg)
+    budget.require_dense(len(control_indices), n_hvg, arrays=3, label="control HVG PCA")
+    controls_hvg = normalized_sparse[:, hvg_index].toarray() if sparse.issparse(matrix) else normalized_dense[:, hvg_index]
+    pca = IncrementalPCA(n_components=n_pcs, batch_size=max(n_pcs, min(budget.chunk_rows, len(control_indices))))
+    control_pcs = pca.fit_transform(controls_hvg)
     n_neighbors = min(15, control_pcs.shape[0] - 1)
     neighbors = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs).fit(control_pcs)
     graph_indices = neighbors.kneighbors(control_pcs, return_distance=False)[:, 1:]
@@ -168,13 +179,13 @@ def run_state_reference_fit(
         pca_mean=pca.mean_,
         control_pcs=control_pcs,
         control_labels=control_labels,
-        control_cell_ids=obs_names[control_mask],
+        control_cell_ids=obs_names[control_indices],
         technical_state_ids=np.asarray([technical_ids[item] for item in control_labels]),
     )
     assignment_path = staging / "control_state_assignments.parquet"
     pd.DataFrame(
         {
-            "cell_id": obs_names[control_mask],
+            "cell_id": obs_names[control_indices],
             "technical_state_id": [technical_ids[item] for item in control_labels],
             "is_control": True,
             "mapping_probability": 1.0,
@@ -191,7 +202,7 @@ def run_state_reference_fit(
             "schema_version": "pertura-state-reference-fit-v1",
             "fit_population": "confirmed_controls_only",
             "normalization": {"normalize_total": 1e4, "transform": "log1p"},
-            "n_controls": int(control_mask.sum()),
+            "n_controls": int(len(control_indices)),
             "n_hvg": n_hvg,
             "n_pcs": n_pcs,
             "n_neighbors": n_neighbors,
@@ -213,7 +224,7 @@ def run_state_reference_fit(
         status=AnalysisStatus.completed,
         summary=f"Fitted a control-only reference with {len(technical_ids)} technical states.",
         metrics={
-            "n_controls": int(control_mask.sum()),
+            "n_controls": int(len(control_indices)),
             "n_states": len(technical_ids),
             "stability": chosen["stability"],
             "chosen_resolution": chosen["resolution"],
@@ -252,6 +263,7 @@ def run_state_reference_map(
             f"state mapping dependency is missing: {exc.name}",
             metadata={"setup_command": "pertura env setup perturbseq-python-v1"},
         )
+    budget = resource_budget(request.parameters)
     h5ad_path = resolve_input(contract, request.parameters.get("h5ad_path"), label="h5ad_path")
     model_path = _parameter_or_dependency_path(
         contract,
@@ -262,66 +274,74 @@ def run_state_reference_map(
     )
     model = np.load(model_path, allow_pickle=False)
     data = ad.read_h5ad(h5ad_path, backed="r")
-    try:
-        matrix = data.X[:]
-        matrix = matrix.toarray() if sparse.issparse(matrix) else np.asarray(matrix)
-        obs_names = np.asarray([str(item) for item in data.obs_names])
-        genes = [str(item) for item in data.var_names]
-    finally:
-        if getattr(data, "file", None):
-            data.file.close()
+    genes = [str(item) for item in data.var_names]
     gene_index = {name: index for index, name in enumerate(genes)}
     missing = [str(name) for name in model["hvg_names"] if str(name) not in gene_index]
     if missing:
+        if getattr(data, "file", None):
+            data.file.close()
         return blocked(spec, request, contract, f"mapping input is missing {len(missing)} reference HVGs")
-    selected = matrix[:, [gene_index[str(name)] for name in model["hvg_names"]]]
-    library = matrix.sum(axis=1)
-    normalized = np.divide(
-        selected,
-        library[:, None],
-        out=np.zeros_like(selected, dtype=float),
-        where=library[:, None] > 0,
-    ) * 1e4
-    normalized = np.log1p(normalized)
-    all_pcs = (normalized - model["pca_mean"]) @ model["pca_components"].T
+    selected_indices = [gene_index[str(name)] for name in model["hvg_names"]]
+    budget.require_dense(budget.chunk_rows, len(selected_indices), arrays=3, label="state mapping chunk")
     control_pcs = model["control_pcs"]
     labels = [str(item) for item in model["technical_state_ids"]]
     n_neighbors = min(15, control_pcs.shape[0])
-    neighbors = NearestNeighbors(n_neighbors=n_neighbors).fit(control_pcs)
-    indices = neighbors.kneighbors(all_pcs, return_distance=False)
+    neighbors = NearestNeighbors(n_neighbors=n_neighbors, n_jobs=budget.n_jobs).fit(control_pcs)
     threshold = float(request.parameters.get("mapping_probability_threshold", 0.60))
-    assignments = []
-    for cell, neighbor_indices in zip(obs_names, indices):
-        votes = [labels[int(index)] for index in neighbor_indices]
-        counts = {label: votes.count(label) for label in set(votes)}
-        label, count = max(counts.items(), key=lambda item: (item[1], item[0]))
-        probability = count / len(votes)
-        assignments.append(
-            {
-                "cell_id": cell,
-                "technical_state_id": label if probability >= threshold else "unresolved_state",
-                "mapping_probability": probability,
-                "candidate_human_label": None,
-            }
-        )
     output = staging / "state_mapping.parquet"
-    pd.DataFrame(assignments).to_parquet(output, index=False)
+    writer = None
+    unresolved = 0
+    mapped_count = 0
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        for start in range(0, int(data.n_obs), budget.chunk_rows):
+            stop = min(int(data.n_obs), start + budget.chunk_rows)
+            raw = data.X[start:stop, :]
+            raw = raw.to_memory() if hasattr(raw, "to_memory") else raw
+            if sparse.issparse(raw):
+                raw = raw.tocsr()
+                library = np.asarray(raw.sum(axis=1)).ravel()
+                selected = raw[:, selected_indices].toarray()
+            else:
+                raw = np.asarray(raw)
+                library = raw.sum(axis=1)
+                selected = raw[:, selected_indices]
+            normalized = np.divide(selected, library[:, None], out=np.zeros_like(selected, dtype=float), where=library[:, None] > 0) * 1e4
+            normalized = np.log1p(normalized)
+            pcs = (normalized - model["pca_mean"]) @ model["pca_components"].T
+            indices = neighbors.kneighbors(pcs, return_distance=False)
+            rows = []
+            cell_ids = [str(item) for item in data.obs_names[start:stop]]
+            for cell, neighbor_indices in zip(cell_ids, indices):
+                votes = [labels[int(index)] for index in neighbor_indices]
+                counts = {label: votes.count(label) for label in set(votes)}
+                label, count = max(counts.items(), key=lambda item: (item[1], item[0]))
+                probability = count / len(votes)
+                technical = label if probability >= threshold else "unresolved_state"
+                unresolved += technical == "unresolved_state"
+                rows.append({"cell_id": cell, "technical_state_id": technical, "mapping_probability": probability, "candidate_human_label": None})
+            table = pa.Table.from_pandas(pd.DataFrame(rows), preserve_index=False)
+            writer = writer or pq.ParquetWriter(output, table.schema)
+            writer.write_table(table)
+            mapped_count += len(rows)
+    finally:
+        if writer is not None:
+            writer.close()
+        if getattr(data, "file", None):
+            data.file.close()
     manifest = write_json(
         staging,
         "state_mapping.json",
         {
             "schema_version": "pertura-state-reference-map-v1",
             "mapping_probability_threshold": threshold,
-            "n_cells": len(assignments),
-            "unresolved_state_count": sum(
-                item["technical_state_id"] == "unresolved_state"
-                for item in assignments
-            ),
+            "n_cells": mapped_count,
+            "unresolved_state_count": unresolved,
             "reference_model_name": model_path.name,
             "reference_refit": False,
         },
     )
-    unresolved = sum(item["technical_state_id"] == "unresolved_state" for item in assignments)
     caution = (
         ("one or more cells could not be mapped above the frozen-reference probability threshold",)
         if unresolved
@@ -332,9 +352,9 @@ def run_state_reference_map(
         request,
         contract,
         status=AnalysisStatus.completed_with_caution if caution else AnalysisStatus.completed,
-        summary=f"Mapped {len(assignments)} cells to the frozen control reference; {unresolved} remained unresolved.",
+        summary=f"Mapped {mapped_count} cells to the frozen control reference; {unresolved} remained unresolved.",
         cautions=caution,
-        metrics={"n_cells": len(assignments), "unresolved_state_count": unresolved},
+        metrics={"n_cells": mapped_count, "unresolved_state_count": unresolved},
         outputs=(output, manifest),
         metadata={"reference_refit": False, "mapping_probability_threshold": threshold},
     )

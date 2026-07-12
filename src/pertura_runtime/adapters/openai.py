@@ -24,6 +24,9 @@ class OpenAIAdapterDescriptor:
     provider_id: str = OPENAI_PROVIDER_ID
     responses_api: bool = True
     planned_tool_transport: str = "stdio-or-streamable-http-mcp"
+    continuation_model: str = "exactly-one-of-pertura-replay-openai-session-response-chain"
+    project_lifecycle_model: str = "pertura-project-conversation-turn-v1"
+    hidden_reasoning_replay: bool = False
     implemented: bool = False
     required_extra: str = "openai-agents"
 
@@ -99,6 +102,6 @@ def openai_adapter_status() -> dict[str, Any]:
         "skill_names": list(BUNDLED_SKILL_NAMES),
         "reason": (
             "OpenAI Agents SDK execution is intentionally not implemented in "
-            "Pertura 0.2.0a5"
+            "Pertura 0.2.0a7"
         ),
     }

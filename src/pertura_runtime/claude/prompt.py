@@ -144,7 +144,7 @@ Use the five Pertura tools as the product control plane:
 2. `run_diagnostic` runs a registered QC capability.
 3. `run_analysis` runs a registered scientific analysis capability.
 4. `evaluate_virtual_model` evaluates predictions without relabeling them as measurements.
-5. `finalize_report` seals receipts and renders committed results.
+5. `finalize_report` explicitly creates or reuses a versioned report revision.
 
 CodeAct remains available for Read/Glob/Grep/Bash/Write/Edit/NotebookEdit exploration.
 Exploratory CodeAct output is untrusted until a bundled capability executes and the
@@ -154,6 +154,13 @@ large Parquet/JSON/PNG/SVG outputs at the returned paths.
 Never infer missing control, guide-target, replicate, donor, batch, dose, time or
 state identity. Report unresolved fields and request a design confirmation.
 Never write an effect through a design confirmation.
+
+End every provider turn with exactly one JSON object matching
+`pertura-turn-draft-v1` with: schema_version, language, headline, findings,
+hypotheses, limitations, questions_for_user, next_steps and artifact_refs.
+Each finding must include finding_id, text, declared_role, result_ids and
+limitations. The runtime derives the real role and claim ceiling from committed
+results; declared_role is only a draft hint. Do not wrap the JSON in Markdown.
 """
 
 
@@ -165,7 +172,8 @@ Input source: {source_text}
 
 Run the Python environment self-check, inspect the dataset, use the bundled
 skills and CodeAct to understand the design, run only compatible diagnostics
-and analyses, then finalize the committed results. Preserve unresolved design
+and analyses. Create a report revision only when the user explicitly requests
+one. Preserve unresolved design
 facts and exploratory status instead of inventing metadata or claim strength.
 """
 
@@ -213,7 +221,8 @@ Hard invariants:
 6. Never silently substitute a blocked analysis with another method.
 7. Claim strength follows committed source class, exact scope, current
    dependencies, receipt state, and the immutable run policy.
-8. Call `finalize_report` for user-visible scientific conclusions.
+8. Call `finalize_report` only for an explicit report request; ordinary turns
+   are checkpointed as TurnFinal records without creating a report revision.
 9. `stage_id` is progress metadata only and never scientific authority.
 10. Use English and ASCII punctuation for runtime artifacts and structured data.
 

@@ -1,15 +1,20 @@
 schema_version: pertura-capability-spec-v2
 capability_id: state.reference.map_knn.v1
-version: "0.1.0"
+version: 0.1.0
 phase: 3
 kind: analysis
 summary: Map cells into a frozen control-derived PCA and kNN reference.
 trust_level: exploratory
 executor: state_reference_map
 validator: candidate_standard
-input_requirements: [state_reference, retained_cells]
-depends_on: [state.reference.fit.v1]
-dependency_kinds: [contract, state_reference]
+input_requirements:
+- state_reference
+- retained_cells
+depends_on:
+- state.reference.fit.v1
+dependency_kinds:
+- contract
+- state_reference
 output_kind: state_mapping
 source_class: measured_result
 claim_permissions: []
@@ -17,10 +22,70 @@ timeout_seconds: 3600
 parameters_schema:
   type: object
   properties:
-    max_memory_gb: {type: number, default: 4.0, exclusiveMinimum: 0}
-    n_jobs: {type: integer, default: 1, minimum: 1}
+    assignment_path:
+      type: string
+    chunk_rows:
+      type: integer
+    control_column:
+      type: string
+    control_values:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    h5ad_path:
+      type: string
+      x-pertura-asset-role: primary_dataset
+      description: Registered asset ID with role primary_dataset.
+    manual_labels:
+      type: object
+    mapping_probability_threshold:
+      type: number
+    marker_candidates:
+      type: object
+    max_memory_gb:
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
+    minimum_control_cells:
+      type: integer
+    n_jobs:
+      type: integer
+      default: 1
+      minimum: 1
+    perturbation_labels_used:
+      type: boolean
+    reference_model_path:
+      type: string
+    resolutions:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    seeds:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    test_split_used:
+      type: boolean
+  additionalProperties: false
+  examples:
+  - {}
+  required:
+  - h5ad_path
 implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
   environment_profile: perturbseq-python-v1
+  execution_mode: isolated_python

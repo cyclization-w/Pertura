@@ -84,9 +84,17 @@ class CapabilityRegistry:
         include_deprecated: bool = False,
     ) -> list[CapabilitySummary]:
         specs = sorted(self._specs.values(), key=lambda item: (item.phase, item.capability_id, item.version))
+        superseded_ids = {
+            str(spec.metadata.get("supersedes_placeholder"))
+            for spec in specs
+            if spec.metadata.get("supersedes_placeholder")
+        }
         result = []
         for spec in specs:
-            if bool(spec.metadata.get("deprecated", False)) and not include_deprecated:
+            if not include_deprecated and (
+                bool(spec.metadata.get("deprecated", False))
+                or spec.capability_id in superseded_ids
+            ):
                 continue
             if kind and spec.kind != kind:
                 continue

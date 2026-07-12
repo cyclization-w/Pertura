@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import json
+import os
 from pathlib import Path
+import subprocess
 from typing import Any
 
 from pertura_core import (
@@ -119,35 +122,67 @@ def _validate_standard(spec: CapabilitySpec, request: CapabilityRunRequest, cont
         raise ValueError("executor output paths and hashes do not match")
 
 
+def _lazy_executor(target: str) -> Executor:
+    module_name, attribute = target.rsplit(":", 1)
+
+    def invoke(spec, request, contract, staging):
+        module = __import__(module_name, fromlist=[attribute])
+        return getattr(module, attribute)(spec, request, contract, staging)
+
+    invoke.__name__ = f"lazy_{attribute}"
+    return invoke
+
+
+_EXECUTOR_TARGETS = {
+    "guide_assignment_qc": "pertura_workflow.capabilities.guide_assignment:run_guide_assignment_qc",
+    "edger_pseudobulk": "pertura_workflow.capabilities.edger:run_edger_pseudobulk",
+    "target_reliability_v2": "pertura_workflow.capabilities.target_reliability:run_target_reliability_v2",
+    "state_reference": "pertura_workflow.capabilities.state_reference:run_state_reference",
+    "gmt_import": "pertura_workflow.capabilities.modules:run_gmt_import",
+    "nmf_modules": "pertura_workflow.capabilities.modules:run_nmf_modules",
+    "replicate_null_calibration": "pertura_workflow.capabilities.calibration:run_replicate_null_calibration",
+    "intake_materialize": "pertura_workflow.capabilities.intake_candidates:run_intake_materialize",
+    "dataset_integrity": "pertura_workflow.capabilities.intake_candidates:run_dataset_integrity",
+    "design_balance": "pertura_workflow.capabilities.intake_candidates:run_design_balance",
+    "guide_integrity": "pertura_workflow.capabilities.guide_candidates:run_guide_integrity",
+    "guide_nb_mixture": "pertura_workflow.capabilities.guide_candidates:run_guide_nb_mixture",
+    "guide_ambient": "pertura_workflow.capabilities.guide_candidates:run_guide_ambient",
+    "moi_doublet": "pertura_workflow.capabilities.guide_candidates:run_moi_doublet",
+    "retained_cells": "pertura_workflow.capabilities.guide_candidates:run_retained_cells",
+    "state_reference_fit": "pertura_workflow.capabilities.state_candidates:run_state_reference_fit",
+    "state_reference_map": "pertura_workflow.capabilities.state_candidates:run_state_reference_map",
+    "state_annotation_candidates": "pertura_workflow.capabilities.state_candidates:run_state_annotation_candidates",
+    "control_nmf": "pertura_workflow.capabilities.state_candidates:run_control_nmf",
+    "mixscape_responder": "pertura_workflow.capabilities.target_candidates:run_mixscape_responder",
+    "guide_efficacy": "pertura_workflow.capabilities.target_candidates:run_guide_efficacy",
+    "target_reliability_aggregate": "pertura_workflow.capabilities.target_candidates:run_target_reliability_aggregate",
+    "sceptre_association": "pertura_workflow.capabilities.effect_candidates:run_sceptre_association",
+    "propeller_composition": "pertura_workflow.capabilities.effect_candidates:run_propeller_composition",
+    "guide_target_sensitivity": "pertura_workflow.capabilities.effect_candidates:run_guide_target_sensitivity",
+    "module_global_effect": "pertura_workflow.capabilities.effect_candidates:run_module_global_effect",
+    "method_null_calibration": "pertura_workflow.capabilities.effect_candidates:run_method_null_calibration",
+    "effect_matrix_assemble": "pertura_workflow.capabilities.p4_candidates:run_effect_matrix_assemble",
+    "response_signed_nmf": "pertura_workflow.capabilities.p4_candidates:run_response_signed_nmf",
+    "perturbation_cluster": "pertura_workflow.capabilities.p4_candidates:run_perturbation_cluster",
+    "enrichment_ora": "pertura_workflow.capabilities.p4_candidates:run_enrichment_ora",
+    "enrichment_gsea_prerank": "pertura_workflow.capabilities.p4_candidates:run_enrichment_gsea_prerank",
+    "regulator_activity_ulm": "pertura_workflow.capabilities.p4_candidates:run_regulator_activity_ulm",
+    "perturbation_regulator_network": "pertura_workflow.capabilities.p4_candidates:run_perturbation_regulator_network",
+    "literature_europepmc": "pertura_workflow.capabilities.p4_candidates:run_literature_europepmc",
+    "interpretation_evidence_map": "pertura_workflow.capabilities.p4_candidates:run_interpretation_evidence_map",
+    "virtual_split_contract": "pertura_workflow.capabilities.p5_candidates:run_virtual_split_contract",
+    "virtual_prediction_ingest": "pertura_workflow.capabilities.p5_candidates:run_virtual_prediction_ingest",
+    "virtual_leakage_audit": "pertura_workflow.capabilities.p5_candidates:run_virtual_leakage_audit",
+    "virtual_baselines": "pertura_workflow.capabilities.p5_candidates:run_virtual_baselines",
+    "virtual_evaluate_comprehensive": "pertura_workflow.capabilities.p5_candidates:run_virtual_evaluate_comprehensive",
+    "design_next_panel": "pertura_workflow.capabilities.p5_candidates:run_design_next_panel",
+}
+
 _EXECUTORS: dict[str, Executor] = {
     "contract_integrity": _contract_integrity,
-    "guide_assignment_qc": __import__("pertura_workflow.capabilities.guide_assignment", fromlist=["run_guide_assignment_qc"]).run_guide_assignment_qc,
-    "edger_pseudobulk": __import__("pertura_workflow.capabilities.edger", fromlist=["run_edger_pseudobulk"]).run_edger_pseudobulk,
-    "target_reliability_v2": __import__("pertura_workflow.capabilities.target_reliability", fromlist=["run_target_reliability_v2"]).run_target_reliability_v2,
-    "state_reference": __import__("pertura_workflow.capabilities.state_reference", fromlist=["run_state_reference"]).run_state_reference,
-    "gmt_import": __import__("pertura_workflow.capabilities.modules", fromlist=["run_gmt_import"]).run_gmt_import,
-    "nmf_modules": __import__("pertura_workflow.capabilities.modules", fromlist=["run_nmf_modules"]).run_nmf_modules,
-    "replicate_null_calibration": __import__("pertura_workflow.capabilities.calibration", fromlist=["run_replicate_null_calibration"]).run_replicate_null_calibration,
-    "intake_materialize": __import__("pertura_workflow.capabilities.intake_candidates", fromlist=["run_intake_materialize"]).run_intake_materialize,
-    "dataset_integrity": __import__("pertura_workflow.capabilities.intake_candidates", fromlist=["run_dataset_integrity"]).run_dataset_integrity,
-    "design_balance": __import__("pertura_workflow.capabilities.intake_candidates", fromlist=["run_design_balance"]).run_design_balance,
-    "guide_integrity": __import__("pertura_workflow.capabilities.guide_candidates", fromlist=["run_guide_integrity"]).run_guide_integrity,
-    "guide_nb_mixture": __import__("pertura_workflow.capabilities.guide_candidates", fromlist=["run_guide_nb_mixture"]).run_guide_nb_mixture,
-    "guide_ambient": __import__("pertura_workflow.capabilities.guide_candidates", fromlist=["run_guide_ambient"]).run_guide_ambient,
-    "moi_doublet": __import__("pertura_workflow.capabilities.guide_candidates", fromlist=["run_moi_doublet"]).run_moi_doublet,
-    "retained_cells": __import__("pertura_workflow.capabilities.guide_candidates", fromlist=["run_retained_cells"]).run_retained_cells,
-    "state_reference_fit": __import__("pertura_workflow.capabilities.state_candidates", fromlist=["run_state_reference_fit"]).run_state_reference_fit,
-    "state_reference_map": __import__("pertura_workflow.capabilities.state_candidates", fromlist=["run_state_reference_map"]).run_state_reference_map,
-    "state_annotation_candidates": __import__("pertura_workflow.capabilities.state_candidates", fromlist=["run_state_annotation_candidates"]).run_state_annotation_candidates,
-    "control_nmf": __import__("pertura_workflow.capabilities.state_candidates", fromlist=["run_control_nmf"]).run_control_nmf,
-    "mixscape_responder": __import__("pertura_workflow.capabilities.target_candidates", fromlist=["run_mixscape_responder"]).run_mixscape_responder,
-    "guide_efficacy": __import__("pertura_workflow.capabilities.target_candidates", fromlist=["run_guide_efficacy"]).run_guide_efficacy,
-    "target_reliability_aggregate": __import__("pertura_workflow.capabilities.target_candidates", fromlist=["run_target_reliability_aggregate"]).run_target_reliability_aggregate,
-    "sceptre_association": __import__("pertura_workflow.capabilities.effect_candidates", fromlist=["run_sceptre_association"]).run_sceptre_association,
-    "propeller_composition": __import__("pertura_workflow.capabilities.effect_candidates", fromlist=["run_propeller_composition"]).run_propeller_composition,
-    "guide_target_sensitivity": __import__("pertura_workflow.capabilities.effect_candidates", fromlist=["run_guide_target_sensitivity"]).run_guide_target_sensitivity,
-    "module_global_effect": __import__("pertura_workflow.capabilities.effect_candidates", fromlist=["run_module_global_effect"]).run_module_global_effect,
-    "method_null_calibration": __import__("pertura_workflow.capabilities.effect_candidates", fromlist=["run_method_null_calibration"]).run_method_null_calibration,    "not_implemented": _not_implemented,
+    **{name: _lazy_executor(target) for name, target in _EXECUTOR_TARGETS.items()},
+    "not_implemented": _not_implemented,
+
 }
 def _validate_candidate(
     spec: CapabilitySpec,
@@ -180,16 +215,128 @@ def has_validator(name: str) -> bool:
     return name in _VALIDATORS
 
 
+def _profile_failure(
+    spec: CapabilitySpec,
+    request: CapabilityRunRequest,
+    message: str,
+) -> ResultEnvelope:
+    if spec.kind == "diagnostic":
+        status: DiagnosticStatus | AnalysisStatus | VirtualStatus = DiagnosticStatus.blocked
+    elif spec.kind == "virtual":
+        status = VirtualStatus.out_of_scope
+    else:
+        status = AnalysisStatus.blocked
+    return _base_envelope(
+        spec,
+        request,
+        status=status,
+        summary=f"{spec.capability_id} could not execute in its locked environment.",
+        blockers=(message,),
+        metadata={
+            "validation_status": str(spec.metadata.get("validation_status") or ""),
+            "candidate": spec.trust_level.value == "exploratory",
+            "environment_execution": "isolated_profile_failed",
+        },
+    )
+
+
+def _execute_in_profile(
+    spec: CapabilitySpec,
+    request: CapabilityRunRequest,
+    contract: DatasetContract,
+    staging: Path,
+    runtime_context: dict[str, Any],
+) -> ResultEnvelope:
+    from pertura_workflow.environment import environment_prefix, micromamba_path
+
+    profile = str(spec.metadata.get("environment_profile") or "")
+    binary, prefix = micromamba_path(), environment_prefix(profile)
+    if not binary.is_file() or not prefix.is_dir():
+        return _profile_failure(spec, request, f"required environment is unavailable: {profile}")
+    runner = Path(__file__).with_name("runners") / "environment_worker.py"
+    result_path = staging / "_environment_result.json"
+    config_path = staging / "_environment_request.json"
+    config = {
+        "schema_version": "pertura-environment-worker-v1",
+        "spec": spec.model_dump(mode="json"),
+        "request": request.model_dump(mode="json"),
+        "contract": contract.model_dump(mode="json"),
+        "staging_dir": str(staging.resolve()),
+        "result_path": str(result_path.resolve()),
+        "runtime_context": runtime_context,
+    }
+    config_path.write_text(json.dumps(config, sort_keys=True), encoding="utf-8")
+    env = {
+        key: os.environ[key]
+        for key in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP", "HOME", "USERPROFILE", "PATH")
+        if key in os.environ
+    }
+    source_root = str(Path(__file__).resolve().parents[2])
+    env["PYTHONPATH"] = source_root
+    try:
+        completed = subprocess.run(
+            [
+                str(binary), "run", "--prefix", str(prefix),
+                "python", str(runner), str(config_path),
+            ],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=spec.timeout_seconds,
+            check=False,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return _profile_failure(spec, request, f"{profile} worker failed: {exc}")
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout)[-2000:]
+        return _profile_failure(spec, request, f"{profile} worker failed: {detail}")
+    if not result_path.is_file():
+        return _profile_failure(spec, request, f"{profile} worker returned no result")
+    try:
+        result = ResultEnvelope.model_validate_json(result_path.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as exc:
+        return _profile_failure(spec, request, f"{profile} worker result is invalid: {exc}")
+    metadata = dict(result.metadata)
+    metadata["environment_execution"] = "isolated_profile"
+    metadata["environment_profile"] = profile
+    return result.model_copy(update={"metadata": metadata})
+
+
 def execute_capability(
     spec: CapabilitySpec,
     request: CapabilityRunRequest,
     contract: DatasetContract,
     staging_dir: str | Path,
+    *,
+    runtime_context: dict[str, Any] | None = None,
 ) -> ResultEnvelope:
+    from pertura_workflow.capabilities.execution_context import bind_execution_context
+
     if not spec.implemented:
         executor = _not_implemented
     else:
         executor = _EXECUTORS[spec.executor]
-    result = executor(spec, request, contract, Path(staging_dir))
+    context = dict(runtime_context or {})
+    isolated = spec.metadata.get("execution_mode") == "isolated_python"
+    inside_worker = bool(context.get("inside_environment_worker"))
+    enforce_isolation = bool(context.get("enforce_environment_execution"))
+    with bind_execution_context(context):
+        if isolated and enforce_isolation and not inside_worker:
+            result = _execute_in_profile(
+                spec, request, contract, Path(staging_dir), context,
+            )
+        else:
+            result = executor(spec, request, contract, Path(staging_dir))
+            if isolated:
+                metadata = dict(result.metadata)
+                metadata["environment_execution"] = (
+                    "isolated_profile" if inside_worker else "in_process_test_only"
+                )
+                metadata["environment_profile"] = str(
+                    spec.metadata.get("environment_profile") or ""
+                )
+                result = result.model_copy(update={"metadata": metadata})
     _VALIDATORS[spec.validator](spec, request, contract, result)
     return result

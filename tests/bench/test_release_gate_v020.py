@@ -4,6 +4,7 @@ import tomllib
 from pathlib import Path
 
 from pertura_bench import release_gate
+from pertura_bench.capability_bench import coverage_matrix
 from pertura_bench.release_gate import (
     EXPECTED_GITATTRIBUTES,
     _attribute_rules,
@@ -15,7 +16,7 @@ from pertura_bench.release_gate import (
 )
 
 
-def test_release_audit_v3_separates_repository_runtime_fixture_and_real_state(
+def test_release_audit_v4_separates_product_runtime_fixture_and_real_state(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("PERTURA_CACHE_DIR", str(tmp_path / "empty-cache"))
@@ -29,7 +30,13 @@ def test_release_audit_v3_separates_repository_runtime_fixture_and_real_state(
     assert checks["dashboard_production_bundle"]["passed"] is True
     assert checks["candidate_case_catalog"]["passed"] is True
     assert checks["server_plan_no_manual_placeholders"]["passed"] is True
-    assert audit["schema_version"] == "pertura-release-audit-v3"
+    assert audit["schema_version"] == "pertura-release-audit-v4"
+    assert audit["project_lifecycle_ready"] is True
+    assert audit["asset_registry_ready"] is True
+    assert audit["conversation_turn_ready"] is True
+    assert audit["report_revision_ready"] is True
+    assert audit["local_agent_protocol_ready"] is checks["local_agent_workflow_protocol"]["passed"]
+    assert audit["real_agent_behavior_ready"] is False
     repository_checks = [
         item["passed"] for item in audit["checks"] if item["category"] == "repository"
     ]
@@ -52,7 +59,10 @@ def test_release_audit_v3_separates_repository_runtime_fixture_and_real_state(
     assert audit["build_version"] == str(project["project"]["version"])
     assert audit["runtime_spine_ready"] is True
     assert audit["code_ready"] is True
-    assert audit["local_fixture_ready"] is True
+    assert audit["local_fixture_ready"] is (
+        coverage_matrix().local_fixture_ready
+        and audit["local_agent_protocol_ready"]
+    )
     assert audit["optional_environment_ready"] is False
     assert audit["real_benchmark_ready"] is False
     assert audit["release_ready"] is False

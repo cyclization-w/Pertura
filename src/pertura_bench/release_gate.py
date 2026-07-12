@@ -379,11 +379,66 @@ def audit_v020(
             ),
         )
     )
+    from pertura_runtime.parameter_protocol import parameter_protocol_complete
+    from pertura_workflow.capabilities import CapabilityRegistry
+    parameter_incomplete = [
+        item.capability_id
+        for item in CapabilityRegistry.load_default(include_external=False).specs()
+        if not parameter_protocol_complete(item)
+    ]
+    checks.append(
+        ReleaseCheck(
+            "capability_parameter_protocol",
+            not parameter_incomplete,
+            f"incomplete parameter schemas: {parameter_incomplete}",
+            "code",
+        )
+    )
+    project_files = (
+        root / "src/pertura_runtime/project/models.py",
+        root / "src/pertura_runtime/project/store.py",
+        root / "src/pertura_runtime/project/assets.py",
+        root / "src/pertura_runtime/project/lifecycle.py",
+    )
+    checks.append(
+        ReleaseCheck(
+            "project_lifecycle_kernel",
+            all(path.is_file() for path in project_files),
+            "ProjectStore, asset registry and turn checkpoint kernel are packaged",
+            "code",
+        )
+    )
+    from pertura_bench.agent_execution import agent_execution_bundle_hash, load_agent_cases
+    local_agent_path = root / "src/pertura_bench/cases/agent_workflow_verdicts.v1.json"
+    local_agent_payload = (
+        json.loads(local_agent_path.read_text(encoding="utf-8"))
+        if local_agent_path.is_file()
+        else {}
+    )
+    current_agent_case_hash = canonical_hash([
+        item.model_dump(mode="json") for item in load_agent_cases()
+    ])
+    local_agent_verdicts = local_agent_payload.get("verdicts") or []
+    current_agent_execution_hash = agent_execution_bundle_hash(root)
+    local_agent_ready = (
+        local_agent_payload.get("case_catalog_hash") == current_agent_case_hash
+        and local_agent_payload.get("execution_bundle_hash") == current_agent_execution_hash
+        and len(local_agent_verdicts) == 12
+        and all(item.get("status") == "passed" for item in local_agent_verdicts)
+    )
+    checks.append(
+        ReleaseCheck(
+            "local_agent_workflow_protocol",
+            local_agent_ready,
+            f"{sum(item.get('status') == 'passed' for item in local_agent_verdicts)}/12 deterministic cases passed; execution bundle current={local_agent_payload.get('execution_bundle_hash') == current_agent_execution_hash}",
+            "fixture",
+        )
+    )
     case_validation = validate_cases()
     checks.append(
         ReleaseCheck(
             "candidate_case_catalog",
-            bool(case_validation["ok"]) and case_validation["case_count"] == 120,
+            bool(case_validation["ok"]) and case_validation["case_count"] == 210,
             f"{case_validation['case_count']} cases; problems: {case_validation['problems']}",
             "code",
         )
@@ -400,6 +455,17 @@ def audit_v020(
     )
 
     capability_matrix = coverage_matrix(root)
+    from pertura_bench.capability_audit import audit_capabilities
+
+    capability_audit = audit_capabilities(root)
+    checks.append(
+        ReleaseCheck(
+            "capability_static_audit",
+            bool(capability_audit["passed"]),
+            f"{capability_audit['capability_count']} capabilities; findings: {capability_audit['findings']}",
+            "code",
+        )
+    )
     checks.append(
         ReleaseCheck(
             "candidate_capability_code",
@@ -425,12 +491,39 @@ def audit_v020(
         )
     )
 
+    server_agent_catalog = json.loads(
+        (root / "src/pertura_bench/cases/server_agent_cases.v1.json").read_text(encoding="utf-8")
+    )
+    agent_verdict_root = root / "benchmarks" / "verdicts" / "agent"
+    real_agent_verdicts = []
+    for case in server_agent_catalog["cases"]:
+        path = agent_verdict_root / f"{case['case_id']}.json"
+        if path.is_file():
+            try:
+                real_agent_verdicts.append(json.loads(path.read_text(encoding="utf-8")))
+            except json.JSONDecodeError:
+                pass
+    real_agent_behavior_ready = (
+        len(real_agent_verdicts) == len(server_agent_catalog["cases"])
+        and all(item.get("status") == "passed" and item.get("judge_status") == "passed" for item in real_agent_verdicts)
+    )
+    checks.append(
+        ReleaseCheck(
+            "real_agent_workflow_verdicts",
+            real_agent_behavior_ready,
+            f"{sum(item.get('status') == 'passed' for item in real_agent_verdicts)}/{len(server_agent_catalog['cases'])} server agent cases passed with deepseek-v4-pro grades",
+            "real_agent",
+        )
+    )
+
     environment_profiles = (
         "edger-v1",
         "sceptre-v1",
         "composition-v1",
         "perturbseq-python-v1",
         "python-science-v1",
+        "interpretation-v1",
+        "virtual-eval-v1",
     )
     environments: dict[str, dict[str, Any]] = {}
     for profile in environment_profiles:
@@ -499,6 +592,9 @@ def audit_v020(
     real_benchmark_ready = all(
         item.passed for item in checks if item.category == "real"
     )
+    real_agent_behavior_ready = all(
+        item.passed for item in checks if item.category == "real_agent"
+    )
     release_specific_ready = all(
         item.passed for item in checks if item.category == "release"
     )
@@ -510,12 +606,19 @@ def audit_v020(
             local_fixture_ready,
             optional_environment_ready,
             real_benchmark_ready,
+            real_agent_behavior_ready,
             release_specific_ready,
         )
     )
     remaining: list[str] = []
+    if not local_agent_ready:
+        remaining.append(
+            "local agent workflow verdicts must be regenerated for the current execution bundle"
+        )
     if not real_benchmark_ready:
         remaining.append("real-data artifact locks, subsets, and capability verdicts")
+    if not real_agent_behavior_ready:
+        remaining.append("8 real agent workflow verdicts and deepseek-v4-pro narrative grades")
     if "crispri_screen_v1.yaml" not in profiles:
         remaining.append("expert-adjudicated CRISPRi profile")
     if "crispra_screen_v1.yaml" not in profiles:
@@ -525,16 +628,22 @@ def audit_v020(
             "optional scientific environments not installed on this machine"
         )
     return {
-        "schema_version": "pertura-release-audit-v3",
+        "schema_version": "pertura-release-audit-v4",
         "target_version": "0.2.0",
         "build_version": build_version,
         "repository_ready": repository_ready,
         "runtime_spine_ready": runtime_spine_ready,
+        "project_lifecycle_ready": all(path.is_file() for path in project_files),
+        "asset_registry_ready": (root / "src/pertura_runtime/project/assets.py").is_file(),
+        "conversation_turn_ready": (root / "src/pertura_runtime/project/lifecycle.py").is_file(),
+        "report_revision_ready": (root / "src/pertura_runtime/project/models.py").is_file(),
         "code_ready": code_ready,
         "local_fixture_ready": local_fixture_ready,
+        "local_agent_protocol_ready": local_agent_ready,
         "optional_environment_ready": optional_environment_ready,
         "local_environment_ready": optional_environment_ready,
         "real_benchmark_ready": real_benchmark_ready,
+        "real_agent_behavior_ready": real_agent_behavior_ready,
         "skill_bundle_ready": bool(skill_state["skill_bundle_ready"]),
         "claude_skill_adapter_ready": bool(
             skill_state["claude_skill_adapter_ready"]

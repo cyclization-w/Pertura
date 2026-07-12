@@ -19,6 +19,13 @@ class DashboardConfirmation(BaseModel):
     rationale: str
 
 
+class DashboardAssetRegistration(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    path: str
+    role: str
+    kind: str
+
+
 def create_dashboard_app(runtime: PerturaProductRuntime):
     try:
         from fastapi import FastAPI, HTTPException
@@ -33,18 +40,58 @@ def create_dashboard_app(runtime: PerturaProductRuntime):
     async def run_projection() -> dict[str, Any]:
         contract_path = runtime.workspace.artifacts_dir / "dataset_contract.latest.json"
         contract = json.loads(contract_path.read_text(encoding="utf-8")) if contract_path.exists() else None
-        authority = runtime.read_authority_projection(runtime.workspace.root.name)
+        authority = runtime.read_authority_projection(runtime.run_id)
         results = [item["result"] for item in authority.get("committed", ())]
-        report_path = runtime.workspace.reports_dir / "capability_report.md"
+        report_path = runtime.workspace.reports_dir / "latest.md"
+        if not report_path.exists():
+            report_path = runtime.workspace.reports_dir / "capability_report.md"
+        project = runtime.project_workspace
+        project_payload = None
+        assets = []
+        conversations = []
+        report_revisions = []
+        if project is not None:
+            project_record = project.store.get_project(project.project.project_id) or project.project
+            project_payload = project_record.model_dump(mode="json")
+            assets = [item.model_dump(mode="json") for item in project.store.list_assets(project_record.project_id)]
+            conversations = [
+                item.model_dump(mode="json") | {
+                    "turns": [turn.model_dump(mode="json") for turn in project.store.list_turns(item.conversation_id)]
+                }
+                for item in project.store.list_conversations(project_record.project_id)
+                if item.run_id == runtime.run_id
+            ]
+            report_revisions = [item.model_dump(mode="json") for item in project.store.list_report_revisions(runtime.run_id)]
         return {
-            "run_id": runtime.workspace.root.name,
+            "project": project_payload,
+            "assets": assets,
+            "conversations": conversations,
+            "report_revisions": report_revisions,
+            "run_id": runtime.run_id,
             "authority": authority,
             "contract": contract,
             "results": results,
             "phases": _phase_projection(results),
             "target_failure_queue": [item for item in results if item["result_kind"] == "target_reliability" and item["status"] != "screen_passed"],
+            "interpretation_results": [
+                item for item in results
+                if item.get("result_kind") in {
+                    "effect_matrix", "response_programs", "perturbation_clusters",
+                    "pathway_enrichment_ora", "pathway_enrichment_gsea",
+                    "regulator_activity", "perturbation_regulator_network",
+                    "literature_prior", "interpretation_evidence_map",
+                }
+            ],
+            "virtual_results": [
+                item for item in results
+                if item.get("result_kind") in {
+                    "virtual_split_contract", "prediction_bundle",
+                    "virtual_leakage_audit", "virtual_baselines",
+                    "virtual_evaluation", "next_panel_design",
+                }
+            ],
             "report": report_path.read_text(encoding="utf-8") if report_path.exists() else None,
-            "permissions": {"can_run": False, "can_retry": False, "can_cancel": False, "can_confirm_design": True},
+            "permissions": {"can_run": False, "can_retry": False, "can_cancel": False, "can_confirm_design": True, "can_register_asset": project is not None},
         }
 
     @app.get("/api/events")
@@ -52,7 +99,7 @@ def create_dashboard_app(runtime: PerturaProductRuntime):
         async def stream():
             cursor = after
             while True:
-                items = runtime.read_authority_events(runtime.workspace.root.name, after=cursor)
+                items = runtime.read_authority_events(runtime.run_id, after=cursor)
                 for item in items:
                     cursor = max(cursor, int(item["sequence"]))
                     yield f"id: {cursor}\nevent: {item['event_type']}\ndata: {json.dumps(item, ensure_ascii=False)}\n\n"
@@ -63,7 +110,7 @@ def create_dashboard_app(runtime: PerturaProductRuntime):
 
     @app.post("/runs/{run_id}/confirmations")
     async def confirmation(run_id: str, body: DashboardConfirmation) -> dict[str, Any]:
-        if run_id != runtime.workspace.root.name:
+        if run_id != runtime.run_id:
             raise HTTPException(status_code=404, detail="run not found")
         allowed = {"control", "guide_target", "replicate", "state_label", "donor", "batch"}
         if body.field not in allowed:
@@ -74,6 +121,19 @@ def create_dashboard_app(runtime: PerturaProductRuntime):
             return runtime.confirm_design(body.contract_id, {body.field: body.value})
         except (ValueError, FileNotFoundError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/projects/{project_id}/assets")
+    async def register_asset(project_id: str, body: DashboardAssetRegistration) -> dict[str, Any]:
+        project = runtime.project_workspace
+        if project is None or project_id != project.project.project_id:
+            raise HTTPException(status_code=404, detail="project not found")
+        if body.kind not in {"observed", "external_resource", "exploratory", "derived"}:
+            raise HTTPException(status_code=422, detail="invalid asset kind")
+        try:
+            asset = runtime.asset_registry.register(Path(body.path), role=body.role, kind=body.kind)
+        except (ValueError, FileNotFoundError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return asset.model_dump(mode="json")
 
     static = Path(__file__).resolve().parent / "dashboard_static"
     if static.is_dir():
@@ -139,6 +199,20 @@ def _phase_projection(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         "effect_sensitivity": 5,
         "module_global_effect": 5,
         "method_null_calibration": 5,
+        "effect_matrix": 6,
+        "response_programs": 6,
+        "perturbation_clusters": 6,
+        "pathway_enrichment_ora": 6,
+        "pathway_enrichment_gsea": 6,
+        "regulator_activity": 6,
+        "perturbation_regulator_network": 6,
+        "literature_prior": 6,
+        "interpretation_evidence_map": 6,
+        "virtual_split_contract": 7,
+        "prediction_bundle": 7,
+        "virtual_leakage_audit": 7,
+        "virtual_baselines": 7,
+        "next_panel_design": 7,
     }
     by_phase: dict[int, list[dict[str, Any]]] = {}
     for result in results:

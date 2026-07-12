@@ -25,6 +25,7 @@ from pertura_core import (
     DiagnosticStatus,
     ResultEnvelope,
     ScopeKey,
+    VirtualStatus,
 )
 from pertura_core.hashing import canonical_hash, file_sha256
 from pertura_workflow.capabilities import CapabilityRegistry
@@ -50,6 +51,21 @@ _RUNNER_MODULES = {
     "guide_target_sensitivity": "effect_candidates.py",
     "module_global_effect": "effect_candidates.py",
     "method_null_calibration": "effect_candidates.py",
+    "effect_matrix_assemble": "p4_candidates.py",
+    "response_signed_nmf": "p4_candidates.py",
+    "perturbation_cluster": "p4_candidates.py",
+    "enrichment_ora": "p4_candidates.py",
+    "enrichment_gsea_prerank": "p4_candidates.py",
+    "regulator_activity_ulm": "p4_candidates.py",
+    "perturbation_regulator_network": "p4_candidates.py",
+    "literature_europepmc": "p4_candidates.py",
+    "interpretation_evidence_map": "p4_candidates.py",
+    "virtual_split_contract": "p5_candidates.py",
+    "virtual_prediction_ingest": "p5_candidates.py",
+    "virtual_leakage_audit": "p5_candidates.py",
+    "virtual_baselines": "p5_candidates.py",
+    "virtual_evaluate_comprehensive": "p5_candidates.py",
+    "design_next_panel": "p5_candidates.py",
 }
 
 
@@ -555,6 +571,129 @@ def _run_r_protocol_adapter(
     return parsed
 
 
+def _run_p4_external_protocol_adapter(
+    case: CapabilityBenchmarkCase,
+    spec: Any,
+    root: Path,
+) -> ResultEnvelope:
+    import subprocess
+    from unittest.mock import patch
+
+    import numpy as np
+
+    from pertura_workflow.capabilities import p4_candidates
+    from pertura_workflow.capabilities.executors import _VALIDATORS
+
+    contract = DatasetContract(
+        dataset_id="synthetic",
+        input_format="npz",
+        source_paths=(str(root),),
+        expression_matrix={"raw_counts_confirmed": True},
+    )
+    staging = root / "staging"
+    staging.mkdir(parents=True, exist_ok=True)
+    matrix = root / "effect_matrix.npz"
+    np.savez_compressed(
+        matrix,
+        effects=np.asarray([[1.0, -1.0, 0.5], [-0.5, 0.8, -1.2]]),
+        observed_mask=np.asarray([[True, True, True], [True, True, True]]),
+        perturbations=np.asarray(["P1", "P2"]),
+        features=np.asarray(["G1", "G2", "G3"]),
+    )
+    effect_result = {
+        "result_id": "effect_matrix_fixture",
+        "result_kind": "effect_matrix",
+        "local_output_paths": [str(matrix)],
+    }
+    request = _protocol_request(
+        spec,
+        contract,
+        {
+            "permutation_num": 100,
+            "min_gene_set_size": 2,
+            "max_gene_set_size": 10,
+            "minimum_targets": 2,
+        },
+    )
+    if spec.capability_id == "enrichment.gsea_prerank.v1":
+        module = root / "gmt_modules.json"
+        module.write_text(
+            json.dumps({"modules": {"SET1": ["G1", "G2", "G3"]}}),
+            encoding="utf-8",
+        )
+        effect_result["local_output_paths"].append(str(module))
+
+        def fake_profile(runner_name: str, config_path: Path, timeout: int):
+            config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+            if runner_name != "gsea_prerank_runner.py":
+                raise ValueError("wrong GSEA runner")
+            output = Path(config["output_path"])
+            if case.scenario == "blocked":
+                text = "perturbation_id,gene_set,NES,PValue\nP1,SET1,1.2,0.01\n"
+            elif case.scenario == "planted_failure":
+                text = "perturbation_id,gene_set,NES,PValue,FDR\nP1,SET1,nan,0.01,0.02\n"
+            else:
+                text = (
+                    "perturbation_id,gene_set,ES,NES,PValue,FDR\n"
+                    "P1,SET1,0.8,1.2,0.01,0.02\n"
+                )
+            output.write_text(text, encoding="utf-8")
+            return subprocess.CompletedProcess([runner_name], 0, "", "")
+
+        target = p4_candidates.run_enrichment_gsea_prerank
+    else:
+        resource_dir = root / "resource"
+        resource_dir.mkdir()
+        network = resource_dir / "collectri_human.csv"
+        network.write_text(
+            "source,target,weight\nTF1,G1,1\nTF1,G2,-1\n",
+            encoding="utf-8",
+        )
+        (staging / "_runtime_dependencies.json").write_text(
+            json.dumps({
+                "dependencies": [{
+                    "kind": "knowledge_resource",
+                    "payload": {
+                        "resource_dir": str(resource_dir),
+                        "artifacts": [{
+                            "artifact_id": "collectri_human",
+                            "relative_path": network.name,
+                        }],
+                    },
+                }]
+            }),
+            encoding="utf-8",
+        )
+
+        def fake_profile(runner_name: str, config_path: Path, timeout: int):
+            config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+            if runner_name != "ulm_runner.py":
+                raise ValueError("wrong ULM runner")
+            output = Path(config["output_path"])
+            if case.scenario == "blocked":
+                text = "perturbation_id,regulator,activity\nP1,TF1,2.0\n"
+            elif case.scenario == "planted_failure":
+                text = "perturbation_id,regulator,activity,FDR\nP1,TF1,2.0,2.0\n"
+            else:
+                text = (
+                    "perturbation_id,regulator,activity,statistic,PValue,FDR,n_targets\n"
+                    "P1,TF1,2.0,2.0,,0.02,2\n"
+                )
+            output.write_text(text, encoding="utf-8")
+            return subprocess.CompletedProcess([runner_name], 0, "", "")
+
+        target = p4_candidates.run_regulator_activity_ulm
+    (staging / "_dependency_results.json").write_text(
+        json.dumps({"results": [effect_result]}),
+        encoding="utf-8",
+    )
+    with patch.object(p4_candidates, "_run_profile", fake_profile):
+        result = target(spec, request, contract, staging)
+    parsed = ResultEnvelope.model_validate_json(result.model_dump_json())
+    _VALIDATORS[spec.validator](spec, request, contract, parsed)
+    return parsed
+
+
 def _run_generic_protocol_adapter(
     case: CapabilityBenchmarkCase,
     spec: Any,
@@ -592,6 +731,8 @@ def _run_generic_protocol_adapter(
         status=(
             DiagnosticStatus.caution
             if spec.kind == "diagnostic"
+            else VirtualStatus.limited
+            if spec.kind == "virtual"
             else AnalysisStatus.completed_with_caution
         ),
         result_kind=("planted_wrong_kind" if malformed else spec.output_kind),
@@ -627,6 +768,18 @@ def _run_protocol_fake(case: CapabilityBenchmarkCase, spec: Any) -> dict[str, An
                 parsed.model_dump(mode="json"), root / "staging"
             )
             parser_name = "production_r_config_and_output_parser"
+        elif spec.capability_id in {
+            "enrichment.gsea_prerank.v1",
+            "regulator.activity.ulm.v1",
+        }:
+            parsed = _run_p4_external_protocol_adapter(case, spec, root)
+            rejected = enum_value(parsed.status) == "blocked"
+            blocker_text = tuple(str(item) for item in parsed.blockers)
+            output_paths = tuple(parsed.output_paths)
+            output_hashes = _semantic_output_hashes(
+                parsed.model_dump(mode="json"), root / "staging"
+            )
+            parser_name = "production_python_config_and_output_parser"
         else:
             parsed, error = _run_generic_protocol_adapter(case, spec, root)
             rejected = parsed is None
@@ -667,6 +820,7 @@ def _run_protocol_fake(case: CapabilityBenchmarkCase, spec: Any) -> dict[str, An
                 "benchmark_scientific_output_hashes": output_hashes,
             },
         }
+
 
 def _enrich_benchmark_result(
     result: dict[str, Any],
@@ -1416,6 +1570,55 @@ def _fixture_parameters(
             "effect_table_path": str(
                 files["guide_effects_bad.csv"] if bad else files["guide_effects.csv"]
             )
+        }
+    if capability_id == "virtual.split.contract.v1":
+        if scenario == "blocked":
+            return {
+                "axes": {
+                    "perturbation": {
+                        "train": ["P1", "P2"],
+                        "validation": ["P3"],
+                        "test": ["P2", "P4"],
+                    }
+                },
+                "heldout_axes": ["perturbation"],
+            }
+        if scenario == "planted_failure":
+            return {
+                "axes": {
+                    "context": {
+                        "train": ["C1"],
+                        "validation": [],
+                        "test": ["C2"],
+                    }
+                },
+                "heldout_axes": ["context"],
+            }
+        if scenario == "caution_or_unresolved":
+            return {
+                "axes": {
+                    "perturbation": {
+                        "train": ["P1", "P2"],
+                        "validation": [],
+                        "test": [],
+                    }
+                },
+                "heldout_axes": [],
+            }
+        return {
+            "axes": {
+                "perturbation": {
+                    "train": ["P1", "P2"],
+                    "validation": ["P3"],
+                    "test": ["P4", "P5"],
+                },
+                "context": {
+                    "train": ["C1"],
+                    "validation": [],
+                    "test": ["C2"],
+                },
+            },
+            "heldout_axes": ["perturbation", "context"],
         }
     if capability_id == "calibration.method_null.v1":
         return {

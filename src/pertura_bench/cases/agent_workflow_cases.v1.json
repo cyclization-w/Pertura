@@ -1,0 +1,17 @@
+{
+  "schema_version": "pertura-agent-workflow-catalog-v1",
+  "cases": [
+    {"case_id":"agent_local_01_project_h5ad","scenario":"project_h5ad","description":"Initialize a project from one observed dataset asset.","tier":"deterministic_local","expected_hard_gates":["project_persisted","asset_registered"]},
+    {"case_id":"agent_local_02_gmt_asset","scenario":"gmt_asset","description":"Register a small external GMT resource.","tier":"deterministic_local","expected_hard_gates":["asset_role_preserved","path_excluded_from_identity"]},
+    {"case_id":"agent_local_03_prediction_asset","scenario":"prediction_asset","description":"Register a prediction bundle without promoting its source class.","tier":"deterministic_local","expected_hard_gates":["prediction_class_preserved"]},
+    {"case_id":"agent_local_04_needs_input","scenario":"needs_input","description":"Missing replicate identity produces a checkpointed question.","tier":"deterministic_local","expected_hard_gates":["needs_input_checkpoint","no_strong_claim"]},
+    {"case_id":"agent_local_05_resume","scenario":"resume","description":"A second turn resumes the stable provider binding.","tier":"deterministic_local","expected_hard_gates":["resume_binding_reused","history_not_duplicated"]},
+    {"case_id":"agent_local_06_stale","scenario":"contract_stale","description":"A design revision changes report content identity.","tier":"deterministic_local","expected_hard_gates":["revision_changes_digest"]},
+    {"case_id":"agent_local_07_blocked_no_fallback","scenario":"blocked_no_fallback","description":"Blocked design has no silent method fallback.","tier":"deterministic_local","expected_hard_gates":["blocked_without_result","no_fallback"]},
+    {"case_id":"agent_local_08_candidate_language","scenario":"candidate_language","description":"Candidate result is rendered below strong measured strength.","tier":"deterministic_local","expected_hard_gates":["candidate_ceiling","no_strong_claim"]},
+    {"case_id":"agent_local_09_report_idempotent","scenario":"report_idempotent","description":"Unchanged report digest reuses a revision.","tier":"deterministic_local","expected_hard_gates":["same_revision"]},
+    {"case_id":"agent_local_10_report_increment","scenario":"report_increment","description":"A valid TurnFinal change creates revision N+1.","tier":"deterministic_local","expected_hard_gates":["new_revision"]},
+    {"case_id":"agent_local_11_repair_fallback","scenario":"repair_fallback","description":"Malformed structured output repairs once then becomes a working note.","tier":"deterministic_local","expected_hard_gates":["repair_once","fallback_no_authority"]},
+    {"case_id":"agent_local_12_cancel_recover","scenario":"cancel_recover","description":"Cancellation checkpoints and releases the active-turn lock.","tier":"deterministic_local","expected_hard_gates":["cancel_checkpoint","lock_released","next_turn_started"]}
+  ]
+}

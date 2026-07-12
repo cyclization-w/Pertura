@@ -1,22 +1,80 @@
 schema_version: pertura-capability-spec-v2
 capability_id: diagnostic.guide_assignment.v1
-version: "1.0.0"
+version: 1.0.0
 phase: 2
 kind: diagnostic
-summary: Check barcode overlap, guide-map integrity, orientation, assignment posterior, ambient guides and MOI.
+summary: Check barcode overlap, guide-map integrity, orientation, assignment posterior,
+  ambient guides and MOI.
 trust_level: builtin_trusted
 executor: guide_assignment_qc
 validator: standard
-input_requirements: [dataset_contract, guide_matrix]
+input_requirements:
+- dataset_contract
+- guide_matrix
 depends_on: []
-dependency_kinds: [contract]
+dependency_kinds:
+- contract
 output_kind: guide_assignment_qc
 source_class: measured_result
 claim_permissions: []
 timeout_seconds: 900
-parameters_schema: {type: object}
+parameters_schema:
+  type: object
+  properties:
+    balance_columns:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    barcode_column:
+      type: string
+    chunk_rows:
+      type: integer
+    design_moi:
+      type: string
+    doublet_score_column:
+      type: string
+    doublet_threshold:
+      type: number
+    guide_counts_path:
+      type: string
+      x-pertura-asset-role: guide_matrix
+      description: Registered asset ID with role guide_matrix.
+    guide_map_path:
+      type: string
+      x-pertura-asset-role: guide_map
+      description: Registered asset ID with role guide_map.
+    max_memory_gb:
+      type: integer
+    metadata_barcode_column:
+      type: string
+    metadata_path:
+      type: string
+      x-pertura-asset-role: cell_metadata
+      description: Registered asset ID with role cell_metadata.
+    n_jobs:
+      type: integer
+    posterior_threshold:
+      type: number
+    raw_guide_counts_path:
+      type: string
+      x-pertura-asset-role: guide_matrix
+      description: Registered asset ID with role guide_matrix.
+    rna_barcode_column:
+      type: string
+    rna_barcodes_path:
+      type: string
+      x-pertura-asset-role: rna_barcodes
+      description: Registered asset ID with role rna_barcodes.
+  additionalProperties: false
+  examples:
+  - {}
 implemented: true
 metadata:
   deprecated: true
   compatibility_only: true
-  provides_dependency_kinds: [retained_cell_manifest]
+  provides_dependency_kinds:
+  - retained_cell_manifest

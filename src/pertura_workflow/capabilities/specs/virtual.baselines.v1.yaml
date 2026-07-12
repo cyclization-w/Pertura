@@ -1,0 +1,150 @@
+schema_version: pertura-capability-spec-v2
+capability_id: virtual.baselines.v1
+version: 0.1.0
+phase: 7
+kind: virtual
+summary: Compute mandatory control-mean, context-mean and linear-additive prediction
+  baselines.
+trust_level: exploratory
+executor: virtual_baselines
+validator: candidate_standard
+input_requirements:
+- split_contract
+- prediction_bundle
+- leakage_audit
+depends_on:
+- virtual.split.contract.v1
+- virtual.prediction.ingest.v1
+- virtual.leakage.audit.v1
+dependency_kinds:
+- virtual_split_contract
+- prediction_bundle
+- virtual_leakage_audit
+output_kind: virtual_baselines
+source_class: prediction
+claim_permissions: []
+timeout_seconds: 1800
+parameters_schema:
+  type: object
+  properties:
+    axes:
+      type: object
+    axis_columns:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    bootstrap_iterations:
+      type: integer
+    budget:
+      type: number
+    candidates:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    chunk_rows:
+      type: integer
+    collapse_distance_ratio_min:
+      type: number
+    collapse_variance_ratio_min:
+      type: number
+    control_ids:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    coverage_tolerance:
+      type: number
+    format:
+      type: string
+    heldout_axes:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    max_memory_gb:
+      type: integer
+    minimum_features:
+      type: integer
+    minimum_units:
+      type: integer
+    model_id:
+      type: string
+    model_training_ids:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    model_version:
+      type: string
+    module_reference_hash:
+      type: string
+    module_reference_training_ids:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    n_jobs:
+      type: integer
+    nominal_coverage:
+      type: number
+    observed_layer:
+      type: string
+    prediction_layer:
+      type: string
+    prediction_path:
+      type: string
+      x-pertura-asset-role: prediction_bundle
+      description: Registered asset ID with role prediction_bundle.
+    prediction_scale:
+      type: string
+    preprocessing_training_ids:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    seed:
+      type: integer
+    state_reference_hash:
+      type: string
+    state_reference_training_ids:
+      type: array
+      items:
+        type:
+        - string
+        - number
+        - integer
+        - object
+    weights:
+      type: object
+  additionalProperties: false
+  examples:
+  - {}
+implemented: true
+metadata:
+  validation_status: synthetic_only
+  candidate: true
+  environment_profile: virtual-eval-v1
+  execution_mode: isolated_python

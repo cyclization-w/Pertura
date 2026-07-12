@@ -222,6 +222,8 @@ def test_server_plan_expands_all_dimensions_and_requires_checkpoint_binding() ->
     assert plan.executable is False
     assert plan.checkpoint_binding["git_commit"] is None
     assert plan.checkpoint_binding["wheel_sha256"] is None
+    assert plan.checkpoint_binding["resource_lock_set_hash"] is None
+    assert plan.checkpoint_binding["prediction_bundle_set_hash"] is None
     assert plan.checkpoint_binding["server_plan_hash"] is None
     assert plan.checkpoint_binding["template_digest"].startswith("sha256:")
     with pytest.raises(ValueError, match="not checkpoint-bound"):
@@ -276,6 +278,8 @@ def test_server_plan_expands_all_dimensions_and_requires_checkpoint_binding() ->
         plan,
         git_commit="a" * 40,
         wheel_sha256="sha256:" + "b" * 64,
+        resource_lock_set_hash="sha256:" + "c" * 64,
+        prediction_bundle_set_hash="sha256:" + "d" * 64,
     )
     assert bound.executable is True
     assert bound.checkpoint_binding["template_digest"] == plan.checkpoint_binding[

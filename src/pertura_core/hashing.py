@@ -34,3 +34,20 @@ def file_sha256(path: str | Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return "sha256:" + digest.hexdigest()
+
+
+def path_sha256(path: str | Path) -> str:
+    """Hash a file compatibly or a directory by stable relative contents."""
+
+    root = Path(path)
+    if root.is_file():
+        return file_sha256(root)
+    if not root.is_dir():
+        raise FileNotFoundError(root)
+    digest = hashlib.sha256()
+    for item in sorted(candidate for candidate in root.rglob("*") if candidate.is_file()):
+        digest.update(item.relative_to(root).as_posix().encode("utf-8") + b"\0")
+        with item.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    return "sha256:" + digest.hexdigest()

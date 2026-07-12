@@ -42,7 +42,7 @@ def dispatch_product_tool(
         )
     if tool_name == "evaluate_virtual_model":
         return runtime.evaluate_virtual_model(
-            capability_id=payload.get("capability_id") or "virtual.evaluate.v1",
+            capability_id=payload.get("capability_id") or "virtual.evaluate.comprehensive.v1",
             contract_id=payload.get("contract_id") or None,
             scope=dict(payload.get("scope") or {}) or None,
             parameters=dict(payload.get("parameters") or {}),

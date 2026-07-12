@@ -20,12 +20,16 @@ PYTHON_PROFILE = "python-science-v1"
 PERTURBSEQ_PYTHON_PROFILE = "perturbseq-python-v1"
 SCEPTRE_PROFILE = "sceptre-v1"
 COMPOSITION_PROFILE = "composition-v1"
+INTERPRETATION_PROFILE = "interpretation-v1"
+VIRTUAL_EVAL_PROFILE = "virtual-eval-v1"
 SUPPORTED_PROFILES = (
     PROFILE,
     PYTHON_PROFILE,
     PERTURBSEQ_PYTHON_PROFILE,
     SCEPTRE_PROFILE,
     COMPOSITION_PROFILE,
+    INTERPRETATION_PROFILE,
+    VIRTUAL_EVAL_PROFILE,
 )
 MICROMAMBA_VERSION = "2.6.2-1"
 EXPECTED_EDGER_VERSIONS = {
@@ -60,6 +64,12 @@ PYTHON_PACKAGES = {
         "anndata", "scanpy", "mudata", "numpy", "pandas", "scipy",
         "scikit-learn", "igraph", "leidenalg", "pyarrow", "pertpy", "scrublet",
     ),
+    INTERPRETATION_PROFILE: (
+        "numpy", "pandas", "scipy", "scikit-learn", "pyarrow", "gseapy", "decoupler",
+    ),
+    VIRTUAL_EVAL_PROFILE: (
+        "anndata", "numpy", "pandas", "scipy", "scikit-learn", "pyarrow",
+    ),
 }
 
 
@@ -86,6 +96,8 @@ def environment_prefix(profile_name: str = PROFILE) -> Path:
         PERTURBSEQ_PYTHON_PROFILE: "PERTURA_PERTURBSEQ_PYTHON_ENV",
         SCEPTRE_PROFILE: "PERTURA_SCEPTRE_ENV",
         COMPOSITION_PROFILE: "PERTURA_COMPOSITION_ENV",
+        INTERPRETATION_PROFILE: "PERTURA_INTERPRETATION_ENV",
+        VIRTUAL_EVAL_PROFILE: "PERTURA_VIRTUAL_EVAL_ENV",
     }
     override = os.environ.get(overrides[profile_name])
     return Path(override).expanduser().resolve() if override else cache_root() / "envs" / profile_name
@@ -346,6 +358,24 @@ def _resource_hashes(profile_name: str) -> dict[str, str]:
             "runners", runner_names[profile_name]
         )
         hashes["runner"] = file_sha256(Path(str(runner)))
+    python_runner_sets = {
+        PYTHON_PROFILE: ("executors.py", "state_candidates.py", "runners/environment_worker.py"),
+        PERTURBSEQ_PYTHON_PROFILE: (
+            "executors.py", "state_candidates.py", "target_candidates.py",
+            "runners/environment_worker.py",
+        ),
+        INTERPRETATION_PROFILE: (
+            "executors.py", "p4_candidates.py", "runners/environment_worker.py",
+            "runners/gsea_prerank_runner.py", "runners/ulm_runner.py",
+        ),
+        VIRTUAL_EVAL_PROFILE: (
+            "executors.py", "p5_candidates.py", "runners/environment_worker.py",
+        ),
+    }
+    capability_root = Path(str(resources.files("pertura_workflow.capabilities")))
+    for relative in python_runner_sets.get(profile_name, ()):
+        path = capability_root / relative
+        hashes[f"python_runner:{relative}"] = file_sha256(path)
     return hashes
 
 def _minimal_env() -> dict[str, str]:
