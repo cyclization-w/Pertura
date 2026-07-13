@@ -48,7 +48,7 @@ EXPECTED_COMPOSITION_VERSIONS = {
 }
 EXPECTED_PERTURBSEQ_PYTHON_VERSIONS = {
     "anndata": "0.11.4",
-    "scanpy": "1.11.4",
+    "scanpy": "1.12.1",
     "mudata": "0.3.2",
     "igraph": "0.11.8",
     "leidenalg": "0.10.2",
@@ -84,6 +84,17 @@ PYTHON_PACKAGES = {
     ),
     VIRTUAL_EVAL_PROFILE: (
         "anndata", "numpy", "pandas", "scipy", "scikit-learn", "pyarrow",
+    ),
+}
+CONDA_PACKAGE_NAMES = {
+    "igraph": "python-igraph",
+}
+PYTHON_IMPORT_SMOKES = {
+    PERTURBSEQ_PYTHON_PROFILE: (
+        "import pertpy,scanpy,skmisc,scrublet;"
+        "from pertpy.tools import Mixscape;"
+        "Mixscape();"
+        "print('perturbseq-import-smoke-ok')"
     ),
 }
 
@@ -247,13 +258,8 @@ def doctor_environment(profile_name: str = PROFILE) -> dict[str, Any]:
                 problems.append("R package check returned an incomplete version manifest")
     elif not problems:
         package_names = PYTHON_PACKAGES[profile_name]
-        expression = (
-            "import importlib.metadata as m,json;"
-            f"names={list(package_names)!r};"
-            "print(json.dumps({n:m.version(n) for n in names},sort_keys=True))"
-        )
         completed = subprocess.run(
-            [str(binary), "run", "--prefix", str(prefix), "python", "-c", expression],
+            [str(binary), "list", "--json", "--prefix", str(prefix)],
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -263,13 +269,33 @@ def doctor_environment(profile_name: str = PROFILE) -> dict[str, Any]:
             env=_minimal_env(),
         )
         if completed.returncode != 0:
-            problems.append("Python scientific package check failed: " + completed.stderr.strip()[-1000:])
+            problems.append(
+                "Python scientific package inventory failed: "
+                + completed.stderr.strip()[-1000:]
+            )
         else:
             try:
-                versions = json.loads(completed.stdout.splitlines()[-1])
-            except (json.JSONDecodeError, IndexError):
-                problems.append("Python scientific package check returned an invalid version manifest")
+                package_inventory = json.loads(completed.stdout)
+                installed = {
+                    str(item["name"]).lower(): str(item["version"])
+                    for item in package_inventory
+                    if isinstance(item, dict)
+                    and item.get("name")
+                    and item.get("version")
+                }
+                versions = {
+                    name: installed[CONDA_PACKAGE_NAMES.get(name, name).lower()]
+                    for name in package_names
+                    if CONDA_PACKAGE_NAMES.get(name, name).lower() in installed
+                }
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                problems.append(
+                    "Python scientific package inventory returned invalid JSON"
+                )
             else:
+                for name in package_names:
+                    if name not in versions:
+                        problems.append(f"Python scientific package is missing: {name}")
                 for name, required in PYTHON_EXPECTED_VERSIONS.get(
                     profile_name, {}
                 ).items():
@@ -277,6 +303,26 @@ def doctor_environment(profile_name: str = PROFILE) -> dict[str, Any]:
                         problems.append(
                             f"expected {name} {required}, found {versions.get(name)}"
                         )
+        smoke_expression = PYTHON_IMPORT_SMOKES.get(profile_name)
+        if smoke_expression:
+            smoke = subprocess.run(
+                [
+                    str(binary), "run", "--prefix", str(prefix),
+                    "python", "-c", smoke_expression,
+                ],
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=120,
+                check=False,
+                env=_minimal_env(),
+            )
+            if smoke.returncode != 0:
+                detail = (smoke.stderr or smoke.stdout).strip()[-2000:]
+                problems.append(
+                    "Perturb-seq Python API compatibility check failed: " + detail
+                )
     manifest_path = prefix / "pertura-environment-manifest.json"
     lock_hash = None
     if not problems or prefix.is_dir():

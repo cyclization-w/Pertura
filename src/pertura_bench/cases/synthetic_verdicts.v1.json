@@ -1195,7 +1195,7 @@
       "verdict_id": "capbenchverdict_9fdcce80f2fa6db88eb5"
     },
     {
-      "canonical_hash": "sha256:ef5651f2ea43b163aefbb2cb5bda3db12cf2914ac78f3ebdf1eb1784e6f212e8",
+      "canonical_hash": "sha256:55f8b942dc43f1258407cc13c6c8c985f63fd10771e914aa82a72b9b18fec7c3",
       "capability_id": "diagnostic.dataset_integrity.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:23412d01ebad61c12b32ba5eb165af3c1e6b3f710b0eae3baae8abcab8a56e72",
@@ -1255,7 +1255,7 @@
       "observed_status": "screen_passed",
       "outcome": "passed",
       "output_hashes": {
-        "dataset_integrity.json": "sha256:1f9f86dd03942558440a95b87746f62f58435f678b93e5f36275563ae432e4e9"
+        "dataset_integrity.json": "sha256:b027476d9e086ed3343ba8dfcec37992885f73cdc40c06913ffbf89082127610"
       },
       "peak_memory_mb": null,
       "reasons": [],
@@ -1264,10 +1264,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:03bc0bd1a450393b7a57a33bdf2c39089e5f13ff58789e8ef99cdecfaf309b50",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_678a965ae8ab38fb60ef"
+      "verdict_id": "capbenchverdict_0f841169ebf92e342a25"
     },
     {
-      "canonical_hash": "sha256:f8fe98049f0ec3ca141e189285710db72705c8033169a1b91f51f7bf54a01e85",
+      "canonical_hash": "sha256:dc8ff63fd53f1fdf47c30a4f9ac29529d8eaba3577e9dc011c1503ffe71daa94",
       "capability_id": "diagnostic.dataset_integrity.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:16a33483c9c4c2c46dc10f084832adcf1d4b28bc65f9f7eab689e139c94723da",
@@ -1307,7 +1307,7 @@
       "observed_status": "caution",
       "outcome": "passed",
       "output_hashes": {
-        "dataset_integrity.json": "sha256:5cc92096ab06fa45d45ce42292e6f3206c7c79dd2a76d4f895098a80bfadc43e"
+        "dataset_integrity.json": "sha256:abcda8e94aa8501bbf510d9bf5b969a6913e172d35c614a2df1f59dfac6fcbf0"
       },
       "peak_memory_mb": null,
       "reasons": [],
@@ -1316,10 +1316,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:d8f61bf0acfb367add7f24247a1fd4ec2b96a0e00c031200baceb255c9c1d3ac",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_1ab519fa8bf5efb8487d"
+      "verdict_id": "capbenchverdict_7d833c1bc23cb58f130a"
     },
     {
-      "canonical_hash": "sha256:4f6a83018a571f84ca53272e719d4cf966fc5f3a060cb1451a27b27703e313ad",
+      "canonical_hash": "sha256:51a5178a080f12af568ffeaf1e4c46e77c68c94c34e25d9239684ec0a73bf24f",
       "capability_id": "diagnostic.dataset_integrity.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:6ee98cb7ffa49ad5320f3e47d717baec91d16a47fb53d20f5a07b801a6f076c6",
@@ -1351,7 +1351,7 @@
       "observed_status": "blocked",
       "outcome": "passed",
       "output_hashes": {
-        "dataset_integrity.json": "sha256:5c1ff7d326560c121dea25a337c823362552fcbcd73dc67a66b9db6e96418cef"
+        "dataset_integrity.json": "sha256:88938ca7cb80d9b611bb6a5e70983a3276979844fc8990459a3473eac86180bf"
       },
       "peak_memory_mb": null,
       "reasons": [],
@@ -1360,10 +1360,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:adbf6461cddba8748c90439c0a8762af5ce207688e152c4570c3084970b1c7fe",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_1936afccf3fd1f53f978"
+      "verdict_id": "capbenchverdict_738ebdf37c0d07a056e5"
     },
     {
-      "canonical_hash": "sha256:bd4525f8e54a0bb10e4077422abe5d6d2a8d861da4dbfe13641580ee1836575b",
+      "canonical_hash": "sha256:157389903e358f1658aabdb5e4c8d6cea03ca919c9613177050ebaf608889bcf",
       "capability_id": "diagnostic.dataset_integrity.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:8c6ebe0f1fd792e735ac9930acb695d6d0e928ec32ede551109e12c158fd86b4",
@@ -1395,7 +1395,7 @@
       "observed_status": "blocked",
       "outcome": "passed",
       "output_hashes": {
-        "dataset_integrity.json": "sha256:7e29489c412e119b8a6edd32904be4bb6ba5b0bc469e7351fb1e840870c14ebb"
+        "dataset_integrity.json": "sha256:10b82830cfe7d3de29d59648a397bdc5a741feb879f502c91d545fab49a0a960"
       },
       "peak_memory_mb": null,
       "reasons": [],
@@ -1404,10 +1404,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:adbf6461cddba8748c90439c0a8762af5ce207688e152c4570c3084970b1c7fe",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_ea0d9144eb0efb220030"
+      "verdict_id": "capbenchverdict_958aa99f50a3e96e5010"
     },
     {
-      "canonical_hash": "sha256:f3d8092ac1f3c2b925c91bd3f1e777b1979826527b940c7c35a3be8926a7e8e2",
+      "canonical_hash": "sha256:635cc2ebb2643efdd68f01ef1136657273955ba54c0e8990d8a88e18fc5b7c81",
       "capability_id": "diagnostic.dataset_integrity.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:d99f562c21db22a4c938432e3c3aed72498ca07fbf72fb02590447c431871510",
@@ -1447,7 +1447,7 @@
       "observed_status": "screen_passed",
       "outcome": "passed",
       "output_hashes": {
-        "dataset_integrity.json": "sha256:18d9865c0c057b710887726dcc3305a36a93bc22b85001a1562d9f5205ab4c0a"
+        "dataset_integrity.json": "sha256:a421862f86ec159147a85b0d4cf05164caca50c833576c8a2037d59bc5bd61d3"
       },
       "peak_memory_mb": null,
       "reasons": [],
@@ -1456,7 +1456,7 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:03bc0bd1a450393b7a57a33bdf2c39089e5f13ff58789e8ef99cdecfaf309b50",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_400e2522af210bc0a552"
+      "verdict_id": "capbenchverdict_910624cde41db3cd5435"
     },
     {
       "canonical_hash": "sha256:149cc95b0a62e65706aaa577a29b61be06afb20480d56d96bfde11a60dfb144d",
@@ -4211,7 +4211,7 @@
       "verdict_id": "capbenchverdict_8792a25a05b9ebf4eb3a"
     },
     {
-      "canonical_hash": "sha256:6fe109957065c558605c87118048094eb4a7ac92e86800b6253e76287f746ceb",
+      "canonical_hash": "sha256:63ea421e912e5d749ec7f6629a169d5badec63f43efb301fc2a007d1bdd1716e",
       "capability_id": "intake.materialize.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:651da1338060dd3d797a1246e69427586073b12d88a848ee69b4274fbd050009",
@@ -4262,7 +4262,7 @@
       "outcome": "passed",
       "output_hashes": {
         "counts.npz": "sha256:2a2d2e8219f02e77511c8142e8d88a90ec229777e863052031477e8a50f11f49",
-        "materialization_manifest.json": "sha256:a3afe717add7dc14407bba96a3982eb2f7453141c6b4dc08dc5bb95cf27a184b",
+        "materialization_manifest.json": "sha256:f7d5949a246b9e156d7a792796104f0da2f31b131d57003f97c578a1c3877460",
         "obs.parquet": "sha256:60e3061f4cfbf5b3f6700ca98be7a350b8205836bc4b7cf3e5679aa5b5d3e951",
         "var.parquet": "sha256:992839255baf4fb256057de126327cac970961f3794680bdc5c1da7a46f9065a"
       },
@@ -4273,10 +4273,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:716c082b995db00a027b257a9bef154c3b39d81ed5045beed6f800398c7e9c04",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_00b63a4ab0ca78530291"
+      "verdict_id": "capbenchverdict_e10d62e1dab722c04ebd"
     },
     {
-      "canonical_hash": "sha256:f8bbc642fea8e89c1f1e4e4fe01a0c401713a9b67dc9fd42bb3574033bf184fa",
+      "canonical_hash": "sha256:c1cd7336867f26c1764fe7cc1b69553f43b76a59d17bea01d0d30e0f14868fb5",
       "capability_id": "intake.materialize.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:45682822d9b6e40e3eb00162e95e0b0fd6aeb8ed68c3db1a961216ca49baf172",
@@ -4307,7 +4307,7 @@
       "outcome": "passed",
       "output_hashes": {
         "counts.npz": "sha256:2a2d2e8219f02e77511c8142e8d88a90ec229777e863052031477e8a50f11f49",
-        "materialization_manifest.json": "sha256:09dc662e394e4002fb51c7a3a73809f4651c0c24206e5ed10c0499c52fdaa5bc",
+        "materialization_manifest.json": "sha256:9d4d7c0dc495b319049f2d1cc7cec7b70881fcb9bd5294a84dd5ae24a1000612",
         "obs.parquet": "sha256:60e3061f4cfbf5b3f6700ca98be7a350b8205836bc4b7cf3e5679aa5b5d3e951",
         "var.parquet": "sha256:992839255baf4fb256057de126327cac970961f3794680bdc5c1da7a46f9065a"
       },
@@ -4318,7 +4318,7 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:716c082b995db00a027b257a9bef154c3b39d81ed5045beed6f800398c7e9c04",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_e4b5fca3f6ec8cd7caf1"
+      "verdict_id": "capbenchverdict_443f0730ca039127debc"
     },
     {
       "canonical_hash": "sha256:60ec6b0f4b035a11897ec66a5c8e7bdd4dce54f4674059eb4a578fa03e219db3",
@@ -4405,7 +4405,7 @@
       "verdict_id": "capbenchverdict_22334cdaec9a0b2afd1e"
     },
     {
-      "canonical_hash": "sha256:d72b7e7feeaf93e07376cc557e99d73ca72c35a30691bd43e37bf3e8497a4d4e",
+      "canonical_hash": "sha256:ed1e54114f04f6679fdb375aee0e4247b916002e256e963487216eb2d86b3b52",
       "capability_id": "intake.materialize.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:d1b9da7aa0ddc1501993efdfc541cab8d3b31f8806d9df86f6d175c781b0f615",
@@ -4446,7 +4446,7 @@
       "outcome": "passed",
       "output_hashes": {
         "counts.npz": "sha256:2a2d2e8219f02e77511c8142e8d88a90ec229777e863052031477e8a50f11f49",
-        "materialization_manifest.json": "sha256:3a7a0c5de8614facffd870f555d0e859066c3fd19898a6feb2f1485b3c03a28f",
+        "materialization_manifest.json": "sha256:d69b12c364ecba7ebf8a204cab2ebde950819ef161d9f483baf15277e3d4243a",
         "obs.parquet": "sha256:60e3061f4cfbf5b3f6700ca98be7a350b8205836bc4b7cf3e5679aa5b5d3e951",
         "var.parquet": "sha256:992839255baf4fb256057de126327cac970961f3794680bdc5c1da7a46f9065a"
       },
@@ -4457,7 +4457,7 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:716c082b995db00a027b257a9bef154c3b39d81ed5045beed6f800398c7e9c04",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_7dcda3570b526107af0c"
+      "verdict_id": "capbenchverdict_246e69609fa61f0256d5"
     },
     {
       "canonical_hash": "sha256:bbd65045b956e5693224b3ed8dc1043d53d5e910735dbab6db7964a8d7b201db",
@@ -7258,7 +7258,7 @@
       "verdict_id": "capbenchverdict_bf97f40e92be8cd0c6bc"
     },
     {
-      "canonical_hash": "sha256:5fa91a43647e4ca09bc8ec95da6d5919edf86d34b1f13cb775733842c4b8c73c",
+      "canonical_hash": "sha256:c48a4baa4c85c55d44b64fc403c4f9ac1ab1b68d6bd40c0ac8b0c070bc5e8d85",
       "capability_id": "state.annotation_candidates.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:ab7a08bc23ea8e63737a082c742b015f5e31b0f3adf2956d3c6a597ef3b5c58f",
@@ -7269,7 +7269,7 @@
         "capability_spec": "sha256:7f3fd99e7b8ad37deea81b76ca6fe4453e669b79cc0a7d0af73e48aaf1b059ff",
         "case": "sha256:ab7a08bc23ea8e63737a082c742b015f5e31b0f3adf2956d3c6a597ef3b5c58f",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:ee70104ababa524c90fdc42282152342a1ddd4c25e01542b73a59434f2e80cca",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7308,10 +7308,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:f69f14f413438b8c1013751ceb2299148a389af4753bac097c6fac7671294054",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_15710bd90f495122400a"
+      "verdict_id": "capbenchverdict_0ace682abd9e5c58f0fe"
     },
     {
-      "canonical_hash": "sha256:934fbd22c90bfbeb5dcc04772565ef599bfd1300eedf5dbcf2ead86b4ad5429d",
+      "canonical_hash": "sha256:cf1c7f4b34041bcbb096267a5842114dba2383af79b1c8c9a078b99820a5fc13",
       "capability_id": "state.annotation_candidates.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:6dfe22e3c14ef99351440f41456709cd69ed1b1e59747ba08257829b7ea0b9cf",
@@ -7322,7 +7322,7 @@
         "capability_spec": "sha256:7f3fd99e7b8ad37deea81b76ca6fe4453e669b79cc0a7d0af73e48aaf1b059ff",
         "case": "sha256:6dfe22e3c14ef99351440f41456709cd69ed1b1e59747ba08257829b7ea0b9cf",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:8b9aef3a30df65c5c7ce74426e90f96482ad2fdaa4d3086b8222940b1ab93f1e",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7351,10 +7351,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:81b1944d677fa196285e52ed1ad51c922b9a71b335d65f7a2d8527e82f6f52ef",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_2d9468689fed44b9f5b6"
+      "verdict_id": "capbenchverdict_5e530c8d02feaf41c44d"
     },
     {
-      "canonical_hash": "sha256:7d4b5b4ab74f99c47387dff2fba69a3af6703a80a46fa714d2d90d95a157cfc1",
+      "canonical_hash": "sha256:55ec5dc4b81fd3af4298b54c12d6f321fc74614dd2ffdbf8cb680aa082b5bb8f",
       "capability_id": "state.annotation_candidates.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:d77947cbf20c7188167d6eae0bc2463fa31b8052a1a735745bd285eab867f10e",
@@ -7365,7 +7365,7 @@
         "capability_spec": "sha256:7f3fd99e7b8ad37deea81b76ca6fe4453e669b79cc0a7d0af73e48aaf1b059ff",
         "case": "sha256:d77947cbf20c7188167d6eae0bc2463fa31b8052a1a735745bd285eab867f10e",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:164d94ac9f739fe8eabe7ae5faab01dfad3ac87a2c129375582fc5bac7287b89",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7394,10 +7394,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:c72efd764b6286efaed10a058b6caa9887a5acd52aa50a7bbedf5d68d4c18709",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_4bb47f7f47ab5ad457ec"
+      "verdict_id": "capbenchverdict_3fdfb4a6ed0e79ca6abf"
     },
     {
-      "canonical_hash": "sha256:e0a6f15eb783ccd62abd62340bcf8ef5572618649d1383fd6973bb0d5f78810a",
+      "canonical_hash": "sha256:e832ee33684204a81501d334c85583504337a6791fc20f5ca0310d7edee3ddab",
       "capability_id": "state.annotation_candidates.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:bb81782de544599434591a4ad322ffad736907c932fb2d451266fe1044b08896",
@@ -7408,7 +7408,7 @@
         "capability_spec": "sha256:7f3fd99e7b8ad37deea81b76ca6fe4453e669b79cc0a7d0af73e48aaf1b059ff",
         "case": "sha256:bb81782de544599434591a4ad322ffad736907c932fb2d451266fe1044b08896",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:b7f42e4106b53ca9dee0564ba783e9afadfdcfe61fd32d640aabec82d50bab56",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7437,10 +7437,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:c72efd764b6286efaed10a058b6caa9887a5acd52aa50a7bbedf5d68d4c18709",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_44197f977373d6517dbf"
+      "verdict_id": "capbenchverdict_f9ddb8c26535e312aed6"
     },
     {
-      "canonical_hash": "sha256:99c09a52c5fb7fee6ab63a721acf4bf1b8f3b57a0fdd42dfc20e9d5b00e2bb75",
+      "canonical_hash": "sha256:03a69e00ddaf02bb5db88b9c03a20fda089aab5294d7ecfe8767af952136049f",
       "capability_id": "state.annotation_candidates.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:fe44ec2e75d06fbe9ca43a6079d512be425e7637894476bcdd8419c41cbd33b0",
@@ -7451,7 +7451,7 @@
         "capability_spec": "sha256:7f3fd99e7b8ad37deea81b76ca6fe4453e669b79cc0a7d0af73e48aaf1b059ff",
         "case": "sha256:fe44ec2e75d06fbe9ca43a6079d512be425e7637894476bcdd8419c41cbd33b0",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:7468f2b5be9794bdbe55ad00e7ce0646e271f8e9fccacba398715e146a139492",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7480,10 +7480,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:a3c726cb6ea6668ad820557f83433220923f0ab9f2eacf83070957992944b9bc",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_74919cb43dc51030bec3"
+      "verdict_id": "capbenchverdict_2bddccc852bd2f37ac5d"
     },
     {
-      "canonical_hash": "sha256:63dc3563c8bfd4bb8538319f6075eb5b90200e0376b5e7430cbbbda2e25b2a1d",
+      "canonical_hash": "sha256:4ab5cde23a2e6a0bf2844cc17a51947ba82a0de1994ee0aef44d7783e2e3802b",
       "capability_id": "state.annotation_candidates.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:4bdb698a1d9cc4e8935364c2f14ef34c5f4389eacb23da0f2b7396abd3c12413",
@@ -7494,7 +7494,7 @@
         "capability_spec": "sha256:7f3fd99e7b8ad37deea81b76ca6fe4453e669b79cc0a7d0af73e48aaf1b059ff",
         "case": "sha256:4bdb698a1d9cc4e8935364c2f14ef34c5f4389eacb23da0f2b7396abd3c12413",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:079733c89daefcc72b230e3ed2607f56d39c2fd3e202b3aa6d0de64c9875e255",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7531,10 +7531,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:0fa8ab6822d0807dda15cd0ce06352d4c3b7eeda6858df9e4328a252df23bc18",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_7f5fc083be35ca5fe4cf"
+      "verdict_id": "capbenchverdict_b32038f8d3a1278d8018"
     },
     {
-      "canonical_hash": "sha256:50b339e516a13cd15db766bd764403df2e2fa8ecb644c3493143da14082be390",
+      "canonical_hash": "sha256:c7f015e305a1c5b34b25e7497b7d1ad079d688b200b9a28e88456d37255c71b0",
       "capability_id": "state.reference.fit.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:a31e4bfc148d48bc578d26e3b5a308489e18fef44d855203be36f5ff89d55a65",
@@ -7545,7 +7545,7 @@
         "capability_spec": "sha256:6ee9db7f77a8d72fd8f667c9fadfedcfaa9d52a3aaec1e5c8eec31ccf66f810a",
         "case": "sha256:a31e4bfc148d48bc578d26e3b5a308489e18fef44d855203be36f5ff89d55a65",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:62921d5aa7311d4f1cc8eb5e79fe48875042263be0eb386b1e1d8558086edbbd",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7584,10 +7584,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:7776869be41ae0278749a345b586ca9dfdca0035c18fe125c20d2f605bf063c0",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_c7d35b4cdb9837f2f7f0"
+      "verdict_id": "capbenchverdict_dcd627cad0af69238965"
     },
     {
-      "canonical_hash": "sha256:26449159a323fa45b227e41b28075c09d2e9b8a6a92ffaee0dcc2d9282af08aa",
+      "canonical_hash": "sha256:4b262b03fa8ea375b27bb1b2a6921fd241519d98f639570cd2f6e7785cc2b845",
       "capability_id": "state.reference.fit.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:a53ce5018de22cf5877694d945d451d935d821e60ab892bff82a927b24450b5a",
@@ -7598,7 +7598,7 @@
         "capability_spec": "sha256:6ee9db7f77a8d72fd8f667c9fadfedcfaa9d52a3aaec1e5c8eec31ccf66f810a",
         "case": "sha256:a53ce5018de22cf5877694d945d451d935d821e60ab892bff82a927b24450b5a",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:30791b7d575910ae0bdb1925a8b69271910027cee93f61f2a46fc21e669a178c",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7627,10 +7627,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:b8fcaf2dad25111622b0430315c01a24ccc750755e4c54dbf2a1dc03af30877c",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_0c773a9c73e56eb6b4f0"
+      "verdict_id": "capbenchverdict_f9162a358f5fd2dcff26"
     },
     {
-      "canonical_hash": "sha256:49d9a77e25c8515bea619570c5d9e5784435449c57afd0e6f8560497937b6957",
+      "canonical_hash": "sha256:487529b068d779a9ca19a682853d282fcb3c8d04bfc7f164db5db5577d112e4c",
       "capability_id": "state.reference.fit.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:0def67cc018af72e28bd42878910b1b62c1b360c4c6d081ddc970af2ce2921bb",
@@ -7641,7 +7641,7 @@
         "capability_spec": "sha256:6ee9db7f77a8d72fd8f667c9fadfedcfaa9d52a3aaec1e5c8eec31ccf66f810a",
         "case": "sha256:0def67cc018af72e28bd42878910b1b62c1b360c4c6d081ddc970af2ce2921bb",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:ec365b5ca3299f55e0e8e6999074424881e176249848ff821b2d3e1f9a9c7c84",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7670,10 +7670,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:866c5094bd50152c66b7f389bb52d057acca238a3f7e4c0e0fcda739b90a50c0",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_bc9dcd78b786d3283351"
+      "verdict_id": "capbenchverdict_784983d86d653b9f83ef"
     },
     {
-      "canonical_hash": "sha256:0e3476f9763d6aa24256bb8ff27b0b9ce5a33c5eabc321a8b1eb5d09e2bc4eec",
+      "canonical_hash": "sha256:0e3693989acc81754972d723244e86f6c1cc74bdb1b44d15d58cef09850bbbd7",
       "capability_id": "state.reference.fit.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:23d4d3a6fa57dcf6ad30eed6e11abda63707f4f4669e05895994440c8efeb569",
@@ -7684,7 +7684,7 @@
         "capability_spec": "sha256:6ee9db7f77a8d72fd8f667c9fadfedcfaa9d52a3aaec1e5c8eec31ccf66f810a",
         "case": "sha256:23d4d3a6fa57dcf6ad30eed6e11abda63707f4f4669e05895994440c8efeb569",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:1d31bce01a1bf9be74bf4a49a15d428f89a3512eba79fa1ca8aceda3d0916a86",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7713,10 +7713,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:866c5094bd50152c66b7f389bb52d057acca238a3f7e4c0e0fcda739b90a50c0",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_cfecc6a87901a0ab6e7a"
+      "verdict_id": "capbenchverdict_001cba57f8d23c825915"
     },
     {
-      "canonical_hash": "sha256:8b9251482143b01e2f7bca1b5552dc8541ef67a814f47fb46040e3c9fa0f3e76",
+      "canonical_hash": "sha256:028db2ebae2711d827cc5f279c5e556ef15b101ab94eb5f28f14b6e53b2b1353",
       "capability_id": "state.reference.fit.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:786878ea9925a009e8aaf4d8d96d35d7d9190edf1aa505072ad445f4ee4cf669",
@@ -7727,7 +7727,7 @@
         "capability_spec": "sha256:6ee9db7f77a8d72fd8f667c9fadfedcfaa9d52a3aaec1e5c8eec31ccf66f810a",
         "case": "sha256:786878ea9925a009e8aaf4d8d96d35d7d9190edf1aa505072ad445f4ee4cf669",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:f24388357277476d557b944a99ff781d69692863bc314657e7d15fdec7403fdb",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7756,10 +7756,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:d3395832b2f84a128e030d426e15163ae4ec66f64b5766e9501f1e3a2af5431a",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_920014824fbee54fa9bc"
+      "verdict_id": "capbenchverdict_554be4f1346bed52677a"
     },
     {
-      "canonical_hash": "sha256:a3eac239949942bd79c336052c99c01efc8e1c8d216242ed0e6edccb2c1044c3",
+      "canonical_hash": "sha256:eb150c0371e2372d41d61451d80098b1357436c3acbfd3b62984abe274b48091",
       "capability_id": "state.reference.fit.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:7c26b23aaf3f3e6474aa9d2730ee2ba5d5f9d6365ea277d246ec229101e7cc55",
@@ -7770,7 +7770,7 @@
         "capability_spec": "sha256:6ee9db7f77a8d72fd8f667c9fadfedcfaa9d52a3aaec1e5c8eec31ccf66f810a",
         "case": "sha256:7c26b23aaf3f3e6474aa9d2730ee2ba5d5f9d6365ea277d246ec229101e7cc55",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:5945c516ee043338b5e1b6fb64d60508e80c33c704bc33ed45e619dda92f00da",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7807,10 +7807,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:5b8c20ea611b45e8be094423a838d41ccad5dcb0993ba314bac4a6aa01e142d6",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_dbcff0d2d094b5647ef4"
+      "verdict_id": "capbenchverdict_c94781523b81e4b6c200"
     },
     {
-      "canonical_hash": "sha256:8ee74ebe1a42d2b00907f8fd304599b71c6013437cd0398994da103941a1e1df",
+      "canonical_hash": "sha256:167110320a8c603c2e81b3c7d94d31b18470a146e916cd5c8e0fee01d6b3ed8e",
       "capability_id": "state.reference.map_knn.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:3359c09b21a92c00758cf6f2a6504c7e2b1df6b20ccf44f51a47ad2c4ebe1753",
@@ -7821,7 +7821,7 @@
         "capability_spec": "sha256:9c6728d36717a74ade4c451ecf2180ecb56aad79e476dabe0acbdda10b6ac55c",
         "case": "sha256:3359c09b21a92c00758cf6f2a6504c7e2b1df6b20ccf44f51a47ad2c4ebe1753",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:133d97e44a9de6707f924da24e4487f048a0c22fc6d80409e687769519e775d1",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7860,10 +7860,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:723c58e38aea0df5e8533c9927fa2937524d2bb39f35479d693215c5e41ae851",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_38b3ea3deabbce6ad9d1"
+      "verdict_id": "capbenchverdict_b43691f108db41448057"
     },
     {
-      "canonical_hash": "sha256:865428d7847d517dc7c6be8295e803646a1cb625599e6cef8ad92633ef9b3089",
+      "canonical_hash": "sha256:c30aa866deb84ed4965d23982a64e58012403b5800e23c8922b3b14c0afaf240",
       "capability_id": "state.reference.map_knn.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:64da0dfd502f31f630be22844d8105a203936d5d7f5ef5432d6768bb0d181209",
@@ -7874,7 +7874,7 @@
         "capability_spec": "sha256:9c6728d36717a74ade4c451ecf2180ecb56aad79e476dabe0acbdda10b6ac55c",
         "case": "sha256:64da0dfd502f31f630be22844d8105a203936d5d7f5ef5432d6768bb0d181209",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:d691cfb72ad994f254491d19f4f6af0e38da0659c021f3dc62ac5ba204d35443",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7903,10 +7903,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:0b8312fdbb0271c14d22b9ae674384da1e43beaa88aba2c7a9f92cbb44e2c4a1",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_71ddef431b9283e623ad"
+      "verdict_id": "capbenchverdict_ed9844452994a5730165"
     },
     {
-      "canonical_hash": "sha256:214ec15faf3b22169af44d4c405993b14be04f295ecd77d6e8e6d1bde12be814",
+      "canonical_hash": "sha256:11c093c31f6f8298608d2ab7cfd5ce1b0ab1561933595ec0869d25fd1667b2af",
       "capability_id": "state.reference.map_knn.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:00f0cd4c8e08e9fbe401a8e96d2ae11e891a54e662319fe8ca8fa5b6ef3fed94",
@@ -7917,7 +7917,7 @@
         "capability_spec": "sha256:9c6728d36717a74ade4c451ecf2180ecb56aad79e476dabe0acbdda10b6ac55c",
         "case": "sha256:00f0cd4c8e08e9fbe401a8e96d2ae11e891a54e662319fe8ca8fa5b6ef3fed94",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:2052e3cd5099219d844a198601172a12b60663a966c7d030763ffb23af2995c7",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7946,10 +7946,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:ae7b7cd863f5e96de8395b59d8a7af21deb711173d416f5efde8c64f6b9a3363",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_eace35fdc6ea2de62a98"
+      "verdict_id": "capbenchverdict_57c046cf3612dc90de8d"
     },
     {
-      "canonical_hash": "sha256:7b4b12016c078b7c5a647aff8f953bc1ba736e274c864cb4e2e5455fc7db408a",
+      "canonical_hash": "sha256:3e07f3d5378d8e38d53ed51983b8a2f4a6101f16338aaccd2eb74866a4bc4d37",
       "capability_id": "state.reference.map_knn.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:3e5e074a23cfe8fd7b363de8e202975be2d6a5cd4269d81a95a7c072325cba88",
@@ -7960,7 +7960,7 @@
         "capability_spec": "sha256:9c6728d36717a74ade4c451ecf2180ecb56aad79e476dabe0acbdda10b6ac55c",
         "case": "sha256:3e5e074a23cfe8fd7b363de8e202975be2d6a5cd4269d81a95a7c072325cba88",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:12ffb075b515e676e8bec8a3946739d0b0944de81681f1c7bdeadc20ff725e37",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -7989,10 +7989,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:ae7b7cd863f5e96de8395b59d8a7af21deb711173d416f5efde8c64f6b9a3363",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_c9c3fd6a3a7513fc77ec"
+      "verdict_id": "capbenchverdict_3ac1c41019e45961a3d5"
     },
     {
-      "canonical_hash": "sha256:91f129f42969670feb16806081b950688641cf9ecb9bb09371eb66ccf50b8f71",
+      "canonical_hash": "sha256:882f9579226fb33045386810ae3c6fc1c77a111bbc1d4e1d97c62804a79acbf4",
       "capability_id": "state.reference.map_knn.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:4c379bcde1ed5603e5c60a02a96b73b45bf073e17126a9d7fe490bd9519e724e",
@@ -8003,7 +8003,7 @@
         "capability_spec": "sha256:9c6728d36717a74ade4c451ecf2180ecb56aad79e476dabe0acbdda10b6ac55c",
         "case": "sha256:4c379bcde1ed5603e5c60a02a96b73b45bf073e17126a9d7fe490bd9519e724e",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:de1909828de7c14aca58a659871d3b2faf09831df93da1130b1f9ef3eb997a74",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -8032,10 +8032,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:f1835019d19beb70b648a1d503d1aaa114b94921b7479b41636b389d06b5f895",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_5e1659948d2835a33366"
+      "verdict_id": "capbenchverdict_74c200ccf3b3c45eef00"
     },
     {
-      "canonical_hash": "sha256:f3ca7bcd442cfca1d45b21a122cf74b6db5823149722dba42619453570ac4206",
+      "canonical_hash": "sha256:a93657e8d08f26c9a77cb4c2dd2a7fd966a860f5f9df6853dd99e9b09847476f",
       "capability_id": "state.reference.map_knn.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:8320fc4ae18458e2f56a90949845281a603408e92800a3c11bcf1d1307231ae5",
@@ -8046,7 +8046,7 @@
         "capability_spec": "sha256:9c6728d36717a74ade4c451ecf2180ecb56aad79e476dabe0acbdda10b6ac55c",
         "case": "sha256:8320fc4ae18458e2f56a90949845281a603408e92800a3c11bcf1d1307231ae5",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:42fc1607eb560fc336055b66e2575379f174e703db36f681ab3f1296720cdea4",
         "product_spine": "sha256:b5b3272e02794ba86165e1fca07ba2dcdc81b6ad75df4bdbf5baa0396ad979cd"
       },
@@ -8083,7 +8083,7 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:ede29ffa64670e37af03e88ee46387b4affb3ec1411523638da0f8ecd8b66dee",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_30e278020878df2a1660"
+      "verdict_id": "capbenchverdict_f6f17fac372b2387bc17"
     },
     {
       "canonical_hash": "sha256:964de41b3e79302b2901ce84d8283919392075e261d24ae68a0f831501b740b4",
@@ -8376,7 +8376,7 @@
       "verdict_id": "capbenchverdict_ef9f458bf5416c247b0c"
     },
     {
-      "canonical_hash": "sha256:5d2cda734f03b421ed7435a39ce3c9bb5fc49cf4ceb5cdf280ae7e3d5a457808",
+      "canonical_hash": "sha256:8db3d6512024723729b2f29871886f03f012a43db835b2a7f79d7f02f436e522",
       "capability_id": "target.reliability.aggregate.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:2a045f56658f133fc43b5fba7c6c021ab397e5fdca296703fbf83b8e89e11529",
@@ -8387,7 +8387,7 @@
         "capability_spec": "sha256:de6fb595d2ecf2a5ab01d1e3e3da275fc43edeca5a580de2df2834c267f89b9b",
         "case": "sha256:2a045f56658f133fc43b5fba7c6c021ab397e5fdca296703fbf83b8e89e11529",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:6416e8bd434b4a94c3e133dcb24053fb9ea63d36a2270bb590d3895939ce54cf",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8426,10 +8426,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:de826b08c5cbc27c7145377ee61ce1c06316df1d2c629fd0da2818e20d4c7052",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_0adc9a1fbe0c238949d1"
+      "verdict_id": "capbenchverdict_e96d5717e6cbe64911d2"
     },
     {
-      "canonical_hash": "sha256:099bb5f9e0a2206bd46729a6833bff82a9799059850639c810586469e49dda9c",
+      "canonical_hash": "sha256:dc34380c29230ebda3f70168ab1946f55e7dd1f1342f059b85a5e46961fbb187",
       "capability_id": "target.reliability.aggregate.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:0d0ba22c38a83f8d834e826737f74bf0730d2e30fe66972308ca1c84718b69ed",
@@ -8440,7 +8440,7 @@
         "capability_spec": "sha256:de6fb595d2ecf2a5ab01d1e3e3da275fc43edeca5a580de2df2834c267f89b9b",
         "case": "sha256:0d0ba22c38a83f8d834e826737f74bf0730d2e30fe66972308ca1c84718b69ed",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:0288e60969027a8684d3897a2439c2e392e44c12279f24132a367058ae01bec6",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8469,10 +8469,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:d51179e0e0acc20a10538a2833a8d168ee1106cbe3ccc4d6ba598c016272d82f",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_0ca140e98e17e9af11ae"
+      "verdict_id": "capbenchverdict_60606831ff5b970a70f3"
     },
     {
-      "canonical_hash": "sha256:2b890e763083da0e153be14728f49420bd043f3e5085ac48a9a767b85277f341",
+      "canonical_hash": "sha256:b0cb47e04be43262c52b8e4aaaf77db53b0e48c4581d8c0060b3537a1b0cc14d",
       "capability_id": "target.reliability.aggregate.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:513c4f3192eea0693b8587fd2e9559df0ae350e140845c11b4f7b0bd776555aa",
@@ -8483,7 +8483,7 @@
         "capability_spec": "sha256:de6fb595d2ecf2a5ab01d1e3e3da275fc43edeca5a580de2df2834c267f89b9b",
         "case": "sha256:513c4f3192eea0693b8587fd2e9559df0ae350e140845c11b4f7b0bd776555aa",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:55c8bdc2a9d6dab6f7bf0ecd23de7dc25c8ac9c065d02870a39fcf93993e9c4a",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8512,10 +8512,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:ade947033f6bdd036f4548573bb5475db2af9cc7fb602f1237cac494e9f96f00",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_24059817608ed9c66c14"
+      "verdict_id": "capbenchverdict_e300c96e5a29bcd0eabb"
     },
     {
-      "canonical_hash": "sha256:ddfff068b617f5b9a5327fd8c0ffd29c85f1a718dd53f2928ae92e08f3a6c6c0",
+      "canonical_hash": "sha256:72b304e2c440cc92d8ee501e2c0a029960a6a1555e5a244066c979e4b7574f61",
       "capability_id": "target.reliability.aggregate.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:2d00df216bc9254443226c1e90a5d35621f5b4a119419bd62cc4d7ab86bc5cb6",
@@ -8526,7 +8526,7 @@
         "capability_spec": "sha256:de6fb595d2ecf2a5ab01d1e3e3da275fc43edeca5a580de2df2834c267f89b9b",
         "case": "sha256:2d00df216bc9254443226c1e90a5d35621f5b4a119419bd62cc4d7ab86bc5cb6",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:9e500c52bc68115275c46ff8e2aa30f9d5b9573ebdae1d00b8b4f84b58a9b5cb",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8555,10 +8555,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:ade947033f6bdd036f4548573bb5475db2af9cc7fb602f1237cac494e9f96f00",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_4631becb47418930725a"
+      "verdict_id": "capbenchverdict_ab8ed703ca5814094442"
     },
     {
-      "canonical_hash": "sha256:7856ee628a049a6f9a96ce50cfa73f11a0546a979756d86197ab3a0fd5b4eec7",
+      "canonical_hash": "sha256:85cb6e6ee5dc5a4d8fc0f6c837fa3690e96ec1a3ecb7fbee75abd54b715b035d",
       "capability_id": "target.reliability.aggregate.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:fd75206010555946c84b66ddc809615c905fa6e36127b276c60ebcde1a6ca42e",
@@ -8569,7 +8569,7 @@
         "capability_spec": "sha256:de6fb595d2ecf2a5ab01d1e3e3da275fc43edeca5a580de2df2834c267f89b9b",
         "case": "sha256:fd75206010555946c84b66ddc809615c905fa6e36127b276c60ebcde1a6ca42e",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:1108e6ea1f8d2e8dd953b5d7e43ed717987dd4dee4df22cd72052d0a595b1300",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8598,10 +8598,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:e0439027950283b3ecfff7e6cc5c96bc5067d8ae44e89cbd1ade02de887a2c82",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_2e7bf93a5370c6c1e39d"
+      "verdict_id": "capbenchverdict_219a6122e337b6fcfe74"
     },
     {
-      "canonical_hash": "sha256:bf9340b386755fe9eece0fda84bda910d7f657ee0b11f1c074ee094abed49eea",
+      "canonical_hash": "sha256:270d72211e5c669d79e50bcfdb19ae31cfb772f42accca9074f935ac1dac4f6f",
       "capability_id": "target.reliability.aggregate.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:0141324f5e111a8cc0ee05ed8b9d7773cc0db373151565d041419695a7bb3ff4",
@@ -8612,7 +8612,7 @@
         "capability_spec": "sha256:de6fb595d2ecf2a5ab01d1e3e3da275fc43edeca5a580de2df2834c267f89b9b",
         "case": "sha256:0141324f5e111a8cc0ee05ed8b9d7773cc0db373151565d041419695a7bb3ff4",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:9e939bae7a997bd5b13e0e70b18ed1dd450f6a248491c4cb5a3431f4d67a5a13",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8649,10 +8649,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:b0cca67fa69114e949bd87331a04b043fbf23b923aa8bee52b7826d843a87592",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_24537d18697b3e5c44f4"
+      "verdict_id": "capbenchverdict_dcedc16b9510e6bbab16"
     },
     {
-      "canonical_hash": "sha256:00f1b098a51c830a326963a886c6a21c0d0e823fe89b12da56efc77c83183129",
+      "canonical_hash": "sha256:e64f06965ad9c14e1e8416f0bfdc9f940c631675a4d8d759a84d7f045c9893ff",
       "capability_id": "target.responder.mixscape.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:58a1afe05f5ebb6173bb656ee7638a2531aa49eab686a3910a606e893927249a",
@@ -8663,7 +8663,7 @@
         "capability_spec": "sha256:dd7765dec912e3527ed6db52f600f72de1b2fb1b533e1c264e1ce315ef6c5680",
         "case": "sha256:58a1afe05f5ebb6173bb656ee7638a2531aa49eab686a3910a606e893927249a",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:297e9841012c84616bceaa297bd39eb9357ad0ba099d25a4abae3208dd5a2fb1",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8702,10 +8702,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:06e59ac2c76e19f571a83ebb07b4cb2120b18ba0050c86bc6ec8c65fedf9cdcf",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_9f00e1c9e80cfbc1a505"
+      "verdict_id": "capbenchverdict_258e30e3e5cf3fc592b5"
     },
     {
-      "canonical_hash": "sha256:e232fd5740414c9e28a27d7d5bccb4d1979732e7fc774574f75e7a40937d2d6e",
+      "canonical_hash": "sha256:eba9ba1c6074e984ecf065518cc2ddb06ef9a59db0eb6e4966ebfedca9b05e1a",
       "capability_id": "target.responder.mixscape.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:15ae8ca6a71fa6a00600fb679db1404daf06f9b6b4100e6d864fa7458d7271b8",
@@ -8716,7 +8716,7 @@
         "capability_spec": "sha256:dd7765dec912e3527ed6db52f600f72de1b2fb1b533e1c264e1ce315ef6c5680",
         "case": "sha256:15ae8ca6a71fa6a00600fb679db1404daf06f9b6b4100e6d864fa7458d7271b8",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:570d4c387fedb9368c23e11668c947a704ea06478fcedbe1e8da19cb3bf18612",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8745,10 +8745,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:0cd56ba82c099e004db9dcb5f9ec3343a97625162e78569b2b5006c1a88385c8",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_251c7ff908151fbeae76"
+      "verdict_id": "capbenchverdict_f7e269da5c6dd30a9b3c"
     },
     {
-      "canonical_hash": "sha256:f369790e4b79a0717ba6ef236be0e8aa91dd89dc5979657b82e1caebac6e4cd3",
+      "canonical_hash": "sha256:8235f39f07a8abf09b3a61191aeaa02beb046d6928598b7d1a2d85f23145eafd",
       "capability_id": "target.responder.mixscape.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:60940006611f631b0ccf3da2bfc5b0e3e5048744ea34d13e02881ad3b7c7d7a0",
@@ -8759,7 +8759,7 @@
         "capability_spec": "sha256:dd7765dec912e3527ed6db52f600f72de1b2fb1b533e1c264e1ce315ef6c5680",
         "case": "sha256:60940006611f631b0ccf3da2bfc5b0e3e5048744ea34d13e02881ad3b7c7d7a0",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:4be4f6f31ea51442f968ea1f67f8b9c0bd03527134fc89c67da1d1d569b1aea4",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8788,10 +8788,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:303cea9a290f918a084ab8f5ad895be8dc4713a046cb16351e5e2efff08757b1",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_c574b40bb96e5842d71b"
+      "verdict_id": "capbenchverdict_8e6c1436748d97c8a741"
     },
     {
-      "canonical_hash": "sha256:5500ed34ab3743c803b664d6c6c5a8a15da76696369f174af38fd0aad6834c29",
+      "canonical_hash": "sha256:8045d9ef7db1ecff388ca4e2ecd87c0055e46d182469bad47fd47015bb8b7fe2",
       "capability_id": "target.responder.mixscape.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:3be2b4811931ef4409abb503f4d641f4915a9e84e35432bda27ae67e52984cf9",
@@ -8802,7 +8802,7 @@
         "capability_spec": "sha256:dd7765dec912e3527ed6db52f600f72de1b2fb1b533e1c264e1ce315ef6c5680",
         "case": "sha256:3be2b4811931ef4409abb503f4d641f4915a9e84e35432bda27ae67e52984cf9",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:a438e4e00f3871c0f73259ea9165ec0ac7905b5c4095d61cb1e23faaae8d9d6d",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8831,10 +8831,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:303cea9a290f918a084ab8f5ad895be8dc4713a046cb16351e5e2efff08757b1",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_508e2f00bb4b8f485707"
+      "verdict_id": "capbenchverdict_f22daf950878ffa3d26a"
     },
     {
-      "canonical_hash": "sha256:4cd0b9093f9e28d22523dcc9887f70948810e1d44ed9583cc4276808ce868695",
+      "canonical_hash": "sha256:d9a26a3f03c2782ee014ca60dd4dafe1118752702b6120142b10422fcca2b9d4",
       "capability_id": "target.responder.mixscape.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:b276cb2f71d720b7a5dcd24e7efa9fd8b0c7a21fa6b7350491304b1473ccf984",
@@ -8845,7 +8845,7 @@
         "capability_spec": "sha256:dd7765dec912e3527ed6db52f600f72de1b2fb1b533e1c264e1ce315ef6c5680",
         "case": "sha256:b276cb2f71d720b7a5dcd24e7efa9fd8b0c7a21fa6b7350491304b1473ccf984",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:d8a58f67cf7e18673cec1ff6cb46289ec37ea0ab2ab82254b9951b7bd854ac03",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8874,10 +8874,10 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:c437a58249b61c21928136e25d20df7369f30102590e2321aed760e542760240",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_6159a6c98c2a9fc3cbd1"
+      "verdict_id": "capbenchverdict_e2ac8bb75740dda590d8"
     },
     {
-      "canonical_hash": "sha256:cbec7990c8457d88100174c0fc733cd6e0cb79d2a2bf9291fed5247c5f71fa08",
+      "canonical_hash": "sha256:aed97c87342bbd9a1d01d21f740013398fb56ee3dd63f1a5834433df579b2a3e",
       "capability_id": "target.responder.mixscape.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:24bd5a8cd1a77f3e47cfc62dcb38357310b83b1c80a730b8af7d81ebc03142fa",
@@ -8888,7 +8888,7 @@
         "capability_spec": "sha256:dd7765dec912e3527ed6db52f600f72de1b2fb1b533e1c264e1ce315ef6c5680",
         "case": "sha256:24bd5a8cd1a77f3e47cfc62dcb38357310b83b1c80a730b8af7d81ebc03142fa",
         "catalog": "sha256:b02f14332cc175172a7c52f89c161ff9ea1ba7e1bb6993d7092804079734667a",
-        "environment_spec": "sha256:5275ebfadbe977e05c5748ff4cafe08f87c768cc96bca5ae84de99f06893bad6",
+        "environment_spec": "sha256:819d67560cc7c68172755866de44a4990cd23d213561ffe5854224fd5849d2d3",
         "fixture": "sha256:24356c93b3cf78bd0318e9b6b4105c686034688cb17b3aa23f8fb23b241bac03",
         "product_spine": "sha256:fc8191ac591adeaf09a478761ce1c42b9f287e5d2ca474481fa722dafaa9e51d"
       },
@@ -8925,7 +8925,7 @@
       "schema_version": "pertura-capability-benchmark-verdict-v2",
       "scientific_result_hash": "sha256:17db663be0ee356411e3ac41135656f7554f7bf0efeecdea71509e49f68d058b",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_05d4b4a752e7987035ab"
+      "verdict_id": "capbenchverdict_00f2b4efce7f3ee3323c"
     },
     {
       "canonical_hash": "sha256:3eb615fb885192ff26d413743efdbce2a06e9f316ccaaa1022c87f0d7034da7b",

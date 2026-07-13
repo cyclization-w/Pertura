@@ -1,6 +1,6 @@
 # Pertura documentation
 
-This index describes the capability-first product implemented by the `0.2.0a8` server-benchmark environment-readiness checkpoint. Historical evidence-lattice, stage, smoke, and paper-facing material remains available for regression context but is not the current product architecture.
+This index describes the capability-first product implemented by the `0.2.0a9` server-benchmark environment-readiness checkpoint. Historical evidence-lattice, stage, smoke, and paper-facing material remains available for regression context but is not the current product architecture.
 
 ## Current product reading order
 
@@ -37,7 +37,7 @@ The five bundled skills influence agent behavior only; their hash is provenance,
 The expected local checkpoint is:
 
 ```text
-build_version: 0.2.0a8
+build_version: 0.2.0a9
 repository_ready: true
 runtime_spine_ready: true
 code_ready: true

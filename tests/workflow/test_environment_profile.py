@@ -94,7 +94,8 @@ def test_perturbseq_profile_uses_only_pinned_conda_binary_packages() -> None:
     assert "pip" not in dependencies
     assert {
         "anndata=0.11.4",
-        "scanpy=1.11.4",
+        "scanpy=1.12.1",
+        "pandas=2.3",
         "mudata=0.3.2",
         "scikit-misc=0.5.2",
         "pertpy=1.1.1",
@@ -132,20 +133,97 @@ def test_perturbseq_doctor_rejects_version_drift(monkeypatch, tmp_path: Path) ->
         json.dumps(manifest), encoding="utf-8"
     )
     observed = expected | {"pertpy": "1.1.0"}
-    monkeypatch.setattr(
-        environment_module.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(
+    inventory = [
+        {
+            "name": environment_module.CONDA_PACKAGE_NAMES.get(name, name),
+            "version": observed.get(name, "fixture"),
+        }
+        for name in environment_module.PYTHON_PACKAGES["perturbseq-python-v1"]
+    ]
+
+    def fake_run(command, *args, **kwargs):
+        if "list" in command:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(inventory),
+                stderr="",
+            )
+        return SimpleNamespace(
             returncode=0,
-            stdout=json.dumps(observed) + "\n",
+            stdout="perturbseq-import-smoke-ok\n",
             stderr="",
-        ),
-    )
+        )
+
+    monkeypatch.setattr(environment_module.subprocess, "run", fake_run)
 
     result = doctor_environment("perturbseq-python-v1")
 
     assert result["ok"] is False
     assert "expected pertpy 1.1.1, found 1.1.0" in result["problems"]
+
+
+def test_perturbseq_doctor_rejects_api_import_failure(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("PERTURA_CACHE_DIR", str(tmp_path / "cache"))
+    binary = micromamba_path()
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"fixture-micromamba")
+    prefix = environment_prefix("perturbseq-python-v1")
+    prefix.mkdir(parents=True)
+    expected = environment_module.EXPECTED_PERTURBSEQ_PYTHON_VERSIONS
+    manifest = {
+        "schema_version": "pertura-environment-manifest-v2",
+        "profile": "perturbseq-python-v1",
+        "platform": "fixture",
+        "micromamba": {
+            "path": str(binary),
+            "sha256": file_sha256(binary),
+            "version": "2.6.2-1",
+        },
+        "prefix": str(prefix),
+        "spec_hash": "sha256:fixture",
+        "resource_hashes": environment_module._resource_hashes(
+            "perturbseq-python-v1"
+        ),
+        "expected_versions": expected,
+        "packages": [],
+    }
+    manifest["lock_hash"] = canonical_hash(manifest)
+    (prefix / "pertura-environment-manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+    inventory = [
+        {
+            "name": environment_module.CONDA_PACKAGE_NAMES.get(name, name),
+            "version": expected.get(name, "fixture"),
+        }
+        for name in environment_module.PYTHON_PACKAGES["perturbseq-python-v1"]
+    ]
+
+    def fake_run(command, *args, **kwargs):
+        if "list" in command:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(inventory),
+                stderr="",
+            )
+        return SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="ImportError: cannot import name 'check_use_raw'",
+        )
+
+    monkeypatch.setattr(environment_module.subprocess, "run", fake_run)
+
+    result = doctor_environment("perturbseq-python-v1")
+
+    assert result["ok"] is False
+    assert any(
+        "API compatibility check failed" in problem
+        and "check_use_raw" in problem
+        for problem in result["problems"]
+    )
 
 
 def test_environment_setup_streams_micromamba_output(monkeypatch, tmp_path: Path) -> None:
@@ -155,6 +233,7 @@ def test_environment_setup_streams_micromamba_output(monkeypatch, tmp_path: Path
     binary.write_bytes(b"fixture-micromamba")
     prefix = environment_prefix("python-science-v1")
     calls = []
+    original_run = environment_module.subprocess.run
 
     def fake_run(command, *args, **kwargs):
         calls.append((command, kwargs))
@@ -162,16 +241,21 @@ def test_environment_setup_streams_micromamba_output(monkeypatch, tmp_path: Path
             prefix.mkdir(parents=True)
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         if "list" in command:
-            return SimpleNamespace(returncode=0, stdout="[]", stderr="")
-        versions = {
-            name: "fixture"
-            for name in environment_module.PYTHON_PACKAGES["python-science-v1"]
-        }
-        return SimpleNamespace(
-            returncode=0,
-            stdout=json.dumps(versions) + "\n",
-            stderr="",
-        )
+            inventory = [
+                {
+                    "name": environment_module.CONDA_PACKAGE_NAMES.get(name, name),
+                    "version": "fixture",
+                }
+                for name in environment_module.PYTHON_PACKAGES[
+                    "python-science-v1"
+                ]
+            ]
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(inventory),
+                stderr="",
+            )
+        return original_run(command, *args, **kwargs)
 
     monkeypatch.setattr(environment_module, "_ensure_micromamba", lambda: binary)
     monkeypatch.setattr(environment_module.subprocess, "run", fake_run)
