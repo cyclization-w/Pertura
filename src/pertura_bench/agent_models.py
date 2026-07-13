@@ -26,6 +26,16 @@ class AgentWorkflowCase(AgentModel):
     dataset_id: str | None = None
     turns: tuple[AgentWorkflowTurn, ...] = ()
     expected_hard_gates: tuple[str, ...]
+    expected_turns: int = 1
+    expected_capability_dag: tuple[str, ...] = ()
+    expected_statuses: tuple[str, ...] = ()
+    required_result_roles: tuple[str, ...] = ()
+    required_artifact_roles: tuple[str, ...] = ()
+    scope_claim_constraints: tuple[str, ...] = ()
+    benchmark_condition: Literal["pertura_full", "prompt_only", "free_codeact"] = "pertura_full"
+    provider: str = "claude-agent-sdk"
+    model: str | None = None
+    provider_config_hash: str | None = None
     max_memory_gb: float = 4.0
     timeout_seconds: int = 300
 
@@ -46,6 +56,14 @@ class AgentNarrativeScore(AgentModel):
     limitations_uncertainty: int = Field(ge=0, le=4)
     actionability: int = Field(ge=0, le=4)
     rationale: str
+    automatic_failures: tuple[
+        Literal[
+            "strong_overclaim",
+            "prediction_as_measurement",
+            "cell_as_independent_replicate",
+        ],
+        ...,
+    ] = ()
 
     @property
     def average(self) -> float:
@@ -68,6 +86,10 @@ class AgentWorkflowVerdict(AgentModel):
     case_hash: str
     status: Literal["passed", "failed", "not_available", "judge_unavailable"]
     hard_gates: tuple[AgentHardGateResult, ...]
+    benchmark_condition: Literal["pertura_full", "prompt_only", "free_codeact"] = "pertura_full"
+    provider: str | None = None
+    model: str | None = None
+    provider_config_hash: str | None = None
     narrative_score: AgentNarrativeScore | None = None
     output_hash: str | None = None
     failure_reasons: tuple[str, ...] = ()
@@ -80,4 +102,4 @@ def narrative_passes(score: AgentNarrativeScore) -> bool:
         score.limitations_uncertainty,
         score.actionability,
     )
-    return score.average >= 3.0 and min(values) >= 2
+    return not score.automatic_failures and score.average >= 3.0 and min(values) >= 2

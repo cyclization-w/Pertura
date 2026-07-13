@@ -24,6 +24,9 @@ _BINDING_FIELDS = (
     "resource_lock_set_hash",
     "prediction_bundle_set_hash",
     "server_plan_hash",
+    "parameter_catalog_hash",
+    "design_confirmation_catalog_hash",
+    "metric_reference_catalog_hash",
 )
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
@@ -32,6 +35,10 @@ _GIT_COMMIT = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 def build_server_plan(
     specs: tuple[CapabilityBenchmarkSpec, ...],
     repo_root: str | Path | None = None,
+    *,
+    parameter_catalog_path: str | Path | None = None,
+    design_confirmations_path: str | Path | None = None,
+    metric_reference_catalog_path: str | Path | None = None,
 ) -> ServerBenchmarkPlan:
     root = (
         Path(__file__).resolve().parents[2]
@@ -213,9 +220,21 @@ def build_server_plan(
             )
 
     registry = CapabilityRegistry.load_default(include_external=False)
-    from pertura_bench.real_execution import load_real_parameter_catalog
+    from pertura_bench.real_execution import (
+        load_design_confirmation_catalog,
+        load_metric_reference_catalog,
+        load_real_parameter_catalog,
+    )
 
-    real_parameter_catalog, real_parameter_catalog_hash = load_real_parameter_catalog()
+    real_parameter_catalog, real_parameter_catalog_hash = load_real_parameter_catalog(
+        parameter_catalog_path
+    )
+    design_catalog, design_catalog_hash = load_design_confirmation_catalog(
+        design_confirmations_path
+    )
+    metric_catalog, metric_catalog_hash = load_metric_reference_catalog(
+        metric_reference_catalog_path
+    )
     for bench_spec in specs:
         capability = registry.get(
             bench_spec.capability_id, bench_spec.capability_version
@@ -272,6 +291,20 @@ def build_server_plan(
                                 "capability_dag": runtime_dag,
                                 "authoritative_commit_store": True,
                             },
+                            "benchmark_catalogs": {
+                                "parameters": {
+                                    "version": real_parameter_catalog["catalog_version"],
+                                    "hash": real_parameter_catalog_hash,
+                                },
+                                "design_confirmations": {
+                                    "version": design_catalog["catalog_version"],
+                                    "hash": design_catalog_hash,
+                                },
+                                "metric_references": {
+                                    "version": metric_catalog["catalog_version"],
+                                    "hash": metric_catalog_hash,
+                                },
+                            },
                             "real_parameter_catalog": {
                                 "version": real_parameter_catalog["catalog_version"],
                                 "hash": real_parameter_catalog_hash,
@@ -310,6 +343,12 @@ def build_server_plan(
                                     "$PERTURA_BENCH_OUTPUT",
                                     "--repo",
                                     "$PERTURA_REPO",
+                                    "--parameter-catalog",
+                                    "$PERTURA_BENCH_PARAMETER_CATALOG",
+                                    "--design-confirmations",
+                                    "$PERTURA_BENCH_DESIGN_CONFIRMATIONS",
+                                    "--metric-reference-catalog",
+                                    "$PERTURA_BENCH_METRIC_REFERENCES",
                                 ]
                             },
                             "consumes": [artifact_id],
@@ -341,60 +380,79 @@ def build_server_plan(
 
     agent_catalog_path = root / "src" / "pertura_bench" / "cases" / "server_agent_cases.v1.json"
     agent_catalog = json.loads(agent_catalog_path.read_text(encoding="utf-8"))
+    conditions = tuple(str(item) for item in agent_catalog.get("conditions") or ())
+    if conditions != ("pertura_full", "prompt_only", "free_codeact"):
+        raise ValueError("agent benchmark catalog must declare the three controlled conditions")
     for case in agent_catalog["cases"]:
         dataset_id = case["dataset_id"]
         if dataset_id not in artifact_ids_by_dataset:
             raise ValueError(f"agent case lacks prepared dataset: {dataset_id}")
-        job_id = f"agent:{case['case_id']}"
-        jobs.append({
-            "job_id": job_id,
-            "kind": "agent_workflow",
-            "dataset_id": dataset_id,
-            "case_id": case["case_id"],
-            "objective": case["objective"],
-            "depends_on": [subset_jobs[(dataset_id, "evaluation")]],
-            "fresh_namespace": {
-                "project_id": True,
-                "analysis_run_id": True,
-                "conversation_id": True,
-                "provider_session": True,
-                "authority_namespace": True,
-                "workspace_binding": True,
-            },
-            "command": {
-                "argv": [
-                    "python", "-m", "pertura_bench", "agent", "run-server",
-                    case["case_id"], "--cache", "$PERTURA_BENCH_CACHE",
-                    "--output", "$PERTURA_BENCH_OUTPUT", "--repo", "$PERTURA_REPO",
-                ]
-            },
-            "consumes": [artifact_ids_by_dataset[dataset_id]["evaluation"]],
-            "produces": [
-                f"agent-verdict:{case['case_id']}",
-                f"agent-grade:{case['case_id']}",
-            ],
-            "judge": {
-                "provider": "deepseek",
-                "model": "deepseek-v4-pro",
-                "fallback_allowed": False,
-                "unavailable_status": "judge_unavailable",
-            },
-            "checkpoint_requirement": {
-                "required": True,
-                "binding_fields": list(_BINDING_FIELDS),
-                "binding_source": "server_plan.checkpoint_binding",
-            },
-            "resources": {
-                "cpus": 8,
-                "memory_gb": 64 if dataset_id in {"replogle_k562_essential_2022", "norman_k562_crispra_2019"} else 32,
-                "walltime_minutes": 720,
-            },
-            "failure_policy": {
-                "missing_lock": "not_available",
-                "judge_unavailable": "failed_no_fallback",
-                "timeout": "failed_no_fallback",
-            },
-        })
+        for condition in conditions:
+            for repeat_index in (1, 2):
+                job_id = f"agent:{case['case_id']}:{condition}:repeat-{repeat_index}"
+                jobs.append({
+                    "job_id": job_id,
+                    "kind": "agent_workflow",
+                    "dataset_id": dataset_id,
+                    "case_id": case["case_id"],
+                    "objective": case["objective"],
+                    "benchmark_condition": condition,
+                    "repeat_index": repeat_index,
+                    "provider": "claude-agent-sdk",
+                    "model_source": "PERTURA_CLAUDE_MODEL",
+                    "controlled_comparison": {
+                        "same_dataset_split": "evaluation",
+                        "same_objective": True,
+                        "same_model": True,
+                        "same_context_budget": True,
+                        "same_timeout": True,
+                        "same_resource_budget": True,
+                    },
+                    "depends_on": [subset_jobs[(dataset_id, "evaluation")]],
+                    "fresh_namespace": {
+                        "project_id": True,
+                        "analysis_run_id": True,
+                        "conversation_id": True,
+                        "provider_session": True,
+                        "authority_namespace": True,
+                        "workspace_binding": True,
+                    },
+                    "command": {
+                        "argv": [
+                            "python", "-m", "pertura_bench", "agent", "run-server",
+                            case["case_id"], "--cache", "$PERTURA_BENCH_CACHE",
+                            "--output", "$PERTURA_BENCH_OUTPUT", "--repo", "$PERTURA_REPO",
+                            "--condition", condition,
+                            "--repeat-index", str(repeat_index),
+                        ]
+                    },
+                    "consumes": [artifact_ids_by_dataset[dataset_id]["evaluation"]],
+                    "produces": [
+                        f"agent-verdict:{case['case_id']}:{condition}:repeat-{repeat_index}",
+                        f"agent-grade:{case['case_id']}:{condition}:repeat-{repeat_index}",
+                    ],
+                    "judge": {
+                        "provider": "deepseek",
+                        "model": "deepseek-v4-pro",
+                        "fallback_allowed": False,
+                        "unavailable_status": "judge_unavailable",
+                    },
+                    "checkpoint_requirement": {
+                        "required": True,
+                        "binding_fields": list(_BINDING_FIELDS),
+                        "binding_source": "server_plan.checkpoint_binding",
+                    },
+                    "resources": {
+                        "cpus": 1,
+                        "memory_gb": float(case.get("max_memory_gb", 4.0)),
+                        "walltime_minutes": max(1, int(case.get("timeout_seconds", 1800)) // 60),
+                    },
+                    "failure_policy": {
+                        "missing_lock": "not_available",
+                        "judge_unavailable": "failed_no_fallback",
+                        "timeout": "failed_no_fallback",
+                    },
+                })
 
     case_catalog_hash = _case_catalog_hash(root)
     template_digest = _template_digest(
@@ -433,6 +491,9 @@ def build_server_plan(
             "resource_lock_set_hash": None,
             "prediction_bundle_set_hash": None,
             "server_plan_hash": None,
+            "parameter_catalog_hash": real_parameter_catalog_hash,
+            "design_confirmation_catalog_hash": design_catalog_hash,
+            "metric_reference_catalog_hash": metric_catalog_hash,
         },
         executable=False,
     )
@@ -493,6 +554,8 @@ def assert_server_plan_executable(plan: ServerBenchmarkPlan) -> None:
         "skill_bundle_hash", "capability_spec_hash", "judge_manifest_hash",
         "report_turn_schema_hash", "template_digest", "resource_lock_set_hash",
         "prediction_bundle_set_hash", "server_plan_hash",
+        "parameter_catalog_hash", "design_confirmation_catalog_hash",
+        "metric_reference_catalog_hash",
     ):
         value = str(binding.get(name) or "")
         if not _SHA256.fullmatch(value):
@@ -674,5 +737,8 @@ def _bound_plan_digest(binding: Mapping[str, Any]) -> str:
             "template_digest": binding.get("template_digest"),
             "resource_lock_set_hash": binding.get("resource_lock_set_hash"),
             "prediction_bundle_set_hash": binding.get("prediction_bundle_set_hash"),
+            "parameter_catalog_hash": binding.get("parameter_catalog_hash"),
+            "design_confirmation_catalog_hash": binding.get("design_confirmation_catalog_hash"),
+            "metric_reference_catalog_hash": binding.get("metric_reference_catalog_hash"),
         }
     )

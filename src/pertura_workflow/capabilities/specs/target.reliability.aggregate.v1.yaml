@@ -29,98 +29,41 @@ timeout_seconds: 900
 parameters_schema:
   type: object
   properties:
-    batch_column:
-      type: string
-    bootstrap_iterations:
-      type: integer
-    cell_column:
-      type: string
     chunk_rows:
       type: integer
-    condition_column:
-      type: string
-    control:
-      type: string
-    control_uid:
-      type: string
-    expected_direction:
-      type: string
-    expression_path:
-      type: string
-      x-pertura-asset-role: primary_dataset
-      description: Registered asset ID with role primary_dataset.
-    guide_bootstrap_iterations:
-      type: integer
-    guide_column:
-      type: string
-    h5ad_path:
-      type: string
-      x-pertura-asset-role: primary_dataset
-      description: Registered asset ID with role primary_dataset.
-    iter_num:
-      type: integer
-    layer_scale:
-      type: string
-    logfc_threshold:
-      type: number
+      minimum: 1
     max_memory_gb:
       type: number
       default: 4.0
       exclusiveMinimum: 0
-    metadata_path:
-      type: string
-      x-pertura-asset-role: cell_metadata
-      description: Registered asset ID with role cell_metadata.
-    min_de_genes:
-      type: integer
-    n_dims:
-      type: integer
     n_jobs:
       type: integer
       default: 1
       minimum: 1
-    n_neighbors:
-      type: integer
-    new_class_name:
-      type: string
-    pert_key:
-      type: string
-    perturbation_type:
-      type: string
-    profile:
-      type: string
-    pval_cutoff:
-      type: string
-    ref_selection_mode:
-      type: string
-    replicate_column:
-      type: string
-    scale:
-      type: boolean
-    signature_genes:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    signature_learned_from_same_perturbation:
-      type: boolean
-    signature_test_split_used:
-      type: boolean
-    split_by:
-      type: string
-    target_gene:
-      type: string
-    target_uid:
-      type: string
-    use_rep:
-      type: string
+  required: []
   additionalProperties: false
   examples:
-  - {}
+  - max_memory_gb: 4.0
 implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
+  dependency_policy:
+    screen.retained_cells.v1:
+      scope: exact
+      usage: scientific_input
+      accepted_statuses: &id001
+      - screen_passed
+      - caution
+    diagnostic.design_balance.v1:
+      scope: exact
+      usage: validation_gate
+      accepted_statuses: *id001
+    target.guide_efficacy.v1:
+      scope: exact
+      usage: scientific_input
+      accepted_statuses: *id001
+    target.responder.mixscape.v1:
+      scope: exact
+      usage: scientific_input
+      accepted_statuses: *id001

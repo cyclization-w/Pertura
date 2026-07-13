@@ -22,11 +22,17 @@ parameters_schema:
   properties:
     chunk_rows:
       type: integer
+      minimum: 1
     max_memory_gb:
-      type: integer
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
     n_jobs:
       type: integer
+      default: 1
+      minimum: 1
+  required: []
   additionalProperties: false
   examples:
-  - {}
+  - max_memory_gb: 4.0
 implemented: false

@@ -28,68 +28,43 @@ parameters_schema:
   properties:
     assignment_path:
       type: string
-    barcode_column:
-      type: string
+      description: Registered asset ID with role capability_artifact.
+      x-pertura-asset-role: capability_artifact
     chunk_rows:
       type: integer
-    design_moi:
-      type: string
-    doublet_score_column:
-      type: string
-    doublet_threshold:
-      type: number
-    filtered_guide_counts_path:
-      type: string
-      x-pertura-asset-role: guide_matrix
-      description: Registered asset ID with role guide_matrix.
-    guide_counts_path:
-      type: string
-      x-pertura-asset-role: guide_matrix
-      description: Registered asset ID with role guide_matrix.
-    guide_map_path:
-      type: string
-      x-pertura-asset-role: guide_map
-      description: Registered asset ID with role guide_map.
-    h5ad_path:
-      type: string
-      x-pertura-asset-role: primary_dataset
-      description: Registered asset ID with role primary_dataset.
-    max_iterations:
-      type: integer
+      minimum: 1
     max_memory_gb:
       type: number
       default: 4.0
       exclusiveMinimum: 0
-    metadata_barcode_column:
-      type: string
-    metadata_path:
-      type: string
-      x-pertura-asset-role: cell_metadata
-      description: Registered asset ID with role cell_metadata.
     moi_doublet_path:
       type: string
+      description: Registered asset ID with role capability_artifact.
+      x-pertura-asset-role: capability_artifact
     n_jobs:
       type: integer
       default: 1
       minimum: 1
-    posterior_threshold:
-      type: number
-    raw_guide_counts_path:
-      type: string
-      x-pertura-asset-role: guide_matrix
-      description: Registered asset ID with role guide_matrix.
-    rna_barcode_column:
-      type: string
-    rna_barcodes_path:
-      type: string
-      x-pertura-asset-role: rna_barcodes
-      description: Registered asset ID with role rna_barcodes.
-    tolerance:
-      type: number
+  required: []
   additionalProperties: false
   examples:
-  - {}
+  - max_memory_gb: 4.0
 implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
+  dependency_policy:
+    guide.assignment.nb_mixture.v1:
+      scope: exact
+      usage: scientific_input
+      accepted_statuses: &id001
+      - screen_passed
+      - caution
+    screen.moi_doublet.v1:
+      scope: exact
+      usage: scientific_input
+      accepted_statuses: *id001
+    guide.ambient.v1:
+      scope: exact
+      usage: validation_gate
+      accepted_statuses: *id001

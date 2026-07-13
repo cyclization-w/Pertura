@@ -22,67 +22,23 @@ timeout_seconds: 3600
 parameters_schema:
   type: object
   properties:
-    activity_threshold:
-      type: number
-    bootstraps:
-      type: string
     chunk_rows:
       type: integer
-    effect_threshold:
-      type: number
-    fdr_threshold:
-      type: number
-    max_gene_set_size:
-      type: integer
-    max_iter:
-      type: integer
+      minimum: 1
     max_memory_gb:
-      type: integer
-    max_records:
-      type: integer
-    min_features:
-      type: integer
-    min_gene_set_size:
-      type: integer
-    min_perturbations:
-      type: integer
-    minimum_feature_coverage:
-      type: integer
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
     minimum_targets:
       type: integer
-    missing_fraction_caution:
-      type: string
     n_jobs:
       type: integer
-    n_seeds:
-      type: integer
-    permutation_num:
-      type: integer
-    query:
-      type: string
-    ranks:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    records:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    seed:
-      type: integer
-    stability_threshold:
-      type: number
+      default: 1
+      minimum: 1
+  required: []
   additionalProperties: false
   examples:
-  - {}
+  - max_memory_gb: 4.0
 implemented: true
 metadata:
   validation_status: synthetic_only
@@ -90,3 +46,10 @@ metadata:
   derived_only: true
   environment_profile: interpretation-v1
   resource_profile: regulator-knowledge-v1
+  dependency_policy:
+    effect.matrix.assemble.v1:
+      scope: exact
+      usage: scientific_input
+      accepted_statuses:
+      - completed
+      - completed_with_caution

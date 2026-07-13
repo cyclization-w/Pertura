@@ -32,30 +32,38 @@ parameters_schema:
       type: string
     chunk_rows:
       type: integer
+      minimum: 1
     condition_column:
       type: string
     control_uid:
       type: string
     expected_direction:
       type: string
+      enum:
+      - down
+      - up
     expression_path:
       type: string
-      x-pertura-asset-role: primary_dataset
       description: Registered asset ID with role primary_dataset.
+      x-pertura-asset-role: primary_dataset
     guide_column:
       type: string
     layer_scale:
       type: string
     max_memory_gb:
-      type: integer
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
     metadata_path:
       type: string
-      x-pertura-asset-role: cell_metadata
       description: Registered asset ID with role cell_metadata.
+      x-pertura-asset-role: cell_metadata
     mixscape_class_column:
       type: string
     n_jobs:
       type: integer
+      default: 1
+      minimum: 1
     profile:
       type: string
     replicate_column:
@@ -63,27 +71,27 @@ parameters_schema:
     responder_labels:
       type: array
       items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+        type: string
     signature_genes:
       type: array
       items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+        type: string
     target_gene:
       type: string
     target_uid:
       type: string
+  required: []
   additionalProperties: false
   examples:
-  - {}
+  - max_memory_gb: 4.0
 implemented: true
 metadata:
   deprecated: true
   compatibility_only: true
+  dependency_policy:
+    diagnostic.guide_assignment.v1:
+      scope: exact
+      usage: validation_gate
+      accepted_statuses:
+      - screen_passed
+      - caution

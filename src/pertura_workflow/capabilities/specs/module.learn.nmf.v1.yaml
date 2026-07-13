@@ -26,60 +26,45 @@ parameters_schema:
   properties:
     chunk_rows:
       type: integer
+      minimum: 1
     control_column:
       type: string
     control_values:
       type: array
       items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    gene_universe:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    gmt_path:
-      type: string
-      x-pertura-asset-role: gene_modules
-      description: Registered asset ID with role gene_modules.
+        type: string
     h5ad_path:
       type: string
-      x-pertura-asset-role: primary_dataset
       description: Registered asset ID with role primary_dataset.
-    identifier_namespace:
-      type: string
+      x-pertura-asset-role: primary_dataset
     max_memory_gb:
-      type: integer
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
     n_jobs:
       type: integer
+      default: 1
+      minimum: 1
     ranks:
       type: array
       items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+        type: string
     seeds:
       type: array
       items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    species:
-      type: string
+        type: string
+  required: []
   additionalProperties: false
   examples:
-  - {}
+  - max_memory_gb: 4.0
 implemented: true
 metadata:
   deprecated: true
   compatibility_only: true
+  dependency_policy:
+    diagnostic.guide_assignment.v1:
+      scope: exact
+      usage: validation_gate
+      accepted_statuses:
+      - screen_passed
+      - caution

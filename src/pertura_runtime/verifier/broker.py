@@ -407,6 +407,7 @@ def _serve(
                                     "network_policy": network_policy.to_dict(),
                                     "broker_instance_id": instance_id,
                                     "enforce_environment_execution": True,
+                                    "enforce_dependency_consumption": True,
                                     "authorized_asset_paths": sorted(set(authorized_asset_paths)),
                                 },
                             )

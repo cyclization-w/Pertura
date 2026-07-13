@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import tomllib
@@ -289,7 +290,7 @@ def _package_version_check(root: Path) -> tuple[str, ReleaseCheck]:
 def audit_v020(
     repo_root: str | Path, *, require_clean_worktree: bool = True
 ) -> dict[str, Any]:
-    """Return the v3 pre-release audit (name retained for CLI compatibility)."""
+    """Return the v5 pre-release audit (name retained for CLI compatibility)."""
 
     from pertura_bench.capability_bench import (
         coverage_matrix,
@@ -314,18 +315,26 @@ def audit_v020(
         )
     )
 
-    from pertura_gate.core.policy import policy_for_profile
-
-    legacy_trusted = set(policy_for_profile("strict").trusted_runner_methods)
-    unsafe = sorted(
-        {"pseudobulk", "pseudobulk_de", "exploratory_normal_approximation"}
-        & legacy_trusted
+    forbidden_authority_tokens = (
+        "Evidence" + "Artifact",
+        "Evidence" + "Registry",
+        "mcp__pertura_" + "evidence__",
+        "import pertura_" + "gate",
+        "from pertura_" + "gate",
     )
+    authority_findings: list[str] = []
+    for package_root in (root / "src" / "pertura_runtime", root / "src" / "pertura_workflow", root / "src" / "pertura_bench"):
+        for source in package_root.rglob("*.py"):
+            content = source.read_text(encoding="utf-8")
+            if any(token in content for token in forbidden_authority_tokens):
+                authority_findings.append(source.relative_to(root).as_posix())
+    if (root / "src" / "pertura_gate").exists():
+        authority_findings.append("src/pertura_gate")
     checks.append(
         ReleaseCheck(
-            "legacy_approximation_not_trusted",
-            not unsafe,
-            f"unsafe trusted methods: {unsafe}",
+            "single_authority_spine",
+            not authority_findings,
+            f"active legacy authority references: {sorted(authority_findings)}",
             "runtime",
         )
     )
@@ -381,9 +390,11 @@ def audit_v020(
     )
     from pertura_runtime.parameter_protocol import parameter_protocol_complete
     from pertura_workflow.capabilities import CapabilityRegistry
+    active_registry = CapabilityRegistry.load_default(include_external=False)
+    active_specs = active_registry.specs()
     parameter_incomplete = [
         item.capability_id
-        for item in CapabilityRegistry.load_default(include_external=False).specs()
+        for item in active_specs
         if not parameter_protocol_complete(item)
     ]
     checks.append(
@@ -392,6 +403,45 @@ def audit_v020(
             not parameter_incomplete,
             f"incomplete parameter schemas: {parameter_incomplete}",
             "code",
+        )
+    )
+    dependency_policy_incomplete = [
+        item.capability_id
+        for item in active_specs
+        if set(item.depends_on) != set((item.metadata.get("dependency_policy") or {}).keys())
+    ]
+    checks.append(
+        ReleaseCheck(
+            "dependency_policy_complete",
+            not dependency_policy_incomplete,
+            f"incomplete dependency policies: {dependency_policy_incomplete}",
+            "runtime",
+        )
+    )
+    sparse_requirements = {
+        "guide_count_source": root / "src/pertura_workflow/capabilities/guide_counts.py",
+        "guide_candidate_runner": root / "src/pertura_workflow/capabilities/guide_candidates.py",
+        "state_candidate_runner": root / "src/pertura_workflow/capabilities/state_candidates.py",
+        "virtual_candidate_runner": root / "src/pertura_workflow/capabilities/p5_candidates.py",
+    }
+    sparse_tokens = {
+        "guide_count_source": ("GuideCountSource", "iter_row_chunks", "estimated_peak_memory"),
+        "guide_candidate_runner": ("open_guide_count_source", "resource_budget"),
+        "state_candidate_runner": ("resource_budget",),
+        "virtual_candidate_runner": ("resource_budget",),
+    }
+    sparse_problems = [
+        name
+        for name, path in sparse_requirements.items()
+        if not path.is_file()
+        or any(token not in path.read_text(encoding="utf-8") for token in sparse_tokens[name])
+    ]
+    checks.append(
+        ReleaseCheck(
+            "sparse_execution_kernel",
+            not sparse_problems,
+            f"missing sparse/resource-budget kernels: {sparse_problems}",
+            "runtime",
         )
     )
     project_files = (
@@ -494,24 +544,50 @@ def audit_v020(
     server_agent_catalog = json.loads(
         (root / "src/pertura_bench/cases/server_agent_cases.v1.json").read_text(encoding="utf-8")
     )
-    agent_verdict_root = root / "benchmarks" / "verdicts" / "agent"
-    real_agent_verdicts = []
-    for case in server_agent_catalog["cases"]:
-        path = agent_verdict_root / f"{case['case_id']}.json"
-        if path.is_file():
+    agent_verdict_root = Path(
+        os.environ.get("PERTURA_REAL_AGENT_VERDICT_ROOT")
+        or root / "benchmarks" / "verdicts" / "agent"
+    ).resolve()
+    required_agent_runs = {
+        (case["case_id"], condition, repeat_index)
+        for case in server_agent_catalog["cases"]
+        for condition in server_agent_catalog["conditions"]
+        for repeat_index in (1, 2)
+    }
+    observed_agent_runs: dict[tuple[str, str, int], dict[str, Any]] = {}
+    if agent_verdict_root.is_dir():
+        for path in agent_verdict_root.rglob("execution_verdict.json"):
             try:
-                real_agent_verdicts.append(json.loads(path.read_text(encoding="utf-8")))
-            except json.JSONDecodeError:
-                pass
+                verdict = json.loads(path.read_text(encoding="utf-8"))
+                grade_path = path.parent / "judge" / "grade.json"
+                grade = (
+                    json.loads(grade_path.read_text(encoding="utf-8"))
+                    if grade_path.is_file()
+                    else {}
+                )
+                key = (
+                    str(verdict.get("case_id") or ""),
+                    str(verdict.get("condition") or ""),
+                    int(verdict.get("repeat_index") or 0),
+                )
+                if key in required_agent_runs:
+                    observed_agent_runs[key] = {"verdict": verdict, "grade": grade}
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                continue
+    passed_agent_runs = sum(
+        item["verdict"].get("status") == "passed"
+        and item["grade"].get("status") == "passed"
+        for item in observed_agent_runs.values()
+    )
     real_agent_behavior_ready = (
-        len(real_agent_verdicts) == len(server_agent_catalog["cases"])
-        and all(item.get("status") == "passed" and item.get("judge_status") == "passed" for item in real_agent_verdicts)
+        set(observed_agent_runs) == required_agent_runs
+        and passed_agent_runs == len(required_agent_runs)
     )
     checks.append(
         ReleaseCheck(
             "real_agent_workflow_verdicts",
             real_agent_behavior_ready,
-            f"{sum(item.get('status') == 'passed' for item in real_agent_verdicts)}/{len(server_agent_catalog['cases'])} server agent cases passed with deepseek-v4-pro grades",
+            f"{passed_agent_runs}/{len(required_agent_runs)} controlled agent runs passed execution hard gates and deepseek-v4-pro grades",
             "real_agent",
         )
     )
@@ -616,9 +692,9 @@ def audit_v020(
             "local agent workflow verdicts must be regenerated for the current execution bundle"
         )
     if not real_benchmark_ready:
-        remaining.append("real-data artifact locks, subsets, and capability verdicts")
+        remaining.append("real-data artifact/subset locks, frozen design/parameter/reference catalogs, and capability verdicts")
     if not real_agent_behavior_ready:
-        remaining.append("8 real agent workflow verdicts and deepseek-v4-pro narrative grades")
+        remaining.append("48 three-condition agent runs and deepseek-v4-pro narrative grades")
     if "crispri_screen_v1.yaml" not in profiles:
         remaining.append("expert-adjudicated CRISPRi profile")
     if "crispra_screen_v1.yaml" not in profiles:
@@ -628,7 +704,7 @@ def audit_v020(
             "optional scientific environments not installed on this machine"
         )
     return {
-        "schema_version": "pertura-release-audit-v4",
+        "schema_version": "pertura-release-audit-v5",
         "target_version": "0.2.0",
         "build_version": build_version,
         "repository_ready": repository_ready,
@@ -637,6 +713,8 @@ def audit_v020(
         "asset_registry_ready": (root / "src/pertura_runtime/project/assets.py").is_file(),
         "conversation_turn_ready": (root / "src/pertura_runtime/project/lifecycle.py").is_file(),
         "report_revision_ready": (root / "src/pertura_runtime/project/models.py").is_file(),
+        "dependency_policy_ready": not dependency_policy_incomplete,
+        "sparse_execution_ready": not sparse_problems,
         "code_ready": code_ready,
         "local_fixture_ready": local_fixture_ready,
         "local_agent_protocol_ready": local_agent_ready,

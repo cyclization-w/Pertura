@@ -14,6 +14,20 @@ def execution_context() -> dict[str, Any]:
     return dict(_CONTEXT.get())
 
 
+def mark_dependency_consumed(*dependency_hashes: str) -> None:
+    consumed = _CONTEXT.get().get("consumed_dependency_hashes")
+    if not isinstance(consumed, set):
+        return
+    consumed.update(str(item) for item in dependency_hashes if str(item))
+
+
+def consumed_dependency_hashes() -> tuple[str, ...]:
+    consumed = _CONTEXT.get().get("consumed_dependency_hashes")
+    if not isinstance(consumed, set):
+        return ()
+    return tuple(sorted(str(item) for item in consumed))
+
+
 @contextmanager
 def bind_execution_context(payload: dict[str, Any] | None) -> Iterator[None]:
     token = _CONTEXT.set(dict(payload or {}))

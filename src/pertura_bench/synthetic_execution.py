@@ -81,6 +81,10 @@ def scientific_result_digest(
     scope.pop("scope_id", None)
     scope.pop("canonical_hash", None)
     metadata_payload = dict(payload.get("metadata") or {})
+    # Runtime dependency hashes bind one concrete execution and may include
+    # run/result identifiers. Scientific dependency content is represented
+    # separately below by benchmark_dependency_scientific_hashes.
+    metadata_payload.pop("consumed_dependency_hashes", None)
     semantic_hashes = metadata_payload.pop(
         "benchmark_scientific_output_hashes", None
     )
@@ -312,6 +316,11 @@ def make_verdict(
     reasons: tuple[str, ...] = (),
     scientific_hash: str | None = None,
     environment_lock_hash: str | None = None,
+    hard_gates: dict[str, bool] | None = None,
+    scientific_metrics_status: str = "not_required",
+    reference_hashes: dict[str, str] | None = None,
+    continuous_metrics: dict[str, float | int | str | None] | None = None,
+    limitations: tuple[str, ...] = (),
 ) -> CapabilityBenchmarkVerdict:
     return CapabilityBenchmarkVerdict(
         case_id=case.case_id,
@@ -321,6 +330,11 @@ def make_verdict(
         tier=case.tier,
         execution_mode=case.execution_mode,
         outcome=outcome,
+        hard_gates=hard_gates or {},
+        scientific_metrics_status=scientific_metrics_status,
+        reference_hashes=reference_hashes or {},
+        continuous_metrics=continuous_metrics or {},
+        limitations=limitations,
         observed_status=observed_status,
         observed_blockers=blockers,
         metrics=metrics,
@@ -871,7 +885,11 @@ def _execute_product_capability(
     workspace_root: Path,
     capability_id: str,
     scenario: str,
+    *,
+    pipeline_root: str | None = None,
 ) -> dict[str, Any]:
+    if pipeline_root is None:
+        pipeline_root = capability_id
     if capability_id in results:
         return results[capability_id]
     capability = runtime.registry.get(capability_id)
@@ -885,6 +903,7 @@ def _execute_product_capability(
             workspace_root,
             upstream_id,
             "happy",
+            pipeline_root=pipeline_root,
         )
         dependencies.append(
             {
@@ -900,6 +919,7 @@ def _execute_product_capability(
         files,
         results,
         workspace_root,
+        pipeline_root=pipeline_root,
     )
     if capability.kind == "diagnostic":
         compact = runtime.run_diagnostic(
@@ -991,6 +1011,8 @@ def _run_stale_audit(case: CapabilityBenchmarkCase, spec: Any) -> dict[str, Any]
                 "control": {"status": "confirmed", "value": "NTC"},
                 "replicate": {"status": "confirmed", "value": "replicate"},
                 "guide_target": {"status": "confirmed", "value": "guide_map.csv"},
+                "design_moi": {"status": "confirmed", "value": "low"},
+                "guide_design": {"status": "confirmed", "value": "single"},
             },
         )
         with temporary_environment(
@@ -1150,6 +1172,14 @@ def _run_product_once(case: CapabilityBenchmarkCase, spec: Any) -> dict[str, Any
                 "control": {"status": "confirmed", "value": "NTC"},
                 "replicate": {"status": "confirmed", "value": "replicate"},
                 "guide_target": {"status": "confirmed", "value": "guide_map.csv"},
+                "design_moi": {
+                    "status": "confirmed",
+                    "value": "high" if case.scenario == "caution_or_unresolved" else "low",
+                },
+                "guide_design": {
+                    "status": "confirmed",
+                    "value": "combinatorial" if case.scenario == "caution_or_unresolved" else "single",
+                },
             },
         )
         with temporary_environment(
@@ -1304,6 +1334,9 @@ def _write_fixture_files(root: Path) -> dict[str, Path]:
         "target_expression.csv",
         "target_metadata.csv",
         "target_metadata_two.csv",
+        "target_guide_counts.csv",
+        "target_raw_guide_counts.csv",
+        "target_rna_barcodes.csv",
         "guide_effects.csv",
         "guide_effects_bad.csv",
         "nulls.csv",
@@ -1414,6 +1447,21 @@ def _write_fixture_files(root: Path) -> dict[str, Path]:
     files["target_metadata_two.csv"].write_text(
         "\n".join(metadata_two) + "\n", encoding="utf-8"
     )
+    target_barcodes = [row.split(",", 1)[0] for row in metadata[1:]]
+    target_guide_rows = ["barcode,g1,g2"] + [
+        f"{cell},12,0" if index % 2 == 0 else f"{cell},0,12"
+        for index, cell in enumerate(target_barcodes)
+    ]
+    files["target_guide_counts.csv"].write_text(
+        "\n".join(target_guide_rows) + "\n", encoding="utf-8"
+    )
+    files["target_raw_guide_counts.csv"].write_text(
+        "\n".join(target_guide_rows + ["empty_1,1,0", "empty_2,0,1"]) + "\n",
+        encoding="utf-8",
+    )
+    files["target_rna_barcodes.csv"].write_text(
+        "barcode\n" + "\n".join(target_barcodes) + "\n", encoding="utf-8"
+    )
     files["guide_effects.csv"].write_text(
         "guide,target,effect\n"
         "g1,T1,-1.0\n"
@@ -1457,8 +1505,14 @@ def _fixture_parameters(
     files: dict[str, Path],
     results: dict[str, dict[str, Any]],
     workspace_root: Path,
+    *,
+    pipeline_root: str,
 ) -> dict[str, Any]:
     bad = scenario in {"blocked", "planted_failure"}
+    target_pipeline = pipeline_root in {
+        "target.guide_efficacy.v1",
+        "effect.guide_target_sensitivity.v1",
+    }
     if capability_id == "diagnostic.contract_integrity.v1":
         return {}
     if capability_id == "intake.materialize.v1":
@@ -1488,32 +1542,35 @@ def _fixture_parameters(
         )
         return {"metadata_path": str(files[selected])}
     if capability_id == "guide.integrity.v1":
+        guide_counts = "target_guide_counts.csv" if target_pipeline else "guide_counts.csv"
+        rna_barcodes = "target_rna_barcodes.csv" if target_pipeline else "rna_barcodes.csv"
         return {
-            "guide_counts_path": str(files["guide_counts.csv"]),
-            "rna_barcodes_path": str(files["rna_barcodes.csv"]),
+            "guide_counts_path": str(files[guide_counts]),
+            "rna_barcodes_path": str(files[rna_barcodes]),
             "guide_map_path": str(
                 files["guide_map_bad.csv"] if bad else files["guide_map.csv"]
             ),
         }
     if capability_id == "guide.assignment.nb_mixture.v1":
+        guide_counts = "target_guide_counts.csv" if target_pipeline else "guide_counts.csv"
         return {
             "guide_counts_path": str(
-                files["negative.csv"] if bad else files["guide_counts.csv"]
+                files["negative.csv"] if bad else files[guide_counts]
             ),
             "posterior_threshold": 0.90,
             "max_iterations": 200,
             "tolerance": 1e-6,
         }
     if capability_id == "guide.ambient.v1":
+        filtered = "target_guide_counts.csv" if target_pipeline else "guide_counts.csv"
+        raw = "target_raw_guide_counts.csv" if target_pipeline else "raw_guide_counts.csv"
         if scenario == "caution_or_unresolved":
-            return {
-                "filtered_guide_counts_path": str(files["guide_counts.csv"])
-            }
+            return {"filtered_guide_counts_path": str(files[filtered])}
         return {
             "raw_guide_counts_path": str(
-                files["raw_guide_bad.csv"] if bad else files["raw_guide_counts.csv"]
+                files["raw_guide_bad.csv"] if bad else files[raw]
             ),
-            "filtered_guide_counts_path": str(files["guide_counts.csv"]),
+            "filtered_guide_counts_path": str(files[filtered]),
         }
     if capability_id == "screen.moi_doublet.v1":
         return {
@@ -1546,7 +1603,6 @@ def _fixture_parameters(
                 "moi_doublet.json",
                 workspace_root,
             ),
-            "design_moi": "high" if scenario == "caution_or_unresolved" else "low",
         }
     if capability_id == "target.guide_efficacy.v1":
         return {

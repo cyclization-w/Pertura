@@ -32,90 +32,81 @@ parameters_schema:
       type: string
     chunk_rows:
       type: integer
+      minimum: 1
     condition_column:
-      type: string
-    control:
       type: string
     control_uid:
       type: string
     expected_direction:
       type: string
+      enum:
+      - down
+      - up
     expression_path:
       type: string
-      x-pertura-asset-role: primary_dataset
       description: Registered asset ID with role primary_dataset.
+      x-pertura-asset-role: primary_dataset
     guide_bootstrap_iterations:
       type: integer
     guide_column:
       type: string
-    h5ad_path:
-      type: string
-      x-pertura-asset-role: primary_dataset
-      description: Registered asset ID with role primary_dataset.
-    iter_num:
-      type: integer
     layer_scale:
       type: string
-    logfc_threshold:
-      type: number
     max_memory_gb:
       type: number
       default: 4.0
       exclusiveMinimum: 0
     metadata_path:
       type: string
-      x-pertura-asset-role: cell_metadata
       description: Registered asset ID with role cell_metadata.
-    min_de_genes:
-      type: integer
-    n_dims:
-      type: integer
+      x-pertura-asset-role: cell_metadata
     n_jobs:
       type: integer
       default: 1
       minimum: 1
-    n_neighbors:
-      type: integer
-    new_class_name:
-      type: string
-    pert_key:
-      type: string
-    perturbation_type:
-      type: string
     profile:
-      type: string
-    pval_cutoff:
-      type: string
-    ref_selection_mode:
       type: string
     replicate_column:
       type: string
-    scale:
-      type: boolean
     signature_genes:
       type: array
       items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+        type: string
     signature_learned_from_same_perturbation:
       type: boolean
     signature_test_split_used:
       type: boolean
-    split_by:
-      type: string
     target_gene:
       type: string
     target_uid:
       type: string
-    use_rep:
-      type: string
+  required:
+  - expression_path
+  - metadata_path
+  - target_uid
+  - control_uid
+  - target_gene
+  - expected_direction
   additionalProperties: false
   examples:
-  - {}
+  - expression_path: asset_example_primary_dataset
+    metadata_path: asset_example_cell_metadata
+    target_uid: example
+    control_uid: example
+    target_gene: example
+    expected_direction: down
 implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
+  dependency_policy:
+    screen.retained_cells.v1:
+      scope: exact
+      usage: row_filter
+      accepted_statuses: &id001
+      - screen_passed
+      - caution
+    diagnostic.design_balance.v1:
+      scope: exact
+      usage: validation_gate
+      accepted_statuses: *id001

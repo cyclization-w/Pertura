@@ -12,11 +12,13 @@ from pertura_core.hashing import file_sha256
 def retained_cells_for_request(
     staging: Path,
     request: CapabilityRunRequest,
+    *,
+    required: bool = False,
 ) -> set[str] | None:
     """Load and verify the retained-cell manifest bound to this request.
 
-    Direct legacy runner tests may omit scientific dependencies and receive
-    None. Broker-mediated trusted execution includes an explicit retained-cell
+    Direct algorithm tests may omit scientific dependencies and receive None.
+    Broker-mediated execution includes an explicit retained-cell
     dependency; absence, ambiguity, or hash drift is fatal before statistics.
     """
 
@@ -24,10 +26,16 @@ def retained_cells_for_request(
         item for item in request.dependencies if item.kind == "retained_cell_manifest"
     ]
     if not bindings:
+        if required:
+            from pertura_workflow.capabilities.execution_context import execution_context
+            if execution_context().get("enforce_dependency_consumption"):
+                raise ValueError("required retained-cell dependency is missing")
         return None
     if len({item.object_id for item in bindings}) != 1:
         raise ValueError("retained-cell dependency is ambiguous")
     dependency_result_id = bindings[0].object_id
+    from pertura_workflow.capabilities.execution_context import mark_dependency_consumed
+    mark_dependency_consumed(bindings[0].object_hash)
     projection_path = staging / "_dependency_results.json"
     if not projection_path.is_file():
         raise ValueError("retained-cell dependency projection is missing")

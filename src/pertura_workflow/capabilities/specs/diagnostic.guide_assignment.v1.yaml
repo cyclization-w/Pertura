@@ -24,54 +24,60 @@ parameters_schema:
     balance_columns:
       type: array
       items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+        type: string
     barcode_column:
       type: string
     chunk_rows:
       type: integer
+      minimum: 1
     design_moi:
       type: string
+      enum:
+      - low
+      - high
+      - unknown
     doublet_score_column:
       type: string
     doublet_threshold:
       type: number
     guide_counts_path:
       type: string
-      x-pertura-asset-role: guide_matrix
       description: Registered asset ID with role guide_matrix.
+      x-pertura-asset-role: guide_matrix
     guide_map_path:
       type: string
-      x-pertura-asset-role: guide_map
       description: Registered asset ID with role guide_map.
+      x-pertura-asset-role: guide_map
     max_memory_gb:
-      type: integer
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
     metadata_barcode_column:
       type: string
     metadata_path:
       type: string
-      x-pertura-asset-role: cell_metadata
       description: Registered asset ID with role cell_metadata.
+      x-pertura-asset-role: cell_metadata
     n_jobs:
       type: integer
+      default: 1
+      minimum: 1
     posterior_threshold:
       type: number
     raw_guide_counts_path:
       type: string
-      x-pertura-asset-role: guide_matrix
       description: Registered asset ID with role guide_matrix.
+      x-pertura-asset-role: guide_matrix
     rna_barcode_column:
       type: string
     rna_barcodes_path:
       type: string
-      x-pertura-asset-role: rna_barcodes
       description: Registered asset ID with role rna_barcodes.
+      x-pertura-asset-role: rna_barcodes
+  required: []
   additionalProperties: false
   examples:
-  - {}
+  - max_memory_gb: 4.0
 implemented: true
 metadata:
   deprecated: true

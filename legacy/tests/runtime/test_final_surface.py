@@ -37,8 +37,7 @@ def test_claude_prompt_files_are_written(tmp_path: Path) -> None:
     assert "CodeAct remains available" in contract
     assert "independent verifier" in contract
     helper = workspace.task_dir / "helpers" / "policy_threshold_probe.py"
-    assert helper.exists()
-    assert "policy_threshold_probe_ok" in helper.read_text(encoding="utf-8")
+    assert not helper.exists(), "the active product must not inject the legacy policy helper"
 
 def test_prompt_records_interaction_mode(tmp_path: Path) -> None:
     workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
@@ -491,14 +490,13 @@ def test_p06_smoke_task_contracts_use_manifest_uid_scope() -> None:
     assert "Strict policy caps" in smoke05
 
 
-def test_policy_threshold_helper_is_staged_into_run_bundle(tmp_path: Path) -> None:
+def test_policy_threshold_helper_is_not_staged_into_active_run_bundle(tmp_path: Path) -> None:
     workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="run1")
 
     write_prompt_files(workspace, task="Smoke 05")
 
     helper = workspace.task_dir / "helpers" / "policy_threshold_probe.py"
-    assert helper.exists()
-    assert "policy_threshold_probe_ok" in helper.read_text(encoding="utf-8")
+    assert not helper.exists(), "the active product must not inject the legacy policy helper"
 
 def test_policy_threshold_helper_script_generates_decisions(tmp_path: Path, monkeypatch) -> None:
     import runpy

@@ -3,6 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from pertura_bench.agent_models import (
+    AgentWorkflowCase,
+    AgentWorkflowVerdict,
+    JudgeManifest,
+)
 from pertura_bench.capability_models import (
     CapabilityBenchmarkCase,
     CapabilityBenchmarkMatrix,
@@ -26,6 +31,9 @@ from pertura_bench.models import (
 
 
 BENCHMARK_MODELS = (
+    AgentWorkflowCase,
+    AgentWorkflowVerdict,
+    JudgeManifest,
     BenchmarkSourceManifest,
     BenchmarkArtifactLock,
     BenchmarkSubsetSpec,

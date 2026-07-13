@@ -23,6 +23,7 @@ from pertura_workflow.capabilities.candidate_common import (
     write_json,
 )
 from pertura_workflow.environment import environment_prefix, micromamba_path
+from pertura_workflow.capabilities.dependency_inputs import retained_cells_for_request
 
 
 def run_sceptre_association(
@@ -54,10 +55,18 @@ def run_sceptre_association(
             resolved = resolve_input(contract, request.parameters[name], label=name)
             assert resolved is not None
             paths[name] = resolved
+    retained = retained_cells_for_request(staging, request, required=True)
+    retained_path = staging / "sceptre_retained_cells.txt"
+    if retained is not None:
+        retained_path.write_text(
+            "\n".join(sorted(retained)) + "\n",
+            encoding="utf-8",
+        )
     config = {
         "schema_version": "pertura-sceptre-run-config-v1",
         **{key: str(value) for key, value in paths.items()},
         "output_dir": str(staging),
+        "retained_cell_ids_path": str(retained_path) if retained is not None else None,
         "moi": "high",
         "side": str(request.parameters.get("side") or "both"),
         "grna_integration_strategy": str(
@@ -159,8 +168,18 @@ def run_sceptre_association(
             "calibration_type1_rate": metadata.get("calibration_type1_rate"),
             "calibration_passed": True,
         },
-        outputs=(config_path, calibration_path, results_path, metadata_path),
-        metadata={"environment_profile": "sceptre-v1", "method": "sceptre_0.99.0"},
+        outputs=(
+            config_path,
+            *((retained_path,) if retained is not None else ()),
+            calibration_path,
+            results_path,
+            metadata_path,
+        ),
+        metadata={
+            "environment_profile": "sceptre-v1",
+            "method": "sceptre_0.99.0",
+            "retained_manifest_applied": retained is not None,
+        },
     )
 
 

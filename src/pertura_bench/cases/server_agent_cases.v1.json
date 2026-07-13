@@ -1,14 +1,276 @@
 {
-  "schema_version": "pertura-server-agent-case-catalog-v1",
-  "judge": {"provider":"deepseek","model":"deepseek-v4-pro","temperature":0.0,"fallback_allowed":false},
-  "cases": [
-    {"case_id":"agent_replogle_qc","dataset_id":"replogle_k562_essential_2022","objective":"guide and screen QC"},
-    {"case_id":"agent_replogle_target","dataset_id":"replogle_k562_essential_2022","objective":"target reliability follow-up"},
-    {"case_id":"agent_papalexi_state","dataset_id":"papalexi_thp1_eccite","objective":"state and Mixscape"},
-    {"case_id":"agent_papalexi_stale","dataset_id":"papalexi_thp1_eccite","objective":"label confirmation and stale handling"},
-    {"case_id":"agent_norman_sceptre","dataset_id":"norman_k562_crispra_2019","objective":"high-MOI SCEPTRE"},
-    {"case_id":"agent_norman_virtual","dataset_id":"norman_k562_crispra_2019","objective":"virtual evaluator and next panel"},
-    {"case_id":"agent_kang_edger","dataset_id":"kang18_8vs8_pbmc","objective":"replicated edgeR effect; state explicitly that Kang is not Perturb-seq"},
-    {"case_id":"agent_kang_propeller","dataset_id":"kang18_8vs8_pbmc","objective":"Propeller composition; state explicitly that Kang is not Perturb-seq"}
-  ]
+    "schema_version":  "pertura-server-agent-case-catalog-v1",
+    "judge":  {
+                  "provider":  "deepseek",
+                  "model":  "deepseek-v4-pro",
+                  "temperature":  0.0,
+                  "fallback_allowed":  false
+              },
+    "cases":  [
+                  {
+                      "case_id":  "agent_replogle_qc",
+                      "dataset_id":  "replogle_k562_essential_2022",
+                      "objective":  "guide and screen QC",
+                      "expected_turns":  1,
+                      "expected_capability_dag":  [
+                                                      "guide.integrity.v1",
+                                                      "guide.assignment.nb_mixture.v1",
+                                                      "guide.ambient.v1",
+                                                      "screen.moi_doublet.v1",
+                                                      "screen.retained_cells.v1"
+                                                  ],
+                      "expected_statuses":  [
+                                                "completed",
+                                                "needs_input",
+                                                "blocked"
+                                            ],
+                      "required_result_roles":  [
+
+                                                ],
+                      "required_artifact_roles":  [
+                                                      "primary_dataset"
+                                                  ],
+                      "scope_claim_constraints":  [
+                                                      "no_cell_as_replicate",
+                                                      "no_prediction_as_measurement",
+                                                      "no_candidate_as_strong_measured"
+                                                  ],
+                      "max_memory_gb":  4,
+                      "timeout_seconds":  1800,
+                      "followup_prompts":  [
+
+                                           ]
+                  },
+                  {
+                      "case_id":  "agent_replogle_target",
+                      "dataset_id":  "replogle_k562_essential_2022",
+                      "objective":  "target reliability follow-up",
+                      "expected_turns":  1,
+                      "expected_capability_dag":  [
+                                                      "target.guide_efficacy.v1",
+                                                      "target.responder.mixscape.v1",
+                                                      "target.reliability.aggregate.v1"
+                                                  ],
+                      "expected_statuses":  [
+                                                "completed",
+                                                "needs_input",
+                                                "blocked"
+                                            ],
+                      "required_result_roles":  [
+
+                                                ],
+                      "required_artifact_roles":  [
+                                                      "primary_dataset"
+                                                  ],
+                      "scope_claim_constraints":  [
+                                                      "no_cell_as_replicate",
+                                                      "no_prediction_as_measurement",
+                                                      "no_candidate_as_strong_measured"
+                                                  ],
+                      "max_memory_gb":  4,
+                      "timeout_seconds":  1800,
+                      "followup_prompts":  [
+
+                                           ]
+                  },
+                  {
+                      "case_id":  "agent_papalexi_state",
+                      "dataset_id":  "papalexi_thp1_eccite",
+                      "objective":  "state and Mixscape",
+                      "expected_turns":  1,
+                      "expected_capability_dag":  [
+                                                      "state.reference.fit.v1",
+                                                      "state.reference.map_knn.v1",
+                                                      "target.responder.mixscape.v1"
+                                                  ],
+                      "expected_statuses":  [
+                                                "completed",
+                                                "needs_input",
+                                                "blocked"
+                                            ],
+                      "required_result_roles":  [
+
+                                                ],
+                      "required_artifact_roles":  [
+                                                      "primary_dataset"
+                                                  ],
+                      "scope_claim_constraints":  [
+                                                      "no_cell_as_replicate",
+                                                      "no_prediction_as_measurement",
+                                                      "no_candidate_as_strong_measured"
+                                                  ],
+                      "max_memory_gb":  4,
+                      "timeout_seconds":  1800,
+                      "followup_prompts":  [
+
+                                           ]
+                  },
+                  {
+                      "case_id":  "agent_papalexi_stale",
+                      "dataset_id":  "papalexi_thp1_eccite",
+                      "objective":  "label confirmation and stale handling",
+                      "expected_turns":  2,
+                      "expected_capability_dag":  [
+                                                      "state.reference.fit.v1",
+                                                      "state.annotation_candidates.v1"
+                                                  ],
+                      "expected_statuses":  [
+                                                "completed",
+                                                "needs_input",
+                                                "blocked"
+                                            ],
+                      "required_result_roles":  [
+
+                                                ],
+                      "required_artifact_roles":  [
+                                                      "primary_dataset"
+                                                  ],
+                      "scope_claim_constraints":  [
+                                                      "no_cell_as_replicate",
+                                                      "no_prediction_as_measurement",
+                                                      "no_candidate_as_strong_measured"
+                                                  ],
+                      "max_memory_gb":  4,
+                      "timeout_seconds":  1800,
+                      "followup_prompts":  [
+                                               "A curator confirms the state label mapping recorded in the benchmark design-confirmation catalog. Re-open the current project state, identify which prior results became stale, and continue without reusing stale evidence."
+                                           ]
+                  },
+                  {
+                      "case_id":  "agent_norman_sceptre",
+                      "dataset_id":  "norman_k562_crispra_2019",
+                      "objective":  "high-MOI SCEPTRE",
+                      "expected_turns":  1,
+                      "expected_capability_dag":  [
+                                                      "screen.retained_cells.v1",
+                                                      "diagnostic.design_balance.v1",
+                                                      "association.sceptre.v1"
+                                                  ],
+                      "expected_statuses":  [
+                                                "completed",
+                                                "needs_input",
+                                                "blocked"
+                                            ],
+                      "required_result_roles":  [
+
+                                                ],
+                      "required_artifact_roles":  [
+                                                      "primary_dataset"
+                                                  ],
+                      "scope_claim_constraints":  [
+                                                      "no_cell_as_replicate",
+                                                      "no_prediction_as_measurement",
+                                                      "no_candidate_as_strong_measured"
+                                                  ],
+                      "max_memory_gb":  4,
+                      "timeout_seconds":  1800,
+                      "followup_prompts":  [
+
+                                           ]
+                  },
+                  {
+                      "case_id":  "agent_norman_virtual",
+                      "dataset_id":  "norman_k562_crispra_2019",
+                      "objective":  "virtual evaluator and next panel",
+                      "expected_turns":  1,
+                      "expected_capability_dag":  [
+                                                      "virtual.split.contract.v1",
+                                                      "virtual.prediction.ingest.v1",
+                                                      "virtual.leakage.audit.v1",
+                                                      "virtual.baselines.v1",
+                                                      "virtual.evaluate.comprehensive.v1",
+                                                      "design.next_panel.v1"
+                                                  ],
+                      "expected_statuses":  [
+                                                "completed",
+                                                "needs_input",
+                                                "blocked"
+                                            ],
+                      "required_result_roles":  [
+
+                                                ],
+                      "required_artifact_roles":  [
+                                                      "primary_dataset"
+                                                  ],
+                      "scope_claim_constraints":  [
+                                                      "no_cell_as_replicate",
+                                                      "no_prediction_as_measurement",
+                                                      "no_candidate_as_strong_measured"
+                                                  ],
+                      "max_memory_gb":  4,
+                      "timeout_seconds":  1800,
+                      "followup_prompts":  [
+
+                                           ]
+                  },
+                  {
+                      "case_id":  "agent_kang_edger",
+                      "dataset_id":  "kang18_8vs8_pbmc",
+                      "objective":  "replicated edgeR effect; state explicitly that Kang is not Perturb-seq",
+                      "expected_turns":  1,
+                      "expected_capability_dag":  [
+                                                      "diagnostic.design_balance.v1",
+                                                      "calibration.replicate_null.v1",
+                                                      "de.pseudobulk.edger.v1"
+                                                  ],
+                      "expected_statuses":  [
+                                                "completed",
+                                                "needs_input",
+                                                "blocked"
+                                            ],
+                      "required_result_roles":  [
+
+                                                ],
+                      "required_artifact_roles":  [
+                                                      "primary_dataset"
+                                                  ],
+                      "scope_claim_constraints":  [
+                                                      "no_cell_as_replicate",
+                                                      "no_prediction_as_measurement",
+                                                      "no_candidate_as_strong_measured"
+                                                  ],
+                      "max_memory_gb":  4,
+                      "timeout_seconds":  1800,
+                      "followup_prompts":  [
+
+                                           ]
+                  },
+                  {
+                      "case_id":  "agent_kang_propeller",
+                      "dataset_id":  "kang18_8vs8_pbmc",
+                      "objective":  "Propeller composition; state explicitly that Kang is not Perturb-seq",
+                      "expected_turns":  1,
+                      "expected_capability_dag":  [
+                                                      "state.reference.map_knn.v1",
+                                                      "diagnostic.design_balance.v1",
+                                                      "composition.propeller.v1"
+                                                  ],
+                      "expected_statuses":  [
+                                                "completed",
+                                                "needs_input",
+                                                "blocked"
+                                            ],
+                      "required_result_roles":  [
+
+                                                ],
+                      "required_artifact_roles":  [
+                                                      "primary_dataset"
+                                                  ],
+                      "scope_claim_constraints":  [
+                                                      "no_cell_as_replicate",
+                                                      "no_prediction_as_measurement",
+                                                      "no_candidate_as_strong_measured"
+                                                  ],
+                      "max_memory_gb":  4,
+                      "timeout_seconds":  1800,
+                      "followup_prompts":  [
+
+                                           ]
+                  }
+              ],
+    "conditions":  [
+                       "pertura_full",
+                       "prompt_only",
+                       "free_codeact"
+                   ]
 }

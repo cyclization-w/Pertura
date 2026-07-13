@@ -21,7 +21,7 @@ These documents preserve the pre-capability architecture, paper-facing experimen
 
 - [Smoke and benchmark results](../08_smoke_and_benchmark_results.md)
 - `docs/results/` freeze summaries and generated comparison tables
-- `docs/smoke_tasks/` and `docs/p07_tasks/` historical prompts
-- `docs/stages/cards/`, `docs/stages/contracts/`, and `docs/stages/templates/` legacy workflow resources
+- `legacy/docs/smoke_tasks/` and `legacy/docs/p07_tasks/` historical prompts
+- `legacy/docs/stages/cards/`, `legacy/docs/stages/contracts/`, and `legacy/docs/stages/templates/` legacy workflow resources
 
 Legacy documentation is read-only migration context. Current behavior is defined by the v0.2 compatibility snapshots, bundled capability specifications, current tests, and the capability-first documents linked from [the main documentation index](../README.md).

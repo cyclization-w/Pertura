@@ -23,68 +23,39 @@ parameters_schema:
   properties:
     alpha:
       type: number
-    assignment_method:
-      type: string
-    batch_column:
-      type: string
-    calibration_group_size:
-      type: number
-    calibration_type1_threshold:
-      type: number
     chunk_rows:
       type: integer
-    condition_column:
-      type: string
-    contrast:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    effect_table_path:
-      type: string
-    grna_integration_strategy:
-      type: number
+      minimum: 1
     max_memory_gb:
       type: number
       default: 4.0
       exclusiveMinimum: 0
     maximum_type1_rate:
-      type: string
-    metadata_path:
-      type: string
-      x-pertura-asset-role: cell_metadata
-      description: Registered asset ID with role cell_metadata.
+      type: number
     method:
       type: string
-    moi:
-      type: string
-    multiple_testing_alpha:
-      type: number
-    n_calibration_pairs:
-      type: integer
     n_jobs:
       type: integer
       default: 1
       minimum: 1
     null_results_path:
       type: string
+      description: Registered asset ID with role null_results.
+      x-pertura-asset-role: null_results
     permutation_unit:
       type: string
-    sample_column:
-      type: string
-    side:
-      type: string
-    state_column:
-      type: string
-    timeout_seconds:
-      type: integer
+  required: []
   additionalProperties: false
   examples:
-  - {}
+  - max_memory_gb: 4.0
 implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
+  dependency_policy:
+    diagnostic.design_balance.v1:
+      scope: exact
+      usage: validation_gate
+      accepted_statuses:
+      - screen_passed
+      - caution

@@ -20,6 +20,8 @@ from pertura_bench.real_execution import (
     _real_case,
     _real_identity_hashes,
     first_existing,
+    load_design_confirmation_catalog,
+    load_metric_reference_catalog,
     load_real_parameter_catalog,
     resolve_real_artifact_chain,
     run_real_tier,
@@ -219,6 +221,9 @@ def run_protocol_cases(
     split: str | None = None,
     cache: str | Path | None = None,
     output: str | Path | None = None,
+    parameter_catalog_path: str | Path | None = None,
+    design_confirmations_path: str | Path | None = None,
+    metric_reference_catalog_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     matching = [item for item in benchmark_specs() if item.capability_id == capability_id]
     if not matching:
@@ -233,6 +238,9 @@ def run_protocol_cases(
             split=split,
             cache=cache,
             output=output,
+            parameter_catalog_path=parameter_catalog_path,
+            design_confirmations_path=design_confirmations_path,
+            metric_reference_catalog_path=metric_reference_catalog_path,
         )
     elif tier in {"unit", "synthetic_ci"}:
         verdicts = [
@@ -475,6 +483,8 @@ def _real_verdict_current(root: Path, spec: CapabilityBenchmarkSpec) -> bool:
     registry = CapabilityRegistry.load_default(include_external=False)
     capability = registry.get(spec.capability_id, spec.capability_version)
     parameter_catalog, parameter_catalog_hash = load_real_parameter_catalog()
+    _, design_catalog_hash = load_design_confirmation_catalog()
+    _, metric_catalog_hash = load_metric_reference_catalog()
     try:
         checkpoint = _load_checkpoint_binding(root)
     except (FileNotFoundError, ValueError, OSError):
@@ -500,6 +510,8 @@ def _real_verdict_current(root: Path, spec: CapabilityBenchmarkSpec) -> bool:
                         split=split,
                         parameter_catalog=parameter_catalog,
                         parameter_catalog_hash=parameter_catalog_hash,
+                        design_catalog_hash=design_catalog_hash,
+                        metric_catalog_hash=metric_catalog_hash,
                     )
                     expected = _real_identity_hashes(
                         root,
@@ -509,6 +521,8 @@ def _real_verdict_current(root: Path, spec: CapabilityBenchmarkSpec) -> bool:
                         split=split,
                         tier=tier,
                         parameter_catalog_hash=parameter_catalog_hash,
+                        design_catalog_hash=design_catalog_hash,
+                        metric_catalog_hash=metric_catalog_hash,
                     )
                 except (ValueError, OSError, json.JSONDecodeError):
                     return False
@@ -538,6 +552,11 @@ def _real_verdict_current(root: Path, spec: CapabilityBenchmarkSpec) -> bool:
                     or not _SHA256_VALUE.fullmatch(verdict.scientific_result_hash)
                     or verdict.environment_lock_hash
                     != expected.get("environment_lock")
+                    or not verdict.hard_gates
+                    or not all(verdict.hard_gates.values())
+                    or verdict.scientific_metrics_status not in {"passed", "reported_only"}
+                    or not verdict.reference_hashes
+                    or not verdict.continuous_metrics
                 ):
                     return False
     return expected_count > 0
@@ -588,16 +607,36 @@ def write_synthetic_verdicts(
 
 def server_benchmark_plan(
     repo_root: str | Path | None = None,
+    *,
+    parameter_catalog_path: str | Path | None = None,
+    design_confirmations_path: str | Path | None = None,
+    metric_reference_catalog_path: str | Path | None = None,
 ) -> ServerBenchmarkPlan:
-    return build_server_plan(benchmark_specs(), repo_root)
+    return build_server_plan(
+        benchmark_specs(),
+        repo_root,
+        parameter_catalog_path=parameter_catalog_path,
+        design_confirmations_path=design_confirmations_path,
+        metric_reference_catalog_path=metric_reference_catalog_path,
+    )
 
 
 def write_server_plan(
-    path: str | Path, *, repo_root: str | Path | None = None
+    path: str | Path,
+    *,
+    repo_root: str | Path | None = None,
+    parameter_catalog_path: str | Path | None = None,
+    design_confirmations_path: str | Path | None = None,
+    metric_reference_catalog_path: str | Path | None = None,
 ) -> dict[str, Any]:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    plan = server_benchmark_plan(repo_root)
+    plan = server_benchmark_plan(
+        repo_root,
+        parameter_catalog_path=parameter_catalog_path,
+        design_confirmations_path=design_confirmations_path,
+        metric_reference_catalog_path=metric_reference_catalog_path,
+    )
     _write_text_lf(
         destination,
         json.dumps(plan.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",

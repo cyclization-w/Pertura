@@ -16,7 +16,7 @@ from pertura_bench.release_gate import (
 )
 
 
-def test_release_audit_v4_separates_product_runtime_fixture_and_real_state(
+def test_release_audit_v5_separates_product_runtime_fixture_and_real_state(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("PERTURA_CACHE_DIR", str(tmp_path / "empty-cache"))
@@ -26,11 +26,15 @@ def test_release_audit_v4_separates_product_runtime_fixture_and_real_state(
     audit = audit_v020(root, require_clean_worktree=False)
     checks = {item["check_id"]: item for item in audit["checks"]}
     assert checks["default_domain_tool_count"]["passed"] is True
-    assert checks["legacy_approximation_not_trusted"]["passed"] is True
+    assert checks["single_authority_spine"]["passed"] is True
+    assert checks["dependency_policy_complete"]["passed"] is True
+    assert checks["sparse_execution_kernel"]["passed"] is True
     assert checks["dashboard_production_bundle"]["passed"] is True
     assert checks["candidate_case_catalog"]["passed"] is True
     assert checks["server_plan_no_manual_placeholders"]["passed"] is True
-    assert audit["schema_version"] == "pertura-release-audit-v4"
+    assert audit["schema_version"] == "pertura-release-audit-v5"
+    assert audit["dependency_policy_ready"] is True
+    assert audit["sparse_execution_ready"] is True
     assert audit["project_lifecycle_ready"] is True
     assert audit["asset_registry_ready"] is True
     assert audit["conversation_turn_ready"] is True

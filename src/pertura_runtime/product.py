@@ -394,14 +394,7 @@ class PerturaProductRuntime:
 
         report_json = self.workspace.reports_dir / "capability_report.json"
         report_md = self.workspace.reports_dir / "capability_report.md"
-        phase_6_results = [
-            item for item in exploratory_results
-            if self.registry.get(item["capability_id"], item["capability_version"]).phase == 6
-        ]
-        phase_7_results = [
-            item for item in exploratory_results
-            if self.registry.get(item["capability_id"], item["capability_version"]).phase == 7
-        ]
+
         turn_finals = []
         if self.project_workspace is not None:
             store = self.project_workspace.store
@@ -429,8 +422,6 @@ class PerturaProductRuntime:
             "results": results,
             "trusted_results": trusted_results,
             "exploratory_results": exploratory_results,
-            "phase_6_interpretation_results": phase_6_results,
-            "phase_7_virtual_design_results": phase_7_results,
             "unverified_results": unverified_results,
             "prediction_results": prediction_results,
             "curated_prior_results": prior_results,

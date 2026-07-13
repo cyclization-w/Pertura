@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 
@@ -10,12 +11,18 @@ from pertura_workflow.capabilities import CapabilityRegistry
 from pertura_workflow.capabilities.executors import execute_capability
 
 
-def _contract(root: Path, *, expression: dict | None = None) -> DatasetContract:
+def _contract(
+    root: Path,
+    *,
+    expression: dict | None = None,
+    identity_fields: dict | None = None,
+) -> DatasetContract:
     return DatasetContract(
         dataset_id="synthetic",
         input_format="csv",
         source_paths=(str(root),),
         expression_matrix=expression or {"raw_counts_confirmed": True},
+        identity_fields=identity_fields or {},
     )
 
 
@@ -164,7 +171,13 @@ def test_p1_granular_guide_pipeline_keeps_multiguide_separate_from_doublets(tmp_
     )
     guide_map = tmp_path / "guide_map.csv"
     guide_map.write_text("guide,target\ng1,T1\ng2,T2\n", encoding="utf-8")
-    contract = _contract(tmp_path)
+    contract = _contract(
+        tmp_path,
+        identity_fields={
+            "design_moi": {"value": "high", "status": "confirmed"},
+            "guide_design": {"value": "combinatorial", "status": "confirmed"},
+        },
+    )
     integrity = _run(
         "guide.integrity.v1",
         contract,
@@ -213,6 +226,16 @@ def test_p1_granular_guide_pipeline_keeps_multiguide_separate_from_doublets(tmp_
     )
     assert retained.metrics["design_moi"] == "high"
     assert retained.metadata["retained_cell_manifest_hash_bound"] is True
+    with (tmp_path / "retained" / "retained_cells.csv").open(
+        "r", encoding="utf-8", newline=""
+    ) as handle:
+        retained_rows = list(csv.DictReader(handle))
+    combinatorial = next(
+        row for row in retained_rows if row["raw_barcode"] == "AAGA-1"
+    )
+    assert combinatorial["multi_guide"].lower() == "true"
+    assert combinatorial["transcriptomic_doublet"].lower() == "false"
+    assert combinatorial["retained"].lower() == "true"
 
 
 def test_target_guide_efficacy_and_leakage_blocking(tmp_path: Path) -> None:

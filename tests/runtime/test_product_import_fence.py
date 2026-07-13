@@ -10,7 +10,6 @@ import pytest
 
 from pertura_core import PromotionPolicy
 from pertura_bench.compatibility import compatibility_payloads
-from pertura_gate.promotion import PromotionPolicy as LegacyPromotionPolicy
 from pertura_runtime.claude.options import ClaudeRuntimeOptions, describe_options
 
 
@@ -21,7 +20,6 @@ def test_v2_promotion_policy_has_one_runtime_neutral_identity() -> None:
     policy = PromotionPolicy(profile="strict")
     frozen = compatibility_payloads()["promotion-policy.json"]
 
-    assert LegacyPromotionPolicy is PromotionPolicy
     assert describe_options(ClaudeRuntimeOptions())["policy_hash"] == policy.policy_hash
     assert frozen["policy_hash"] == policy.policy_hash
     assert frozen["policy"]["version"] == "pertura-promotion-v2"
@@ -114,3 +112,28 @@ print(json.dumps('pertura_workflow.cli' in sys.modules))
         env=env,
     )
     assert json.loads(completed.stdout) is False
+
+
+def test_retired_authority_spine_is_physically_isolated() -> None:
+    assert not (ROOT / "src" / "pertura_gate").exists()
+    assert (ROOT / "legacy" / "src" / "pertura_gate").is_dir()
+    retired_active_files = (
+        ROOT / "src" / "pertura_runtime" / "claude" / "finalizer.py",
+        ROOT / "src" / "pertura_runtime" / "claude" / "mcp_server.py",
+        ROOT / "src" / "pertura_runtime" / "claude" / "tools" / "evidence_tools.py",
+    )
+    assert not any(path.exists() for path in retired_active_files)
+
+    forbidden = (
+        "Evidence" + "Artifact",
+        "Evidence" + "Registry",
+        "mcp__pertura_" + "evidence__",
+        "from pertura_" + "gate",
+        "import pertura_" + "gate",
+    )
+    findings = []
+    for package in ("pertura_runtime", "pertura_workflow", "pertura_bench"):
+        for source in (ROOT / "src" / package).rglob("*.py"):
+            if any(token in source.read_text(encoding="utf-8") for token in forbidden):
+                findings.append(source.relative_to(ROOT).as_posix())
+    assert findings == []

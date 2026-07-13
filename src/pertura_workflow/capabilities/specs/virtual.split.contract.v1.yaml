@@ -21,121 +21,30 @@ parameters_schema:
   properties:
     axes:
       type: object
-    axis_columns:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    bootstrap_iterations:
-      type: integer
-    budget:
-      type: number
-    candidates:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
     chunk_rows:
       type: integer
-    collapse_distance_ratio_min:
-      type: number
-    collapse_variance_ratio_min:
-      type: number
-    control_ids:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    coverage_tolerance:
-      type: number
-    format:
-      type: string
+      minimum: 1
     heldout_axes:
       type: array
       items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+        type: string
     max_memory_gb:
-      type: integer
-    minimum_features:
-      type: integer
-    minimum_units:
-      type: integer
-    model_id:
-      type: string
-    model_training_ids:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    model_version:
-      type: string
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
     module_reference_hash:
       type: string
-    module_reference_training_ids:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
     n_jobs:
       type: integer
-    nominal_coverage:
-      type: number
-    observed_layer:
-      type: string
-    prediction_layer:
-      type: string
-    prediction_path:
-      type: string
-      x-pertura-asset-role: prediction_bundle
-      description: Registered asset ID with role prediction_bundle.
-    prediction_scale:
-      type: string
-    preprocessing_training_ids:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    seed:
-      type: integer
+      default: 1
+      minimum: 1
     state_reference_hash:
       type: string
-    state_reference_training_ids:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    weights:
-      type: object
-  additionalProperties: false
-  examples:
-  - {}
   required:
   - axes
+  additionalProperties: false
+  examples:
+  - axes: {}
 implemented: true
 metadata:
   validation_status: synthetic_only

@@ -167,11 +167,9 @@ def test_real_dag_uses_one_runtime_and_authoritative_upstream_handoff(
     assert len({item[1] for item in runtime.calls}) == 1
     assert len(runtime.broker.committed) == 2
     for _, _, parameters in runtime.calls:
-        context = parameters["benchmark_context"]
-        assert context["dataset_id"] == "fixture"
-        assert context["tier"] == "frozen_subset"
-        assert context["split"] == "evaluation"
-        assert context["artifact_lock_hashes"]["artifact"].startswith("sha256:")
+        assert "benchmark_context" not in parameters
+        assert len(parameters) == 1
+        assert set(parameters) <= {"input_path", "upstream_path"}
 
 
 def test_real_dag_fails_precisely_when_dataset_mapping_is_absent(
@@ -273,6 +271,38 @@ def test_server_plan_expands_all_dimensions_and_requires_checkpoint_binding() ->
         assert job["checkpoint_requirement"]["required"] is True
         assert all(item.startswith("artifact:") for item in job["consumes"])
         assert all(item.startswith("verdict:") for item in job["produces"])
+        assert set(job["benchmark_catalogs"]) == {
+            "parameters", "design_confirmations", "metric_references"
+        }
+        argv = job["command"]["argv"]
+        assert "--parameter-catalog" in argv
+        assert "--design-confirmations" in argv
+        assert "--metric-reference-catalog" in argv
+
+    agent_jobs = [item for item in plan.jobs if item["kind"] == "agent_workflow"]
+    assert len(agent_jobs) == 8 * 3 * 2
+    grouped: dict[str, list[dict]] = {}
+    for job in agent_jobs:
+        grouped.setdefault(job["case_id"], []).append(job)
+    for case_id, case_jobs in grouped.items():
+        assert len(case_jobs) == 6
+        assert {item["benchmark_condition"] for item in case_jobs} == {
+            "pertura_full", "prompt_only", "free_codeact"
+        }
+        assert {item["repeat_index"] for item in case_jobs} == {1, 2}
+        assert len({item["dataset_id"] for item in case_jobs}) == 1
+        assert len({item["objective"] for item in case_jobs}) == 1
+        assert len({str(item["resources"]) for item in case_jobs}) == 1
+        assert all(item["controlled_comparison"]["same_model"] for item in case_jobs)
+        assert all("--condition" in item["command"]["argv"] for item in case_jobs)
+        assert all("--repeat-index" in item["command"]["argv"] for item in case_jobs)
+
+    for binding_name in (
+        "parameter_catalog_hash",
+        "design_confirmation_catalog_hash",
+        "metric_reference_catalog_hash",
+    ):
+        assert plan.checkpoint_binding[binding_name].startswith("sha256:")
 
     bound = bind_server_plan(
         plan,

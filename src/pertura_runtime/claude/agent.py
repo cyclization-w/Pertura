@@ -123,6 +123,7 @@ class ClaudePerturaAgent:
             interaction_mode=runtime_config.interaction_mode,
             stage_id=runtime_config.stage_id,
             tool_surface=runtime_config.tool_surface,
+            benchmark_condition=runtime_config.benchmark_condition,
         )
         self.workspace.update_manifest({
             "claude_runtime_options": describe_options(runtime_config),

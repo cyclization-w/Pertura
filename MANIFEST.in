@@ -28,3 +28,6 @@ global-exclude *.h5ad
 global-exclude *.h5
 global-exclude *.rds
 global-exclude *.rda
+
+prune legacy
+prune src/pertura_gate

@@ -51,7 +51,7 @@ def run_edger_pseudobulk(
     metadata = _read_metadata(metadata_path, cell_column)
     if set(cells) - set(metadata):
         raise ValueError("count matrix contains cells absent from metadata")
-    retained_cells = retained_cells_for_request(staging, request)
+    retained_cells = retained_cells_for_request(staging, request, required=True)
     contrast_cells = [cell for cell in cells if metadata[cell].get(condition_column) in {target, baseline}]
     selected_cells = apply_retained_cells(contrast_cells, retained_cells)
     grounding = dependency_grounding_metadata(retained_cells, selected_cells)

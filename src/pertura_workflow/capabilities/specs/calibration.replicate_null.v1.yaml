@@ -30,37 +30,47 @@ parameters_schema:
       type: string
     chunk_rows:
       type: integer
+      minimum: 1
     condition_column:
       type: string
     counts_path:
       type: string
-      x-pertura-asset-role: primary_dataset
       description: Registered asset ID with role primary_dataset.
+      x-pertura-asset-role: primary_dataset
     gene_column:
       type: string
     max_memory_gb:
-      type: integer
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
     metadata_path:
       type: string
-      x-pertura-asset-role: cell_metadata
       description: Registered asset ID with role cell_metadata.
+      x-pertura-asset-role: cell_metadata
     n_jobs:
       type: integer
+      default: 1
+      minimum: 1
     negative_control_conditions:
       type: array
       items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+        type: string
     permutations:
       type: integer
     replicate_column:
       type: string
     target_condition:
       type: string
+  required: []
   additionalProperties: false
   examples:
-  - {}
+  - max_memory_gb: 4.0
 implemented: true
+metadata:
+  dependency_policy:
+    diagnostic.guide_assignment.v1:
+      scope: exact
+      usage: validation_gate
+      accepted_statuses:
+      - screen_passed
+      - caution

@@ -43,6 +43,13 @@ grna <- read_named_matrix(
 if (!identical(colnames(response), colnames(grna))) {
   stop("response and gRNA matrices must have identical cell columns")
 }
+retained_cells <- readLines(cfg$retained_cell_ids_path)
+selected_cells <- intersect(colnames(response), retained_cells)
+if (!length(selected_cells)) {
+  stop("retained-cell manifest has no overlap with SCEPTRE matrices")
+}
+response <- response[, selected_cells, drop = FALSE]
+grna <- grna[, selected_cells, drop = FALSE]
 guide_map <- read.csv(cfg$guide_target_map_path, stringsAsFactors = FALSE)
 if (!all(c("grna_id", "grna_target") %in% colnames(guide_map))) {
   stop("guide target map must contain grna_id and grna_target")

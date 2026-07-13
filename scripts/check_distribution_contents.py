@@ -33,6 +33,9 @@ WHEEL_REQUIRED = (
     "pertura_bench/cases/agent_workflow_cases.v1.json",
     "pertura_bench/cases/agent_workflow_verdicts.v1.json",
     "pertura_bench/cases/server_agent_cases.v1.json",
+    "pertura_bench/cases/real_parameters.v1.json",
+    "pertura_bench/cases/design_confirmations.v1.json",
+    "pertura_bench/cases/metric_references.v1.json",
     "pertura_bench/schemas/CapabilityBenchmarkCase.schema.json",
     "pertura_bench/schemas/ProjectLifecycle.schema.json",
     "pertura_bench/schemas/AgentWorkflowCase.schema.json",
@@ -51,8 +54,6 @@ SDIST_REQUIRED = (
     "ui/vite.config.ts",
     "benchmarks/README.md",
     "docs/README.md",
-    "docs/legacy/README.md",
-    "docs/legacy/06_registrar_tool_surface.md",
     "scripts/freeze_v020_contracts.py",
     *(f"src/{path}" for path in WHEEL_REQUIRED),
 )
@@ -63,6 +64,23 @@ FORBIDDEN_PARTS = (
     "/dist/",
     "/.claude_runs/",
     "/.pytest_cache/",
+    "/legacy/",
+    "/pertura_gate/",
+)
+FORBIDDEN_ACTIVE_FILES = (
+    "pertura_runtime/claude/finalizer.py",
+    "pertura_runtime/claude/mcp_server.py",
+    "pertura_runtime/claude/tools/evidence_tools.py",
+    "pertura_bench/p07_harness.py",
+    "pertura_bench/p21_classic_workflow.py",
+    "pertura_bench/stage_benchmark.py",
+)
+FORBIDDEN_AUTHORITY_TOKENS = (
+    b"Evidence" + b"Artifact",
+    b"Evidence" + b"Registry",
+    b"mcp__pertura_" + b"evidence__",
+    b"from pertura_" + b"gate",
+    b"import pertura_" + b"gate",
 )
 FORBIDDEN_SUFFIXES = (
     ".h5ad",
@@ -97,6 +115,32 @@ def _forbidden(names: set[str], *, artifact: Path) -> list[str]:
             findings.append(name)
         if name.lower().endswith(FORBIDDEN_SUFFIXES):
             findings.append(name)
+        if name in FORBIDDEN_ACTIVE_FILES:
+            findings.append(name)
+    return sorted(set(findings))
+
+
+def _authority_token_findings(path: Path, *, kind: str, names: set[str]) -> list[str]:
+    findings: list[str] = []
+    source_names = sorted(
+        name for name in names
+        if name.endswith(".py")
+        and name.startswith(("pertura_runtime/", "pertura_workflow/", "pertura_bench/"))
+    )
+    if kind == "wheel":
+        with zipfile.ZipFile(path) as archive:
+            for name in source_names:
+                payload = archive.read(name)
+                if any(token in payload for token in FORBIDDEN_AUTHORITY_TOKENS):
+                    findings.append(name)
+    else:
+        with tarfile.open(path, "r:*") as archive:
+            members = {member.name.split("/", 1)[1]: member for member in archive.getmembers() if "/" in member.name}
+            for name in source_names:
+                extracted = archive.extractfile(members[name])
+                payload = extracted.read() if extracted is not None else b""
+                if any(token in payload for token in FORBIDDEN_AUTHORITY_TOKENS):
+                    findings.append(name)
     return findings
 
 
@@ -115,6 +159,8 @@ def check_distribution(path: str | Path) -> dict[str, object]:
 
     missing = sorted(item for item in required if item not in names)
     forbidden = _forbidden(names, artifact=artifact)
+    forbidden.extend(_authority_token_findings(artifact, kind=kind, names=names))
+    forbidden = sorted(set(forbidden))
     return {
         "artifact": artifact.name,
         "kind": kind,

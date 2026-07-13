@@ -23,25 +23,12 @@ parameters_schema:
   properties:
     batch_column:
       type: string
-    cell_column:
-      type: string
     chunk_rows:
       type: integer
+      minimum: 1
     condition_column:
       type: string
     donor_column:
-      type: string
-    guide_barcode_column:
-      type: string
-    guide_counts_path:
-      type: string
-      x-pertura-asset-role: guide_matrix
-      description: Registered asset ID with role guide_matrix.
-    input_path:
-      type: string
-      x-pertura-asset-role: primary_dataset
-      description: Registered asset ID with role primary_dataset.
-    layer:
       type: string
     max_memory_gb:
       type: number
@@ -49,10 +36,8 @@ parameters_schema:
       exclusiveMinimum: 0
     metadata_path:
       type: string
-      x-pertura-asset-role: cell_metadata
       description: Registered asset ID with role cell_metadata.
-    modality:
-      type: string
+      x-pertura-asset-role: cell_metadata
     n_jobs:
       type: integer
       default: 1
@@ -63,10 +48,19 @@ parameters_schema:
       type: string
     state_column:
       type: string
+  required:
+  - metadata_path
   additionalProperties: false
   examples:
-  - {}
+  - metadata_path: asset_example_cell_metadata
 implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
+  dependency_policy:
+    diagnostic.dataset_integrity.v1:
+      scope: exact
+      usage: validation_gate
+      accepted_statuses:
+      - screen_passed
+      - caution

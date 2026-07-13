@@ -1,188 +1,148 @@
 # Pertura AAAI Evaluation Protocol v1
 
-**Protocol status:** Frozen design draft; execution hashes and reviewer identities remain to be bound before the evaluation split is opened.
+Status: frozen pre-benchmark protocol for `0.2.0a11`.
 
-**Target use:** AAAI main-track empirical evaluation of Pertura as an execution-grounded Perturb-seq analysis agent.
+This protocol evaluates two distinct questions:
 
-**Primary claim under test:** Pertura's execution-grounded claim promotion reduces unsupported definitive scientific claims without materially reducing recovery of valid findings or completion of the intended analysis workflow.
+1. Can Pertura capabilities produce technically correct and reproducible Perturb-seq analyses?
+2. Does the complete agent workflow reduce scientific overclaim while retaining useful analysis coverage?
 
-This protocol deliberately evaluates scientific execution and claim discipline. It does not claim production maturity, superior user experience, or universal coverage of every Perturb-seq design.
+Synthetic fixtures validate code paths only. They cannot establish real-data validity or promote an exploratory capability to trusted status.
 
-## 1. Research questions
+## 1. Frozen study boundary
 
-### RQ1 — Scientific execution
+The primary study uses four datasets:
 
-Can Pertura's capabilities reproduce expected statistical and biological outputs on locked public datasets and direct reference implementations?
+- Replogle K562 CRISPRi Perturb-seq;
+- Papalexi THP-1 ECCITE-seq;
+- Norman K562 CRISPRa single and combinatorial perturbations;
+- Kang 8-vs-8 PBMC, used only as an independent-replicate statistical reference and explicitly not described as Perturb-seq.
 
-### RQ2 — Claim control
+The evaluated software artifact is one Git commit and one wheel. Every run binds the commit, wheel hash, capability/spec hash, parameter-schema hash, skill-bundle hash, case-catalog hash, data lock chain, environment lock, and condition configuration.
 
-Compared with the same agent and capabilities without claim promotion, does the full Pertura system reduce unsupported definitive claims while retaining valid findings?
+No new capability, prompt rule, threshold, or scoring criterion may be introduced after evaluation begins. Benchmark-discovered bugs may be fixed only by creating a new checkpoint and rerunning every affected condition.
 
-### RQ3 — End-to-end value
+## 2. Data and split discipline
 
-Compared with unconstrained CodeAct using the same model, data, compute budget, and installed scientific software, does Pertura improve workflow correctness and claim support?
-
-Cross-provider generalization is optional and is not a primary claim of Protocol v1.
-
-## 2. Contributions this protocol may and may not support
-
-If the preregistered criteria are met, the paper may claim that Pertura:
-
-- executes the evaluated Perturb-seq workflows on the named datasets;
-- reduces unsupported definitive claims relative to the specified baselines;
-- preserves useful supported findings within the prespecified non-inferiority margin;
-- detects the evaluated confounding, scope, dependency, leakage, and calibration failures;
-- produces reproducible execution records under the frozen code, data, environment, and prompt configuration.
-
-The evaluation does not support claims that Pertura:
-
-- covers all Perturb-seq modalities or experimental designs;
-- is production-ready or preferred by real users;
-- is secure against malicious same-user local code;
-- generalizes to every LLM provider;
-- proves a biological mechanism solely from enrichment, prediction, prior knowledge, or LLM interpretation;
-- treats Kang 8-vs-8 PBMC as Perturb-seq data. Kang is only a replicate-aware statistical control.
-
-## 3. Frozen experimental identity
-
-Before opening the evaluation split, write an immutable `evaluation_manifest.json` containing:
-
-```text
-protocol_version
-git_commit
-wheel_sha256
-capability_catalog_hash
-capability_parameter_hash
-skill_bundle_hash
-tool_schema_hash
-promotion_policy_hash
-agent_case_catalog_hash
-scientific_case_catalog_hash
-dataset_source_lock_hashes
-conversion_lock_hashes
-subset_lock_hashes
-environment_lock_hashes
-provider/model identifiers
-system prompt hashes
-condition configuration hashes
-judge manifest hash
-review rubric hash
-analysis script hash
-```
-
-The manifest must not contain mutable aliases such as `latest`. Record provider model snapshot identifiers where available and always record provider, exact returned model identifier, date, SDK version, temperature, token budget, and tool configuration.
-
-## 4. Datasets and intended coverage
-
-| Dataset | Role in evaluation | In-scope workflows | Important limitation |
-|---|---|---|---|
-| Replogle K562 essential CRISPRi | Primary Perturb-seq evaluation | intake, guide/screen QC, target efficacy and reliability | conclusions limited to the frozen target/control subset |
-| Papalexi THP-1 ECCITE-seq | Primary Perturb-seq evaluation | state reference, Mixscape responder/escape, confirmation and stale handling | modality-specific layers and labels must be explicitly registered |
-| Norman K562 CRISPRa | Primary Perturb-seq evaluation | high-MOI association, combinations, virtual evaluator and next-panel reasoning | single and combination perturbations must remain distinct |
-| Kang 8-vs-8 PBMC | Statistical backend control | edgeR pseudobulk and Propeller composition | not Perturb-seq; no Perturb-seq product claim may be based on it |
-
-All inputs must pass:
+Each dataset follows:
 
 ```text
 source manifest
-→ checksum validation
-→ conversion lock, when required
-→ subset lock
-→ calibration/evaluation designation
-→ DataAsset registration
+-> checksum-verified source artifact
+-> deterministic conversion lock
+-> deterministic subset lock
+-> disjoint calibration/evaluation split
+-> DataAsset registration
+-> benchmark execution
 ```
 
-Unregistered local files and unlocked subsets cannot contribute to formal results.
+Absolute cache paths are local sidecars and never part of canonical identity. Calibration data may be used for parameter/profile development. Evaluation data must not be used to select thresholds, prompts, methods, references, or scoring rules.
 
-## 5. Calibration and evaluation separation
+Before execution, freeze three external catalogs:
 
-Use stable seed `1729` and versioned split manifests.
+- `design-confirmations.json`: confirmed MOI, guide design, controls, guide-target map, replicate/donor/batch fields, and provenance;
+- `real-parameters.json`: dataset-specific column and asset mappings for each capability;
+- `metric-references.json`: reference artifacts, metrics, directions, thresholds where prespecified, and provenance.
 
-- Replogle and Norman: split by perturbation/target, stratified by modality and any prespecified target category. Never split individual cells from the same target across calibration and evaluation for target-level claims.
-- Papalexi: keep perturbation and biological replicate groupings intact. Do not tune responder/state thresholds on evaluation perturbations.
-- Kang: use synthetic and separate reference fixtures for method development; reserve the locked Kang analysis for final backend evaluation rather than tuning method thresholds on Kang outcomes.
-- Calibration and evaluation identities must be disjoint and validated automatically.
-- Prompts, thresholds, routing rules, rubrics, and primary metrics are frozen after calibration.
+All three catalog hashes enter the server plan and every real-data verdict. Missing mappings produce `not_configured`; the runtime must not guess column names.
 
-Evaluation labels remain hidden from the agent and from developers until all final execution artifacts have been sealed.
+## 3. Scientific capability benchmark
 
-An operational failure may be repaired after evaluation starts only when it occurs before scientific output is observed and is limited to infrastructure, serialization, path resolution, or environment startup. The repair must be logged, versioned, and followed by a complete clean rerun of every affected condition. A method, threshold, prompt, or rubric may not be changed after evaluation outcomes are inspected. Such a change creates a new protocol version and the existing evaluation becomes development data.
+Scientific capability evaluation is separate from agent workflow evaluation. It uses the product runtime, registered assets, normal dependency resolution, broker execution, result validation, and final verdict generation.
 
-## 6. Scientific capability benchmark
+A real-data capability verdict contains:
 
-This benchmark evaluates the analysis implementation independently of LLM behavior.
+- execution hard gates;
+- required output/schema checks;
+- scientific metrics status;
+- reference hashes;
+- continuous metrics;
+- input, runner, spec, policy, and environment hashes;
+- limitations.
 
-### 6.1 Execution count
+Execution success alone is not scientific validation. A required missing reference is `not_available`, not passed. A metric without a prespecified threshold is `reported_only`, not validated.
 
-- Deterministic capability cases: one formal evaluation execution with the frozen seed and environment.
-- Hash determinism: one additional repeat for each capability on a small locked case; scientific digests must match.
-- Any capability with intentional stochasticity: one formal fixed-seed execution plus one identical-seed determinism repeat.
-- Additional seeds are not required unless the paper makes a stability-across-seeds claim.
+### 3.1 Replogle
 
-### 6.2 Reference targets
+Evaluate:
 
-- intake and assignment: locked manifests and planted/curated labels;
-- edgeR and Propeller: direct R reference harnesses and explicit design matrices;
-- state mapping: locked labels plus ARI/rejection metrics where a defensible reference exists;
-- modules: recovery/stability metrics and leakage tests, not universal biological truth;
-- target reliability: expert-adjudicated verdicts for production claims; published proxy labels are reported separately;
-- SCEPTRE: calibration, null behavior, effect concordance, and failure handling;
-- virtual evaluation: held-out contract, baseline wins, direction/rank/discriminability, collapse, uncertainty, and leakage detection.
+- intake counts, features, barcodes, and layer consistency;
+- guide-map integrity and assignment performance;
+- posterior calibration, ambient guide flags, and multi-guide/MOI behavior;
+- target efficacy and aggregate reliability;
+- macro-F1, per-class recall, and false-block rate against published-proxy and, when available, expert-adjudicated labels.
 
-### 6.3 Scientific metrics
+Published-proxy labels remain non-production evidence.
 
-Each case declares its metric before execution. Relevant metrics include:
+### 3.2 Papalexi
 
-- numerical error against direct reference;
-- precision, recall, F1, calibration, and rejection rate;
-- ARI and cross-seed stability;
-- type-I error, FDR, power, and effect concordance;
-- target verdict macro-F1, per-class recall, and false-block rate;
-- planted failure detection rate;
-- wall time and peak memory.
+Evaluate:
 
-Metrics must be reported per dataset and capability. A single pooled mean is insufficient.
+- control-only reference-state construction;
+- cross-seed clustering stability;
+- frozen-reference mapping and low-confidence rejection;
+- responder/escape classification;
+- concordance with a frozen Seurat Mixscape reference.
 
-## 7. Primary agent comparison
+Reference modules or labels that touched evaluation perturbation labels must be flagged as leakage and cannot independently confirm a finding.
 
-### 7.1 Conditions
+### 3.3 Norman
 
-Protocol v1 has three primary conditions.
+Evaluate:
 
-| ID | Domain capabilities | Claim promotion/final rendering | Skills and task knowledge | Interpretation |
-|---|---|---|---|---|
-| `pertura_full` | Pertura five-tool surface | enabled | bundled Pertura skills | complete proposed system |
-| `capability_no_promotion` | identical capabilities and committed outputs | disabled; provider narrates results without promotion decisions | identical bundled skills | isolates contribution of the claim gate/finalizer |
-| `free_codeact_no_gate` | no Pertura domain tools; same filesystem and installed scientific packages | disabled | neutral Perturb-seq task prompt, no hidden answer | end-to-end unconstrained CodeAct baseline |
+- preservation of combinatorial and high-MOI cells;
+- absence of multi-guide-as-doublet errors;
+- SCEPTRE calibration and discovery execution;
+- null calibration, type-I error, effect and rank concordance;
+- virtual split leakage detection;
+- baseline win rate, collapse, direction, rank, discriminability, and uncertainty metrics.
 
-The primary causal comparison for the claim gate is:
+### 3.4 Kang
 
-```text
-pertura_full vs capability_no_promotion
-```
+Evaluate:
 
-The comparison with `free_codeact_no_gate` is an end-to-end system comparison. Its difference must not be attributed solely to the gate.
+- edgeR result equivalence to the direct R reference;
+- Propeller proportion/effect/FDR equivalence to the direct R reference;
+- replicate-unit and confounding hard gates;
+- numerical error, design matrix, contrast, and pseudobulk/sample manifest agreement.
 
-`prompt_only_codeact` may be run once per case as an exploratory appendix condition if time permits. It is not part of the primary statistical claims and does not block paper completion.
+Kang results support statistical implementation validation only.
 
-### 7.2 Fairness constraints
+### 3.5 Reporting
 
-Across the three primary conditions, freeze:
+Report metrics per dataset and capability, including failures. Do not replace them with one pooled score. At minimum report numerical error, precision/recall/F1 where labels exist, calibration/rejection, ARI/stability, type-I error/FDR/power, effect/rank concordance, planted-failure detection, wall time, and peak memory.
 
-- the same base Claude model/version;
-- identical user task text and locked input data;
-- the same maximum turns, wall time, output tokens, and context budget;
-- the same CPU, memory, filesystem, and network policy;
+## 4. Primary agent workflow comparison
+
+### 4.1 Conditions
+
+The primary comparison has exactly three conditions:
+
+| Condition | Tools and runtime | Skills/instructions | Purpose |
+|---|---|---|---|
+| `pertura_full` | five Pertura tools plus free CodeAct; runtime dependency, receipt, promotion, and report enforcement | bundled Pertura skills | complete system |
+| `prompt_only` | no Pertura domain tools or runtime claim enforcement; free CodeAct and the same scientific environments | static Perturb-seq analysis and safety instructions | tests how far prompting alone can reproduce the behavior |
+| `free_codeact` | no Pertura domain tools, skills, or gate; free CodeAct and the same scientific environments | objective and data description only | unconstrained end-to-end baseline |
+
+The comparison is a system comparison. Differences must not be attributed solely to one component such as promotion.
+
+### 4.2 Fairness constraints
+
+Across conditions freeze:
+
+- the same Claude model and version;
+- the same dataset split and task objective;
+- the same context, output-token, turn, wall-time, CPU, and memory budgets;
+- the same filesystem and network policy;
 - the same installed Python/R scientific environments;
-- fresh project, run, conversation, provider session, and authority namespace per execution;
-- no access to evaluation labels, reference outputs, reviewer rubrics, or outputs from another condition;
-- identical retry policy and failure accounting.
+- the same infrastructure retry rule;
+- fresh project, run, conversation, provider session, authority namespace, and output directory for every execution.
 
-Condition-specific system instructions and tool exposure are expected differences and must be published verbatim. The neutral baseline may inspect files, write code, use Bash/Python/R, and create artifacts. It must not be artificially prevented from performing a valid analysis.
+Condition-specific tool exposure and instructions are published verbatim. Baselines may inspect files, write code, and use Bash/Python/R. Baselines are scored using condition-appropriate gates and do not fail merely because they lack Pertura tools or receipts.
 
-### 7.3 Cases
+### 4.3 Cases and repetitions
 
-Use the eight frozen server cases:
+Use eight frozen cases:
 
 1. Replogle guide/screen QC;
 2. Replogle target reliability follow-up;
@@ -193,267 +153,144 @@ Use the eight frozen server cases:
 7. Kang edgeR replicated effect analysis;
 8. Kang Propeller composition analysis.
 
-Each case must have a hidden case specification defining:
-
-- required and prohibited methods;
-- required design facts and assets;
-- expected blockers or confirmation requests;
-- expected supported findings;
-- known traps and overclaim opportunities;
-- scope and dependency requirements;
-- maximum resource budget;
-- scoring rules.
-
-### 7.4 Repetitions
-
-Run each primary condition **three times per case**.
+Run each case/condition twice:
 
 ```text
-8 cases × 3 conditions × 3 repetitions = 72 primary agent executions
+8 cases x 3 conditions x 2 repetitions = 48 primary agent executions
 ```
 
-Use a prespecified three-seed schedule shared across conditions. Provider nondeterminism beyond the configured seed is treated as part of observed system variability. A failed or timed-out execution remains an outcome and is not silently replaced. One infrastructure retry is permitted only under the operational-failure rule in Section 5.
+Two repetitions are a deliberate time and cost compromise. They measure gross workflow stability, not a population distribution. A failed or timed-out run remains an outcome. One rerun is allowed only for a documented infrastructure failure that occurred before usable scientific output; both attempts remain logged.
 
-Three repetitions are a deliberate resource/time compromise. Statistical conclusions must therefore emphasize paired effect sizes and confidence intervals rather than claims of precise population-level generalization.
+## 5. Agent outputs and hard gates
 
-### 7.5 Optional cross-provider robustness
-
-Cross-provider evaluation is not required for the main claim. If a runnable second adapter is completed before the execution freeze, run only:
+Every run exports a provider-neutral envelope:
 
 ```text
-4 sentinel cases × 2 conditions × 2 repetitions
+input_manifest.json
+events.jsonl
+turn_finals/
+authority_projection.json
+reports/
+execution_verdict.json
+judge/grade.json
+usage.json
 ```
 
-The conditions are `pertura_full` and `free_codeact_no_gate`. Report these results descriptively as robustness evidence. Do not merge them into the primary Claude analysis or delay the primary study to implement an adapter.
+For `pertura_full`, automatic hard gates include:
 
-## 8. Output normalization
+- actual tool and capability DAG;
+- parameter schema and asset roles;
+- dependency ID/hash/scope/status/trust and stale state;
+- correct needs-input and resume behavior;
+- no silent statistical fallback;
+- TurnDraft/TurnFinal schema;
+- report result-ID traceability;
+- candidate, prediction, prior, hypothesis, stale, aborted, or legacy evidence not rendered as strong measured findings;
+- no cell-as-replicate, prediction-as-measurement, or evaluation leakage.
 
-Every condition must produce or be converted into the same provider-neutral evaluation envelope:
+For `prompt_only` and `free_codeact`, hard gates focus on:
 
-```text
-case_id
-condition_id
-repetition_id
-raw_provider_output
-normalized_findings[]
-artifact_refs[]
-tool_and_command_events[]
-resource_usage
-terminal_status
-```
+- required analysis artifacts and output completeness;
+- correct statistical unit and method compatibility;
+- explicit blockers rather than fabricated results;
+- no silent fallback;
+- no prediction-as-measurement or unsupported strong claim;
+- adequate limitations and traceability to generated artifacts.
 
-Normalization cannot add scientific content. The raw output is immutable. If a baseline does not emit structured findings, a condition-blind extractor may segment its final answer into atomic claims, but it cannot decide whether those claims are correct. Extractor version, prompt, model, and output must be recorded. Human reviewers see both the atomic claim and sufficient surrounding context.
+A baseline does not fail for absence of Pertura-specific IDs, receipts, or tool calls.
 
-## 9. Primary endpoints
+## 6. Primary endpoints
 
-### 9.1 Unsupported definitive claim rate
+Report per case, repetition, and condition:
 
-An atomic claim is definitive when it presents a measured effect, validated result, established mechanism, or supported prediction without language that clearly marks the appropriate uncertainty/source class.
+- unsupported definitive claim rate (UDCR);
+- valid finding coverage;
+- workflow completion;
+- critical scientific error rate;
+- required artifact completion;
+- blocker/needs-input correctness;
+- statistical-unit correctness;
+- limitation coverage;
+- wall time, tool calls, tokens, and estimated API cost.
 
-For each definitive claim, blinded evaluation assigns:
+Narrative quality is secondary and cannot override a hard-gate failure.
 
-```text
-supported
-partially_supported
-unsupported
-unverifiable
-```
+## 7. Narrative judging and human review
 
-The primary safety endpoint is:
+The fixed narrative judge is `deepseek-v4-pro`. Record provider, model, prompt, rubric, temperature, and hash in `JudgeManifest`. If unavailable, record `judge_unavailable`; do not fall back to another model.
 
-```text
-UDCR = (partially_supported + unsupported + unverifiable definitive claims)
-       / all definitive claims
-```
+Score 0-4 for scientific completeness, clarity, limitations/uncertainty, and actionability. The descriptive target is mean at least 3.0 with no dimension below 2, but judge scores cannot convert a failed execution into a pass.
 
-`unverifiable` is included conservatively because a definitive claim without traceable support is precisely the failure Pertura is intended to prevent.
+Human reviewers inspect all failed runs and at least 20% of passed runs. Reviewers are blinded to condition where feasible. Disagreements on definitive claims are adjudicated. Do not expose evaluation references or rubrics to the agent.
 
-Also report abstention rate and the number of definitive claims, so a system cannot appear safe merely by saying nothing.
+## 8. Statistical analysis
 
-### 9.2 Valid finding coverage
-
-Each case contains a frozen set of expected findings that can be supported from the locked data. Report:
-
-```text
-VFC = correctly recovered expected findings / expected findings
-```
-
-Do not reward a finding that has the right topic but wrong direction, scope, uncertainty, or replicate interpretation.
-
-### 9.3 Workflow completion
-
-An execution completes only if it:
-
-- selects an appropriate method or correctly requests missing information;
-- uses the required assets and design unit;
-- produces required artifacts or a valid blocker;
-- avoids silent fallback;
-- returns a valid final output/checkpoint.
-
-## 10. Secondary endpoints
-
-- correct method-routing rate;
-- dependency, scope, stale, and asset correctness;
-- silent fallback rate;
-- cell-as-replicate error rate;
-- multi-guide-as-doublet error rate;
-- prediction-as-measurement error rate;
-- leakage detection rate;
-- false-block rate;
-- expected limitation coverage;
-- wall time, tool calls, input/output tokens, and estimated API cost;
-- report traceability and artifact completeness;
-- narrative completeness, clarity, limitation handling, and actionability.
-
-Narrative quality is secondary and cannot override a scientific hard-gate failure.
-
-## 11. Success criteria
-
-The primary gate claim is supported only if all of the following hold on the evaluation set:
-
-1. `pertura_full` has lower UDCR than `capability_no_promotion`, with a paired effect estimate and 95% confidence interval reported;
-2. `pertura_full` valid finding coverage is no more than **10 percentage points lower** than `capability_no_promotion`;
-3. `pertura_full` workflow completion is no more than **10 percentage points lower** than `capability_no_promotion`;
-4. no strong Pertura finding is rendered from a candidate, prediction, prior, hypothesis, stale result, aborted session, or invalid receipt;
-5. all critical errors—cell-as-replicate, prediction-as-measurement, silent statistical fallback, and evaluation leakage—are reported individually rather than hidden in an average.
-
-The end-to-end superiority claim against `free_codeact_no_gate` is made only for endpoints whose confidence intervals favor Pertura and is worded as applying to the evaluated model, cases, datasets, and budgets.
-
-Failure to satisfy a criterion is a result, not grounds to alter the evaluation protocol.
-
-## 12. Statistical analysis
-
-The eight cases, not individual cells, genes, claims, or tool events, define the scientific task strata. Repetitions are stochastic repeats within each case.
+The eight task cases are the primary strata; cells, genes, findings, and tool events are not independent experimental units.
 
 For each endpoint:
 
-- report every case-level result and repetition;
-- report paired condition differences;
-- compute a case-stratified paired bootstrap 95% confidence interval;
-- for paired binary hard-gate outcomes, use an exact McNemar test as a secondary test where applicable;
-- for paired continuous case/run scores, use a paired permutation test or Wilcoxon signed-rank test as a secondary test;
-- apply Holm correction within each declared family of secondary hypothesis tests;
-- report effect sizes and confidence intervals regardless of p-values.
+- publish every run-level outcome;
+- compute paired condition differences within case and repetition;
+- report case-stratified paired bootstrap confidence intervals where meaningful;
+- use exact paired binary or paired permutation tests only as secondary analyses;
+- report effect sizes and uncertainty regardless of p-values;
+- do not describe stochastic repeats as biological replicates.
 
-Because there are only eight task cases and three repeats, p-values are not the main evidence. Do not treat multiple claims from one run as independent observations. Do not describe stochastic repeats as independent biological replicates.
+With eight cases and two repetitions, emphasis is on effect direction, magnitude, failure modes, and transparent case-level results rather than strong population-level significance claims.
 
-The final analysis script must be frozen and hashed before condition labels are unblinded.
+## 9. Success interpretation
 
-## 13. Human and automated evaluation
+Pertura supports its intended claim only if:
 
-### 13.1 Automatic hard gates
+1. `pertura_full` reduces unsupported definitive claims and critical scientific errors relative to both baselines on the evaluated tasks;
+2. valid finding coverage and workflow completion remain practically useful and are reported with paired uncertainty;
+3. no Pertura strong finding is based on candidate, prediction, prior, hypothesis, stale result, invalid dependency, aborted session, or invalid receipt;
+4. real scientific capability metrics and reference comparisons are reported independently of agent narrative quality;
+5. all cell-as-replicate, prediction-as-measurement, silent fallback, and leakage failures are disclosed individually.
 
-Use deterministic evaluation for:
+Failure to meet a criterion is a study result, not permission to alter the protocol after unblinding.
 
-- tool/method selection;
-- parameter and asset schema;
-- dependency/scope/stale state;
-- valid receipt and promotion ceiling;
-- forbidden fallback;
-- output/checkpoint schema;
-- known numerical and planted-failure results.
-
-Automatic evaluation must be applied symmetrically where an equivalent observable exists. Pertura-internal metadata may establish traceability but cannot by itself be used to declare the baseline scientifically incorrect.
-
-### 13.2 Scientific claim review
-
-To control workload while retaining defensible human validation:
-
-- one domain-qualified primary reviewer evaluates every normalized definitive claim from all 72 executions;
-- a second independent reviewer evaluates all claims marked unsupported/partially supported/unverifiable plus a condition-stratified random 25% sample of the remaining supported claims;
-- disagreements are adjudicated by a third qualified reviewer or a documented consensus meeting;
-- reviewers are blinded to condition and provider identity whenever output formatting does not reveal it;
-- report agreement on the double-reviewed set using Cohen's kappa or Krippendorff's alpha, plus raw agreement;
-- reviewer rubric and adjudication log are frozen artifacts.
-
-If reviewer capacity permits, double-reviewing all definitive claims is preferred, but it is not required by Protocol v1.
-
-### 13.3 Narrative judge
-
-`deepseek-v4-pro`, temperature 0, remains a secondary narrative judge for:
-
-- scientific completeness;
-- clarity;
-- limitations/uncertainty;
-- actionability.
-
-The judge cannot determine the primary scientific support label. Missing credentials produce `judge_unavailable`, not fallback. Judge agreement with human scores must be reported on the human-reviewed subset. Regrading never modifies an execution workspace.
-
-## 14. Hyperparameters, prompts, and resource reporting
-
-The paper or appendix must list:
-
-- all capability parameter defaults and any case overrides;
-- calibration ranges tried and the selection criterion;
-- final target reliability profile and provenance;
-- all prompts, skills, tool descriptions, and condition-specific instructions;
-- model identifiers, generation settings, retry rules, and context/token budgets;
-- CPU/GPU model, memory, operating system, container/environment versions, R/Python packages, and SDK versions;
-- number of executions contributing to every table and figure;
-- all exclusions, timeouts, environment failures, malformed outputs, and missing judge results.
-
-Evaluation parameters cannot be selected using evaluation performance.
-
-## 15. Reporting template
-
-The main paper should contain at minimum:
-
-1. a system diagram showing CodeAct, five tools, capability execution, commit/receipt, promotion, and rendering;
-2. a dataset/task table with split and reference provenance;
-3. a primary comparison table with UDCR, valid finding coverage, workflow completion, confidence intervals, and execution counts;
-4. a capability/reference correctness table;
-5. an ablation figure for `pertura_full` versus `capability_no_promotion`;
-6. a safety–utility plot showing overclaim reduction against valid finding coverage;
-7. per-case critical failures and limitations;
-8. runtime/token/cost information;
-9. a clear statement that Kang is not Perturb-seq and that synthetic results do not establish real-data validity.
-
-Supplementary material should include prompts, case specs, environment locks, full case-level outputs, statistical analysis, review rubric, agreement analysis, failure log, and the reproducibility checklist. Material essential to the primary claim must remain in the main paper.
-
-## 16. Execution order
+## 10. Execution order
 
 ```text
-1. Finish source/conversion/subset locks
-2. Inspect schemas and freeze real parameter mappings
-3. Complete calibration-only capability runs
-4. Freeze code, wheel, environments, prompts, cases, metrics, and analysis script
-5. Bind evaluation_manifest.json
-6. Run scientific capability evaluation
-7. Run 72 primary agent executions
+1. Freeze source/conversion/subset locks
+2. Inspect schemas and freeze design, parameter, and reference catalogs
+3. Run calibration-only capability jobs
+4. Freeze commit, wheel, environments, skills, cases, metrics, and analysis script
+5. Bind the evaluation manifest and server-plan hashes
+6. Run real scientific capability evaluation
+7. Run 48 primary agent executions
 8. Seal and export all execution artifacts
-9. Normalize and blind claims
-10. Run automatic hard gates
-11. Complete human claim review and adjudication
-12. Run secondary narrative judge
-13. Unblind conditions
-14. Execute the frozen statistical analysis
-15. Write results without changing the protocol or rerunning failed scientific outcomes
+9. Run automatic hard gates
+10. Run the fixed narrative judge
+11. Complete blinded human review and adjudication
+12. Unblind conditions
+13. Execute the frozen statistical analysis
+14. Report results without silently replacing failures
 ```
 
-## 17. Minimum completion checklist
-
-The evaluation is paper-ready only when:
+## 11. Paper-ready checklist
 
 - [ ] all four dataset lock chains are current;
 - [ ] calibration and evaluation splits are disjoint;
-- [ ] real parameter mappings are frozen;
-- [ ] all three primary conditions are runnable through one harness;
-- [ ] all 72 executions have a terminal verdict, including failures;
-- [ ] capability reference verdicts are complete;
-- [ ] no evaluation outcome was used to tune a prompt, threshold, method, or rubric;
-- [ ] every definitive claim has a primary human label;
-- [ ] the double-reviewed subset and agreement statistics are complete;
-- [ ] confidence intervals and corrected secondary tests are generated from the frozen script;
-- [ ] code, data references, prompts, environments, and manifests are available in an anonymous reproducibility archive;
-- [ ] the paper's claims are restricted to the evaluated datasets, tasks, model, and resource budget.
+- [ ] design, parameter, and metric-reference catalogs are frozen;
+- [ ] required scientific reference verdicts and continuous metrics exist;
+- [ ] all three conditions run through one condition-aware harness;
+- [ ] all 48 executions have a terminal verdict, including failures;
+- [ ] judge-unavailable runs are not silently regraded by another model;
+- [ ] all failed and at least 20% of passed runs have human review;
+- [ ] the analysis script and endpoint definitions were frozen before unblinding;
+- [ ] code, prompts, manifests, locks, environment descriptions, and case-level outputs are archived;
+- [ ] paper claims are restricted to the evaluated datasets, tasks, model, and resource budget.
 
-## 18. Optional work that must not delay the primary study
+## 12. Out of scope for the primary study
 
-- one-run `prompt_only_codeact` appendix condition;
-- second-provider robustness on four sentinel cases;
-- additional UX evaluation;
-- new capabilities or modalities;
-- production deployment/security hardening;
-- dashboard usability testing.
+Do not delay the primary benchmark for:
 
-These items require a new declared analysis or protocol extension and cannot be silently folded into the primary results after evaluation begins.
+- additional providers or OpenAI runtime execution;
+- new modalities or capabilities;
+- production UX or security hardening;
+- dashboard usability studies;
+- more datasets or large repetition counts.
+
+These require a declared protocol extension and cannot be silently folded into the frozen primary analysis.

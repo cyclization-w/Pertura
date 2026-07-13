@@ -10,7 +10,7 @@ from pertura_core import (
     ScopeKey,
     SourceClass,
 )
-from pertura_gate.promotion import decide_promotion
+from pertura_core.promotion import decide_promotion
 from pertura_runtime.verifier import VerifierBroker
 from pertura_workflow.capabilities import CapabilityRegistry
 

@@ -79,7 +79,7 @@ ranking workflow
 ...
 ```
 
-It should instead implement a finite catalog of native Perturb-seq stages. The implemented catalog lives at `docs/stages/index.yaml`, with Claude-readable cards under `docs/stages/cards/` and runtime/benchmark contracts under `docs/stages/contracts/`:
+It should instead implement a finite catalog of native Perturb-seq stages. The implemented catalog lives at `legacy/docs/stages/index.yaml`, with Claude-readable cards under `legacy/docs/stages/cards/` and runtime/benchmark contracts under `legacy/docs/stages/contracts/`:
 
 ```text
 preflight

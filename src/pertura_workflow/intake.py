@@ -19,6 +19,13 @@ _IDENTITY_CANDIDATES = {
     "batch": ("batch", "batch_id", "lane"),
     "dose": ("dose", "concentration"),
     "time": ("time", "timepoint", "time_point"),
+    "design_moi": ("design_moi", "moi_regime"),
+    "guide_design": ("guide_design", "perturbation_design"),
+}
+
+_CONFIRMATION_ENUMS = {
+    "design_moi": {"low", "high", "unknown"},
+    "guide_design": {"single", "combinatorial", "mixed", "unknown"},
 }
 
 
@@ -89,10 +96,19 @@ def contract_with_confirmations(
 ) -> DatasetContract:
     identity = {key: dict(value) for key, value in contract.identity_fields.items()}
     unresolved = set(contract.unresolved_fields)
-    allowed = {"control", "guide", "guide_target", "target", "donor", "replicate", "batch", "dose", "time", "state_label"}
+    allowed = {
+        "control", "guide", "guide_target", "target", "donor", "replicate",
+        "batch", "dose", "time", "state_label", "design_moi", "guide_design",
+    }
     for field, value in confirmations.items():
         if field not in allowed:
             raise ValueError(f"field cannot be confirmed through the design interface: {field}")
+        if field in _CONFIRMATION_ENUMS:
+            normalized = str(value or "").strip().lower()
+            if normalized not in _CONFIRMATION_ENUMS[field]:
+                choices = ", ".join(sorted(_CONFIRMATION_ENUMS[field]))
+                raise ValueError(f"invalid confirmation for {field}; expected one of: {choices}")
+            value = normalized
         identity[field] = {"status": "confirmed", "value": value, "source": "user_confirmation"}
         unresolved.discard(field)
     return DatasetContract(

@@ -688,63 +688,59 @@ Novel CodeAct analysis can later be packaged through review, a spec, pinned
 environment, validator, and golden tests. The agent cannot self-certify arbitrary
 code in the same run.
 
-## 12. Target package structure
+## 12. Current package structure
 
-Keep the current monorepo and Claude Agent SDK. The verifier is a process
-boundary, not necessarily a repository boundary.
+The monorepo and Claude Agent SDK remain in place. Scientific authority is split by responsibility, not duplicated across frameworks.
 
 ```text
 src/
+  pertura_core/
+    contracts.py
+    scope.py
+    promotion.py
+    compatibility/v0.2/
+
   pertura_workflow/
-    contracts/              dataset, scope, state reference
     capabilities/
-      spec.py, registry.py, result.py
-      intake/, assignment/, state/, reliability/
-      effects/, interpretation/, virtual/, design/
-    routing/method_router.py
-    runners/
+      registry.py
+      specs/
+      runners/
+    planner.py
 
   pertura_runtime/
-    claude/tools/product_tools.py
+    product.py
+    product_tools/
     verifier/
-      client.py, service.py, receipts.py, isolation.py
+    project/
+    adapters/
+    agent_bundle/
 
-  pertura_gate/
-    commit/
-      store.py, dependencies.py, receipt_verification.py
-    promotion/
-      statements.py, rules.py, decisions.py
-    render/product_report.py
+  pertura_bench/
+    capability_models.py
+    real_execution.py
+    agent_models.py
+    agent_server_execution.py
+    server_plan.py
 ```
 
-Required dependency direction:
+Required authority direction:
 
 ```text
-capabilities -> result envelopes -> commit kernel -> promotion -> renderer
+capability spec + runtime-resolved dependencies
+-> controlled executor + validator
+-> ResultEnvelope
+-> authority commit + optional receipt/session seal
+-> pertura_core.promotion
+-> TurnFinal / versioned report
 ```
 
-The gate MUST NOT import analytical workflow implementations.
+`phase` is presentation metadata only. Scientific topology comes from `depends_on`, cycle validation, and explicit dependency policies.
 
-## 13. Current-to-target mapping
+## 13. Migration and legacy boundary
 
-| Current path/concept | Target role | Action |
-| --- | --- | --- |
-| `preflight.py` | `inspect_dataset` seed | emit `DatasetContract` |
-| `method_router.py` | capability router | become spec-driven/executable |
-| `target_reliability.py` | reliability v2 | profile thresholds; rename success |
-| `pseudobulk_de.py` | exploratory prototype | remove trust; replace adapter |
-| `evidence_tools.py` | legacy MCP surface | five product tools + migration shim |
-| catalog/family registrars | legacy adapter | generic envelope commit |
-| `EligibilityProfile` | dependency diagnostics | no registry-wide implicit merging |
-| scope/manifest variants | contract + `ScopeKey` | one authority/comparator |
-| resolver/warrant | promotion seed | keep ceilings; remove sentence branching |
-| 19 stage cards | phase metadata | remove scientific authority |
-| classic recipe | regression fixture | not product orchestration |
-| JSONL ledger | audit compatibility | signed isolated receipts as authority |
+The retired evidence lattice, registrar, stage harness, classic recipe, evidence MCP, and old finalizer are physically isolated under `legacy/`. They are excluded from wheel/sdist and from the active runtime import graph.
 
-Legacy artifacts may translate one-way into envelopes during migration. New
-capabilities MUST NOT expand the legacy taxonomy.
-
+Historical workspaces enter through a read-only importer and become `legacy_unverified`. They are never converted into current receipts or promotion decisions. New capabilities must use `ResultEnvelope` and must not extend or bridge the legacy taxonomy.
 ## 14. Implementation sequence
 
 ### P0. Integrity freeze

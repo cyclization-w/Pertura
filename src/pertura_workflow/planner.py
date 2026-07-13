@@ -16,7 +16,11 @@ from pertura_core import (
     ScopeKey,
     compare_scope_keys,
 )
-from pertura_workflow.capabilities.registry import CapabilityRegistry
+from pertura_core.hashing import canonical_hash
+from pertura_workflow.capabilities.registry import (
+    CapabilityRegistry,
+    capability_scientific_hash,
+)
 
 
 _SUCCESS_STATUSES = {
@@ -248,6 +252,14 @@ def resolve_dependencies(
         ]
         candidate_ids.update(item.result_id for item in all_candidates)
         dependency_policy = dict(policy.get(dependency_capability) or {})
+        metadata = dict(spec.metadata)
+        metadata.setdefault("upstream_spec_hashes", {})[
+            dependency_capability
+        ] = capability_scientific_hash(upstream_spec)
+        metadata.setdefault("upstream_dependency_policy_hashes", {})[dependency_capability] = canonical_hash(
+            dict(upstream_spec.metadata.get("dependency_policy") or {})
+        )
+        effective_spec = spec.model_copy(update={"metadata": metadata})
         expected_kind = str(
             dependency_policy.get("result_kind") or upstream_spec.output_kind
         )
@@ -456,7 +468,13 @@ def design_facts(
     replicate_field = identity.get("replicate")
     replicate_value = (replicate_field or {}).get("value")
     replicate_count = _count_values(replicate_value) if _confirmed(replicate_field) else 0
-    moi = str(contract.metadata.get("design_moi") or "").strip().lower()
+    moi_field = identity.get("design_moi")
+    guide_design_field = identity.get("guide_design")
+    moi = _confirmed_enum(moi_field, {"low", "high"})
+    guide_design = _confirmed_enum(
+        guide_design_field,
+        {"single", "combinatorial", "mixed"},
+    )
 
     for result in committed:
         if (
@@ -471,9 +489,6 @@ def design_facts(
                 replicate_count,
                 int(result.metrics.get("minimum_units_per_condition") or 0),
             )
-        elif result.capability_id == "screen.retained_cells.v1":
-            moi = str(result.metrics.get("design_moi") or moi).strip().lower()
-
     assignment_ids = {
         "diagnostic.guide_assignment.v1",
         "guide.assignment.nb_mixture.v1",
@@ -485,7 +500,8 @@ def design_facts(
         "state.reference.map_knn.v1",
     }
     return {
-        "moi": moi or "unknown",
+        "moi": moi,
+        "guide_design": guide_design,
         "n_replicates": replicate_count,
         "controls_defined": controls_defined,
         "guide_assignment_validated": any(
@@ -513,13 +529,21 @@ def _route_objective(
     facts: Mapping[str, Any],
     blockers: list[str],
 ) -> str | None:
+    condition_blockers: list[str] = []
     for route in _planner_routes():
         if not _objective_matches(route, objective):
             continue
         if not _route_applies(route, facts):
+            condition_blockers.append(
+                str(
+                    route.get("when_blocker")
+                    or "confirmed design is incompatible with capability"
+                )
+            )
             continue
         blockers.extend(_requirement_blockers(route, facts))
         return str(route["capability_id"])
+    blockers.extend(dict.fromkeys(condition_blockers))
     return None
 
 
@@ -650,22 +674,24 @@ def _candidate_issues(
         item.required and item.state != "current" for item in result.dependencies
     ):
         issues.append("upstream_dependency_not_current")
-    if (
-        downstream_spec.phase <= 3
-        and required_scope.canonical_hash == result.scope.canonical_hash
-    ):
-        comparison = ScopeComparison.exact
-    else:
-        comparison = compare_scope_keys(required_scope, result.scope)
-    scope_mode = str(dependency_policy.get("scope") or "exact")
-    if scope_mode == "exact" and comparison != ScopeComparison.exact:
+    scope_mode = str(dependency_policy["scope"])
+    if not _dependency_set_scope_ok(required_scope, result.scope, scope_mode):
         issues.append("scope_mismatch")
-    if scope_mode == "dataset" and comparison not in {
-        ScopeComparison.exact,
-        ScopeComparison.broader,
-        ScopeComparison.compatible_by_declared_rule,
-    }:
-        issues.append("scope_mismatch")
+    if result.capability_version == upstream_version:
+        expected_spec_hash = downstream_spec.metadata.get("upstream_spec_hashes", {}).get(
+            result.capability_id
+        )
+        # The registry-owned caller supplies current hashes below; absence in old
+        # result metadata makes the result historical-only.
+        actual_spec_hash = str(result.metadata.get("capability_spec_hash") or "")
+        actual_policy_hash = str(result.metadata.get("dependency_policy_hash") or "")
+        if expected_spec_hash and actual_spec_hash != expected_spec_hash:
+            issues.append("capability_spec_hash_mismatch")
+        expected_policy_hash = downstream_spec.metadata.get(
+            "upstream_dependency_policy_hashes", {}
+        ).get(result.capability_id)
+        if expected_policy_hash and actual_policy_hash != expected_policy_hash:
+            issues.append("dependency_policy_hash_mismatch")
     if downstream_spec.trust_level == CapabilityTrust.builtin_trusted:
         if result.capability_trust != CapabilityTrust.builtin_trusted:
             issues.append("untrusted_dependency")
@@ -727,6 +753,16 @@ def _append_dependency(
 
 def _confirmed(value: Mapping[str, Any] | None) -> bool:
     return bool(value) and str(value.get("status") or "") == "confirmed"
+
+
+def _confirmed_enum(
+    value: Mapping[str, Any] | None,
+    allowed: set[str],
+) -> str:
+    if not _confirmed(value):
+        return "unknown"
+    normalized = _norm(value.get("value"))
+    return normalized if normalized in allowed else "unknown"
 
 
 def _count_values(value: Any) -> int:

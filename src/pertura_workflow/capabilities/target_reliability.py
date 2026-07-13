@@ -49,7 +49,7 @@ def run_target_reliability_v2(
 
     expression = _read_expression(expression_path, cell_column)
     metadata = _read_metadata(metadata_path, cell_column)
-    retained = retained_cells_for_request(staging, request)
+    retained = retained_cells_for_request(staging, request, required=True)
     expression_cells = [
         cell for cell in metadata if cell in expression["rows"]
     ]

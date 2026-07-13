@@ -2294,16 +2294,16 @@
         {
           "execution_mode": "product_path",
           "expected_blocker_contains": [
-            "guide UMI matrix must contain nonnegative integer counts"
+            "guide counts must be nonnegative integers"
           ],
           "expected_statuses": [
-            "exception_blocked"
+            "blocked"
           ],
           "fixture_id": "synthetic/v1/guide.assignment.nb_mixture.v1/blocked",
           "fixture_version": "v1",
           "metrics": [
             {
-              "name": "exception_blocked",
+              "name": "failure_detected",
               "operator": "eq",
               "threshold": 1
             }
@@ -2319,16 +2319,16 @@
         {
           "execution_mode": "product_path",
           "expected_blocker_contains": [
-            "guide UMI matrix must contain nonnegative integer counts"
+            "guide counts must be nonnegative integers"
           ],
           "expected_statuses": [
-            "exception_blocked"
+            "blocked"
           ],
           "fixture_id": "synthetic/v1/guide.assignment.nb_mixture.v1/planted_failure",
           "fixture_version": "v1",
           "metrics": [
             {
-              "name": "exception_blocked",
+              "name": "failure_detected",
               "operator": "eq",
               "threshold": 1
             }
@@ -4169,7 +4169,7 @@
         {
           "execution_mode": "product_path",
           "expected_blocker_contains": [
-            "Expecting property name enclosed in double quotes"
+            "explicit assignment_path must resolve to exactly one"
           ],
           "expected_statuses": [
             "exception_blocked"
@@ -4194,7 +4194,7 @@
         {
           "execution_mode": "product_path",
           "expected_blocker_contains": [
-            "Expecting property name enclosed in double quotes"
+            "explicit assignment_path must resolve to exactly one"
           ],
           "expected_statuses": [
             "exception_blocked"
@@ -4351,7 +4351,7 @@
         {
           "execution_mode": "product_path",
           "expected_blocker_contains": [
-            "Expecting property name enclosed in double quotes"
+            "explicit assignment_path must resolve to exactly one"
           ],
           "expected_statuses": [
             "exception_blocked"
@@ -4376,7 +4376,7 @@
         {
           "execution_mode": "product_path",
           "expected_blocker_contains": [
-            "Expecting property name enclosed in double quotes"
+            "explicit assignment_path must resolve to exactly one"
           ],
           "expected_statuses": [
             "exception_blocked"

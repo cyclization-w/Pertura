@@ -134,7 +134,32 @@ def test_ci_separates_product_legacy_and_real_synthetic_execution() -> None:
     )
 
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert 'python -m pytest -q -m "not legacy"' in workflow
-    assert "python -m pytest -q -m legacy" in workflow
+    assert "python -m pytest -q" in workflow
+    assert "python -m pytest -c legacy/pytest.ini legacy/tests" in workflow
+    assert "PYTHONPATH: legacy/src:src" in workflow
     assert "run-matrix --tier synthetic_ci --repo ." in workflow
     assert "0.2.0a4" not in workflow
+
+
+def test_distribution_checker_rejects_retired_authority_packages(
+    tmp_path: Path,
+) -> None:
+    script = runpy.run_path(str(ROOT / "scripts" / "check_distribution_contents.py"))
+    wheel = tmp_path / "legacy.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("pertura_gate/__init__.py", b"retired")
+        archive.writestr(
+            "pertura_runtime/retired.py",
+            b"from pertura_" + b"gate import Evidence" + b"Registry",
+        )
+
+    verdict = script["check_distribution"](wheel)
+
+    assert verdict["passed"] is False
+    assert "pertura_gate/__init__.py" in verdict["forbidden"]
+    assert "pertura_runtime/retired.py" in verdict["forbidden"]
+
+def test_distribution_contract_excludes_legacy_from_sdist() -> None:
+    script = runpy.run_path(str(ROOT / "scripts" / "check_distribution_contents.py"))
+
+    assert not any("legacy/" in path for path in script["SDIST_REQUIRED"])

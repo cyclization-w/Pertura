@@ -24,48 +24,23 @@ timeout_seconds: 3600
 parameters_schema:
   type: object
   properties:
-    batch_column:
-      type: string
-    bootstrap_iterations:
-      type: integer
-    cell_column:
-      type: string
     chunk_rows:
       type: integer
-    condition_column:
-      type: string
+      minimum: 1
     control:
-      type: string
-    control_uid:
-      type: string
-    expected_direction:
-      type: string
-    expression_path:
-      type: string
-      x-pertura-asset-role: primary_dataset
-      description: Registered asset ID with role primary_dataset.
-    guide_bootstrap_iterations:
-      type: integer
-    guide_column:
       type: string
     h5ad_path:
       type: string
-      x-pertura-asset-role: primary_dataset
       description: Registered asset ID with role primary_dataset.
+      x-pertura-asset-role: primary_dataset
     iter_num:
       type: integer
-    layer_scale:
-      type: string
     logfc_threshold:
       type: number
     max_memory_gb:
       type: number
       default: 4.0
       exclusiveMinimum: 0
-    metadata_path:
-      type: string
-      x-pertura-asset-role: cell_metadata
-      description: Registered asset ID with role cell_metadata.
     min_de_genes:
       type: integer
     n_dims:
@@ -82,43 +57,29 @@ parameters_schema:
       type: string
     perturbation_type:
       type: string
-    profile:
-      type: string
+      enum:
+      - KO
+      - KD
+      - OE
     pval_cutoff:
       type: string
     ref_selection_mode:
       type: string
-    replicate_column:
-      type: string
     scale:
-      type: boolean
-    signature_genes:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    signature_learned_from_same_perturbation:
-      type: boolean
-    signature_test_split_used:
       type: boolean
     split_by:
       type: string
-    target_gene:
-      type: string
-    target_uid:
-      type: string
     use_rep:
       type: string
-  additionalProperties: false
-  examples:
-  - {}
   required:
   - h5ad_path
   - pert_key
   - control
+  additionalProperties: false
+  examples:
+  - h5ad_path: asset_example_primary_dataset
+    pert_key: example
+    control: example
 implemented: true
 metadata:
   validation_status: synthetic_only
@@ -126,3 +87,16 @@ metadata:
   environment_profile: perturbseq-python-v1
   execution_mode: isolated_python
   method_version: pertpy-1.1.1
+  dependency_policy:
+    screen.retained_cells.v1:
+      scope: exact
+      usage: row_filter
+      accepted_statuses:
+      - screen_passed
+      - caution
+    state.reference.map_knn.v1:
+      scope: exact
+      usage: scientific_input
+      accepted_statuses:
+      - completed
+      - completed_with_caution

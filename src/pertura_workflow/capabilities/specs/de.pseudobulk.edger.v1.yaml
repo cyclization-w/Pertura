@@ -33,32 +33,33 @@ parameters_schema:
       type: string
     chunk_rows:
       type: integer
+      minimum: 1
     condition_column:
       type: string
     counts_path:
       type: string
-      x-pertura-asset-role: primary_dataset
       description: Registered asset ID with role primary_dataset.
+      x-pertura-asset-role: primary_dataset
     covariates:
       type: array
       items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+        type: string
     gene_column:
       type: string
     max_memory_gb:
-      type: integer
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
     metadata_path:
       type: string
-      x-pertura-asset-role: cell_metadata
       description: Registered asset ID with role cell_metadata.
+      x-pertura-asset-role: cell_metadata
     minimum_cells_per_pseudobulk:
       type: integer
     n_jobs:
       type: integer
+      default: 1
+      minimum: 1
     paired:
       type: boolean
     replicate_column:
@@ -67,16 +68,21 @@ parameters_schema:
       type: string
     target_condition:
       type: string
+  required: []
   additionalProperties: false
   examples:
-  - {}
+  - max_memory_gb: 4.0
 implemented: true
 metadata:
   environment_profile: edger-v1
   dependency_policy:
     target.reliability.v2:
+      scope: exact
+      usage: validation_gate
       accepted_statuses:
       - screen_passed
     calibration.replicate_null.v1:
+      scope: exact
+      usage: validation_gate
       accepted_statuses:
       - completed

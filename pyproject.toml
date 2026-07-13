@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pertura"
-version = "0.2.0a10"
+version = "0.2.0a11"
 description = "Execution-grounded evidence runtime for Perturb-seq CodeAct agents."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -66,6 +66,7 @@ dashboard = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+exclude = ["pertura_gate", "pertura_gate.*"]
 
 [tool.setuptools.package-data]
 "pertura_workflow.capabilities" = ["specs/*.yaml", "profiles/*.yaml", "runners/*.R", "runners/*.py", "planner_routes.json"]

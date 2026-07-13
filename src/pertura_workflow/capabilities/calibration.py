@@ -47,7 +47,7 @@ def run_replicate_null_calibration(
     metadata = _read_metadata(metadata_path, cell_column)
     if set(cells) - set(metadata):
         raise ValueError("count matrix contains cells absent from metadata")
-    retained = retained_cells_for_request(staging, request)
+    retained = retained_cells_for_request(staging, request, required=True)
     analysis_cells = apply_retained_cells(cells, retained)
     grounding = dependency_grounding_metadata(retained, analysis_cells)
     if not analysis_cells:

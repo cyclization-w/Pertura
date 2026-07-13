@@ -63,10 +63,55 @@ def validate_and_resolve_parameters(
     return resolved
 
 
-def parameter_protocol_complete(spec: CapabilitySpec) -> bool:
-    schema = spec.parameters_schema or {}
-    return (
-        schema.get("type") == "object"
-        and isinstance(schema.get("properties"), dict)
-        and schema.get("additionalProperties") is False
+def parameter_protocol_issues(spec: CapabilitySpec) -> tuple[str, ...]:
+    from jsonschema.exceptions import SchemaError, ValidationError
+    from pertura_workflow.capabilities.parameter_schema import (
+        expected_executor_parameter_names,
     )
+
+    schema = dict(spec.parameters_schema or {})
+    issues: list[str] = []
+    try:
+        Draft202012Validator.check_schema(schema)
+    except SchemaError as exc:
+        issues.append(f"invalid JSON Schema: {exc.message}")
+        return tuple(issues)
+    if schema.get("type") != "object":
+        issues.append("parameter schema type must be object")
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        issues.append("parameter schema properties must be an object")
+        return tuple(issues)
+    if schema.get("additionalProperties") is not False:
+        issues.append("additionalProperties must be false")
+    required = schema.get("required")
+    if not isinstance(required, list) or any(name not in properties for name in required):
+        issues.append("required must be a list of declared properties")
+    examples = schema.get("examples")
+    if not isinstance(examples, list) or not examples or not all(
+        isinstance(item, dict) and item for item in examples
+    ):
+        issues.append("at least one non-empty object example is required")
+    else:
+        validator = Draft202012Validator(schema)
+        for index, example in enumerate(examples):
+            try:
+                validator.validate(example)
+            except ValidationError as exc:
+                issues.append(f"example {index} is invalid: {exc.message}")
+    for name, field in properties.items():
+        if not isinstance(field, dict) or "type" not in field:
+            issues.append(f"property {name} lacks a valid type")
+        if name.endswith("_path") and not field.get("x-pertura-asset-role"):
+            issues.append(f"asset path property {name} lacks x-pertura-asset-role")
+    expected = set(expected_executor_parameter_names(spec.executor))
+    observed = set(properties)
+    for name in sorted(expected - observed):
+        issues.append(f"runner parameter is missing from schema: {name}")
+    for name in sorted(observed - expected):
+        issues.append(f"schema property is not consumed by runner/runtime: {name}")
+    return tuple(issues)
+
+
+def parameter_protocol_complete(spec: CapabilitySpec) -> bool:
+    return not parameter_protocol_issues(spec)

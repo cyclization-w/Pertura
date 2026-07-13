@@ -57,6 +57,8 @@ class ClaudeRuntimeOptions:
     interaction_mode: str = "benchmark"
     stage_id: str | None = None
     tool_surface: str = "capability"
+    domain_tools_enabled: bool = True
+    benchmark_condition: str = "pertura_full"
     # The claim policy is a run-level trust decision. It is deliberately not
     # exposed as an MCP tool argument, so CodeAct cannot weaken it mid-run.
     policy_profile: str = "strict"
@@ -102,7 +104,11 @@ def build_agent_options(
             else NetworkAccessPolicy.offline()
         ),
     )
-    mcp_servers = {"pertura": create_product_mcp_server(runtime)}
+    mcp_servers = (
+        {"pertura": create_product_mcp_server(runtime)}
+        if config.domain_tools_enabled
+        else {}
+    )
     skill_config = resolve_skill_configuration(
         enable_bundled=config.enable_bundled_skills,
         additional_plugin_paths=config.additional_skill_plugins,
@@ -114,7 +120,10 @@ def build_agent_options(
         "resume": config.resume_session_id,
         "system_prompt": system_prompt,
         "tools": {"type": "preset", "preset": "claude_code"},
-        "allowed_tools": list(config.allowed_tools),
+        "allowed_tools": [
+            item for item in config.allowed_tools
+            if config.domain_tools_enabled or not item.startswith("mcp__pertura__")
+        ],
         "disallowed_tools": list(config.disallowed_tools),
         "mcp_servers": mcp_servers,
         "strict_mcp_config": True,
@@ -184,7 +193,10 @@ def describe_options(config: ClaudeRuntimeOptions) -> dict[str, Any]:
         "include_hook_events": config.include_hook_events,
         "setting_sources": list(config.setting_sources),
         "disallowed_tools": list(config.disallowed_tools),
-        "allowed_tools": list(config.allowed_tools),
+        "allowed_tools": [
+            item for item in config.allowed_tools
+            if config.domain_tools_enabled or not item.startswith("mcp__pertura__")
+        ],
         "enable_bundled_skills": config.enable_bundled_skills,
         "allow_literature_network": config.allow_literature_network,
         "available_skills": list(skill_config.skill_names),
@@ -202,6 +214,8 @@ def describe_options(config: ClaudeRuntimeOptions) -> dict[str, Any]:
         "interaction_mode": config.interaction_mode,
         "stage_id": config.stage_id,
         "tool_surface": config.tool_surface,
+        "domain_tools_enabled": config.domain_tools_enabled,
+        "benchmark_condition": config.benchmark_condition,
         "policy_profile": policy.profile,
         "policy_hash": policy.policy_hash,
         "env_keys": sorted(config.env),

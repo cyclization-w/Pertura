@@ -25,17 +25,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev,dashboard,omics]"
       - name: Run capability-first product suite
-        run: >-
-          python -m pytest -q -m "not legacy"
-          --ignore=tests/gate
-          --ignore=tests/bench/test_p07_gate_utility.py
-          --ignore=tests/bench/test_p21_classic_workflow.py
-          --ignore=tests/bench/test_stage_benchmark.py
-          --ignore=tests/runtime/test_claude_evidence_tools.py
-          --ignore=tests/runtime/test_final_surface.py
-          --ignore=tests/runtime/test_stage_catalog.py
-          --ignore=tests/workflow/test_classic_recipe.py
-          --ignore=tests/workflow/test_workflow_substrate.py
+        run: python -m pytest -q
 
   legacy-regression:
     name: Legacy read-only regression
@@ -47,28 +37,11 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: python -m pip install -e ".[dev]"
-      - name: Run explicitly marked legacy tests
-        shell: bash
-        run: |
-          set +e
-          python -m pytest -q -m legacy
-          status=$?
-          set -e
-          if [ "$status" -ne 0 ] && [ "$status" -ne 5 ]; then
-            exit "$status"
-          fi
-      - name: Run legacy gate, stage, and classic fixtures
-        run: >-
-          python -m pytest -q -m "not legacy"
-          tests/gate
-          tests/bench/test_p07_gate_utility.py
-          tests/bench/test_p21_classic_workflow.py
-          tests/bench/test_stage_benchmark.py
-          tests/runtime/test_claude_evidence_tools.py
-          tests/runtime/test_final_surface.py
-          tests/runtime/test_stage_catalog.py
-          tests/workflow/test_classic_recipe.py
-          tests/workflow/test_workflow_substrate.py
+      - name: Run isolated legacy regression archive
+        env:
+          PYTHONPATH: legacy/src:src
+        run: python -m pytest -c legacy/pytest.ini legacy/tests
+
 
 
   synthetic-benchmark:

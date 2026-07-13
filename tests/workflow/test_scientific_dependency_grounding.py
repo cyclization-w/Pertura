@@ -166,3 +166,126 @@ def test_target_reliability_uses_retained_cells_not_all_caller_cells(tmp_path: P
     assert payload["target_gene_efficacy"]["effect"] < 0
     assert payload["n_target_cells"] == 5
     assert payload["n_control_cells"] == 30
+
+
+def test_sceptre_consumes_the_authoritative_retained_cell_manifest(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from types import SimpleNamespace
+
+    from pertura_workflow.capabilities import effect_candidates
+    from pertura_workflow.capabilities.executors import execute_capability
+
+    source = tmp_path / "sceptre-retained"
+    source.mkdir()
+    for name, payload in {
+        "response.csv": "id,c1,c2,c3\nG1,1,2,3\n",
+        "guides.csv": "id,c1,c2,c3\ng1,1,0,1\n",
+        "guide_map.csv": "grna_id,grna_target\ng1,T1\n",
+        "pairs.csv": "grna_target,response_id\nT1,G1\n",
+    }.items():
+        (source / name).write_text(payload, encoding="utf-8")
+
+    retained_result_id = "result_retained_sceptre"
+    retained_hash = "sha256:" + "8" * 64
+    design_hash = "sha256:" + "9" * 64
+    dependencies = (
+        DependencyRef(
+            kind="retained_cell_manifest",
+            object_id=retained_result_id,
+            object_hash=retained_hash,
+            role="screen.retained_cells.v1",
+        ),
+        DependencyRef(
+            kind="design_balance",
+            object_id="result_design_sceptre",
+            object_hash=design_hash,
+            role="diagnostic.design_balance.v1",
+        ),
+    )
+    contract, spec, request = _contract_request(
+        source,
+        "association.sceptre.v1",
+        {
+            "response_matrix_path": "response.csv",
+            "guide_matrix_path": "guides.csv",
+            "guide_target_map_path": "guide_map.csv",
+            "discovery_pairs_path": "pairs.csv",
+            "moi": "high",
+        },
+        dependencies=dependencies,
+    )
+    staging = tmp_path / "sceptre-output"
+    staging.mkdir()
+    retained_manifest = staging / "dependency" / "retained_cells.csv"
+    retained_manifest.parent.mkdir()
+    retained_manifest.write_text(
+        "cell_id,retained\nc1,true\nc2,false\nc3,true\n", encoding="utf-8"
+    )
+    (staging / "_dependency_results.json").write_text(
+        json.dumps(
+            {
+                "results": [
+                    {
+                        "result_id": retained_result_id,
+                        "canonical_hash": retained_hash,
+                        "capability_id": "screen.retained_cells.v1",
+                        "result_kind": "retained_cell_manifest",
+                        "output_hashes": {
+                            "retained_cells.csv": file_sha256(retained_manifest)
+                        },
+                        "local_output_paths": [str(retained_manifest)],
+                        "dependency_refs": [
+                            {
+                                "kind": "retained_cell_manifest",
+                                "object_id": retained_result_id,
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+
+    def fake_runner(profile, runner, config_path, *, timeout):
+        del runner, timeout
+        assert profile == "sceptre-v1"
+        config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        captured.update(config)
+        output = Path(config["output_dir"])
+        (output / "sceptre_metadata.json").write_text(
+            json.dumps(
+                {
+                    "calibration_passed": True,
+                    "calibration_type1_rate": 0.04,
+                    "discovery_executed": True,
+                }
+            ),
+            encoding="utf-8",
+        )
+        (output / "sceptre_calibration.csv").write_text(
+            "response_id,grna_target,p_value\nG1,NTC,0.4\n", encoding="utf-8"
+        )
+        (output / "sceptre_results.csv").write_text(
+            "response_id,grna_target,p_value,fold_change,se_fold_change,FDR\n"
+            "G1,T1,0.01,-1.0,0.2,0.02\n",
+            encoding="utf-8",
+        )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(effect_candidates, "_run_r_profile", fake_runner)
+    result = execute_capability(
+        spec,
+        request,
+        contract,
+        staging,
+        runtime_context={"enforce_dependency_consumption": True},
+    )
+
+    retained_path = Path(str(captured["retained_cell_ids_path"]))
+    assert retained_path.read_text(encoding="utf-8").splitlines() == ["c1", "c3"]
+    assert result.metadata["retained_manifest_applied"] is True
+    assert retained_hash in result.metadata["consumed_dependency_hashes"]
+    assert design_hash not in result.metadata["consumed_dependency_hashes"]

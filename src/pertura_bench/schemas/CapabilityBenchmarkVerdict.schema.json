@@ -108,6 +108,26 @@
       "title": "Case Id",
       "type": "string"
     },
+    "continuous_metrics": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "title": "Continuous Metrics",
+      "type": "object"
+    },
     "environment_lock_hash": {
       "anyOf": [
         {
@@ -129,12 +149,27 @@
       "title": "Execution Mode",
       "type": "string"
     },
+    "hard_gates": {
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "title": "Hard Gates",
+      "type": "object"
+    },
     "input_hashes": {
       "additionalProperties": {
         "type": "string"
       },
       "title": "Input Hashes",
       "type": "object"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
     },
     "metrics": {
       "default": [],
@@ -169,7 +204,8 @@
         "passed",
         "failed",
         "not_available",
-        "not_run_environment_missing"
+        "not_run_environment_missing",
+        "not_configured"
       ],
       "title": "Outcome",
       "type": "string"
@@ -201,6 +237,13 @@
       "title": "Reasons",
       "type": "array"
     },
+    "reference_hashes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Reference Hashes",
+      "type": "object"
+    },
     "runner_hash": {
       "anyOf": [
         {
@@ -226,8 +269,20 @@
       "title": "Runtime Seconds"
     },
     "schema_version": {
-      "default": "pertura-capability-benchmark-verdict-v2",
+      "default": "pertura-capability-benchmark-verdict-v3",
       "title": "Schema Version",
+      "type": "string"
+    },
+    "scientific_metrics_status": {
+      "default": "not_required",
+      "enum": [
+        "passed",
+        "failed",
+        "reported_only",
+        "not_available",
+        "not_required"
+      ],
+      "title": "Scientific Metrics Status",
       "type": "string"
     },
     "scientific_result_hash": {

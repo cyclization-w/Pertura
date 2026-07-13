@@ -67,12 +67,12 @@ def run_guide_assignment_qc(
     assignments: list[dict[str, Any]] = []
     moi_counts: dict[int, int] = {}
     retained: list[str] = []
-    design_moi = str(params.get("design_moi") or "low").strip().lower()
+    design_moi = str(params.get("design_moi") or "unknown").strip().lower()
     for row_index, (raw_barcode, normalized_barcode) in enumerate(zip(barcodes, selected_barcodes)):
         assigned = [guide for guide in guides if posterior_by_guide[guide][row_index] >= threshold and counts[row_index][guides.index(guide)] > 0]
         moi = len(assigned)
         moi_counts[moi] = moi_counts.get(moi, 0) + 1
-        if (design_moi in {"high", "combinatorial", "multi"} and moi >= 1) or (design_moi not in {"high", "combinatorial", "multi"} and moi == 1):
+        if (design_moi == "high" and moi >= 1) or (design_moi == "low" and moi == 1):
             retained.append(raw_barcode)
         assignments.append({
             "raw_barcode": raw_barcode,

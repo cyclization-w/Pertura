@@ -121,6 +121,12 @@ def main(argv: list[str] | None = None) -> int:
     agent_server.add_argument("--cache", type=Path, required=True)
     agent_server.add_argument("--output", type=Path, required=True)
     agent_server.add_argument("--repo", type=Path, default=Path.cwd())
+    agent_server.add_argument(
+        "--condition",
+        choices=("pertura_full", "prompt_only", "free_codeact"),
+        required=True,
+    )
+    agent_server.add_argument("--repeat-index", type=int, choices=(1, 2), required=True)
     agent_regrade = agent_sub.add_parser("regrade")
     agent_regrade.add_argument("execution_root", type=Path)
     agent_sub.add_parser("server-cases")
@@ -138,6 +144,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--cache", type=Path)
     run.add_argument("--output", type=Path)
     run.add_argument("--repo", type=Path, default=Path.cwd())
+    run.add_argument("--parameter-catalog", type=Path)
+    run.add_argument("--design-confirmations", type=Path)
+    run.add_argument("--metric-reference-catalog", type=Path)
 
     run_matrix = sub.add_parser("run-matrix")
     run_matrix.add_argument("--tier", choices=_TIERS, default="synthetic_ci")
@@ -146,6 +155,9 @@ def main(argv: list[str] | None = None) -> int:
     run_matrix.add_argument("--cache", type=Path)
     run_matrix.add_argument("--output", type=Path)
     run_matrix.add_argument("--repo", type=Path, default=Path.cwd())
+    run_matrix.add_argument("--parameter-catalog", type=Path)
+    run_matrix.add_argument("--design-confirmations", type=Path)
+    run_matrix.add_argument("--metric-reference-catalog", type=Path)
     run_matrix.add_argument(
         "--write-frozen-synthetic-verdicts", action="store_true"
     )
@@ -153,6 +165,9 @@ def main(argv: list[str] | None = None) -> int:
     server = sub.add_parser("export-server-plan")
     server.add_argument("--output", type=Path, required=True)
     server.add_argument("--repo", type=Path, default=Path.cwd())
+    server.add_argument("--parameter-catalog", type=Path)
+    server.add_argument("--design-confirmations", type=Path)
+    server.add_argument("--metric-reference-catalog", type=Path)
 
     args, extra = parser.parse_known_args(argv)
     commands_with_repo = {
@@ -365,7 +380,12 @@ def main(argv: list[str] | None = None) -> int:
             except ValueError as exc:
                 parser.error(str(exc))
             payload = run_server_agent_case(
-                args.case_id, repo_root=agent_repo, cache=args.cache, output=args.output
+                args.case_id,
+                repo_root=agent_repo,
+                cache=args.cache,
+                output=args.output,
+                condition=args.condition,
+                repeat_index=args.repeat_index,
             )
         elif args.agent_command == "regrade":
             from pertura_bench.agent_server_execution import regrade_server_agent_case
@@ -393,6 +413,9 @@ def main(argv: list[str] | None = None) -> int:
                 split=args.split,
                 cache=args.cache,
                 output=args.output,
+                parameter_catalog_path=args.parameter_catalog,
+                design_confirmations_path=args.design_confirmations,
+                metric_reference_catalog_path=args.metric_reference_catalog,
             ),
         }
     elif args.command == "run-matrix":
@@ -416,6 +439,9 @@ def main(argv: list[str] | None = None) -> int:
                     split=args.split,
                     cache=args.cache,
                     output=args.output,
+                    parameter_catalog_path=args.parameter_catalog,
+                    design_confirmations_path=args.design_confirmations,
+                    metric_reference_catalog_path=args.metric_reference_catalog,
                 )
                 for capability_id in CANDIDATE_CAPABILITIES
                 if args.dataset is None
@@ -432,7 +458,13 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "export-server-plan":
         from pertura_bench.capability_bench import write_server_plan
 
-        payload = write_server_plan(args.output, repo_root=repo)
+        payload = write_server_plan(
+            args.output,
+            repo_root=repo,
+            parameter_catalog_path=args.parameter_catalog,
+            design_confirmations_path=args.design_confirmations,
+            metric_reference_catalog_path=args.metric_reference_catalog,
+        )
     elif args.command == "edger-golden":
         from pertura_bench.edger_golden import run_edger_golden
 

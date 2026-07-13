@@ -1,52 +1,39 @@
 # Repository tree
 
-This is the intended `0.2.0a10` server-benchmark environment-readiness product layout. It is a boundary map, not an exhaustive generated file listing.
+This is the intended 0.2.0a11 pre-benchmark layout. It is a boundary map, not an exhaustive generated file list.
 
-```text
-pertura/
-|-- pyproject.toml
-|-- MANIFEST.in
-|-- README.md
-|-- compatibility/v0.2/          # generated repository snapshots
-|-- benchmarks/                  # manifests, license notes, small goldens
-|-- docs/
-|   |-- README.md                # current documentation entry
-|   |-- 14_capability_first_product_architecture.md
-|   |-- 15_v020_implementation_status.md
-|   |-- benchmark_design.md
-|   `-- legacy/README.md         # navigation to historical material
-|-- scripts/                     # freeze, version, benchmark maintenance
-|-- src/
-|   |-- pertura_core/            # contracts, scope, policy, verification
-|   |   `-- compatibility/v0.2/  # wheel-packaged snapshot mirror
-|   |-- pertura_workflow/        # capabilities, planner, runners, envs
-|   |-- pertura_runtime/         # product CLI, five tools, sessions, UI API
-|   |   |-- product_tools/      # provider-neutral definitions and handlers
-|   |   |-- agent_bundle/       # four shared skills and Claude plugin manifest
-|   |   |-- adapters/           # provider contracts and OpenAI skeleton
-|   |   `-- dashboard_static/   # generated dashboard bundle
-|   |-- pertura_bench/           # cases, schemas, runners, server plans
-|   `-- pertura_gate/            # legacy compatibility/regression only
-|-- tests/
-|   |-- core/
-|   |-- compatibility/
-|   |-- runtime/
-|   |-- workflow/
-|   |-- bench/
-|   `-- gate/                    # legacy regression lane
-`-- ui/                          # React/Vite dashboard source and lockfile
-```
+    pertura/
+    |-- pyproject.toml
+    |-- MANIFEST.in
+    |-- README.md
+    |-- compatibility/v0.2/          # generated public snapshots
+    |-- benchmarks/                  # source manifests, licenses, small goldens
+    |-- docs/                        # capability-first active documentation only
+    |-- legacy/                      # excluded evidence/registrar/stage archive
+    |   |-- src/
+    |   |-- tests/
+    |   |-- docs/
+    |   `-- pytest.ini
+    |-- scripts/                     # active freeze, audit, benchmark tools
+    |-- src/
+    |   |-- pertura_core/            # frozen contracts, scope, promotion
+    |   |-- pertura_workflow/        # capabilities, planner, runners, envs
+    |   |-- pertura_runtime/         # projects, authority, five tools, adapters, UI
+    |   `-- pertura_bench/           # cases, schemas, metrics, server plans
+    |-- tests/                       # default capability-first product tests
+    |-- ui/                          # React/Vite dashboard source
+    |-- REPO_TREE.md
+    `-- REPO_MANIFEST.md
 
-## Product dependency direction
+## Active dependency direction
 
-```text
-pertura_core      -> no runtime/workflow/bench dependency
-pertura_workflow  -> pertura_core
-pertura_runtime   -> pertura_core + pertura_workflow
-pertura_bench     -> product path through explicit maintainer adapters
-pertura_gate      -> compatibility only; never imported by default product startup
-```
+    pertura_core      -> no runtime/workflow/bench dependency
+    pertura_workflow  -> pertura_core
+    pertura_runtime   -> pertura_core + pertura_workflow
+    pertura_bench     -> explicit product/maintainer interfaces
+
+There is no active bridge to legacy/. The archive is excluded from wheel/sdist and runs only under its explicit legacy test lane.
 
 ## Local-only outputs
 
-Runtime runs, reports, artifacts, authority databases, real datasets, benchmark caches, optional environments, build trees, wheels, and `node_modules` are ignored. CI and packaging checks verify that none enter a release artifact.
+Runs, reports, authority databases, real datasets, benchmark caches, scientific environments, build artifacts, wheels, and node_modules are ignored and must not enter a release artifact.

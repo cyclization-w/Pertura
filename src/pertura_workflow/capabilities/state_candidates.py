@@ -16,6 +16,7 @@ from pertura_workflow.capabilities.candidate_common import (
     resource_budget,
     write_json,
 )
+from pertura_workflow.capabilities.dependency_inputs import retained_cells_for_request
 from pertura_workflow.capabilities.modules import run_nmf_modules
 from pertura_workflow.environment import doctor_environment
 
@@ -65,6 +66,9 @@ def run_state_reference_fit(
         if control_column not in data.obs.columns:
             return blocked(spec, request, contract, f"control column is missing: {control_column}")
         control_mask = data.obs[control_column].astype(str).isin(control_values).to_numpy()
+        retained = retained_cells_for_request(staging, request, required=True)
+        if retained is not None:
+            control_mask &= data.obs_names.astype(str).isin(retained)
         minimum_controls = int(request.parameters.get("minimum_control_cells", 30))
         if int(control_mask.sum()) < minimum_controls:
             return blocked(
@@ -230,7 +234,10 @@ def run_state_reference_fit(
             "chosen_resolution": chosen["resolution"],
         },
         outputs=(model_path, assignment_path, manifest_path),
-        metadata={"fit_population": "confirmed_controls_only"},
+        metadata={
+            "fit_population": "confirmed_controls_only",
+            "retained_manifest_applied": True,
+        },
     )
 
 

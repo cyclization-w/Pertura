@@ -20,52 +20,17 @@ timeout_seconds: 900
 parameters_schema:
   type: object
   properties:
-    activity_threshold:
-      type: number
-    bootstraps:
-      type: string
     chunk_rows:
       type: integer
-    effect_threshold:
-      type: number
-    fdr_threshold:
-      type: number
-    max_gene_set_size:
-      type: integer
-    max_iter:
-      type: integer
+      minimum: 1
     max_memory_gb:
-      type: integer
-    max_records:
-      type: integer
-    min_features:
-      type: integer
-    min_gene_set_size:
-      type: integer
-    min_perturbations:
-      type: integer
-    minimum_feature_coverage:
-      type: integer
-    minimum_targets:
-      type: integer
-    missing_fraction_caution:
-      type: string
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
     n_jobs:
       type: integer
-    n_seeds:
-      type: integer
-    permutation_num:
-      type: integer
-    query:
-      type: string
-    ranks:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+      default: 1
+      minimum: 1
     records:
       type: array
       items:
@@ -74,13 +39,10 @@ parameters_schema:
         - number
         - integer
         - object
-    seed:
-      type: integer
-    stability_threshold:
-      type: number
+  required: []
   additionalProperties: false
   examples:
-  - {}
+  - max_memory_gb: 4.0
 implemented: true
 metadata:
   validation_status: synthetic_only

@@ -17,6 +17,8 @@ from pertura_workflow.capabilities.candidate_common import (
     write_json,
 )
 from pertura_workflow.environment import doctor_environment
+from pertura_workflow.capabilities.dependency_inputs import retained_cells_for_request
+from pertura_workflow.capabilities.candidate_common import resource_budget
 from pertura_workflow.capabilities.target_reliability import (
     _axis_overlap,
     _bootstrap_effect,
@@ -64,7 +66,45 @@ def run_mixscape_responder(
     control = str(request.parameters.get("control") or "")
     if not pert_key or not control:
         return blocked(spec, request, contract, "pert_key and control are required for Mixscape")
-    data = ad.read_h5ad(h5ad_path)
+    budget = resource_budget(request.parameters)
+    retained = retained_cells_for_request(staging, request, required=True)
+    inspection = ad.read_h5ad(h5ad_path, backed="r")
+    try:
+        retained_mask = (
+            inspection.obs_names.astype(str).isin(retained)
+            if retained is not None
+            else [True] * int(inspection.n_obs)
+        )
+        retained_count = int(retained_mask.sum())
+        estimated = budget.dense_bytes(
+            retained_count,
+            int(inspection.n_vars),
+            arrays=3,
+            itemsize=8,
+        )
+        if estimated > budget.max_bytes:
+            return blocked(
+                spec,
+                request,
+                contract,
+                f"Mixscape working-set estimate {estimated / 1024**3:.3f} GB exceeds max_memory_gb={budget.max_memory_gb}",
+            )
+    finally:
+        if getattr(inspection, "file", None):
+            inspection.file.close()
+    inspection = ad.read_h5ad(h5ad_path, backed="r")
+    try:
+        selected = (
+            inspection.obs_names.astype(str).isin(retained)
+            if retained is not None
+            else [True] * int(inspection.n_obs)
+        )
+        data = inspection[selected].to_memory()
+    finally:
+        if getattr(inspection, "file", None):
+            inspection.file.close()
+    if data.n_obs == 0:
+        return blocked(spec, request, contract, "retained-cell manifest has no overlap with Mixscape input")
     if pert_key not in data.obs.columns:
         return blocked(spec, request, contract, f"perturbation column is missing: {pert_key}")
     split_by = request.parameters.get("split_by")
@@ -196,8 +236,13 @@ def run_guide_efficacy(
     layer_scale = str(request.parameters.get("layer_scale") or "log_normalized")
     profile_name = str(request.parameters.get("profile") or "dev_unvalidated_v0")
     profile = _load_profile(profile_name)
+    retained = retained_cells_for_request(staging, request, required=True)
     expression = _read_expression(expression_path, cell_column)
-    metadata = _read_metadata(metadata_path, cell_column)
+    metadata = {
+        cell: row
+        for cell, row in _read_metadata(metadata_path, cell_column).items()
+        if retained is None or cell in retained
+    }
     if target_gene not in expression["genes"]:
         return blocked(spec, request, contract, f"target gene is absent: {target_gene}")
     target_cells = [
@@ -365,7 +410,11 @@ def run_guide_efficacy(
             "signature_confirmation_allowed": signature["confirmation_allowed"],
         },
         outputs=(output,),
-        metadata={"profile": profile_name, "profile_validation": "dev_unvalidated"},
+        metadata={
+            "profile": profile_name,
+            "profile_validation": "dev_unvalidated",
+            "retained_manifest_applied": True,
+        },
     )
 
 

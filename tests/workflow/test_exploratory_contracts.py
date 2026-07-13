@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from pertura_core import DependencyRef, ScientificStatement, ScopeKey, SourceClass
-from pertura_gate.promotion import decide_promotion
+from pertura_core.promotion import decide_promotion
 from pertura_runtime.claude.tools.product_tools import PRODUCT_TOOL_NAMES
 from pertura_workflow.capabilities import CapabilityRegistry
 from pertura_workflow.exploratory import (

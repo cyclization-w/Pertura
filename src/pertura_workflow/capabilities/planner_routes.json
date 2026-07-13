@@ -23,11 +23,7 @@
       ],
       "when": {
         "moi_in": [
-          "high",
-          "multi",
-          "multiple",
-          "combinatorial",
-          "pooled_high"
+          "high"
         ]
       },
       "when_blocker": "SCEPTRE requires an explicitly high-MOI design"
@@ -55,15 +51,11 @@
         "guide_assignment_validated"
       ],
       "when": {
-        "moi_not_in": [
-          "high",
-          "multi",
-          "multiple",
-          "combinatorial",
-          "pooled_high"
+        "moi_in": [
+          "low"
         ]
       },
-      "when_blocker": "edgeR pseudobulk is incompatible with a high-MOI design"
+      "when_blocker": "edgeR requires an explicitly confirmed low-MOI design"
     },
     {
       "capability_id": "composition.propeller.v1",

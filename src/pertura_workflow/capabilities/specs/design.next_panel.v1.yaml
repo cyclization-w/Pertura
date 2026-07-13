@@ -23,18 +23,6 @@ timeout_seconds: 900
 parameters_schema:
   type: object
   properties:
-    axes:
-      type: object
-    axis_columns:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    bootstrap_iterations:
-      type: integer
     budget:
       type: number
     candidates:
@@ -47,102 +35,34 @@ parameters_schema:
         - object
     chunk_rows:
       type: integer
-    collapse_distance_ratio_min:
-      type: number
-    collapse_variance_ratio_min:
-      type: number
-    control_ids:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    coverage_tolerance:
-      type: number
-    format:
-      type: string
-    heldout_axes:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+      minimum: 1
     max_memory_gb:
-      type: integer
-    minimum_features:
-      type: integer
-    minimum_units:
-      type: integer
-    model_id:
-      type: string
-    model_training_ids:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    model_version:
-      type: string
-    module_reference_hash:
-      type: string
-    module_reference_training_ids:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+      type: number
+      default: 4.0
+      exclusiveMinimum: 0
     n_jobs:
       type: integer
-    nominal_coverage:
-      type: number
-    observed_layer:
-      type: string
-    prediction_layer:
-      type: string
-    prediction_path:
-      type: string
-      x-pertura-asset-role: prediction_bundle
-      description: Registered asset ID with role prediction_bundle.
-    prediction_scale:
-      type: string
-    preprocessing_training_ids:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    seed:
-      type: integer
-    state_reference_hash:
-      type: string
-    state_reference_training_ids:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+      default: 1
+      minimum: 1
     weights:
       type: object
-  additionalProperties: false
-  examples:
-  - {}
   required:
   - candidates
   - budget
+  additionalProperties: false
+  examples:
+  - candidates:
+    - example
+    budget: 1.0
 implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
   hypothesis_only: true
+  dependency_policy:
+    virtual.evaluate.comprehensive.v1:
+      scope: exact
+      usage: scientific_input
+      accepted_statuses:
+      - supported
+      - limited

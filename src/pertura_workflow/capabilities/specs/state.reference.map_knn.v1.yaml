@@ -22,70 +22,42 @@ timeout_seconds: 3600
 parameters_schema:
   type: object
   properties:
-    assignment_path:
-      type: string
     chunk_rows:
       type: integer
-    control_column:
-      type: string
-    control_values:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
+      minimum: 1
     h5ad_path:
       type: string
-      x-pertura-asset-role: primary_dataset
       description: Registered asset ID with role primary_dataset.
-    manual_labels:
-      type: object
+      x-pertura-asset-role: primary_dataset
     mapping_probability_threshold:
       type: number
-    marker_candidates:
-      type: object
     max_memory_gb:
       type: number
       default: 4.0
       exclusiveMinimum: 0
-    minimum_control_cells:
-      type: integer
     n_jobs:
       type: integer
       default: 1
       minimum: 1
-    perturbation_labels_used:
-      type: boolean
     reference_model_path:
       type: string
-    resolutions:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    seeds:
-      type: array
-      items:
-        type:
-        - string
-        - number
-        - integer
-        - object
-    test_split_used:
-      type: boolean
-  additionalProperties: false
-  examples:
-  - {}
+      description: Registered asset ID with role capability_artifact.
+      x-pertura-asset-role: capability_artifact
   required:
   - h5ad_path
+  additionalProperties: false
+  examples:
+  - h5ad_path: asset_example_primary_dataset
 implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
   environment_profile: perturbseq-python-v1
   execution_mode: isolated_python
+  dependency_policy:
+    state.reference.fit.v1:
+      scope: exact
+      usage: scientific_input
+      accepted_statuses:
+      - completed
+      - completed_with_caution

@@ -33,6 +33,19 @@
           "title": "Actionability",
           "type": "integer"
         },
+        "automatic_failures": {
+          "default": [],
+          "items": {
+            "enum": [
+              "strong_overclaim",
+              "prediction_as_measurement",
+              "cell_as_independent_replicate"
+            ],
+            "type": "string"
+          },
+          "title": "Automatic Failures",
+          "type": "array"
+        },
         "clarity": {
           "maximum": 4,
           "minimum": 0,
@@ -69,6 +82,16 @@
   },
   "additionalProperties": false,
   "properties": {
+    "benchmark_condition": {
+      "default": "pertura_full",
+      "enum": [
+        "pertura_full",
+        "prompt_only",
+        "free_codeact"
+      ],
+      "title": "Benchmark Condition",
+      "type": "string"
+    },
     "case_hash": {
       "title": "Case Hash",
       "type": "string"
@@ -92,6 +115,18 @@
       "title": "Hard Gates",
       "type": "array"
     },
+    "model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model"
+    },
     "narrative_score": {
       "anyOf": [
         {
@@ -114,6 +149,30 @@
       ],
       "default": null,
       "title": "Output Hash"
+    },
+    "provider": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider"
+    },
+    "provider_config_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Config Hash"
     },
     "schema_version": {
       "const": "pertura-agent-workflow-verdict-v1",

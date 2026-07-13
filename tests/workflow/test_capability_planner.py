@@ -10,7 +10,9 @@ from pertura_core import (
     ScopeKey,
     SourceClass,
 )
+from pertura_core.hashing import canonical_hash
 from pertura_workflow.capabilities import CapabilityRegistry
+from pertura_workflow.capabilities.registry import capability_scientific_hash
 from pertura_workflow.planner import (
     plan_analysis,
     plan_requested_capability,
@@ -18,7 +20,12 @@ from pertura_workflow.planner import (
 )
 
 
-def _contract(*, replicates: tuple[str, ...] = ("r1", "r2", "r3")) -> DatasetContract:
+def _contract(
+    *,
+    replicates: tuple[str, ...] = ("r1", "r2", "r3"),
+    moi: str = "low",
+    guide_design: str = "single",
+) -> DatasetContract:
     return DatasetContract(
         dataset_id="dataset",
         input_format="csv",
@@ -26,6 +33,8 @@ def _contract(*, replicates: tuple[str, ...] = ("r1", "r2", "r3")) -> DatasetCon
         identity_fields={
             "control": {"status": "confirmed", "value": ["NTC"]},
             "replicate": {"status": "confirmed", "value": list(replicates)},
+            "design_moi": {"status": "confirmed", "value": moi},
+            "guide_design": {"status": "confirmed", "value": guide_design},
         },
     )
 
@@ -43,6 +52,20 @@ def _result(
     metrics: dict | None = None,
     dependencies: tuple[DependencyRef, ...] = (),
 ) -> ResultEnvelope:
+    result_metadata = {}
+    try:
+        upstream_spec = CapabilityRegistry.load_default(include_external=False).get(
+            capability_id, capability_version
+        )
+    except Exception:
+        upstream_spec = None
+    if upstream_spec is not None:
+        result_metadata = {
+            "capability_spec_hash": capability_scientific_hash(upstream_spec),
+            "dependency_policy_hash": canonical_hash(
+                dict(upstream_spec.metadata.get("dependency_policy") or {})
+            ),
+        }
     return ResultEnvelope(
         run_id="run",
         request_id=f"request-{capability_id}",
@@ -59,11 +82,12 @@ def _result(
         stale=stale,
         metrics=metrics or {},
         dependencies=dependencies,
+        metadata=result_metadata,
     )
 
 
 def test_planner_routes_from_design_facts_instead_of_objective_keywords() -> None:
-    contract = _contract()
+    contract = _contract(moi="high", guide_design="combinatorial")
     scope = ScopeKey(dataset_id=contract.dataset_id)
     retained = _result(
         contract,

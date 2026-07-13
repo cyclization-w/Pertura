@@ -27,7 +27,12 @@ from pertura_workflow.capabilities import CapabilityRegistry
 
 
 _REAL_PARAMETER_RESOURCE = "real_parameters.v1.json"
+_DESIGN_CONFIRMATION_RESOURCE = "design_confirmations.v1.json"
+_METRIC_REFERENCE_RESOURCE = "metric_references.v1.json"
 _CHECKPOINT_ENV = "PERTURA_BENCH_CHECKPOINT_BINDING"
+_PARAMETER_CATALOG_ENV = "PERTURA_BENCH_PARAMETER_CATALOG"
+_DESIGN_CATALOG_ENV = "PERTURA_BENCH_DESIGN_CONFIRMATIONS"
+_METRIC_CATALOG_ENV = "PERTURA_BENCH_METRIC_REFERENCES"
 
 
 class RealParametersNotConfigured(RuntimeError):
@@ -56,6 +61,9 @@ def run_real_tier(
     split: str | None,
     cache: str | Path | None,
     output: str | Path | None,
+    parameter_catalog_path: str | Path | None = None,
+    design_confirmations_path: str | Path | None = None,
+    metric_reference_catalog_path: str | Path | None = None,
 ) -> list[CapabilityBenchmarkVerdict]:
     if not dataset_id:
         raise ValueError("real-data benchmark execution requires --dataset")
@@ -71,7 +79,9 @@ def run_real_tier(
     root = _default_repo_root() if repo_root is None else Path(repo_root).resolve()
     registry = CapabilityRegistry.load_default(include_external=False)
     capability = registry.get(spec.capability_id, spec.capability_version)
-    parameter_catalog, parameter_catalog_hash = load_real_parameter_catalog()
+    parameter_catalog, parameter_catalog_hash = load_real_parameter_catalog(parameter_catalog_path)
+    design_catalog, design_catalog_hash = load_design_confirmation_catalog(design_confirmations_path)
+    metric_catalog, metric_catalog_hash = load_metric_reference_catalog(metric_reference_catalog_path)
     case = _real_case(
         spec,
         tier,
@@ -79,6 +89,8 @@ def run_real_tier(
         split=split,
         parameter_catalog=parameter_catalog,
         parameter_catalog_hash=parameter_catalog_hash,
+        design_catalog_hash=design_catalog_hash,
+        metric_catalog_hash=metric_catalog_hash,
     )
     input_hashes = _real_identity_hashes(
         root,
@@ -88,6 +100,8 @@ def run_real_tier(
         split=split,
         tier=tier,
         parameter_catalog_hash=parameter_catalog_hash,
+        design_catalog_hash=design_catalog_hash,
+        metric_catalog_hash=metric_catalog_hash,
     )
     try:
         artifact, lock_hashes = resolve_real_artifact_chain(
@@ -129,6 +143,12 @@ def run_real_tier(
         split=split,
         parameter_catalog=parameter_catalog,
         parameter_catalog_hash=parameter_catalog_hash,
+        design_catalog=design_catalog,
+        metric_catalog=metric_catalog,
+        metric_catalog_hash=metric_catalog_hash,
+        parameter_catalog_path=parameter_catalog_path,
+        design_confirmations_path=design_confirmations_path,
+        metric_reference_catalog_path=metric_reference_catalog_path,
     )
     if output:
         destination = Path(output).expanduser().resolve()
@@ -153,6 +173,8 @@ def _real_case(
     split: str,
     parameter_catalog: Mapping[str, Any],
     parameter_catalog_hash: str,
+    design_catalog_hash: str,
+    metric_catalog_hash: str,
 ) -> CapabilityBenchmarkCase:
     template = spec.cases[0]
     case_override = template.parameters.get("real_execution")
@@ -168,6 +190,8 @@ def _real_case(
             "split": split,
             "real_parameter_catalog_version": parameter_catalog["catalog_version"],
             "real_parameter_catalog_hash": parameter_catalog_hash,
+            "design_confirmation_catalog_hash": design_catalog_hash,
+            "metric_reference_catalog_hash": metric_catalog_hash,
             "real_execution": dict(case_override) if isinstance(case_override, Mapping) else {},
         },
         expected_statuses=(
@@ -184,6 +208,8 @@ def _real_case(
 def load_real_parameter_catalog(
     path: str | Path | None = None,
 ) -> tuple[dict[str, Any], str]:
+    if path is None and os.environ.get(_PARAMETER_CATALOG_ENV):
+        path = os.environ[_PARAMETER_CATALOG_ENV]
     if path is None:
         resource = resources.files("pertura_bench").joinpath(
             "cases", _REAL_PARAMETER_RESOURCE
@@ -209,6 +235,70 @@ def load_real_parameter_catalog(
             )
     return payload, digest
 
+
+def _load_packaged_or_external_json(
+    resource_name: str,
+    path: str | Path | None,
+    *,
+    environment_variable: str,
+) -> tuple[dict[str, Any], str]:
+    if path is None and os.environ.get(environment_variable):
+        path = os.environ[environment_variable]
+    if path is None:
+        resource = resources.files("pertura_bench").joinpath("cases", resource_name)
+        with resources.as_file(resource) as packaged:
+            source = Path(packaged)
+            return json.loads(source.read_text(encoding="utf-8")), file_sha256(source)
+    source = Path(path).expanduser().resolve()
+    return json.loads(source.read_text(encoding="utf-8")), file_sha256(source)
+
+
+def load_design_confirmation_catalog(
+    path: str | Path | None = None,
+) -> tuple[dict[str, Any], str]:
+    payload, digest = _load_packaged_or_external_json(
+        _DESIGN_CONFIRMATION_RESOURCE,
+        path,
+        environment_variable=_DESIGN_CATALOG_ENV,
+    )
+    if payload.get("schema_version") != "pertura-design-confirmation-catalog-v1":
+        raise ValueError("unsupported design confirmation catalog schema")
+    datasets = payload.get("datasets")
+    if not payload.get("catalog_version") or not isinstance(datasets, dict):
+        raise ValueError("design confirmation catalog lacks versioned datasets")
+    for dataset_id, dataset in datasets.items():
+        if not isinstance(dataset, dict):
+            raise ValueError(f"invalid design confirmation dataset: {dataset_id}")
+        confirmations = dataset.get("confirmations")
+        provenance = dataset.get("provenance")
+        if not isinstance(confirmations, dict) or not isinstance(provenance, dict):
+            raise ValueError(f"design confirmations/provenance are invalid: {dataset_id}")
+        for name in confirmations:
+            record = provenance.get(name)
+            if not isinstance(record, dict) or not record.get("source") or not record.get("confirmed_by"):
+                raise ValueError(
+                    f"confirmed design fact lacks source/confirmed_by: {dataset_id}/{name}"
+                )
+    return payload, digest
+
+
+def load_metric_reference_catalog(
+    path: str | Path | None = None,
+) -> tuple[dict[str, Any], str]:
+    payload, digest = _load_packaged_or_external_json(
+        _METRIC_REFERENCE_RESOURCE,
+        path,
+        environment_variable=_METRIC_CATALOG_ENV,
+    )
+    if payload.get("schema_version") != "pertura-metric-reference-catalog-v1":
+        raise ValueError("unsupported metric reference catalog schema")
+    datasets = payload.get("datasets")
+    if not payload.get("catalog_version") or not isinstance(datasets, dict):
+        raise ValueError("metric reference catalog lacks versioned datasets")
+    for dataset_id, dataset in datasets.items():
+        if not isinstance(dataset, dict) or not isinstance(dataset.get("capabilities"), dict):
+            raise ValueError(f"invalid metric reference dataset: {dataset_id}")
+    return payload, digest
 
 def resolve_real_artifact_chain(
     repo_root: str | Path,
@@ -363,6 +453,12 @@ def _invoke_locked_product_case(
     split: str,
     parameter_catalog: Mapping[str, Any],
     parameter_catalog_hash: str,
+    design_catalog: Mapping[str, Any],
+    metric_catalog: Mapping[str, Any],
+    metric_catalog_hash: str,
+    parameter_catalog_path: str | Path | None,
+    design_confirmations_path: str | Path | None,
+    metric_reference_catalog_path: str | Path | None,
 ) -> CapabilityBenchmarkVerdict:
     from pertura_runtime.claude.workspace import ClaudeRunWorkspace
     from pertura_runtime.product import PerturaProductRuntime
@@ -370,7 +466,12 @@ def _invoke_locked_product_case(
     registry = CapabilityRegistry.load_default(include_external=False)
     spec = registry.get(case.capability_id, case.capability_version)
     try:
-        checkpoint = _load_checkpoint_binding(repo_root)
+        checkpoint = _load_checkpoint_binding(
+            repo_root,
+            parameter_catalog_path=parameter_catalog_path,
+            design_confirmations_path=design_confirmations_path,
+            metric_reference_catalog_path=metric_reference_catalog_path,
+        )
     except (FileNotFoundError, ValueError) as exc:
         return make_verdict(
             case,
@@ -402,7 +503,7 @@ def _invoke_locked_product_case(
             force_loopback_transport(runtime)
             try:
                 confirmations = _dataset_confirmations(
-                    parameter_catalog,
+                    design_catalog,
                     dataset_id=str(case.dataset_id),
                     case=case,
                 )
@@ -474,19 +575,133 @@ def _invoke_locked_product_case(
     digest = scientific_result_digest(result)
     status = enum_value(result["status"])
     accepted = status in case.expected_statuses
+    metric_evaluation = _evaluate_metric_references(
+        result,
+        dataset_id=str(case.dataset_id),
+        capability_id=case.capability_id,
+        capability_version=case.capability_version,
+        catalog=metric_catalog,
+        catalog_hash=metric_catalog_hash,
+    )
+    required_outputs = set(metric_evaluation["required_outputs"])
+    output_hashes = dict(result.get("output_hashes") or {})
+    hard_gates = {
+        "status_accepted": accepted,
+        "result_schema_valid": True,
+        "authority_projection_complete": True,
+        "required_outputs_present": required_outputs.issubset(output_hashes),
+    }
+    execution_passed = all(hard_gates.values())
     return make_verdict(
         case,
-        outcome="passed" if accepted else "failed",
+        outcome="passed" if execution_passed else "failed",
         observed_status=status,
         blockers=tuple(result.get("blockers") or ()),
         input_hashes=input_hashes,
-        output_hashes=dict(result.get("output_hashes") or {}),
+        output_hashes=output_hashes,
         runner_hash=runner_hash(spec.executor),
-        reasons=() if accepted else (f"unexpected real-data status: {status}",),
+        reasons=() if execution_passed else ("one or more execution hard gates failed",),
         scientific_hash=digest.canonical_hash,
         environment_lock_hash=input_hashes.get("environment_lock"),
+        hard_gates=hard_gates,
+        scientific_metrics_status=metric_evaluation["status"],
+        reference_hashes=metric_evaluation["reference_hashes"],
+        continuous_metrics=metric_evaluation["continuous_metrics"],
+        limitations=metric_evaluation["limitations"],
     )
 
+
+def _evaluate_metric_references(
+    result: Mapping[str, Any],
+    *,
+    dataset_id: str,
+    capability_id: str,
+    capability_version: str,
+    catalog: Mapping[str, Any],
+    catalog_hash: str,
+) -> dict[str, Any]:
+    dataset = dict(catalog.get("datasets", {}).get(dataset_id) or {})
+    key = f"{capability_id}@{capability_version}"
+    entry = dict(dataset.get("capabilities", {}).get(key) or {})
+    if not entry:
+        return {
+            "status": "not_available",
+            "required_outputs": (),
+            "reference_hashes": {"metric_reference_catalog": catalog_hash},
+            "continuous_metrics": {},
+            "limitations": (f"metric references are not configured for {dataset_id}/{key}",),
+        }
+    required_outputs = tuple(str(item) for item in entry.get("required_outputs") or ())
+    references = tuple(entry.get("metrics") or ())
+    reported = tuple(str(item) for item in entry.get("reported_metrics") or ())
+    continuous: dict[str, float | int | str | None] = {}
+    comparisons: list[bool] = []
+    metrics_payload = dict(result.get("metrics") or {})
+    for name in reported:
+        continuous[name] = _metric_value(metrics_payload, name)
+    for raw in references:
+        if not isinstance(raw, Mapping):
+            raise ValueError(f"invalid metric reference entry for {dataset_id}/{key}")
+        name = str(raw.get("name") or "")
+        source = str(raw.get("result_metric") or name)
+        if not name or "reference" not in raw:
+            raise ValueError(f"metric reference lacks name/reference for {dataset_id}/{key}")
+        observed = _metric_value(metrics_payload, source)
+        reference = raw.get("reference")
+        continuous[name] = observed
+        continuous[f"{name}__reference"] = reference
+        if observed is None:
+            comparisons.append(False)
+            continue
+        mode = str(raw.get("comparison") or "absolute_error")
+        tolerance = float(raw.get("tolerance", 0.0))
+        if mode == "equal":
+            passed = observed == reference
+            error = 0.0 if passed else 1.0
+        else:
+            try:
+                absolute = abs(float(observed) - float(reference))
+                error = absolute if mode == "absolute_error" else absolute / max(abs(float(reference)), 1e-12)
+                passed = error <= tolerance
+            except (TypeError, ValueError):
+                passed, error = False, float("inf")
+        continuous[f"{name}__error"] = error
+        comparisons.append(passed)
+    reference_hashes = {"metric_reference_catalog": catalog_hash}
+    for name, digest in dict(entry.get("reference_hashes") or {}).items():
+        value = str(digest)
+        if not value.startswith("sha256:"):
+            raise ValueError(f"reference hash is not canonical: {name}")
+        reference_hashes[str(name)] = value
+    if references:
+        status = "passed" if comparisons and all(comparisons) else "failed"
+        limitations: tuple[str, ...] = () if status == "passed" else (
+            "one or more frozen scientific reference comparisons failed",
+        )
+    elif reported:
+        status = "reported_only"
+        limitations = (
+            "continuous metrics are reported without a frozen pass threshold and do not establish validation",
+        )
+    else:
+        status = "not_available"
+        limitations = ("metric reference entry contains no metrics",)
+    return {
+        "status": status,
+        "required_outputs": required_outputs,
+        "reference_hashes": reference_hashes,
+        "continuous_metrics": continuous,
+        "limitations": limitations,
+    }
+
+
+def _metric_value(payload: Mapping[str, Any], dotted: str) -> Any:
+    value: Any = payload
+    for part in dotted.split("."):
+        if not isinstance(value, Mapping) or part not in value:
+            return None
+        value = value[part]
+    return value if isinstance(value, (str, int, float)) or value is None else str(value)
 
 def execute_capability_dag(
     runtime: Any,
@@ -538,16 +753,6 @@ def execute_capability_dag(
             workspace_root=Path(runtime.workspace.root),
             committed_by_capability=committed_by_capability,
         )
-        parameters["benchmark_context"] = {
-            "schema_version": "pertura-real-benchmark-context-v1",
-            "dataset_id": dataset_id,
-            "capability_id": spec.capability_id,
-            "capability_version": spec.version,
-            "tier": tier,
-            "split": split,
-            "artifact_lock_hashes": dict(sorted(lock_hashes.items())),
-            "real_parameter_catalog_hash": parameter_catalog_hash,
-        }
         if spec.kind == "diagnostic":
             compact = runtime.run_diagnostic(
                 capability_id,
@@ -727,17 +932,18 @@ def _dataset_confirmations(
     dataset_id: str,
     case: CapabilityBenchmarkCase,
 ) -> dict[str, Any]:
+    del case
     dataset = dict(catalog.get("datasets", {}).get(dataset_id) or {})
-    confirmations = dict(dataset.get("contract_confirmations") or {})
-    override = case.parameters.get("real_execution")
-    if isinstance(override, Mapping) and isinstance(
-        override.get("contract_confirmations"), Mapping
-    ):
-        confirmations.update(dict(override["contract_confirmations"]))
-    return confirmations
+    return dict(dataset.get("confirmations") or {})
 
 
-def _load_checkpoint_binding(repo_root: Path) -> dict[str, str]:
+def _load_checkpoint_binding(
+    repo_root: Path,
+    *,
+    parameter_catalog_path: str | Path | None = None,
+    design_confirmations_path: str | Path | None = None,
+    metric_reference_catalog_path: str | Path | None = None,
+) -> dict[str, str]:
     binding_path = os.environ.get(_CHECKPOINT_ENV)
     if not binding_path:
         raise FileNotFoundError(
@@ -755,7 +961,13 @@ def _load_checkpoint_binding(repo_root: Path) -> dict[str, str]:
     from pertura_bench.capability_bench import benchmark_specs
     from pertura_bench.server_plan import build_server_plan, validate_checkpoint_binding
 
-    template = build_server_plan(benchmark_specs(), repo_root)
+    template = build_server_plan(
+        benchmark_specs(),
+        repo_root,
+        parameter_catalog_path=parameter_catalog_path,
+        design_confirmations_path=design_confirmations_path,
+        metric_reference_catalog_path=metric_reference_catalog_path,
+    )
     return validate_checkpoint_binding(template, binding)
 
 
@@ -768,6 +980,8 @@ def _real_identity_hashes(
     split: str,
     tier: BenchmarkTier,
     parameter_catalog_hash: str,
+    design_catalog_hash: str,
+    metric_catalog_hash: str,
 ) -> dict[str, str]:
     hashes = {
         "case": case.canonical_hash,
@@ -778,6 +992,8 @@ def _real_identity_hashes(
         "split": canonical_hash({"split": split}),
         "tier": canonical_hash({"tier": tier}),
         "real_parameter_catalog": parameter_catalog_hash,
+        "design_confirmation_catalog": design_catalog_hash,
+        "metric_reference_catalog": metric_catalog_hash,
     }
     profile = str(spec.metadata.get("environment_profile") or "")
     if profile:

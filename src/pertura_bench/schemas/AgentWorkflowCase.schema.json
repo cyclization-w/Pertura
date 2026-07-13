@@ -42,6 +42,16 @@
   },
   "additionalProperties": false,
   "properties": {
+    "benchmark_condition": {
+      "default": "pertura_full",
+      "enum": [
+        "pertura_full",
+        "prompt_only",
+        "free_codeact"
+      ],
+      "title": "Benchmark Condition",
+      "type": "string"
+    },
     "case_id": {
       "title": "Case Id",
       "type": "string"
@@ -62,6 +72,14 @@
       "title": "Description",
       "type": "string"
     },
+    "expected_capability_dag": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Expected Capability Dag",
+      "type": "array"
+    },
     "expected_hard_gates": {
       "items": {
         "type": "string"
@@ -69,10 +87,68 @@
       "title": "Expected Hard Gates",
       "type": "array"
     },
+    "expected_statuses": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Expected Statuses",
+      "type": "array"
+    },
+    "expected_turns": {
+      "default": 1,
+      "title": "Expected Turns",
+      "type": "integer"
+    },
     "max_memory_gb": {
       "default": 4.0,
       "title": "Max Memory Gb",
       "type": "number"
+    },
+    "model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model"
+    },
+    "provider": {
+      "default": "claude-agent-sdk",
+      "title": "Provider",
+      "type": "string"
+    },
+    "provider_config_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Config Hash"
+    },
+    "required_artifact_roles": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Artifact Roles",
+      "type": "array"
+    },
+    "required_result_roles": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Result Roles",
+      "type": "array"
     },
     "scenario": {
       "title": "Scenario",
@@ -83,6 +159,14 @@
       "default": "pertura-agent-workflow-case-v1",
       "title": "Schema Version",
       "type": "string"
+    },
+    "scope_claim_constraints": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Scope Claim Constraints",
+      "type": "array"
     },
     "tier": {
       "enum": [

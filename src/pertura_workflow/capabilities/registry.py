@@ -7,10 +7,32 @@ from typing import Any, Iterable
 import yaml
 
 from pertura_core import CapabilitySpec, CapabilityTrust
+from pertura_core.hashing import canonical_hash
 
 
 class CapabilityRegistryError(ValueError):
     pass
+
+
+def capability_scientific_hash(spec: CapabilitySpec) -> str:
+    """Hash executable scientific semantics while excluding display-only phase."""
+
+    payload = spec.model_dump(mode="json", exclude={"canonical_hash", "phase"})
+    return canonical_hash(payload)
+
+_DEPENDENCY_SCOPE_MODES = {
+    "exact",
+    "dataset",
+    "same_dataset_context",
+    "compatible",
+}
+_DEPENDENCY_USAGE_MODES = {
+    "scientific_input",
+    "row_filter",
+    "validation_gate",
+    "parameter_source",
+    "provenance_only",
+}
 
 
 @dataclass(frozen=True)
@@ -138,13 +160,59 @@ class CapabilityRegistry:
                     if installed_external:
                         continue
                     raise CapabilityRegistryError(f"unknown dependency {dependency!r} for {spec.capability_id}")
-                if by_id[dependency].phase > spec.phase:
-                    raise CapabilityRegistryError(f"backward phase dependency {spec.capability_id} -> {dependency}")
+            if not installed_external:
+                _validate_dependency_policy(spec)
             if spec.trust_level != CapabilityTrust.builtin_trusted and spec.claim_permissions:
                 raise CapabilityRegistryError(
                     f"untrusted capability {spec.capability_id} cannot self-authorize claim permissions"
                 )
         _validate_acyclic(by_id)
+
+
+def _validate_dependency_policy(spec: CapabilitySpec) -> None:
+    """Validate scientific dependency semantics independently of display phase."""
+
+    policy = spec.metadata.get("dependency_policy") or {}
+    if not isinstance(policy, dict):
+        raise CapabilityRegistryError(
+            f"dependency_policy must be an object for {spec.capability_id}"
+        )
+    expected = set(spec.depends_on)
+    observed = set(policy)
+    if observed != expected:
+        missing = sorted(expected - observed)
+        extra = sorted(observed - expected)
+        details = []
+        if missing:
+            details.append("missing " + ", ".join(missing))
+        if extra:
+            details.append("unknown " + ", ".join(extra))
+        raise CapabilityRegistryError(
+            f"dependency_policy keys do not match depends_on for {spec.capability_id}: "
+            + "; ".join(details)
+        )
+    for dependency, rules in policy.items():
+        if not isinstance(rules, dict):
+            raise CapabilityRegistryError(
+                f"dependency policy for {spec.capability_id} -> {dependency} must be an object"
+            )
+        scope = str(rules.get("scope") or "")
+        usage = str(rules.get("usage") or "")
+        statuses = rules.get("accepted_statuses")
+        if scope not in _DEPENDENCY_SCOPE_MODES:
+            raise CapabilityRegistryError(
+                f"invalid dependency scope {scope!r} for {spec.capability_id} -> {dependency}"
+            )
+        if usage not in _DEPENDENCY_USAGE_MODES:
+            raise CapabilityRegistryError(
+                f"invalid dependency usage {usage!r} for {spec.capability_id} -> {dependency}"
+            )
+        if not isinstance(statuses, list) or not statuses or not all(
+            isinstance(item, str) and item for item in statuses
+        ):
+            raise CapabilityRegistryError(
+                f"accepted_statuses must be a non-empty string list for {spec.capability_id} -> {dependency}"
+            )
 
 
 def _load_bundled_specs() -> Iterable[CapabilitySpec]:

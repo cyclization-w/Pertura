@@ -61,4 +61,4 @@ A null receipt indicates a validated-untrusted candidate result. Such a result m
 
 The tool names and JSON contracts are frozen under `compatibility/v0.2/tool-surface.json`. Adding an exploratory capability with no claim permission does not add another MCP tool.
 
-The former registrar/evidence MCP surface is retained only for legacy regression tests. See [the historical registrar tool document](legacy/06_registrar_tool_surface.md).
+The former registrar/evidence MCP surface is retained only for legacy regression tests. See [the historical registrar tool document](../legacy/docs/06_registrar_tool_surface.md).

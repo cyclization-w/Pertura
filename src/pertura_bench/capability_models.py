@@ -14,6 +14,7 @@ BenchmarkOutcome = Literal[
     "failed",
     "not_available",
     "not_run_environment_missing",
+    "not_configured",
 ]
 BenchmarkExecutionMode = Literal["product_path", "protocol_fake", "stale_audit"]
 BenchmarkSplit = Literal["calibration", "evaluation"]
@@ -139,7 +140,7 @@ class ScientificResultDigest(CanonicalModel):
 
 
 class CapabilityBenchmarkVerdict(CanonicalModel):
-    schema_version: str = "pertura-capability-benchmark-verdict-v2"
+    schema_version: str = "pertura-capability-benchmark-verdict-v3"
     verdict_id: str = ""
     id_field = "verdict_id"
     id_prefix = "capbenchverdict"
@@ -151,6 +152,13 @@ class CapabilityBenchmarkVerdict(CanonicalModel):
     tier: BenchmarkTier
     execution_mode: BenchmarkExecutionMode
     outcome: BenchmarkOutcome
+    hard_gates: dict[str, bool] = Field(default_factory=dict)
+    scientific_metrics_status: Literal[
+        "passed", "failed", "reported_only", "not_available", "not_required"
+    ] = "not_required"
+    reference_hashes: dict[str, str] = Field(default_factory=dict)
+    continuous_metrics: dict[str, float | int | str | None] = Field(default_factory=dict)
+    limitations: tuple[str, ...] = ()
     observed_status: str | None = None
     observed_blockers: tuple[str, ...] = ()
     metrics: tuple[CapabilityBenchmarkMetric, ...] = ()
@@ -213,7 +221,7 @@ class CapabilityBenchmarkMatrix(CanonicalModel):
 
 
 class ServerBenchmarkPlan(CanonicalModel):
-    schema_version: str = "pertura-server-benchmark-plan-v2"
+    schema_version: str = "pertura-server-benchmark-plan-v3"
     plan_id: str = ""
     id_field = "plan_id"
     id_prefix = "serverbench"
@@ -240,6 +248,9 @@ class ServerBenchmarkPlan(CanonicalModel):
             "resource_lock_set_hash": None,
             "prediction_bundle_set_hash": None,
             "server_plan_hash": None,
+            "parameter_catalog_hash": None,
+            "design_confirmation_catalog_hash": None,
+            "metric_reference_catalog_hash": None,
         }
     )
     executable: bool = False
@@ -262,6 +273,9 @@ class ServerBenchmarkPlan(CanonicalModel):
             "resource_lock_set_hash",
             "prediction_bundle_set_hash",
             "server_plan_hash",
+            "parameter_catalog_hash",
+            "design_confirmation_catalog_hash",
+            "metric_reference_catalog_hash",
         }
         if set(self.checkpoint_binding) != required:
             raise ValueError(

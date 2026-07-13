@@ -18,6 +18,7 @@ from pertura_workflow.capabilities.candidate_common import (
     success_status,
     write_json,
 )
+from pertura_workflow.capabilities.guide_counts import open_guide_count_source
 
 
 _SUFFIX = re.compile(r"-\d+$")
@@ -79,26 +80,37 @@ def run_intake_materialize(
     guide_path = request.parameters.get("guide_counts_path")
     if guide_path:
         resolved_guide = resolve_input(contract, guide_path, label="guide_counts_path")
-        guide_fields, guide_rows = read_rows(resolved_guide)
-        barcode_column = str(request.parameters.get("guide_barcode_column") or guide_fields[0])
-        guide_names = [name for name in guide_fields if name != barcode_column]
-        guide_values = []
-        for row in guide_rows:
-            guide_values.append([_nonnegative_number(row.get(name), integer=True) for name in guide_names])
-        guide_matrix = sparse.csr_matrix(guide_values)
+        try:
+            guide_source = open_guide_count_source(
+                resolved_guide,
+                barcode_column=request.parameters.get("guide_barcode_column"),
+                row_manifest_path=request.parameters.get("guide_row_manifest_path"),
+                column_manifest_path=request.parameters.get("guide_column_manifest_path"),
+                modality=request.parameters.get("guide_modality"),
+                layer=request.parameters.get("guide_layer"),
+                max_memory_gb=max_memory_gb,
+                chunk_rows=resource_budget(request.parameters).chunk_rows,
+            )
+        except (MemoryError, ValueError) as exc:
+            return blocked(spec, request, contract, str(exc))
+        try:
+            guide_matrix = guide_source.to_csr(
+                chunk_rows=resource_budget(request.parameters).chunk_rows
+            )
+            guide_barcodes = list(guide_source.cell_ids)
+            guide_names = list(guide_source.guide_ids)
+        finally:
+            guide_source.close()
         guide_matrix_path = staging / "guide_counts.npz"
         sparse.save_npz(guide_matrix_path, guide_matrix)
         guide_obs_path = staging / "guide_barcodes.parquet"
         guide_var_path = staging / "guides.parquet"
-        pd.DataFrame(
-            {
-                "raw_barcode": [row[barcode_column] for row in guide_rows],
-                "normalized_barcode": [_normalize_barcode(row[barcode_column]) for row in guide_rows],
-            }
-        ).to_parquet(guide_obs_path, index=False)
+        pd.DataFrame({
+            "raw_barcode": guide_barcodes,
+            "normalized_barcode": [_normalize_barcode(item) for item in guide_barcodes],
+        }).to_parquet(guide_obs_path, index=False)
         pd.DataFrame({"guide_id": guide_names}).to_parquet(guide_var_path, index=False)
         guide_outputs.extend((guide_matrix_path, guide_obs_path, guide_var_path))
-
     manifest = {
         "schema_version": "pertura-materialized-bundle-v1",
         "contract_id": contract.contract_id,

@@ -1,68 +1,34 @@
-# Appendix: Source Map
+# Appendix: source map
 
-This clean documentation set was extracted from current repository docs, code, tests, and smoke results.
+## Active product authority
 
-## Main Source Documents
+- `src/pertura_core/contracts.py`: frozen core result, receipt, scope, and statement objects.
+- `src/pertura_core/promotion.py`: the only active promotion policy and decision engine.
+- `src/pertura_workflow/capabilities/specs/`: capability specifications and explicit dependency policies.
+- `src/pertura_workflow/capabilities/registry.py`: spec, dependency-policy, and cycle validation.
+- `src/pertura_workflow/planner.py`: routing from confirmed design facts and committed diagnostics.
+- `src/pertura_runtime/verifier/`: controlled execution, receipts, committed results, and authority-session seals.
+- `src/pertura_runtime/product.py`: five-tool product runtime and report projection.
+- `src/pertura_runtime/project/`: projects, assets, runs, conversations, turns, and report revisions.
 
-- `docs/P0_6_P0_7_TECHNICAL_DESIGN.md`: latest full design and P1.3 closure record.
-- `docs/pertura_gate_v1.md`: concise evidence lattice spec.
-- `docs/mcp_tools_v1.md`: early MCP boundary design, retained as historical context.
-- `docs/smoke_tasks/`: executable Claude smoke task prompts.
-- `docs/p07_tasks/`: P0.7 gate utility task prompt material.
-- `docs/skills/10_evidence_workflow.md`: A+C evidence workflow SOP.
+## Active benchmarks
 
-## Key Code Locations
+- `src/pertura_bench/capability_models.py`: scientific capability case and verdict schemas.
+- `src/pertura_bench/real_execution.py`: locked real-data execution and scientific metrics.
+- `src/pertura_bench/server_plan.py`: checkpoint-bound server plan.
+- `src/pertura_bench/agent_models.py`: provider-neutral agent workflow cases and verdicts.
+- `src/pertura_bench/agent_server_execution.py`: three-condition server agent runs.
+- `src/pertura_bench/release_gate.py`: repository/runtime/local/real readiness audit.
+- `src/pertura_bench/cases/`: versioned cases and external catalog templates.
 
-Trusted gate core:
+## Active tests
 
-- `src/pertura_gate/core/schema.py`: `EvidenceClass`, `ArtifactRole`, `StrengthCeiling`, `ScopeFit`, `EligibilityProfile`, `EvidenceArtifact`, `Claim`, `ClaimDecision`.
-- `src/pertura_gate/core/policy.py`: policy version and hash.
-- `src/pertura_gate/identity/design_manifest.py`: perturbation design manifest support.
-- `src/pertura_gate/identity/canonical_scope.py`: canonical perturbation identity comparison.
-- `src/pertura_gate/identity/scope.py`: claim/artifact scope helpers.
-- `src/pertura_gate/evidence/registry.py`: artifact registration and registry persistence.
-- `src/pertura_gate/resolver/resolver.py`: claim-conditioned resolver and P1 evidence branches.
-- `src/pertura_gate/resolver/warrant.py`: shared strength/warrant helpers.
-- `src/pertura_gate/render/renderer.py`: controlled final surface templates.
+- `tests/workflow/test_a11_dependency_and_sparse.py`: phase neutrality, dependency policies, design routing, and sparse guide behavior.
+- `tests/workflow/test_scientific_dependency_grounding.py`: runtime-owned dependency hashes and actual consumption.
+- `tests/bench/test_a11_scientific_verdicts.py`: v3 hard-gate/reference/metrics behavior and three-condition parity.
+- `tests/runtime/test_product_import_fence.py`: active import isolation.
+- `tests/core/test_version_and_packaging.py`: distribution contents and legacy exclusion.
 
-Runtime adapter:
+## Legacy archive
 
-- `src/pertura_runtime/claude/tools/evidence_tools.py`: Claude-visible evidence MCP tools.
-- `src/pertura_runtime/claude/finalizer.py`: decision-aware finalization.
-- `src/pertura_runtime/claude/prompt.py`: runtime prompt and workflow instruction injection.
-- `src/pertura_runtime/claude/manifest.py`: run manifest and analysis state manifest.
-
-Benchmark utilities:
-
-- `src/pertura_bench/p07_harness.py`: P0.7 strong-baseline harness.
-- `src/pertura_bench/surface_eval.py`: benchmark-only surface evaluator.
-
-## Key Tests
-
-- `tests/gate/test_claim_resolver.py`: resolver and lattice tests, including P1.1/P1.2/P1.3.
-- `tests/gate/test_artifact_strength.py`: artifact strength and report-rendering tests.
-- `tests/gate/test_identity_manifest.py`: canonical UID and manifest tests.
-- `tests/gate/test_import_boundaries.py`: gate import-boundary invariant.
-- `tests/runtime/test_claude_evidence_tools.py`: MCP registration, source hash, next claim template behavior.
-- `tests/runtime/test_final_surface.py`: runtime final and evidence report behavior.
-- `tests/bench/test_p07_gate_utility.py`: P0.7 strong-baseline harness and evaluator.
-
-## Smoke Task Prompts
-
-- `docs/smoke_tasks/01_measured_association_with_eligibility.md`
-- `docs/smoke_tasks/02_prediction_prior_laundering.md`
-- `docs/smoke_tasks/03_missing_eligibility_trap.md`
-- `docs/smoke_tasks/04_dual_guide_attribution_trap.md`
-- `docs/smoke_tasks/05_policy_threshold_probe.md`
-- `docs/smoke_tasks/06_target_engagement_mechanism_trap.md`
-- `docs/smoke_tasks/07_cell_qc_blocks_measured_claim.md`
-- `docs/smoke_tasks/08_curated_enrichment_context.md`
-- `docs/smoke_tasks/08b_curated_enrichment_valid_measured_scope.md`
-- `docs/smoke_tasks/09_module_effect_not_mechanism.md`
-- `docs/smoke_tasks/10_global_effect_not_gene_specific_or_fate.md`
-
-## Latest Recorded Test Result
-
-```text
-110 passed
-```
+The retired evidence lattice, registrar, stage harness, evidence MCP, old finalizer, classic recipes, prompts, and tests are under `legacy/`. They run only through `legacy/pytest.ini` with `legacy/src` explicitly added to `PYTHONPATH`. They are excluded from product distributions and cannot create v0.2 results, receipts, or promotion decisions.

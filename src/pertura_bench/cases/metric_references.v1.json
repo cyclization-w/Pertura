@@ -1,0 +1,10 @@
+{
+  "schema_version": "pertura-metric-reference-catalog-v1",
+  "catalog_version": "v1",
+  "datasets": {
+    "replogle_k562_essential_2022": {"capabilities": {}},
+    "papalexi_thp1_eccite": {"capabilities": {}},
+    "norman_k562_crispra_2019": {"capabilities": {}},
+    "kang18_8vs8_pbmc": {"capabilities": {}}
+  }
+}

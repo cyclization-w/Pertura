@@ -7,6 +7,9 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
+from pertura_core.hashing import canonical_hash
+from pertura_workflow.capabilities.registry import capability_scientific_hash
+
 from pertura_core import (
     AnalysisStatus,
     CapabilityRunRequest,
@@ -120,6 +123,31 @@ def _validate_standard(spec: CapabilitySpec, request: CapabilityRunRequest, cont
         raise ValueError("executor changed or omitted authoritative dependencies")
     if set(result.output_paths) != set(result.output_hashes):
         raise ValueError("executor output paths and hashes do not match")
+    enforce_consumption = bool(result.metadata.get("dependency_consumption_enforced"))
+    successful = status in {
+        "screen_passed", "caution", "completed", "completed_with_caution",
+        "supported", "limited",
+    }
+    if not enforce_consumption or not successful:
+        return
+    policy = dict(spec.metadata.get("dependency_policy") or {})
+    consumed = set(result.metadata.get("consumed_dependency_hashes") or ())
+    direct_dependencies = {
+        item.role: item
+        for item in request.dependencies
+        if item.role in policy
+    }
+    for dependency, rules in policy.items():
+        usage = str(rules.get("usage") or "")
+        if usage not in {"scientific_input", "row_filter", "parameter_source"}:
+            continue
+        binding = direct_dependencies.get(dependency)
+        if binding is None:
+            raise ValueError(f"required consumed dependency is missing: {dependency}")
+        if binding.object_hash not in consumed:
+            raise ValueError(
+                f"executor did not consume declared {usage} dependency: {dependency}; expected {binding.object_hash}; observed {sorted(consumed)}"
+            )
 
 
 def _lazy_executor(target: str) -> Executor:
@@ -263,7 +291,11 @@ def _execute_in_profile(
         "contract": contract.model_dump(mode="json"),
         "staging_dir": str(staging.resolve()),
         "result_path": str(result_path.resolve()),
-        "runtime_context": runtime_context,
+        "runtime_context": {
+            key: value
+            for key, value in runtime_context.items()
+            if key != "consumed_dependency_hashes"
+        },
     }
     config_path.write_text(json.dumps(config, sort_keys=True), encoding="utf-8")
     env = {
@@ -322,6 +354,7 @@ def execute_capability(
     isolated = spec.metadata.get("execution_mode") == "isolated_python"
     inside_worker = bool(context.get("inside_environment_worker"))
     enforce_isolation = bool(context.get("enforce_environment_execution"))
+    context.setdefault("consumed_dependency_hashes", set())
     with bind_execution_context(context):
         if isolated and enforce_isolation and not inside_worker:
             result = _execute_in_profile(
@@ -338,5 +371,24 @@ def execute_capability(
                     spec.metadata.get("environment_profile") or ""
                 )
                 result = result.model_copy(update={"metadata": metadata})
+        from pertura_workflow.capabilities.execution_context import consumed_dependency_hashes
+        context_consumed = consumed_dependency_hashes()
+    metadata = dict(result.metadata)
+    existing_consumed = set(metadata.get("consumed_dependency_hashes") or ())
+    existing_consumed.update(context_consumed)
+    metadata.update({
+        "capability_spec_hash": capability_scientific_hash(spec),
+        "dependency_consumption_enforced": bool(
+            context.get("enforce_dependency_consumption")
+        ),
+        "dependency_policy_hash": canonical_hash(
+            dict(spec.metadata.get("dependency_policy") or {})
+        ),
+        "consumed_dependency_hashes": sorted(existing_consumed),
+    })
+    payload = result.model_dump(mode="json")
+    payload["canonical_hash"] = ""
+    payload["metadata"] = metadata
+    result = ResultEnvelope.model_validate(payload)
     _VALIDATORS[spec.validator](spec, request, contract, result)
     return result

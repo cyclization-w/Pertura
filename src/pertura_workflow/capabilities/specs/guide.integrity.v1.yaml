@@ -22,70 +22,62 @@ timeout_seconds: 900
 parameters_schema:
   type: object
   properties:
-    assignment_path:
-      type: string
     barcode_column:
       type: string
     chunk_rows:
       type: integer
-    design_moi:
+      minimum: 1
+    column_manifest_path:
       type: string
-    doublet_score_column:
-      type: string
-    doublet_threshold:
-      type: number
-    filtered_guide_counts_path:
-      type: string
-      x-pertura-asset-role: guide_matrix
-      description: Registered asset ID with role guide_matrix.
+      description: Registered asset ID with role guide_matrix_manifest.
+      x-pertura-asset-role: guide_matrix_manifest
     guide_counts_path:
       type: string
-      x-pertura-asset-role: guide_matrix
       description: Registered asset ID with role guide_matrix.
+      x-pertura-asset-role: guide_matrix
     guide_map_path:
       type: string
-      x-pertura-asset-role: guide_map
       description: Registered asset ID with role guide_map.
-    h5ad_path:
+      x-pertura-asset-role: guide_map
+    layer:
       type: string
-      x-pertura-asset-role: primary_dataset
-      description: Registered asset ID with role primary_dataset.
-    max_iterations:
-      type: integer
     max_memory_gb:
       type: number
       default: 4.0
       exclusiveMinimum: 0
-    metadata_barcode_column:
-      type: string
-    metadata_path:
-      type: string
-      x-pertura-asset-role: cell_metadata
-      description: Registered asset ID with role cell_metadata.
-    moi_doublet_path:
+    modality:
       type: string
     n_jobs:
       type: integer
       default: 1
       minimum: 1
-    posterior_threshold:
-      type: number
-    raw_guide_counts_path:
-      type: string
-      x-pertura-asset-role: guide_matrix
-      description: Registered asset ID with role guide_matrix.
     rna_barcode_column:
       type: string
     rna_barcodes_path:
       type: string
-      x-pertura-asset-role: rna_barcodes
       description: Registered asset ID with role rna_barcodes.
-    tolerance:
-      type: number
+      x-pertura-asset-role: rna_barcodes
+    row_manifest_path:
+      type: string
+      description: Registered asset ID with role guide_matrix_manifest.
+      x-pertura-asset-role: guide_matrix_manifest
+  required:
+  - guide_counts_path
+  - rna_barcodes_path
+  - guide_map_path
   additionalProperties: false
   examples:
-  - {}
+  - guide_counts_path: asset_example_guide_matrix
+    rna_barcodes_path: asset_example_rna_barcodes
+    guide_map_path: asset_example_guide_map
 implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
+  dependency_policy:
+    diagnostic.dataset_integrity.v1:
+      scope: exact
+      usage: validation_gate
+      accepted_statuses:
+      - screen_passed
+      - caution
