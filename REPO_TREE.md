@@ -1,6 +1,6 @@
 # Repository tree
 
-This is the intended `0.2.0a7` pre-server-benchmark product layout. It is a boundary map, not an exhaustive generated file listing.
+This is the intended `0.2.0a8` server-benchmark environment-readiness product layout. It is a boundary map, not an exhaustive generated file listing.
 
 ```text
 pertura/

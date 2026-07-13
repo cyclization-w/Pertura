@@ -353,7 +353,10 @@ def main(argv: list[str] | None = None) -> int:
                     "verdicts": payload["verdicts"],
                 }
                 destination = repo / "src/pertura_bench/cases/agent_workflow_verdicts.v1.json"
-                destination.write_text(json.dumps(frozen, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                with destination.open(
+                    "w", encoding="utf-8", newline="\n"
+                ) as handle:
+                    handle.write(json.dumps(frozen, indent=2, sort_keys=True) + "\n")
                 payload["frozen_verdict_path"] = str(destination)
         elif args.agent_command == "run-server":
             from pertura_bench.agent_server_execution import run_server_agent_case

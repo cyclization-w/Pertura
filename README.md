@@ -5,7 +5,7 @@
 Pertura lets an LLM inspect files, write code, use Bash, Python, R, and notebooks, while keeping scientific claims tied to what was actually executed. The agent stays flexible; contracts, dependencies, result provenance, and claim ceilings live outside the model.
 
 > [!IMPORTANT]
-> **Current status: `0.2.0a7` research alpha.** The local product and synthetic protocol are implemented and tested. Expanded analysis capabilities remain `synthetic_only` candidates until real-data server benchmarks are complete. Pertura is not yet a production-validated clinical or scientific decision system.
+> **Current status: `0.2.0a8` research alpha.** The local product and synthetic protocol are implemented and tested. Expanded analysis capabilities remain `synthetic_only` candidates until real-data server benchmarks are complete. Pertura is not yet a production-validated clinical or scientific decision system.
 
 ## Why Pertura?
 
@@ -102,14 +102,16 @@ Python 3.10 or later is required.
 ```bash
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-python -m pip install -e ".[dev,omics,dashboard]"
+python -m pip install -e ".[dev,dashboard]"
 ```
 
-Install the Claude adapter and Perturb-seq integrations only when needed:
+Install the Claude adapter only when needed:
 
 ```bash
-python -m pip install -e ".[llm,omics,perturbseq,dashboard]"
+python -m pip install -e ".[llm,dashboard]"
 ```
+
+Scientific packages are supplied through explicit Micromamba profiles rather than installed into the runtime environment. This is the required path for server benchmarks and avoids accidental source builds on older Linux hosts. The `omics` and `perturbseq` pip extras are intended only for compatible developer workstations, not the frozen benchmark runtime.
 
 Create a persistent project and register a dataset without copying a large source file:
 
@@ -157,6 +159,12 @@ The OpenAI Agents SDK adapter currently provides import-safe tool-schema and ins
 Scientific environments are explicit and are never installed during analysis:
 
 ```bash
+pertura env setup python-science-v1
+pertura env doctor python-science-v1
+
+pertura env setup perturbseq-python-v1
+pertura env doctor perturbseq-python-v1
+
 pertura env setup edger-v1
 pertura env doctor edger-v1
 

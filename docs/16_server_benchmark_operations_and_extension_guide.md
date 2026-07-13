@@ -8,7 +8,7 @@
 4. Pertura、prompt-only、free CodeAct/no-gate 和其他 LLM 的公平比较；
 5. 根据 benchmark 结果进行可追溯修复，并规划 capability、用户体验和 provider adapter 的后续扩展。
 
-本文档描述的是研究 benchmark 工作流，不把当前 alpha 表述为生产级发布。`v0.2.0a7-prebench` 的 expanded capabilities 仍是 `exploratory` / `synthetic_only`，真实 benchmark 通过前不能晋升为 trusted。
+本文档描述的是研究 benchmark 工作流，不把当前 alpha 表述为生产级发布。`v0.2.0a8-prebench` 的 expanded capabilities 仍是 `exploratory` / `synthetic_only`，真实 benchmark 通过前不能晋升为 trusted。
 
 ---
 
@@ -30,7 +30,7 @@ Pertura 同时存在三类状态，服务器端不得混用。
 
 服务器 Codex 必须遵守以下 hard rules：
 
-1. 不修改或覆盖 `v0.2.0a7-prebench` tag。
+1. 不修改或覆盖 `v0.2.0a8-prebench` tag。
 2. 正式运行安装 wheel，不使用 editable install 作为最终 verdict 的执行身份。
 3. 数据准备可以联网；analysis capability 默认离线。
 4. 所有大型数据位于 repo 外部的只读 cache/object-store mount。
@@ -92,7 +92,7 @@ Pertura 同时存在三类状态，服务器端不得混用。
 git clone https://github.com/cyclization-w/Pertura.git /srv/pertura/repo
 cd /srv/pertura/repo
 git fetch --tags
-git checkout v0.2.0a7-prebench
+git checkout v0.2.0a8-prebench
 git status --short
 git rev-parse HEAD
 ```
@@ -113,17 +113,20 @@ python scripts/check_distribution_contents.py \
 sha256sum /srv/pertura/wheels/*
 ```
 
-正式运行使用独立环境安装 wheel：
+正式运行使用预先供应并通过 `pip check` 的轻量 runtime 环境安装 wheel；科学依赖只能由下一节的 Micromamba profiles 提供：
 
 ```bash
-python -m venv /srv/pertura/runtime-venv
-source /srv/pertura/runtime-venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install "/srv/pertura/wheels/pertura-0.2.0a7-py3-none-any.whl[llm,omics,perturbseq,dashboard]"
+conda create --yes --prefix /srv/pertura/runtime-env --channel conda-forge \
+  python=3.11 pydantic=2 pyyaml cryptography jsonschema \
+  jupyter_client ipykernel ipython fastapi uvicorn pytest pip
+conda activate /srv/pertura/runtime-env
+python -m pip install --only-binary=:all: "claude-agent-sdk>=0.1.62,<0.3"
+python -m pip install --no-deps "/srv/pertura/wheels/pertura-0.2.0a8-py3-none-any.whl"
+python -m pip check
 python -c "from importlib.metadata import version; print(version('pertura'))"
 ```
 
-预期版本为 `0.2.0a7`。
+预期版本为 `0.2.0a8`。
 
 ---
 

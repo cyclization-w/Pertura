@@ -1,6 +1,6 @@
 # v0.2 capability-first implementation status
 
-This file records the `0.2.0a7` server-benchmark preflight product checkpoint. It is not the final `0.2.0` scientific release.
+This file records the `0.2.0a8` server-benchmark environment-readiness checkpoint. It is not the final `0.2.0` scientific release.
 
 ## Code checkpoint
 
@@ -29,11 +29,12 @@ This file records the `0.2.0a7` server-benchmark preflight product checkpoint. I
 - Five bundled Perturb-seq skills provide operational, design, screen-diagnostic, and interpretation guidance without entering receipts, dependencies, or promotion.
 - Claude loads only the bundled skills plus explicitly supplied plugin roots. User and project-global skills are excluded by default, while Read/Glob/Grep/Bash/Write/Edit/NotebookEdit remain available.
 - The OpenAI Agents SDK adapter is an import-safe contract and schema projection only. It makes no API request and reports `openai_adapter_ready: false`.
+- The Pertpy/Mixscape profile is resolved entirely through pinned Conda/Bioconda binaries; pip source builds are excluded, and method-critical versions are checked by `env doctor`.
 
 Target audit state after the maintainer reruns the local agent protocol outside Codex:
 
 ```text
-build_version: 0.2.0a7
+build_version: 0.2.0a8
 repository_ready: true
 runtime_spine_ready: true
 code_ready: true

@@ -7,6 +7,7 @@ import platform
 import shutil
 import stat
 import subprocess
+import sys
 import urllib.request
 from importlib import resources
 from pathlib import Path
@@ -45,10 +46,23 @@ EXPECTED_COMPOSITION_VERSIONS = {
     "speckle": "1.10.0",
     "limma": "3.66.0",
 }
+EXPECTED_PERTURBSEQ_PYTHON_VERSIONS = {
+    "anndata": "0.11.4",
+    "scanpy": "1.11.4",
+    "mudata": "0.3.2",
+    "igraph": "0.11.8",
+    "leidenalg": "0.10.2",
+    "scikit-misc": "0.5.2",
+    "pertpy": "1.1.1",
+    "scrublet": "0.2.3",
+}
 R_EXPECTED_VERSIONS = {
     PROFILE: EXPECTED_EDGER_VERSIONS,
     SCEPTRE_PROFILE: EXPECTED_SCEPTRE_VERSIONS,
     COMPOSITION_PROFILE: EXPECTED_COMPOSITION_VERSIONS,
+}
+PYTHON_EXPECTED_VERSIONS = {
+    PERTURBSEQ_PYTHON_PROFILE: EXPECTED_PERTURBSEQ_PYTHON_VERSIONS,
 }
 R_INSTALLERS = {
     PROFILE: "install-edger-v1.R",
@@ -62,7 +76,8 @@ PYTHON_PACKAGES = {
     ),
     PERTURBSEQ_PYTHON_PROFILE: (
         "anndata", "scanpy", "mudata", "numpy", "pandas", "scipy",
-        "scikit-learn", "igraph", "leidenalg", "pyarrow", "pertpy", "scrublet",
+        "scikit-learn", "igraph", "leidenalg", "pyarrow", "scikit-misc",
+        "pertpy", "scrublet",
     ),
     INTERPRETATION_PROFILE: (
         "numpy", "pandas", "scipy", "scikit-learn", "pyarrow", "gseapy", "decoupler",
@@ -112,25 +127,42 @@ def setup_environment(profile_name: str = PROFILE) -> dict[str, Any]:
     spec_path = resources.files("pertura_workflow").joinpath("environments", f"{profile_name}.yml")
     prefix.parent.mkdir(parents=True, exist_ok=True)
     command = [str(binary), "create", "--yes", "--no-rc", "--prefix", str(prefix), "--file", str(spec_path)]
-    completed = subprocess.run(command, text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=3600, check=False)
+    print(
+        f"[pertura] creating {profile_name} at {prefix}",
+        file=sys.stderr,
+        flush=True,
+    )
+    completed = subprocess.run(
+        command,
+        stdout=sys.stderr,
+        stderr=sys.stderr,
+        timeout=3600,
+        check=False,
+    )
     if completed.returncode != 0:
-        raise RuntimeError(f"micromamba environment creation failed:\n{completed.stderr[-4000:]}")
+        raise RuntimeError(
+            "micromamba environment creation failed with exit code "
+            f"{completed.returncode}; see the streamed setup output above"
+        )
     installer_name = R_INSTALLERS.get(profile_name)
     if installer_name:
         installer = resources.files("pertura_workflow").joinpath("environments", installer_name)
+        print(
+            f"[pertura] bootstrapping R packages for {profile_name}",
+            file=sys.stderr,
+            flush=True,
+        )
         bootstrap = subprocess.run(
             [str(binary), "run", "--prefix", str(prefix), "Rscript", str(installer)],
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
+            stdout=sys.stderr,
+            stderr=sys.stderr,
             timeout=3600,
             check=False,
         )
         if bootstrap.returncode != 0:
             raise RuntimeError(
-                f"{profile_name} R bootstrap failed:\n"
-                f"{bootstrap.stdout[-2000:]}\n{bootstrap.stderr[-4000:]}"
+                f"{profile_name} R bootstrap failed with exit code "
+                f"{bootstrap.returncode}; see the streamed setup output above"
             )
     package_list = subprocess.run(
         [str(binary), "list", "--json", "--prefix", str(prefix)],
@@ -150,7 +182,7 @@ def setup_environment(profile_name: str = PROFILE) -> dict[str, Any]:
         "prefix": str(prefix),
         "spec_hash": canonical_hash(spec_path.read_text(encoding="utf-8")),
         "resource_hashes": _resource_hashes(profile_name),
-        "expected_versions": R_EXPECTED_VERSIONS.get(profile_name, {}),
+        "expected_versions": _expected_versions(profile_name),
         "packages": packages,
     }
     manifest["lock_hash"] = canonical_hash(manifest)
@@ -237,6 +269,14 @@ def doctor_environment(profile_name: str = PROFILE) -> dict[str, Any]:
                 versions = json.loads(completed.stdout.splitlines()[-1])
             except (json.JSONDecodeError, IndexError):
                 problems.append("Python scientific package check returned an invalid version manifest")
+            else:
+                for name, required in PYTHON_EXPECTED_VERSIONS.get(
+                    profile_name, {}
+                ).items():
+                    if versions.get(name) != required:
+                        problems.append(
+                            f"expected {name} {required}, found {versions.get(name)}"
+                        )
     manifest_path = prefix / "pertura-environment-manifest.json"
     lock_hash = None
     if not problems or prefix.is_dir():
@@ -260,7 +300,7 @@ def doctor_environment(profile_name: str = PROFILE) -> dict[str, Any]:
                     problems.append("environment micromamba binary hash drift")
                 if manifest.get("resource_hashes") != _resource_hashes(profile_name):
                     problems.append("environment runner/installer resource hash drift")
-                if manifest.get("expected_versions") != R_EXPECTED_VERSIONS.get(profile_name, {}):
+                if manifest.get("expected_versions") != _expected_versions(profile_name):
                     problems.append("environment expected-version manifest drift")
                 lock_hash = observed_lock
             except (OSError, ValueError, json.JSONDecodeError) as exc:
@@ -377,6 +417,14 @@ def _resource_hashes(profile_name: str) -> dict[str, str]:
         path = capability_root / relative
         hashes[f"python_runner:{relative}"] = file_sha256(path)
     return hashes
+
+
+def _expected_versions(profile_name: str) -> dict[str, str]:
+    return R_EXPECTED_VERSIONS.get(
+        profile_name,
+        PYTHON_EXPECTED_VERSIONS.get(profile_name, {}),
+    )
+
 
 def _minimal_env() -> dict[str, str]:
     allowed = ("SYSTEMROOT", "WINDIR", "TEMP", "TMP", "HOME", "USERPROFILE", "PATH")

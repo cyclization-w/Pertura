@@ -102,6 +102,6 @@ def openai_adapter_status() -> dict[str, Any]:
         "skill_names": list(BUNDLED_SKILL_NAMES),
         "reason": (
             "OpenAI Agents SDK execution is intentionally not implemented in "
-            "Pertura 0.2.0a7"
+            "Pertura 0.2.0a8"
         ),
     }
