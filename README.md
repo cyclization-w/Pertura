@@ -5,7 +5,7 @@
 Pertura lets an LLM inspect files, write code, use Bash, Python, R, and notebooks, while keeping scientific claims tied to what was actually executed. The agent stays flexible; contracts, dependencies, result provenance, and claim ceilings live outside the model.
 
 > [!IMPORTANT]
-> **Current status: `0.2.0a9` research alpha.** The local product and synthetic protocol are implemented and tested. Expanded analysis capabilities remain `synthetic_only` candidates until real-data server benchmarks are complete. Pertura is not yet a production-validated clinical or scientific decision system.
+> **Current status: `0.2.0a10` research alpha.** The local product and synthetic protocol are implemented and tested. Expanded analysis capabilities remain `synthetic_only` candidates until real-data server benchmarks are complete. Pertura is not yet a production-validated clinical or scientific decision system.
 
 ## Why Pertura?
 

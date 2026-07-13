@@ -45,6 +45,7 @@ EXPECTED_COMPOSITION_VERSIONS = {
     "Bioconductor": "3.22",
     "speckle": "1.10.0",
     "limma": "3.66.0",
+    "edgeR": "4.8.2",
 }
 EXPECTED_PERTURBSEQ_PYTHON_VERSIONS = {
     "anndata": "0.11.4",
@@ -68,6 +69,12 @@ R_INSTALLERS = {
     PROFILE: "install-edger-v1.R",
     SCEPTRE_PROFILE: "install-sceptre-v1.R",
     COMPOSITION_PROFILE: "install-composition-v1.R",
+}
+R_IMPORT_SMOKES = {
+    COMPOSITION_PROFILE: (
+        "suppressPackageStartupMessages({library(speckle);library(limma);"
+        "library(edgeR)})"
+    ),
 }
 PYTHON_PACKAGES = {
     PYTHON_PROFILE: (
@@ -231,6 +238,9 @@ def doctor_environment(profile_name: str = PROFILE) -> dict[str, Any]:
             expressions = ["cat(paste(R.version$major, R.version$minor, sep='.'), '\\n')"]
             if "Bioconductor" in expected:
                 expressions.append("cat(as.character(BiocManager::version()), '\\n')")
+        import_smoke = R_IMPORT_SMOKES.get(profile_name)
+        if import_smoke:
+            expressions.insert(0, import_smoke)
         expressions.extend(
             f"cat(as.character(packageVersion('{name}')), '\\n')"
             for name in package_names

@@ -1,6 +1,6 @@
 # v0.2 capability-first implementation status
 
-This file records the `0.2.0a9` server-benchmark environment-readiness checkpoint. It is not the final `0.2.0` scientific release.
+This file records the `0.2.0a10` server-benchmark environment-readiness checkpoint. It is not the final `0.2.0` scientific release.
 
 ## Code checkpoint
 
@@ -34,7 +34,7 @@ This file records the `0.2.0a9` server-benchmark environment-readiness checkpoin
 Target audit state after the maintainer reruns the local agent protocol outside Codex:
 
 ```text
-build_version: 0.2.0a9
+build_version: 0.2.0a10
 repository_ready: true
 runtime_spine_ready: true
 code_ready: true

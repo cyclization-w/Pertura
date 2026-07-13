@@ -1,6 +1,6 @@
 # PerturaBench Design Principles
 
-## Current capability benchmark protocol (0.2.0a9)
+## Current capability benchmark protocol (0.2.0a10)
 
 PerturaBench currently covers 35 exploratory capabilities with 210 versioned cases: happy, caution/unresolved, blocked, planted failure, determinism, and stale propagation for every capability. Synthetic cases establish code and protocol readiness only. They cannot issue a trusted receipt, change a capability trust level, or satisfy a real-data release gate.
 

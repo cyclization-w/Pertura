@@ -271,3 +271,81 @@ def test_environment_setup_streams_micromamba_output(monkeypatch, tmp_path: Path
     assert (
         prefix / "pertura-environment-manifest.json"
     ).is_file()
+
+
+def test_composition_profile_uses_only_pinned_conda_bioconda_packages() -> None:
+    environment_root = Path(environment_module.__file__).parent / "environments"
+    profile = yaml.safe_load(
+        (environment_root / "composition-v1.yml").read_text(encoding="utf-8")
+    )
+    dependencies = profile["dependencies"]
+
+    assert profile["channels"] == ["conda-forge", "bioconda"]
+    assert profile["channel_priority"] == "strict"
+    assert not any(isinstance(item, dict) and "pip" in item for item in dependencies)
+    assert {
+        "r-base=4.5.3",
+        "bioconductor-speckle=1.10.0",
+        "bioconductor-limma=3.66.0",
+        "bioconductor-edger=4.8.2",
+    }.issubset(set(dependencies))
+
+    validator = (environment_root / "install-composition-v1.R").read_text(
+        encoding="utf-8"
+    )
+    assert "BiocManager::install" not in validator
+    assert "install.packages" not in validator
+    assert "library(speckle)" in validator
+    assert "library(limma)" in validator
+    assert "library(edgeR)" in validator
+
+
+def test_composition_doctor_loads_packages_before_reporting_versions(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("PERTURA_CACHE_DIR", str(tmp_path / "cache"))
+    binary = micromamba_path()
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"fixture-micromamba")
+    prefix = environment_prefix("composition-v1")
+    prefix.mkdir(parents=True)
+    expected = environment_module.EXPECTED_COMPOSITION_VERSIONS
+    manifest = {
+        "schema_version": "pertura-environment-manifest-v2",
+        "profile": "composition-v1",
+        "platform": "fixture",
+        "micromamba": {
+            "path": str(binary),
+            "sha256": file_sha256(binary),
+            "version": "2.6.2-1",
+        },
+        "prefix": str(prefix),
+        "spec_hash": "sha256:fixture",
+        "resource_hashes": environment_module._resource_hashes(
+            "composition-v1"
+        ),
+        "expected_versions": expected,
+        "packages": [],
+    }
+    manifest["lock_hash"] = canonical_hash(manifest)
+    (prefix / "pertura-environment-manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+    observed_command: list[str] = []
+
+    def fake_run(command, *args, **kwargs):
+        observed_command.extend(command)
+        output = "\n".join(
+            ("4.5.3", "3.22", "1.10.0", "3.66.0", "4.8.2")
+        )
+        return SimpleNamespace(returncode=0, stdout=output, stderr="")
+
+    monkeypatch.setattr(environment_module.subprocess, "run", fake_run)
+
+    result = doctor_environment("composition-v1")
+
+    assert result["ok"] is True
+    expression = observed_command[-1]
+    assert "library(speckle)" in expression
+    assert "library(limma)" in expression
+    assert "library(edgeR)" in expression
