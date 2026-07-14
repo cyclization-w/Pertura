@@ -28,7 +28,7 @@ manifest <- list(
   output = output,
   sha256 = paste0("sha256:", digest(file = output, algo = "sha256")),
   writer = "anndataR::write_h5ad",
-  packages = c(
+  packages = list(
     R = paste(R.version$major, R.version$minor, sep = "."),
     muscData = as.character(packageVersion("muscData")),
     anndataR = as.character(packageVersion("anndataR")),

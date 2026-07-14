@@ -91,6 +91,8 @@ def test_kang_conversion_uses_native_r_h5ad_writer() -> None:
     assert "anndataR::write_h5ad(" in script
     assert 'x_mapping = "counts"' in script
     assert 'writer = "anndataR::write_h5ad"' in script
+    assert "packages = list(" in script
+    assert "packages = c(" not in script
     assert "zellkonverter" not in script
 
 

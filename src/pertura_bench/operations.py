@@ -177,7 +177,17 @@ def run_conversion(
         raise RuntimeError("benchmark conversion failed: " + completed.stderr[-4000:])
     sidecar = destination.with_suffix(destination.suffix + ".manifest.json")
     raw = json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.is_file() else {}
-    lock = finalize_conversion(manifest, destination, script, package_versions=dict(raw.get("packages") or {}))
+    if not isinstance(raw, dict):
+        raise RuntimeError("benchmark conversion sidecar must contain a JSON object")
+    packages = raw.get("packages", {})
+    if not isinstance(packages, dict) or not all(
+        isinstance(name, str) and isinstance(version, str)
+        for name, version in packages.items()
+    ):
+        raise RuntimeError(
+            "benchmark conversion sidecar field 'packages' must be a string-to-string JSON object"
+        )
+    lock = finalize_conversion(manifest, destination, script, package_versions=packages)
     lock_path = destination.parent / f"{manifest.dataset_id}.lock.json"
     lock_path.write_text(json.dumps(lock.model_dump(mode="json"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     (destination.parent / f"{manifest.dataset_id}.local.json").write_text(
