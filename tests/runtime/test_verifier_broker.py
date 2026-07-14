@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from pertura_core import CapabilityRunRequest, DatasetContract, DependencyRef, RunReceipt, ScopeKey
@@ -94,3 +95,24 @@ def test_broker_rejects_self_declared_dependencies_not_in_authority_store(tmp_pa
             assert "does not exist in authority store" in str(exc)
         else:
             raise AssertionError("self-declared dependencies must not receive a receipt")
+
+
+def test_broker_starts_with_deeply_nested_authority_directory(tmp_path: Path) -> None:
+    if os.name == "nt":
+        return
+
+    # Reproduce server benchmark layouts whose full authority path exceeds
+    # sockaddr_un.sun_path.  Persistent state remains here, while transient
+    # broker IPC must use a short path independent of this directory.
+    authority = (
+        tmp_path
+        / ("benchmark-authority-" + "a" * 60)
+        / ("analysis-run-" + "b" * 60)
+    )
+    contract = DatasetContract(dataset_id="deep-authority-fixture", input_format="csv")
+
+    with VerifierBroker(authority_dir=authority, policy_hash="sha256:policy") as broker:
+        broker.register_contract(contract)
+        assert broker.instance_id.startswith("broker_")
+
+    assert (authority / "authority.sqlite3").is_file()

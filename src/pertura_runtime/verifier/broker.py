@@ -506,7 +506,21 @@ def _new_address(authority_dir: Path) -> tuple[Any, str]:
     token = uuid4().hex
     if os.name == "nt":
         return rf"\\.\pipe\pertura-{token}", "AF_PIPE"
-    return str(authority_dir / f"verifier-{token}.sock"), "AF_UNIX"
+
+    # Unix-domain socket addresses have a small platform-defined path limit
+    # (typically about 104-108 bytes).  The authority store may legitimately
+    # live below a deeply nested project/run directory, so its path must not
+    # become part of the transient IPC address.  Authentication still comes
+    # from the per-broker random auth key; the socket itself carries no
+    # persistent authority state.
+    del authority_dir
+    candidate = Path(tempfile.gettempdir()) / f"pertura-{token}.sock"
+    # Keep a conservative margin across Linux and macOS.  If the configured
+    # temporary directory is unusually long, authenticated loopback is safer
+    # than letting the child process fail during Listener.bind().
+    if len(os.fsencode(str(candidate))) >= 100:
+        return _new_loopback_address()
+    return str(candidate), "AF_UNIX"
 
 
 def _new_loopback_address() -> tuple[tuple[str, int], str]:
