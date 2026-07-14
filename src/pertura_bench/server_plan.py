@@ -83,15 +83,31 @@ def build_server_plan(
             "evaluation": f"artifact:{dataset_id}:subset:evaluation",
         }
         artifact_ids_by_dataset[dataset_id] = artifact_ids
+        mixed_source_conversion = bool(manifest.file and manifest.conversion)
         source_relative = (
-            str(manifest.file["name"])
+            f"datasets/{dataset_id}/source/{manifest.file['name']}"
+            if mixed_source_conversion
+            else str(manifest.file["name"])
             if manifest.file
             else f"external-sources/{dataset_id}.json"
         )
         converted_relative = (
-            f"{dataset_id}.h5ad" if manifest.conversion else source_relative
+            f"datasets/{dataset_id}/converted/artifact.h5ad"
+            if mixed_source_conversion
+            else f"{dataset_id}.h5ad"
+            if manifest.conversion
+            else source_relative
         )
-        artifact_lock_relative = f"{dataset_id}.lock.json"
+        source_lock_relative = (
+            f"datasets/{dataset_id}/source/artifact.lock.json"
+            if mixed_source_conversion
+            else f"{dataset_id}.lock.json"
+        )
+        converted_lock_relative = (
+            f"datasets/{dataset_id}/converted/artifact.lock.json"
+            if mixed_source_conversion
+            else f"{dataset_id}.lock.json"
+        )
         artifacts.extend(
             (
                 {
@@ -100,7 +116,7 @@ def build_server_plan(
                     "dataset_id": dataset_id,
                     "relative_path": source_relative,
                     "lock_relative_path": (
-                        artifact_lock_relative if manifest.file else None
+                        source_lock_relative if manifest.file else None
                     ),
                 },
                 {
@@ -108,7 +124,7 @@ def build_server_plan(
                     "kind": "converted" if manifest.conversion else "source_ready",
                     "dataset_id": dataset_id,
                     "relative_path": converted_relative,
-                    "lock_relative_path": artifact_lock_relative,
+                    "lock_relative_path": converted_lock_relative,
                 },
                 {
                     "artifact_id": artifact_ids["calibration"],

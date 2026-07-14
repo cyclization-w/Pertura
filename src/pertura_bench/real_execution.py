@@ -671,6 +671,39 @@ def resolve_real_artifact_chain(
         "artifact_lock": artifact_lock.canonical_hash,
         "artifact": artifact_lock.artifact_sha256,
     }
+    if manifest.file and manifest.conversion:
+        source_root = dataset_root / "source"
+        source_lock_path = source_root / "artifact.lock.json"
+        source_sidecar_path = source_root / "artifact.local.json"
+        if not source_lock_path.is_file() or not source_sidecar_path.is_file():
+            raise FileNotFoundError(
+                f"not_available: source artifact lock chain is missing for {dataset_id}"
+            )
+        source_lock = BenchmarkArtifactLock.model_validate_json(
+            source_lock_path.read_text(encoding="utf-8")
+        )
+        if source_lock.dataset_id != dataset_id:
+            raise ValueError("source artifact lock dataset mismatch")
+        if source_lock.source_manifest_hash != manifest.canonical_hash:
+            raise ValueError("source artifact lock manifest hash drift")
+        source_artifact = _sidecar_artifact(
+            source_sidecar_path,
+            cache_root,
+            expected_lock_id=source_lock.lock_id,
+        )
+        _validate_locked_file(
+            source_artifact,
+            source_lock.artifact_sha256,
+            expected_size=source_lock.size_bytes,
+        )
+        if artifact_lock.upstream_lock_hash != source_lock.canonical_hash:
+            raise ValueError("converted artifact is not bound to the current source lock")
+        hashes.update(
+            {
+                "source_artifact_lock": source_lock.canonical_hash,
+                "source_artifact": source_lock.artifact_sha256,
+            }
+        )
     if tier == "full_dataset":
         return artifact_path, hashes
     subset_root = dataset_root / "subset" / split

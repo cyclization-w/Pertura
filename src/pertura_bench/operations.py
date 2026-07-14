@@ -89,25 +89,42 @@ def fetch_benchmark(
     if not manifest.file:
         raise ValueError("benchmark source is conversion-only and cannot be fetched directly")
     cache_path = Path(cache).expanduser().resolve()
-    cache_path.mkdir(parents=True, exist_ok=True)
-    destination = cache_path / str(manifest.file["name"])
+    mixed_source = bool(manifest.conversion)
+    artifact_root = (
+        cache_path / "datasets" / manifest.dataset_id / "source"
+        if mixed_source
+        else cache_path
+    )
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    destination = artifact_root / str(manifest.file["name"])
     temporary = destination.with_suffix(destination.suffix + ".part")
     expected_size = int(manifest.file["size_bytes"])
     md5 = hashlib.md5()  # noqa: S324 - verifies an upstream-published checksum only
     sha256 = hashlib.sha256()
-    request = urllib.request.Request(str(manifest.file["download_url"]), headers={"User-Agent": "pertura-benchmark-fetch"})
-    with opener(request, timeout=300) as response, temporary.open("wb") as handle:
-        while chunk := response.read(1024 * 1024):
-            handle.write(chunk)
-            md5.update(chunk)
-            sha256.update(chunk)
-    if temporary.stat().st_size != expected_size:
-        temporary.unlink(missing_ok=True)
-        raise ValueError("benchmark download size mismatch")
+    downloaded = False
+    if destination.is_file():
+        with destination.open("rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                md5.update(chunk)
+                sha256.update(chunk)
+        if destination.stat().st_size != expected_size:
+            raise ValueError("cached benchmark source size mismatch")
+    else:
+        request = urllib.request.Request(str(manifest.file["download_url"]), headers={"User-Agent": "pertura-benchmark-fetch"})
+        with opener(request, timeout=300) as response, temporary.open("wb") as handle:
+            while chunk := response.read(1024 * 1024):
+                handle.write(chunk)
+                md5.update(chunk)
+                sha256.update(chunk)
+        downloaded = True
+        if temporary.stat().st_size != expected_size:
+            temporary.unlink(missing_ok=True)
+            raise ValueError("benchmark download size mismatch")
     if md5.hexdigest() != manifest.file["supplied_md5"]:
         temporary.unlink(missing_ok=True)
         raise ValueError("benchmark download checksum mismatch")
-    temporary.replace(destination)
+    if downloaded:
+        temporary.replace(destination)
     lock = BenchmarkArtifactLock(
         dataset_id=manifest.dataset_id,
         source_manifest_hash=manifest.canonical_hash,
@@ -116,13 +133,22 @@ def fetch_benchmark(
         upstream_checksum="md5:" + md5.hexdigest(),
         license_status=manifest.license_status,
     )
-    lock_path = cache_path / f"{manifest.dataset_id}.lock.json"
+    lock_path = (
+        artifact_root / "artifact.lock.json"
+        if mixed_source
+        else cache_path / f"{manifest.dataset_id}.lock.json"
+    )
     if lock_path.exists():
         existing = BenchmarkArtifactLock.model_validate_json(lock_path.read_text(encoding="utf-8"))
         if existing.canonical_hash != lock.canonical_hash:
             raise ValueError("benchmark lock already exists with different content")
     lock_path.write_text(json.dumps(lock.model_dump(mode="json"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    (cache_path / f"{manifest.dataset_id}.local.json").write_text(
+    local_path = (
+        artifact_root / "artifact.local.json"
+        if mixed_source
+        else cache_path / f"{manifest.dataset_id}.local.json"
+    )
+    local_path.write_text(
         json.dumps({"artifact_path": str(destination), "lock_id": lock.lock_id}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
@@ -135,6 +161,7 @@ def finalize_conversion(
     conversion_script: str | Path,
     *,
     package_versions: dict[str, str] | None = None,
+    upstream_lock_hash: str | None = None,
 ) -> BenchmarkArtifactLock:
     output = Path(output_path).resolve()
     script = Path(conversion_script).resolve()
@@ -142,11 +169,16 @@ def finalize_conversion(
         raise ValueError("benchmark conversion output is missing or empty")
     if not script.is_file():
         raise ValueError("benchmark conversion script is missing")
+    if manifest.file and not upstream_lock_hash:
+        raise ValueError(
+            "benchmark conversion with a downloadable source requires an upstream lock hash"
+        )
     return BenchmarkArtifactLock(
         dataset_id=manifest.dataset_id,
         source_manifest_hash=manifest.canonical_hash,
         artifact_sha256=file_sha256(output),
         size_bytes=output.stat().st_size,
+        upstream_lock_hash=upstream_lock_hash,
         conversion_script_hash=file_sha256(script),
         parameters={"output_format": output.suffix.lower().lstrip(".")},
         package_versions=package_versions or {},
@@ -167,10 +199,52 @@ def run_conversion(
     script = (root / manifest.conversion).resolve()
     if root not in script.parents:
         raise ValueError("benchmark conversion script escapes the repository")
-    destination = Path(cache).resolve() / f"{manifest.dataset_id}.h5ad"
+    cache_root = Path(cache).expanduser().resolve()
+    source_path: Path | None = None
+    upstream_lock_hash: str | None = None
+    if manifest.file:
+        source_root = cache_root / "datasets" / manifest.dataset_id / "source"
+        source_lock_path = source_root / "artifact.lock.json"
+        source_local_path = source_root / "artifact.local.json"
+        if not source_lock_path.is_file() or not source_local_path.is_file():
+            raise FileNotFoundError(
+                "benchmark conversion source lock chain is missing; run fetch first"
+            )
+        source_lock = BenchmarkArtifactLock.model_validate_json(
+            source_lock_path.read_text(encoding="utf-8")
+        )
+        if source_lock.dataset_id != manifest.dataset_id:
+            raise ValueError("benchmark conversion source lock dataset mismatch")
+        if source_lock.source_manifest_hash != manifest.canonical_hash:
+            raise ValueError("benchmark conversion source manifest hash drift")
+        source_sidecar = json.loads(source_local_path.read_text(encoding="utf-8"))
+        if source_sidecar.get("lock_id") != source_lock.lock_id:
+            raise ValueError("benchmark conversion source sidecar lock identity mismatch")
+        source_path = Path(str(source_sidecar.get("artifact_path") or "")).resolve()
+        if not source_path.is_file():
+            raise FileNotFoundError("benchmark conversion source artifact is missing")
+        if source_path.stat().st_size != source_lock.size_bytes:
+            raise ValueError("benchmark conversion source size mismatch")
+        if file_sha256(source_path) != source_lock.artifact_sha256:
+            raise ValueError("benchmark conversion source checksum mismatch")
+        upstream_lock_hash = source_lock.canonical_hash
+
+    artifact_root = (
+        cache_root / "datasets" / manifest.dataset_id / "converted"
+        if manifest.file
+        else cache_root
+    )
+    destination = (
+        artifact_root / "artifact.h5ad"
+        if manifest.file
+        else artifact_root / f"{manifest.dataset_id}.h5ad"
+    )
     destination.parent.mkdir(parents=True, exist_ok=True)
+    command = [rscript, str(script), str(destination)]
+    if source_path is not None:
+        command.append(str(source_path))
     completed = subprocess.run(
-        [rscript, str(script), str(destination)],
+        command,
         text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=7200, check=False,
     )
     if completed.returncode != 0:
@@ -187,10 +261,25 @@ def run_conversion(
         raise RuntimeError(
             "benchmark conversion sidecar field 'packages' must be a string-to-string JSON object"
         )
-    lock = finalize_conversion(manifest, destination, script, package_versions=packages)
-    lock_path = destination.parent / f"{manifest.dataset_id}.lock.json"
+    lock = finalize_conversion(
+        manifest,
+        destination,
+        script,
+        package_versions=packages,
+        upstream_lock_hash=upstream_lock_hash,
+    )
+    lock_path = (
+        artifact_root / "artifact.lock.json"
+        if manifest.file
+        else destination.parent / f"{manifest.dataset_id}.lock.json"
+    )
     lock_path.write_text(json.dumps(lock.model_dump(mode="json"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    (destination.parent / f"{manifest.dataset_id}.local.json").write_text(
+    local_path = (
+        artifact_root / "artifact.local.json"
+        if manifest.file
+        else destination.parent / f"{manifest.dataset_id}.local.json"
+    )
+    local_path.write_text(
         json.dumps({"artifact_path": str(destination), "lock_id": lock.lock_id}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )

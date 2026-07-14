@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from pertura_bench.models import BenchmarkArtifactLock, BenchmarkSplitManifest, TargetVerdict
-from pertura_bench.operations import fetch_benchmark, finalize_conversion, load_source_manifest, stable_target_split, validate_repository
+from pertura_bench.operations import fetch_benchmark, finalize_conversion, load_source_manifest, run_conversion, stable_target_split, validate_repository
 
 
 class _Response(io.BytesIO):
@@ -60,6 +60,65 @@ def test_fetch_detects_size_checksum_and_duplicate_lock(tmp_path: Path) -> None:
         fetch_benchmark(manifest, tmp_path / "cache", opener=opener)
 
 
+def test_mixed_source_conversion_uses_distinct_bound_locks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = b"frozen source package"
+    md5 = __import__("hashlib").md5(payload).hexdigest()
+    script = tmp_path / "convert.R"
+    script.write_text("print('fixture')\n", encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "pertura-benchmark-source-v1",
+                "dataset_id": "mixed_fixture",
+                "file": {
+                    "name": "source.tar.gz",
+                    "download_url": "https://example.test/source.tar.gz",
+                    "supplied_md5": md5,
+                    "size_bytes": len(payload),
+                },
+                "conversion": script.name,
+                "intended_uses": ["test"],
+                "license_review_url": "https://example.test/license",
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = load_source_manifest(manifest_path)
+    cache = tmp_path / "cache"
+    source_lock, source_path = fetch_benchmark(
+        manifest, cache, opener=lambda *args, **kwargs: _Response(payload)
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        destination = Path(command[2])
+        destination.write_bytes(b"converted")
+        destination.with_suffix(destination.suffix + ".manifest.json").write_text(
+            json.dumps({"packages": {"R": "4.5.3"}}), encoding="utf-8"
+        )
+        return type("Completed", (), {"returncode": 0, "stderr": ""})()
+
+    monkeypatch.setattr("pertura_bench.operations.subprocess.run", fake_run)
+    converted_lock, converted_path = run_conversion(
+        manifest,
+        repo_root=tmp_path,
+        cache=cache,
+        rscript="Rscript",
+    )
+
+    assert source_path == cache / "datasets/mixed_fixture/source/source.tar.gz"
+    assert converted_path == cache / "datasets/mixed_fixture/converted/artifact.h5ad"
+    assert captured["command"][-1] == str(source_path.resolve())
+    assert converted_lock.upstream_lock_hash == source_lock.canonical_hash
+    assert (source_path.parent / "artifact.lock.json").is_file()
+    assert (converted_path.parent / "artifact.lock.json").is_file()
+
+
 def test_stable_split_is_disjoint_and_deterministic() -> None:
     first = stable_target_split([f"T{i:03d}" for i in range(50)], "crispri")
     second = stable_target_split([f"T{i:03d}" for i in reversed(range(50))], "crispri")
@@ -75,7 +134,13 @@ def test_conversion_lock_binds_script_without_local_paths(tmp_path: Path) -> Non
     script = tmp_path / "convert.R"
     script.write_text("print('fixture')\n", encoding="utf-8")
     manifest_path = Path(__file__).resolve().parents[2] / "benchmarks" / "manifests" / "papalexi_thp1_eccite.json"
-    lock = finalize_conversion(load_source_manifest(manifest_path), output, script, package_versions={"R": "4.5.3"})
+    lock = finalize_conversion(
+        load_source_manifest(manifest_path),
+        output,
+        script,
+        package_versions={"R": "4.5.3"},
+        upstream_lock_hash="sha256:" + "9" * 64,
+    )
     rendered = json.dumps(lock.model_dump(mode="json"))
     assert str(tmp_path) not in rendered
     assert lock.conversion_script_hash.startswith("sha256:")
@@ -104,7 +169,15 @@ def test_papalexi_conversion_writes_mapping_sidecar() -> None:
 
     assert 'schema_version = "pertura-benchmark-conversion-sidecar-v1"' in script
     assert 'writer = "SeuratDisk::Convert"' in script
+    assert 'SeuratData = "3e51f44303069b64f5dc4d68e6a3d4a343f55c39"' in script
+    assert 'SeuratDisk = "877d4e18ab38c686f5db54f8cd290274ccdbe295"' in script
+    assert "source_commits = as.list(observed_commits)" in script
+    assert "install.packages(source_package, repos = NULL, type = \"source\")" in script
+    assert "InstallData(" not in script
+    assert "expected_source_md5" in script
+    assert "expected_source_sha256" in script
     assert "packages = as.list(c(" in script
+    assert 'R = paste(R.version$major, R.version$minor, sep = ".")' in script
     assert "if (!file.exists(output))" in script
 
 

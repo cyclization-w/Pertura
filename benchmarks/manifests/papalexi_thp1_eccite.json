@@ -1,13 +1,22 @@
 {
   "schema_version": "pertura-benchmark-conversion-v1",
   "dataset_id": "papalexi_thp1_eccite",
-  "source": "SeuratData::InstallData('thp1.eccite')",
+  "file": {
+    "name": "thp1.eccite.SeuratData_3.1.5.tar.gz",
+    "download_url": "http://seurat.nygenome.org/src/contrib/thp1.eccite.SeuratData_3.1.5.tar.gz",
+    "supplied_md5": "4884b7c5175a9e88dfe0d16f17965d43",
+    "size_bytes": 128140483
+  },
+  "source": "checksum-frozen thp1.eccite.SeuratData 3.1.5 source package",
   "source_url": "https://satijalab.org/seurat/articles/mixscape_vignette.html",
   "source_versions": {
     "Seurat": "5.5.0",
     "SeuratData": "0.2.2.9002",
+    "SeuratData_commit": "3e51f44303069b64f5dc4d68e6a3d4a343f55c39",
+    "SeuratDisk_commit": "877d4e18ab38c686f5db54f8cd290274ccdbe295",
+    "thp1.eccite.SeuratData_sha256": "sha256:ed137f933f93c416b4480e970bd6937505c20c7dccaee0244b3c94d2c8f0ba1e",
     "thp1.eccite.SeuratData": "3.1.5",
-    "R": "4.5.2"
+    "R": "4.5.3"
   },
   "conversion": "scripts/convert_papalexi_to_h5ad.R",
   "intended_uses": ["escape_responder", "state_reference", "mixscape_golden"],

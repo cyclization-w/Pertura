@@ -141,6 +141,16 @@ def test_server_plan_is_scheduler_neutral_and_has_no_manual_placeholders() -> No
     assert jobs["prepare:papalexi_thp1_eccite:subset:evaluation"][
         "depends_on"
     ] == ["prepare:papalexi_thp1_eccite:convert"]
+    assert jobs["prepare:papalexi_thp1_eccite:convert"]["depends_on"] == [
+        "prepare:papalexi_thp1_eccite:fetch"
+    ]
+    artifacts = {item["artifact_id"]: item for item in plan.artifacts}
+    assert artifacts["artifact:papalexi_thp1_eccite:source"][
+        "lock_relative_path"
+    ] == "datasets/papalexi_thp1_eccite/source/artifact.lock.json"
+    assert artifacts["artifact:papalexi_thp1_eccite:converted"][
+        "lock_relative_path"
+    ] == "datasets/papalexi_thp1_eccite/converted/artifact.lock.json"
 
 
 def test_capability_case_rejects_absolute_fixture_identity() -> None:
@@ -269,7 +279,7 @@ def test_real_lock_chain_detects_tampering(tmp_path: Path) -> None:
         )
 
 
-def test_real_lock_chain_rejects_conversion_and_subset_script_drift(
+def test_real_lock_chain_rejects_conversion_script_drift(
     tmp_path: Path,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
@@ -308,6 +318,84 @@ def test_real_lock_chain_rejects_conversion_and_subset_script_drift(
             split="evaluation",
             cache=tmp_path,
         )
+
+
+def test_converted_artifact_binds_source_and_rejects_subset_script_drift(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    dataset_id = "papalexi_thp1_eccite"
+    manifest = source_manifests(root)[dataset_id][1]
+
+    source_root = tmp_path / "datasets" / dataset_id / "source"
+    source_root.mkdir(parents=True)
+    source_artifact = source_root / "source.tar.gz"
+    source_artifact.write_bytes(b"frozen source")
+    source_lock = BenchmarkArtifactLock(
+        dataset_id=dataset_id,
+        source_manifest_hash=manifest.canonical_hash,
+        artifact_sha256=file_sha256(source_artifact),
+        size_bytes=source_artifact.stat().st_size,
+        license_status="required",
+    )
+    (source_root / "artifact.lock.json").write_text(
+        json.dumps(source_lock.model_dump(mode="json")), encoding="utf-8"
+    )
+    (source_root / "artifact.local.json").write_text(
+        json.dumps(
+            {"artifact_path": str(source_artifact), "lock_id": source_lock.lock_id}
+        ),
+        encoding="utf-8",
+    )
+
+    converted_root = tmp_path / "datasets" / dataset_id / "converted"
+    converted_root.mkdir(parents=True)
+    converted_artifact = converted_root / "artifact.h5ad"
+    converted_artifact.write_bytes(b"converted")
+
+    def write_converted_lock(upstream_lock_hash: str) -> None:
+        converted_lock = BenchmarkArtifactLock(
+            dataset_id=dataset_id,
+            source_manifest_hash=manifest.canonical_hash,
+            artifact_sha256=file_sha256(converted_artifact),
+            size_bytes=converted_artifact.stat().st_size,
+            upstream_lock_hash=upstream_lock_hash,
+            conversion_script_hash=file_sha256(root / manifest.conversion),
+            license_status="required",
+        )
+        (converted_root / "artifact.lock.json").write_text(
+            json.dumps(converted_lock.model_dump(mode="json")), encoding="utf-8"
+        )
+        (converted_root / "artifact.local.json").write_text(
+            json.dumps(
+                {
+                    "artifact_path": str(converted_artifact),
+                    "lock_id": converted_lock.lock_id,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    write_converted_lock("sha256:" + "f" * 64)
+    with pytest.raises(ValueError, match="not bound to the current source lock"):
+        resolve_real_artifact_chain(
+            root,
+            dataset_id=dataset_id,
+            tier="full_dataset",
+            split="evaluation",
+            cache=tmp_path,
+        )
+
+    write_converted_lock(source_lock.canonical_hash)
+    selected, hashes = resolve_real_artifact_chain(
+        root,
+        dataset_id=dataset_id,
+        tier="full_dataset",
+        split="evaluation",
+        cache=tmp_path,
+    )
+    assert selected == converted_artifact.resolve()
+    assert hashes["source_artifact_lock"] == source_lock.canonical_hash
 
     direct_dataset = "replogle_k562_essential_2022"
     direct_manifest = source_manifests(root)[direct_dataset][1]
@@ -364,6 +452,7 @@ def test_real_lock_chain_rejects_conversion_and_subset_script_drift(
             split="evaluation",
             cache=tmp_path,
         )
+
 
 def test_subset_from_lock_chain_uses_portable_spec_and_persists_sidecars(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

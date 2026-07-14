@@ -77,6 +77,7 @@ class BenchmarkArtifactLock(CanonicalModel):
     artifact_sha256: str
     size_bytes: int = Field(gt=0)
     upstream_checksum: str | None = None
+    upstream_lock_hash: str | None = None
     conversion_script_hash: str | None = None
     parameters: dict[str, Any] = Field(default_factory=dict)
     package_versions: dict[str, str] = Field(default_factory=dict)
@@ -84,7 +85,12 @@ class BenchmarkArtifactLock(CanonicalModel):
 
     @model_validator(mode="after")
     def _validate_hashes(self) -> "BenchmarkArtifactLock":
-        for name in ("source_manifest_hash", "artifact_sha256", "conversion_script_hash"):
+        for name in (
+            "source_manifest_hash",
+            "artifact_sha256",
+            "upstream_lock_hash",
+            "conversion_script_hash",
+        ):
             value = getattr(self, name)
             if value is not None and not _SHA256.fullmatch(value):
                 raise ValueError(f"{name} must use the canonical sha256: prefix")

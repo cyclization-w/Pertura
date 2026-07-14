@@ -76,6 +76,18 @@
       ],
       "default": null,
       "title": "Upstream Checksum"
+    },
+    "upstream_lock_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Upstream Lock Hash"
     }
   },
   "required": [
