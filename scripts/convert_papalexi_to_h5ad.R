@@ -1,7 +1,7 @@
 suppressPackageStartupMessages({
   library(Seurat)
   library(SeuratData)
-  library(SeuratDisk)
+  library(anndataR)
   library(jsonlite)
   library(digest)
 })
@@ -34,13 +34,23 @@ if (any(observed != expected)) {
   stop(paste("version mismatch:", paste(names(observed), observed, collapse = ", ")))
 }
 
+expected_native_writer <- c(anndataR = "1.0.2", rhdf5 = "2.54.1")
+observed_native_writer <- c(
+  anndataR = as.character(packageVersion("anndataR")),
+  rhdf5 = as.character(packageVersion("rhdf5"))
+)
+if (any(observed_native_writer != expected_native_writer)) {
+  stop(paste(
+    "native H5AD writer version mismatch:",
+    paste(names(observed_native_writer), observed_native_writer, collapse = ", ")
+  ))
+}
+
 expected_commits <- c(
-  SeuratData = "3e51f44303069b64f5dc4d68e6a3d4a343f55c39",
-  SeuratDisk = "877d4e18ab38c686f5db54f8cd290274ccdbe295"
+  SeuratData = "3e51f44303069b64f5dc4d68e6a3d4a343f55c39"
 )
 observed_commits <- c(
-  SeuratData = packageDescription("SeuratData", fields = "RemoteSha"),
-  SeuratDisk = packageDescription("SeuratDisk", fields = "RemoteSha")
+  SeuratData = packageDescription("SeuratData", fields = "RemoteSha")
 )
 if (any(is.na(observed_commits)) || any(observed_commits != expected_commits)) {
   stop(paste(
@@ -56,11 +66,41 @@ if (as.character(packageVersion("thp1.eccite.SeuratData")) != "3.1.5") {
   stop("thp1.eccite.SeuratData version mismatch")
 }
 object <- LoadData(ds = "thp1.eccite")
-temporary <- sub("\\.h5ad$", ".h5Seurat", output)
-SaveH5Seurat(object, filename = temporary, overwrite = TRUE)
-Convert(temporary, dest = "h5ad", overwrite = TRUE)
+required_metadata <- c("guide_ID", "gene", "con", "NT", "crispr", "replicate")
+missing_metadata <- setdiff(required_metadata, colnames(object[[]]))
+if (length(missing_metadata) > 0) {
+  stop(paste(
+    "Papalexi object is missing required cell metadata:",
+    paste(missing_metadata, collapse = ", ")
+  ))
+}
+rna_layers <- SeuratObject::Layers(object[["RNA"]])
+if (!all(c("counts", "data") %in% rna_layers)) {
+  stop("Papalexi RNA assay must contain counts and data layers")
+}
+
+# SeuratDisk still calls the defunct SeuratObject GetAssayData(slot=...)
+# interface. anndataR writes Seurat v5 layers natively and avoids a Python or
+# basilisk dependency. Raw RNA counts are the primary matrix; normalized RNA
+# values are retained as a separate layer and all cell metadata are preserved.
+anndataR::write_h5ad(
+  object,
+  output,
+  assay_name = "RNA",
+  x_mapping = "counts",
+  layers_mapping = c(data = "data"),
+  obs_mapping = TRUE,
+  var_mapping = TRUE,
+  obsm_mapping = FALSE,
+  varm_mapping = FALSE,
+  obsp_mapping = FALSE,
+  varp_mapping = FALSE,
+  uns_mapping = FALSE,
+  compression = "gzip",
+  mode = "w"
+)
 if (!file.exists(output)) {
-  stop(paste("SeuratDisk conversion did not create the expected output:", output))
+  stop(paste("anndataR conversion did not create the expected output:", output))
 }
 
 manifest <- list(
@@ -68,18 +108,27 @@ manifest <- list(
   dataset_id = "papalexi_thp1_eccite",
   output = output,
   sha256 = paste0("sha256:", digest(file = output, algo = "sha256")),
-  writer = "SeuratDisk::Convert",
+  writer = "anndataR::write_h5ad",
+  mapping = list(
+    assay = "RNA",
+    X = "counts",
+    layers = list(data = "data"),
+    obs = "all cell metadata",
+    var = "all RNA feature metadata"
+  ),
   source_artifact = list(
     md5 = paste0("md5:", observed_source_md5),
     sha256 = paste0("sha256:", observed_source_sha256)
   ),
   source_commits = as.list(observed_commits),
-  packages = as.list(c(
+  packages = list(
     R = paste(R.version$major, R.version$minor, sep = "."),
-    observed,
+    Seurat = unname(observed[["Seurat"]]),
+    SeuratData = unname(observed[["SeuratData"]]),
     thp1.eccite.SeuratData = as.character(packageVersion("thp1.eccite.SeuratData")),
-    SeuratDisk = as.character(packageVersion("SeuratDisk"))
-  )),
+    anndataR = unname(observed_native_writer[["anndataR"]]),
+    rhdf5 = unname(observed_native_writer[["rhdf5"]])
+  ),
   session_info = capture.output(sessionInfo())
 )
 write(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE), paste0(output, ".manifest.json"))

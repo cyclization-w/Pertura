@@ -168,15 +168,21 @@ def test_papalexi_conversion_writes_mapping_sidecar() -> None:
     )
 
     assert 'schema_version = "pertura-benchmark-conversion-sidecar-v1"' in script
-    assert 'writer = "SeuratDisk::Convert"' in script
+    assert "library(anndataR)" in script
+    assert "anndataR::write_h5ad(" in script
+    assert 'x_mapping = "counts"' in script
+    assert 'layers_mapping = c(data = "data")' in script
+    assert 'writer = "anndataR::write_h5ad"' in script
     assert 'SeuratData = "3e51f44303069b64f5dc4d68e6a3d4a343f55c39"' in script
-    assert 'SeuratDisk = "877d4e18ab38c686f5db54f8cd290274ccdbe295"' in script
     assert "source_commits = as.list(observed_commits)" in script
     assert "install.packages(source_package, repos = NULL, type = \"source\")" in script
     assert "InstallData(" not in script
+    assert "library(SeuratDisk)" not in script
+    assert "SaveH5Seurat(" not in script
+    assert "Convert(temporary" not in script
     assert "expected_source_md5" in script
     assert "expected_source_sha256" in script
-    assert "packages = as.list(c(" in script
+    assert "packages = list(" in script
     assert 'R = paste(R.version$major, R.version$minor, sep = ".")' in script
     assert "if (!file.exists(output))" in script
 
