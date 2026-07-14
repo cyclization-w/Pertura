@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+import shutil
 from collections import Counter
 from importlib import metadata as package_metadata
 from pathlib import Path
@@ -207,6 +208,152 @@ def run_mixscape_responder(
 
 
 def run_guide_efficacy(
+    spec: CapabilitySpec,
+    request: CapabilityRunRequest,
+    contract: DatasetContract,
+    staging: Path,
+):
+    """Evaluate one target or a frozen batch without duplicating capability jobs."""
+
+    configured = request.parameters.get("targets")
+    if configured in (None, []):
+        return _run_single_guide_efficacy(spec, request, contract, staging)
+    legacy_target_fields = {
+        "target_uid", "control_uid", "target_gene", "expected_direction"
+    }
+    mixed_fields = sorted(legacy_target_fields.intersection(request.parameters))
+    if mixed_fields:
+        return blocked(
+            spec,
+            request,
+            contract,
+            "targets cannot be combined with single-target fields: "
+            + ", ".join(mixed_fields),
+        )
+    if not isinstance(configured, list) or not configured:
+        return blocked(spec, request, contract, "targets must be a non-empty list")
+
+    target_uids: set[str] = set()
+    evaluations: list[dict[str, Any]] = []
+    dependency_projection = staging / "_dependency_results.json"
+    for index, raw in enumerate(configured):
+        if not isinstance(raw, dict):
+            return blocked(spec, request, contract, "each targets entry must be an object")
+        target_uid = str(raw.get("target_uid") or "").strip()
+        if not target_uid or target_uid in target_uids:
+            return blocked(
+                spec,
+                request,
+                contract,
+                "targets must contain unique non-empty target_uid values",
+            )
+        target_uids.add(target_uid)
+        merged = {
+            key: value
+            for key, value in request.parameters.items()
+            if key != "targets"
+        }
+        merged.update(raw)
+        child_request = request.model_copy(update={"parameters": merged})
+        child_staging = staging / f"target_{index + 1:04d}"
+        child_staging.mkdir(parents=True, exist_ok=True)
+        if dependency_projection.is_file():
+            shutil.copyfile(
+                dependency_projection,
+                child_staging / dependency_projection.name,
+            )
+        child = _run_single_guide_efficacy(
+            spec,
+            child_request,
+            contract,
+            child_staging,
+        )
+        payload_path = child_staging / "target_guide_efficacy.json"
+        payload = (
+            json.loads(payload_path.read_text(encoding="utf-8"))
+            if payload_path.is_file()
+            else {
+                "target_uid": target_uid,
+                "target_gene": str(raw.get("target_gene") or ""),
+                "blockers": list(child.blockers),
+                "cautions": list(child.cautions),
+            }
+        )
+        evaluations.append(
+            {
+                "target_uid": target_uid,
+                "target_gene": str(raw.get("target_gene") or ""),
+                "status": child.status.value,
+                "blockers": list(child.blockers),
+                "cautions": list(child.cautions),
+                "metrics": dict(child.metrics),
+                "evaluation": payload,
+            }
+        )
+
+    blocked_count = sum(item["status"] == DiagnosticStatus.blocked.value for item in evaluations)
+    caution_count = sum(item["status"] == DiagnosticStatus.caution.value for item in evaluations)
+    passed_count = len(evaluations) - blocked_count - caution_count
+    all_blocked = blocked_count == len(evaluations)
+    status = (
+        DiagnosticStatus.blocked
+        if all_blocked
+        else DiagnosticStatus.caution
+        if blocked_count or caution_count
+        else DiagnosticStatus.screen_passed
+    )
+    blockers = (
+        ["all configured target efficacy evaluations were blocked"]
+        if all_blocked
+        else []
+    )
+    cautions = []
+    if blocked_count and not all_blocked:
+        cautions.append(
+            f"{blocked_count} configured targets were blocked and remain unresolved"
+        )
+    if caution_count:
+        cautions.append(f"{caution_count} configured targets completed with caution")
+    payload = {
+        "schema_version": "pertura-target-guide-efficacy-set-v1",
+        "profile": str(request.parameters.get("profile") or "dev_unvalidated_v0"),
+        "profile_validation": "dev_unvalidated",
+        "target_count": len(evaluations),
+        "status_counts": {
+            "screen_passed": passed_count,
+            "caution": caution_count,
+            "blocked": blocked_count,
+        },
+        "targets": evaluations,
+        "blockers": blockers,
+        "cautions": cautions,
+    }
+    output = write_json(staging, "target_guide_efficacy.json", payload)
+    return envelope(
+        spec,
+        request,
+        contract,
+        status=status,
+        summary=f"Evaluated guide efficacy for {len(evaluations)} configured targets.",
+        blockers=blockers,
+        cautions=cautions,
+        metrics={
+            "target_count": len(evaluations),
+            "targets_screen_passed": passed_count,
+            "targets_with_caution": caution_count,
+            "targets_blocked": blocked_count,
+        },
+        outputs=(output,),
+        metadata={
+            "profile": payload["profile"],
+            "profile_validation": "dev_unvalidated",
+            "retained_manifest_applied": True,
+            "batch_mode": True,
+        },
+    )
+
+
+def _run_single_guide_efficacy(
     spec: CapabilitySpec,
     request: CapabilityRunRequest,
     contract: DatasetContract,
@@ -461,6 +608,36 @@ def run_target_reliability_aggregate(
             f"{capability_id}: {reason}"
             for reason in result.get("cautions") or []
         )
+    target_verdicts: list[dict[str, Any]] = []
+    efficacy_result = by_capability["target.guide_efficacy.v1"]
+    efficacy_outputs = [
+        Path(str(item))
+        for item in efficacy_result.get("local_output_paths") or ()
+        if Path(str(item)).name == "target_guide_efficacy.json"
+    ]
+    if len(efficacy_outputs) == 1 and efficacy_outputs[0].is_file():
+        efficacy_payload = json.loads(efficacy_outputs[0].read_text(encoding="utf-8"))
+        if efficacy_payload.get("schema_version") == "pertura-target-guide-efficacy-set-v1":
+            target_verdicts = [
+                {
+                    "target_uid": str(item.get("target_uid") or ""),
+                    "target_gene": str(item.get("target_gene") or ""),
+                    "status": str(item.get("status") or "unresolved"),
+                    "blockers": list(item.get("blockers") or ()),
+                    "cautions": list(item.get("cautions") or ()),
+                }
+                for item in efficacy_payload.get("targets") or ()
+            ]
+        else:
+            target_verdicts = [
+                {
+                    "target_uid": str(efficacy_payload.get("target_uid") or ""),
+                    "target_gene": str(efficacy_payload.get("target_gene") or ""),
+                    "status": str(efficacy_result.get("status") or "unresolved"),
+                    "blockers": list(efficacy_payload.get("blockers") or ()),
+                    "cautions": list(efficacy_payload.get("cautions") or ()),
+                }
+            ]
     cautions.append("aggregate uses dev_unvalidated_v0 thresholds and is not a production screen certification")
     status = DiagnosticStatus.blocked if blockers else DiagnosticStatus.caution
     payload = {
@@ -469,6 +646,7 @@ def run_target_reliability_aggregate(
         "profile": "dev_unvalidated_v0",
         "validation_status": "synthetic_only",
         "dependency_trace": trace,
+        "target_verdicts": target_verdicts,
         "blockers": blockers,
         "cautions": list(dict.fromkeys(cautions)),
         "raw_data_recomputed": False,
@@ -486,6 +664,11 @@ def run_target_reliability_aggregate(
             "dependency_count": len(trace),
             "profile_validated": False,
             "raw_data_recomputed": False,
+            "target_count": len(target_verdicts),
+            "targets_blocked": sum(
+                item["status"] == DiagnosticStatus.blocked.value
+                for item in target_verdicts
+            ),
         },
         outputs=(output,),
         metadata={"profile": "dev_unvalidated_v0", "raw_data_recomputed": False},

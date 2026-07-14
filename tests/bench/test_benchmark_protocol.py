@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -214,6 +216,80 @@ def test_papalexi_guide_asset_export_is_source_bound_and_sparse() -> None:
     assert "download.file(" not in script
 
 
+def test_h5ad_benchmark_table_export_is_backed_bounded_and_hashes_outputs() -> None:
+    root = Path(__file__).resolve().parents[2]
+    script = (root / "scripts" / "export_h5ad_benchmark_tables.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'ad.read_h5ad(source, backed="r")' in script
+    assert "selected expression estimate" in script
+    assert 'output / "cell_metadata.tsv"' in script
+    assert 'output / "target_expression.tsv"' in script
+    assert '"source_sha256": _sha256(source)' in script
+    assert "data.X if args.layer == \"X\" else data.layers[args.layer]" in script
+
+
+def test_h5ad_benchmark_table_export_writes_selected_portable_tables(
+    tmp_path: Path,
+) -> None:
+    ad = pytest.importorskip("anndata")
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    root = Path(__file__).resolve().parents[2]
+    source = tmp_path / "fixture.h5ad"
+    output = tmp_path / "exported"
+    guide_map = tmp_path / "guide_map.tsv"
+    data = ad.AnnData(
+        X=np.asarray([[1, 2], [3, 4]], dtype=np.float32),
+        obs=pd.DataFrame(
+            {"condition": ["control", "target"], "replicate": ["r1", "r1"]},
+            index=["c1", "c2"],
+        ),
+        var=pd.DataFrame(index=["GENE1", "CD274"]),
+    )
+    data.write_h5ad(source)
+    guide_map.write_text(
+        "guide\ttarget\tmapping_source\n"
+        "g1\tGENE1\tobserved_assignment\n"
+        "g2\tPDL1\tfeature_name_rule\n"
+        "g3\teGFP\tfeature_name_rule\n",
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "export_h5ad_benchmark_tables.py"),
+            str(source),
+            str(output),
+            "--obs-column",
+            "condition",
+            "--obs-column",
+            "replicate",
+            "--expression-genes-file",
+            str(guide_map),
+            "--gene-alias",
+            "PDL1=CD274",
+            "--exclude-gene",
+            "eGFP",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    metadata = pd.read_csv(output / "cell_metadata.tsv", sep="\t")
+    expression = pd.read_csv(output / "target_expression.tsv", sep="\t")
+    manifest = json.loads(
+        (output / "benchmark_tables_manifest.json").read_text(encoding="utf-8")
+    )
+    assert list(metadata.columns) == ["cell_id", "condition", "replicate"]
+    assert list(expression.columns) == ["cell_id", "GENE1", "CD274"]
+    assert manifest["expression_columns"] == ["GENE1", "CD274"]
+    assert set(manifest["files"]) == {"cell_metadata.tsv", "target_expression.tsv"}
+
+
 def test_server_agent_cases_match_observed_dataset_semantics() -> None:
     root = Path(__file__).resolve().parents[2]
     catalog = json.loads(
@@ -289,12 +365,20 @@ def test_real_capability_policy_matches_available_artifacts() -> None:
     )
     excluded = set(policy["excluded_capabilities"])
     assert "association.sceptre.v1" in excluded
+    assert "calibration.method_null.v1" in excluded
     assert {
         "effect.matrix.assemble.v1",
         "effect.module_global.v1",
         "program.response.signed_nmf.v1",
         "program.perturbation.cluster.v1",
     }.issubset(excluded)
+
+    propeller = (
+        root
+        / "src/pertura_workflow/capabilities/specs/composition.propeller.v1.yaml"
+    ).read_text(encoding="utf-8")
+    assert "- diagnostic.design_balance.v1" in propeller
+    assert "state.reference.map_knn.v1" not in propeller
 
 
 def test_expert_split_minimums_and_proxy_validation_fail_closed() -> None:

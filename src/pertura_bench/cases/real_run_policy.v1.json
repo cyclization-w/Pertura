@@ -4,6 +4,7 @@
   "secondary_capabilities": [],
   "excluded_capabilities": [
     "association.sceptre.v1",
+    "calibration.method_null.v1",
     "effect.matrix.assemble.v1",
     "effect.module_global.v1",
     "enrichment.gsea_prerank.v1",
@@ -16,7 +17,6 @@
     "regulator.activity.ulm.v1"
   ],
   "calibration_capabilities": [
-    "calibration.method_null.v1",
     "target.guide_efficacy.v1",
     "target.reliability.aggregate.v1"
   ],

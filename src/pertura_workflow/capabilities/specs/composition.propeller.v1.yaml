@@ -8,14 +8,11 @@ trust_level: exploratory
 executor: propeller_composition
 validator: candidate_standard
 input_requirements:
-- state_mapping
 - design_balance
 depends_on:
-- state.reference.map_knn.v1
 - diagnostic.design_balance.v1
 dependency_kinds:
 - contract
-- state_mapping
 - design_balance
 output_kind: composition_effect
 source_class: measured_result
@@ -69,12 +66,6 @@ metadata:
   environment_profile: composition-v1
   method_version: speckle-1.10.0
   dependency_policy:
-    state.reference.map_knn.v1:
-      scope: exact
-      usage: scientific_input
-      accepted_statuses:
-      - completed
-      - completed_with_caution
     diagnostic.design_balance.v1:
       scope: exact
       usage: validation_gate

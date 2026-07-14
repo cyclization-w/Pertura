@@ -44,8 +44,8 @@ parameters_schema:
       - up
     expression_path:
       type: string
-      description: Registered asset ID with role primary_dataset.
-      x-pertura-asset-role: primary_dataset
+      description: Registered asset ID with role expression_table.
+      x-pertura-asset-role: expression_table
     guide_bootstrap_iterations:
       type: integer
     guide_column:
@@ -80,16 +80,60 @@ parameters_schema:
       type: string
     target_uid:
       type: string
+    targets:
+      type: array
+      minItems: 1
+      items:
+        type: object
+        properties:
+          target_uid:
+            type: string
+            minLength: 1
+          control_uid:
+            type: string
+            minLength: 1
+          target_gene:
+            type: string
+            minLength: 1
+          expected_direction:
+            type: string
+            enum:
+            - down
+            - up
+        required:
+        - target_uid
+        - control_uid
+        - target_gene
+        - expected_direction
+        additionalProperties: false
   required:
   - expression_path
   - metadata_path
-  - target_uid
-  - control_uid
-  - target_gene
-  - expected_direction
   additionalProperties: false
+  oneOf:
+  - required:
+    - target_uid
+    - control_uid
+    - target_gene
+    - expected_direction
+    not:
+      anyOf:
+      - required:
+        - targets
+  - required:
+    - targets
+    not:
+      anyOf:
+      - required:
+        - target_uid
+      - required:
+        - control_uid
+      - required:
+        - target_gene
+      - required:
+        - expected_direction
   examples:
-  - expression_path: asset_example_primary_dataset
+  - expression_path: asset_example_expression_table
     metadata_path: asset_example_cell_metadata
     target_uid: example
     control_uid: example

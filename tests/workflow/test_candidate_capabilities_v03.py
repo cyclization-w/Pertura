@@ -298,10 +298,83 @@ def test_target_guide_efficacy_and_leakage_blocking(tmp_path: Path) -> None:
     assert leaked.metrics["signature_confirmation_allowed"] is False
     assert any("leakage" in item for item in leaked.cautions)
 
+    batched = _run(
+        "target.guide_efficacy.v1",
+        contract,
+        tmp_path / "batch_efficacy",
+        {
+            "expression_path": str(expression),
+            "metadata_path": str(metadata),
+            "targets": [
+                {
+                    "target_uid": "TARGET",
+                    "control_uid": "NTC",
+                    "target_gene": "TG",
+                    "expected_direction": "down",
+                },
+                {
+                    "target_uid": "TARGET2",
+                    "control_uid": "NTC",
+                    "target_gene": "S1",
+                    "expected_direction": "up",
+                },
+            ],
+            "bootstrap_iterations": 10,
+            "guide_bootstrap_iterations": 5,
+        },
+    )
+    assert batched.metrics["target_count"] == 2
+    payload = json.loads(
+        (tmp_path / "batch_efficacy" / "target_guide_efficacy.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["schema_version"] == "pertura-target-guide-efficacy-set-v1"
+    assert [item["target_gene"] for item in payload["targets"]] == ["TG", "S1"]
+
+    mixed = _run(
+        "target.guide_efficacy.v1",
+        contract,
+        tmp_path / "mixed_efficacy",
+        {
+            "expression_path": str(expression),
+            "metadata_path": str(metadata),
+            "target_uid": "TARGET",
+            "targets": [
+                {
+                    "target_uid": "TARGET",
+                    "control_uid": "NTC",
+                    "target_gene": "TG",
+                    "expected_direction": "down",
+                }
+            ],
+        },
+    )
+    assert mixed.status.value == "blocked"
+    assert "cannot be combined" in mixed.blockers[0]
+
 
 def test_dependency_only_target_aggregate_never_becomes_production_pass(tmp_path: Path) -> None:
     staging = tmp_path / "aggregate"
     staging.mkdir()
+    efficacy_output = tmp_path / "target_guide_efficacy.json"
+    efficacy_output.write_text(
+        json.dumps(
+            {
+                "schema_version": "pertura-target-guide-efficacy-set-v1",
+                "targets": [
+                    {
+                        "target_uid": "TARGET",
+                        "target_gene": "TG",
+                        "status": "screen_passed",
+                        "blockers": [],
+                        "cautions": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
     dependencies = []
     for index, capability_id in enumerate(
         (
@@ -320,7 +393,11 @@ def test_dependency_only_target_aggregate_never_becomes_production_pass(tmp_path
                 "blockers": [],
                 "cautions": [],
                 "metrics": {},
-                "local_output_paths": [],
+                "local_output_paths": (
+                    [str(efficacy_output)]
+                    if capability_id == "target.guide_efficacy.v1"
+                    else []
+                ),
             }
         )
     (staging / "_dependency_results.json").write_text(
@@ -337,6 +414,7 @@ def test_dependency_only_target_aggregate_never_becomes_production_pass(tmp_path
     assert result.status.value == "caution"
     assert result.metrics["profile_validated"] is False
     assert result.metrics["raw_data_recomputed"] is False
+    assert result.metrics["target_count"] == 1
 
 
 def test_pure_python_effect_sensitivity_module_and_null_calibration(tmp_path: Path) -> None:

@@ -60,7 +60,7 @@ A real-data capability verdict contains:
 - input, runner, spec, policy, and environment hashes;
 - limitations.
 
-The artifact-aware frozen policy expands to 41 planned scientific jobs. Full-dataset jobs are evaluation-only; only prespecified frozen-subset jobs use calibration data. Capabilities without a scientifically compatible artifact in this four-dataset study are explicitly excluded rather than silently treated as validated. Execution success alone is not scientific validation. A required missing reference is `not_available`, not passed. A metric without a prespecified threshold is `reported_only`, not validated.
+The artifact-aware frozen policy expands to 39 planned scientific jobs. Full-dataset jobs are evaluation-only; only prespecified frozen-subset jobs use calibration data. Papalexi target efficacy evaluates a frozen batch of target definitions inside each capability run so that the expensive upstream DAG is not rerun once per target. Capabilities without a scientifically compatible artifact in this four-dataset study are explicitly excluded rather than silently treated as validated. Execution success alone is not scientific validation. A required missing reference is `not_available`, not passed. A metric without a prespecified threshold is `reported_only`, not validated.
 
 ### 3.1 Replogle
 

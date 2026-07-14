@@ -39,7 +39,7 @@ Frozen references are evaluated outside the capability runner. Reference provena
 
 `real_benchmark_complete=true` (with `real_benchmark_ready` retained as a compatibility alias) means every primary run has a current, hash-bound terminal verdict, including disclosed failures. `candidate_validation_passed=true` is the separate performance target: execution hard gates pass and frozen scientific comparisons pass. This separation prevents completed failures from disappearing while preventing completion from being advertised as validation.
 
-The artifact-aware frozen run policy schedules 41 scientific jobs rather than a capability-by-tier cross product. Full-dataset jobs are evaluation-only; calibration is restricted to declared frozen-subset jobs. Capabilities without a scientifically compatible artifact in the four-dataset study are explicitly excluded, not counted as passed.
+The artifact-aware frozen run policy schedules 39 scientific jobs rather than a capability-by-tier cross product. Full-dataset jobs are evaluation-only; calibration is restricted to declared frozen-subset jobs. Papalexi target-level evaluation uses a frozen batch within the target efficacy capability instead of rerunning its upstream DAG per target. Capabilities without a scientifically compatible artifact in the four-dataset study are explicitly excluded, not counted as passed.
 
 ### Dataset coverage
 

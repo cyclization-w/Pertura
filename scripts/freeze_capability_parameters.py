@@ -17,7 +17,7 @@ ARRAY_FIELDS = {
     "control_values", "covariates", "gene_universe", "heldout_axes", "model_training_ids",
     "module_reference_training_ids", "negative_control_conditions", "preprocessing_training_ids",
     "ranks", "records", "responder_labels", "resolutions", "seeds", "signature_genes",
-    "state_reference_training_ids", "target_conditions",
+    "state_reference_training_ids", "target_conditions", "targets",
 }
 OBJECT_FIELDS = {"axes", "manual_labels", "marker_candidates", "weights"}
 BOOLEAN_FIELDS = {
@@ -75,8 +75,7 @@ REQUIRED = {
     "module.learn.control_nmf.v1": ["h5ad_path", "control_column", "control_values"],
     "target.responder.mixscape.v1": ["h5ad_path", "pert_key", "control"],
     "target.guide_efficacy.v1": [
-        "expression_path", "metadata_path", "target_uid", "control_uid",
-        "target_gene", "expected_direction",
+        "expression_path", "metadata_path",
     ],
     "association.sceptre.v1": [
         "response_matrix_path", "guide_matrix_path", "guide_target_map_path",
@@ -96,6 +95,12 @@ ENUMS = {
     "expected_direction": ["down", "up"],
     "perturbation_type": ["KO", "KD", "OE"],
 }
+EXCLUSIVE_REQUIRED_FORMS = {
+    "target.guide_efficacy.v1": [
+        ["target_uid", "control_uid", "target_gene", "expected_direction"],
+        ["targets"],
+    ],
+}
 
 
 def _schema_for(name: str, existing: dict[str, Any]) -> dict[str, Any]:
@@ -104,7 +109,28 @@ def _schema_for(name: str, existing: dict[str, Any]) -> dict[str, Any]:
         for key, value in dict(existing or {}).items()
         if key not in {"type", "items", "x-pertura-asset-role"}
     }
-    if name in OBJECT_FIELDS:
+    if name == "targets":
+        inferred = {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "target_uid": {"type": "string", "minLength": 1},
+                    "control_uid": {"type": "string", "minLength": 1},
+                    "target_gene": {"type": "string", "minLength": 1},
+                    "expected_direction": {
+                        "type": "string",
+                        "enum": ["down", "up"],
+                    },
+                },
+                "required": [
+                    "target_uid", "control_uid", "target_gene", "expected_direction"
+                ],
+                "additionalProperties": False,
+            },
+        }
+    elif name in OBJECT_FIELDS:
         inferred: dict[str, Any] = {"type": "object"}
     elif name in ARRAY_FIELDS or name.endswith("_ids") or name.endswith("_values"):
         inferred = {"type": "array", "items": {"type": "string"}}
@@ -143,6 +169,13 @@ def _schema_for(name: str, existing: dict[str, Any]) -> dict[str, Any]:
 def _example(schema: dict[str, Any]) -> dict[str, Any]:
     properties = schema["properties"]
     names = list(schema.get("required") or ())
+    variants = schema.get("oneOf") or schema.get("anyOf") or ()
+    if variants:
+        names.extend(
+            name
+            for name in variants[0].get("required", ())
+            if name not in names
+        )
     if not names:
         names = [name for name in ("max_memory_gb", "n_jobs", "chunk_rows") if name in properties][:1]
     if not names and properties:
@@ -161,6 +194,11 @@ def freeze(root: Path, *, check: bool) -> list[str]:
             name: _schema_for(name, existing.get(name, {}))
             for name in sorted(keys)
         }
+        if payload["capability_id"] == "target.guide_efficacy.v1":
+            properties["expression_path"]["x-pertura-asset-role"] = "expression_table"
+            properties["expression_path"]["description"] = (
+                "Registered asset ID with role expression_table."
+            )
         required = [name for name in REQUIRED.get(payload["capability_id"], ()) if name in properties]
         schema = {
             "type": "object",
@@ -168,6 +206,22 @@ def freeze(root: Path, *, check: bool) -> list[str]:
             "required": required,
             "additionalProperties": False,
         }
+        if payload["capability_id"] in EXCLUSIVE_REQUIRED_FORMS:
+            forms = EXCLUSIVE_REQUIRED_FORMS[payload["capability_id"]]
+            schema["oneOf"] = [
+                {
+                    "required": names,
+                    "not": {
+                        "anyOf": [
+                            {"required": [excluded]}
+                            for other in forms
+                            if other is not names
+                            for excluded in other
+                        ]
+                    },
+                }
+                for names in forms
+            ]
         schema["examples"] = [_example(schema)]
         Draft202012Validator.check_schema(schema)
         for example in schema["examples"]:
