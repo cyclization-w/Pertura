@@ -187,6 +187,114 @@ def test_papalexi_conversion_writes_mapping_sidecar() -> None:
     assert "if (!file.exists(output))" in script
 
 
+def test_papalexi_guide_asset_export_is_source_bound_and_sparse() -> None:
+    root = Path(__file__).resolve().parents[2]
+    script = (root / "scripts" / "export_papalexi_guide_assets.R").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'expected_source_md5 <- "4884b7c5175a9e88dfe0d16f17965d43"' in script
+    assert (
+        'expected_source_sha256 <- "ed137f933f93c416b4480e970bd6937505c20c7dccaee0244b3c94d2c8f0ba1e"'
+        in script
+    )
+    assert 'LayerData(object = object[["GDO"]], layer = "counts")' in script
+    assert "Matrix::writeMM(guide_counts, matrix_path)" in script
+    assert '"guide_matrix/matrix.mtx"' in script
+    assert '"guide_matrix/barcodes.tsv"' in script
+    assert '"guide_matrix/features.tsv"' in script
+    assert '"rna_barcodes.tsv"' in script
+    assert '"guide_map.tsv"' in script
+    assert '"cell_metadata.tsv"' in script
+    assert "identical(colnames(rna_counts), colnames(guide_counts))" in script
+    assert "install.packages(source_package, repos = NULL, type = \"source\"" in script
+    assert "InstallData(" not in script
+    assert "download.file(" not in script
+
+
+def test_server_agent_cases_match_observed_dataset_semantics() -> None:
+    root = Path(__file__).resolve().parents[2]
+    catalog = json.loads(
+        (root / "src/pertura_bench/cases/server_agent_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    cases = {item["case_id"]: item for item in catalog["cases"]}
+
+    replogle_qc = cases["agent_replogle_qc"]
+    assert set(replogle_qc["expected_capability_dag"]) == {
+        "intake.materialize.v1",
+        "diagnostic.dataset_integrity.v1",
+    }
+    assert "guide.assignment.nb_mixture.v1" not in replogle_qc["expected_capability_dag"]
+
+    papalexi = cases["agent_papalexi_target"]
+    assert {
+        "guide_matrix",
+        "guide_map",
+        "rna_barcodes",
+        "cell_metadata",
+    }.issubset(papalexi["required_artifact_roles"])
+    assert "target.reliability.aggregate.v1" in papalexi["expected_capability_dag"]
+
+    norman = cases["agent_norman_design"]
+    assert "association.sceptre.v1" not in norman["expected_capability_dag"]
+    assert "predefined dual-sgRNA" in norman["objective"]
+
+    kang = cases["agent_kang_design"]
+    assert "de.pseudobulk.edger.v1" not in kang["expected_capability_dag"]
+    assert "not Perturb-seq" in kang["objective"]
+
+
+def test_real_capability_policy_matches_available_artifacts() -> None:
+    root = Path(__file__).resolve().parents[2]
+    catalog = json.loads(
+        (root / "src/pertura_bench/cases/capability_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    datasets = {
+        item["capability_id"]: set(item["required_real_datasets"])
+        for item in catalog["capabilities"]
+    }
+
+    assert datasets["association.sceptre.v1"] == set()
+    assert datasets["guide.ambient.v1"] == set()
+    for capability_id in (
+        "guide.integrity.v1",
+        "guide.assignment.nb_mixture.v1",
+        "screen.moi_doublet.v1",
+        "screen.retained_cells.v1",
+        "target.guide_efficacy.v1",
+        "target.reliability.aggregate.v1",
+    ):
+        assert datasets[capability_id] == {"papalexi_thp1_eccite"}
+    assert datasets["diagnostic.design_balance.v1"] == {
+        "papalexi_thp1_eccite",
+        "kang18_8vs8_pbmc",
+    }
+    assert datasets["intake.materialize.v1"] == {
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019",
+        "kang18_8vs8_pbmc",
+    }
+
+    policy = json.loads(
+        (root / "src/pertura_bench/cases/real_run_policy.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    excluded = set(policy["excluded_capabilities"])
+    assert "association.sceptre.v1" in excluded
+    assert {
+        "effect.matrix.assemble.v1",
+        "effect.module_global.v1",
+        "program.response.signed_nmf.v1",
+        "program.perturbation.cluster.v1",
+    }.issubset(excluded)
+
+
 def test_expert_split_minimums_and_proxy_validation_fail_closed() -> None:
     with pytest.raises(ValueError, match="at least 50"):
         BenchmarkSplitManifest(

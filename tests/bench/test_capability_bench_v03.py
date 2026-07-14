@@ -108,7 +108,7 @@ def test_synthetic_verdicts_are_deterministic_and_real_tier_requires_locks(
         "guide.assignment.nb_mixture.v1",
         tier="full_dataset",
         repo_root=root,
-        dataset_id="replogle_k562_essential_2022",
+        dataset_id="papalexi_thp1_eccite",
         split="evaluation",
         cache=tmp_path,
         output=tmp_path / "verdicts",

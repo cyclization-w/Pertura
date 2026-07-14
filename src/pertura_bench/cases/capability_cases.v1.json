@@ -179,9 +179,7 @@
       "environment_required": true,
       "execution_mode": "protocol_fake",
       "fixture_profile": "association",
-      "required_real_datasets": [
-        "norman_k562_crispra_2019"
-      ]
+      "required_real_datasets": []
     },
     {
       "capability_id": "calibration.method_null.v1",
@@ -365,9 +363,7 @@
       "execution_mode": "product_path",
       "fixture_profile": "calibration",
       "required_real_datasets": [
-        "replogle_k562_essential_2022",
-        "norman_k562_crispra_2019",
-        "kang18_8vs8_pbmc"
+        "papalexi_thp1_eccite"
       ]
     },
     {
@@ -930,7 +926,10 @@
       "execution_mode": "product_path",
       "fixture_profile": "intake",
       "required_real_datasets": [
-        "replogle_k562_essential_2022"
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019",
+        "kang18_8vs8_pbmc"
       ]
     },
     {
@@ -1117,6 +1116,7 @@
       "execution_mode": "product_path",
       "fixture_profile": "design",
       "required_real_datasets": [
+        "papalexi_thp1_eccite",
         "kang18_8vs8_pbmc"
       ]
     },
@@ -1292,8 +1292,7 @@
       "execution_mode": "product_path",
       "fixture_profile": "effect",
       "required_real_datasets": [
-        "replogle_k562_essential_2022",
-        "norman_k562_crispra_2019"
+        "papalexi_thp1_eccite"
       ]
     },
     {
@@ -2213,9 +2212,7 @@
       "environment_required": false,
       "execution_mode": "product_path",
       "fixture_profile": "guide",
-      "required_real_datasets": [
-        "replogle_k562_essential_2022"
-      ]
+      "required_real_datasets": []
     },
     {
       "capability_id": "guide.assignment.nb_mixture.v1",
@@ -2408,7 +2405,7 @@
       "execution_mode": "product_path",
       "fixture_profile": "guide",
       "required_real_datasets": [
-        "replogle_k562_essential_2022"
+        "papalexi_thp1_eccite"
       ]
     },
     {
@@ -2597,7 +2594,7 @@
       "execution_mode": "product_path",
       "fixture_profile": "guide",
       "required_real_datasets": [
-        "replogle_k562_essential_2022"
+        "papalexi_thp1_eccite"
       ]
     },
     {
@@ -2786,7 +2783,10 @@
       "execution_mode": "product_path",
       "fixture_profile": "intake",
       "required_real_datasets": [
-        "replogle_k562_essential_2022"
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019",
+        "kang18_8vs8_pbmc"
       ]
     },
     {
@@ -4280,7 +4280,7 @@
       "execution_mode": "product_path",
       "fixture_profile": "guide",
       "required_real_datasets": [
-        "replogle_k562_essential_2022"
+        "papalexi_thp1_eccite"
       ]
     },
     {
@@ -4463,7 +4463,7 @@
       "execution_mode": "product_path",
       "fixture_profile": "guide",
       "required_real_datasets": [
-        "replogle_k562_essential_2022"
+        "papalexi_thp1_eccite"
       ]
     },
     {
@@ -5153,8 +5153,7 @@
       "execution_mode": "product_path",
       "fixture_profile": "target",
       "required_real_datasets": [
-        "replogle_k562_essential_2022",
-        "norman_k562_crispra_2019"
+        "papalexi_thp1_eccite"
       ]
     },
     {
@@ -5324,8 +5323,7 @@
       "execution_mode": "protocol_fake",
       "fixture_profile": "target",
       "required_real_datasets": [
-        "replogle_k562_essential_2022",
-        "norman_k562_crispra_2019"
+        "papalexi_thp1_eccite"
       ]
     },
     {

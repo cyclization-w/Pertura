@@ -114,7 +114,7 @@ python -m pertura_bench subset <dataset_id> --split evaluation   --cache /data1/
 
 任何 checksum、转换脚本、subset rule、源版本或 split 变化都必须产生新 lock/hash。
 
-Before exporting the bound plan, a human must review each dataset license and record reviewer/basis in the source manifest used for the checkpoint. The generated scientific plan contains 61 explicit jobs; full-dataset runs are evaluation-only. Formal agent jobs require scheduler/cgroup resource enforcement and every condition must emit outputs/benchmark_result.json for the same frozen metric-reference evaluation.
+Before exporting the bound plan, a human must review each dataset license and record reviewer/basis in the source manifest used for the checkpoint. The artifact-aware scientific plan contains 41 explicit jobs; full-dataset runs are evaluation-only, and capabilities without a compatible artifact are explicitly excluded. Formal agent jobs require scheduler/cgroup resource enforcement and every condition must emit outputs/benchmark_result.json for the same frozen metric-reference evaluation.
 
 ## 5. 先做 backed schema inspection
 

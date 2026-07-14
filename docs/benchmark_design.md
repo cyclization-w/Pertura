@@ -39,16 +39,16 @@ Frozen references are evaluated outside the capability runner. Reference provena
 
 `real_benchmark_complete=true` (with `real_benchmark_ready` retained as a compatibility alias) means every primary run has a current, hash-bound terminal verdict, including disclosed failures. `candidate_validation_passed=true` is the separate performance target: execution hard gates pass and frozen scientific comparisons pass. This separation prevents completed failures from disappearing while preventing completion from being advertised as validation.
 
-The frozen run policy schedules 61 scientific jobs rather than the former capability-by-tier cross product. Full-dataset jobs are evaluation-only; calibration is restricted to declared frozen-subset jobs.
+The artifact-aware frozen run policy schedules 41 scientific jobs rather than a capability-by-tier cross product. Full-dataset jobs are evaluation-only; calibration is restricted to declared frozen-subset jobs. Capabilities without a scientifically compatible artifact in the four-dataset study are explicitly excluded, not counted as passed.
 
 ### Dataset coverage
 
 | Dataset | Required evaluation |
 |---|---|
-| Replogle K562 CRISPRi | intake consistency; guide-map and assignment quality; MOI/multi-guide behavior; target-reliability classification against proxy and, later, expert labels |
-| Papalexi THP-1 ECCITE | control-only state reference; cross-seed stability; mapping rejection; Mixscape responder/escape concordance with a frozen Seurat reference |
-| Norman K562 CRISPRa | preservation of combinatorial guides; SCEPTRE null calibration; effect/rank concordance; virtual-model leakage, baseline, and evaluator metrics |
-| Kang 8-vs-8 PBMC | edgeR numerical agreement with direct R; Propeller proportion/effect/FDR agreement; replicate and confounding hard gates; it is not represented as Perturb-seq |
+| Replogle K562 CRISPRi | intake/count integrity; perturbation-label and non-targeting-control coverage; target-reliability applicability limits. The frozen processed artifact has no cell-by-guide count matrix, so guide assignment, ambient-guide estimation, and MOI are not scored from it. |
+| Papalexi THP-1 ECCITE | raw GDO guide integrity/assignment from a separately hash-bound auxiliary export; retained-cell QC; control-only state reference; cross-seed stability; mapping rejection; Mixscape responder/escape concordance; candidate target-reliability classification. |
+| Norman K562 CRISPRa | preservation and correct interpretation of predefined dual-sgRNA constructs; explicit rejection of an inapplicable random high-MOI/SCEPTRE route; virtual-model leakage, baseline, evaluator, and next-panel metrics. |
+| Kang 8-vs-8 PBMC | direct-R edgeR numerical agreement; Propeller proportion/effect/FDR agreement; paired-donor, replicate, and confounding hard gates. Kang is an external statistical reference, is not represented as Perturb-seq, and is not given fabricated guide/MOI facts. |
 
 ### Local synthetic protocol
 

@@ -1,25 +1,26 @@
 {
   "schema_version": "pertura-real-run-policy-v1",
   "catalog_version": "v1",
-  "secondary_capabilities": [
+  "secondary_capabilities": [],
+  "excluded_capabilities": [
+    "association.sceptre.v1",
     "effect.matrix.assemble.v1",
+    "effect.module_global.v1",
     "enrichment.gsea_prerank.v1",
     "enrichment.ora.v1",
     "interpretation.evidence_map.v1",
+    "literature.europepmc.v1",
     "network.perturbation_regulator.v1",
     "program.perturbation.cluster.v1",
     "program.response.signed_nmf.v1",
     "regulator.activity.ulm.v1"
   ],
-  "excluded_capabilities": ["literature.europepmc.v1"],
   "calibration_capabilities": [
-    "association.sceptre.v1",
     "calibration.method_null.v1",
     "target.guide_efficacy.v1",
     "target.reliability.aggregate.v1"
   ],
   "full_dataset_capabilities": [
-    "association.sceptre.v1",
     "guide.assignment.nb_mixture.v1",
     "intake.materialize.v1",
     "state.reference.fit.v1",

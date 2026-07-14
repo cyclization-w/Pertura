@@ -67,4 +67,7 @@ metadata:
     guide.ambient.v1:
       scope: exact
       usage: validation_gate
-      accepted_statuses: *id001
+      accepted_statuses:
+      - screen_passed
+      - caution
+      - unresolved

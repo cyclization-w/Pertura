@@ -20,9 +20,9 @@
     "R": "4.5.3"
   },
   "conversion": "scripts/convert_papalexi_to_h5ad.R",
-  "intended_uses": ["escape_responder", "state_reference", "mixscape_golden"],
+  "intended_uses": ["guide_assignment", "screen_qc", "target_reliability", "escape_responder", "state_reference", "mixscape_golden"],
   "license_review_url": "https://github.com/satijalab/seurat-data",
   "license_status": "required",
   "output_sha256": null,
-  "note": "The conversion command records the installed package tarball and output SHA-256; release evaluation requires a non-null frozen lock."
+  "note": "The primary conversion freezes the RNA H5AD. scripts/export_papalexi_guide_assets.R separately exports the raw GDO matrix, RNA barcodes, guide map, and cell metadata from the same checksum-frozen source package; both lock chains are required for guide and target benchmarks."
 }

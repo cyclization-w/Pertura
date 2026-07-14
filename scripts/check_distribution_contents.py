@@ -60,6 +60,7 @@ SDIST_REQUIRED = (
     "benchmarks/README.md",
     "docs/README.md",
     "scripts/freeze_v020_contracts.py",
+    "scripts/export_papalexi_guide_assets.R",
     *(f"src/{path}" for path in WHEEL_REQUIRED),
 )
 

@@ -623,6 +623,18 @@ def run_retained_cells(
     caution = []
     if not predicted_doublet:
         caution.append("doublet exclusion was unresolved")
+    ambient_dependency = next(
+        (
+            item
+            for item in dependencies
+            if item.get("capability_id") == "guide.ambient.v1"
+        ),
+        None,
+    )
+    if ambient_dependency and str(ambient_dependency.get("status")) == "unresolved":
+        caution.append(
+            "ambient guide contamination was unresolved because raw droplets were not provided"
+        )
     if design_moi == "unknown":
         caution.append("design MOI is unconfirmed; multi-guide cells were not excluded by MOI")
     blockers = []

@@ -60,28 +60,30 @@ A real-data capability verdict contains:
 - input, runner, spec, policy, and environment hashes;
 - limitations.
 
-The frozen policy expands to 61 planned scientific jobs. Full-dataset jobs are evaluation-only; only prespecified frozen-subset jobs use calibration data. Execution success alone is not scientific validation. A required missing reference is `not_available`, not passed. A metric without a prespecified threshold is `reported_only`, not validated.
+The artifact-aware frozen policy expands to 41 planned scientific jobs. Full-dataset jobs are evaluation-only; only prespecified frozen-subset jobs use calibration data. Capabilities without a scientifically compatible artifact in this four-dataset study are explicitly excluded rather than silently treated as validated. Execution success alone is not scientific validation. A required missing reference is `not_available`, not passed. A metric without a prespecified threshold is `reported_only`, not validated.
 
 ### 3.1 Replogle
 
 Evaluate:
 
 - intake counts, features, barcodes, and layer consistency;
-- guide-map integrity and assignment performance;
-- posterior calibration, ambient guide flags, and multi-guide/MOI behavior;
-- target efficacy and aggregate reliability;
-- macro-F1, per-class recall, and false-block rate against published-proxy and, when available, expert-adjudicated labels.
+- perturbation-label, target, and non-targeting-control coverage;
+- preservation of `sgID_AB` construct identity without treating it as a measured guide-count matrix;
+- target-reliability applicability and explicit blocking of unsupported guide-assignment, ambient, MOI, and replicate-aware claims.
 
-Published-proxy labels remain non-production evidence.
+The current processed artifact cannot support guide-assignment calibration or aggregate target-reliability scoring. Published-proxy labels remain non-production evidence and may be used only in a later artifact version that contains the required guide-level inputs.
 
 ### 3.2 Papalexi
 
 Evaluate:
 
+- guide-map and RNA/GDO barcode integrity from the checksum-bound auxiliary GDO export;
+- negative-binomial guide assignment, posterior diagnostics, retained-cell QC, and explicit unresolved ambient status when raw droplets are absent;
 - control-only reference-state construction;
 - cross-seed clustering stability;
 - frozen-reference mapping and low-confidence rejection;
 - responder/escape classification;
+- candidate guide efficacy and aggregate target reliability;
 - concordance with a frozen Seurat Mixscape reference.
 
 Reference modules or labels that touched evaluation perturbation labels must be flagged as leakage and cannot independently confirm a finding.
@@ -90,10 +92,9 @@ Reference modules or labels that touched evaluation perturbation labels must be 
 
 Evaluate:
 
-- preservation of combinatorial and high-MOI cells;
+- preservation of predefined single and combinatorial dual-sgRNA construct labels;
 - absence of multi-guide-as-doublet errors;
-- SCEPTRE calibration and discovery execution;
-- null calibration, type-I error, effect and rank concordance;
+- correct refusal to reinterpret the artifact as random high-MOI guide exposure or run SCEPTRE without a cell-by-guide count matrix;
 - virtual split leakage detection;
 - baseline win rate, collapse, direction, rank, discriminability, and uncertainty metrics.
 
@@ -144,14 +145,25 @@ Condition-specific tool exposure and instructions are published verbatim. Baseli
 
 Use six frozen primary Perturb-seq cases:
 
-1. Replogle guide/screen QC;
-2. Replogle target reliability follow-up;
+1. Replogle intake integrity and perturbation-label QC;
+2. Replogle target/control coverage and target-reliability applicability;
 3. Papalexi state/Mixscape analysis;
-4. Papalexi label confirmation and stale handling;
-5. Norman high-MOI SCEPTRE analysis;
+4. Papalexi GDO guide assignment, retained-cell QC, and candidate target reliability;
+5. Norman predefined dual-sgRNA construct integrity and method applicability;
 6. Norman virtual evaluation and next-panel reasoning;
 
-Kang edgeR and Propeller agent tasks are reported separately as supplemental statistical demonstrations. They are not part of the primary agent comparison because Kang is not Perturb-seq.
+Kang paired-donor design auditing and Propeller agent tasks are reported separately as supplemental statistical demonstrations. Kang is not Perturb-seq and is never assigned a guide design or MOI. Its edgeR result is evaluated through the direct-R scientific golden/reference harness rather than the guide-dependent Pertura product route.
+
+These mappings follow the frozen artifacts actually available to the benchmark. The processed Replogle artifact contains perturbation labels but not a cell-by-guide count matrix, so it cannot evaluate guide assignment or ambient-guide estimation. Norman contains predefined dual-sgRNA constructs rather than random high-MOI guide exposure, so the primary Norman task must not invoke SCEPTRE. Papalexi's raw GDO assay is exported as a separately hash-bound auxiliary asset bundle for guide-level tasks.
+
+The server configuration must bind the following observed fields rather than guess from names:
+
+| Dataset | Expression counts | Perturbation/control facts | Independent unit and state facts | Method boundary |
+|---|---|---|---|---|
+| Replogle | `X` (raw integer-like counts) | `gene`; control value `non-targeting`; `sgID_AB` is an observed construct label | `gem_group` is a technical capture group, not an independent biological replicate | No guide-count matrix is present; guide assignment, ambient estimation, MOI, and replicate-aware effects are out of scope for this artifact. |
+| Papalexi | `X` (RNA counts); `data` is normalized | `guide_ID`; target `gene`; control value `NT`; confirmed low-MOI, single-guide design | `replicate` has three independent transductions; `orig.ident` is sequencing-lane/batch context | Guide tasks require the separately exported `GDO` MEX, `guide_map.tsv`, `rna_barcodes.tsv`, and `cell_metadata.tsv`. |
+| Norman | `counts` layer (raw); `X` is normalized | `guide_identity`/`guide_merged`; control value `ctrl`; predefined combinatorial dual-sgRNA constructs | `gemgroup` is technical; no independent biological replicate is asserted | Do not confirm `design_moi=high`; do not route to SCEPTRE without cell-by-guide counts and a compatible exposure design. |
+| Kang | `X` (raw counts) | condition `stim`, control value `ctrl`; no guide or target facts | donor `ind` (eight paired donors); state `cell`; `multiplets` is a cell-QC label | Not Perturb-seq. Use for paired design, Propeller, and direct-R edgeR reference tests only; never fabricate guide/MOI confirmations. |
 
 Run each case/condition twice:
 

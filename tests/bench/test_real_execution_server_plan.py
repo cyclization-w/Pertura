@@ -244,6 +244,7 @@ def test_server_plan_expands_all_dimensions_and_requires_checkpoint_binding() ->
     from pertura_bench.real_run_policy import real_runs_for_spec
 
     expected_jobs = sum(len(real_runs_for_spec(spec)) for spec in benchmark_specs())
+    assert expected_jobs == 41
     assert len(capability_jobs) == expected_jobs
     for spec in benchmark_specs():
         expected_runs = {

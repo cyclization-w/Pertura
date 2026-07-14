@@ -10,20 +10,18 @@
                   {
                       "case_id":  "agent_replogle_qc",
                       "dataset_id":  "replogle_k562_essential_2022",
-                      "objective":  "guide and screen QC",
+                      "objective":  "intake integrity and perturbation-label QC for the processed Replogle artifact; do not infer cell-level guide assignment when no guide-count matrix is present",
                       "expected_turns":  1,
                       "expected_capability_dag":  [
-                                                      "guide.integrity.v1",
-                                                      "guide.assignment.nb_mixture.v1",
-                                                      "guide.ambient.v1",
-                                                      "screen.moi_doublet.v1",
-                                                      "screen.retained_cells.v1"
+                                                      "intake.materialize.v1",
+                                                      "diagnostic.dataset_integrity.v1"
                                                   ],
                       "expected_statuses":  [
                                                 "completed"
                                             ],
                       "required_result_roles":  [
-                                                    "retained_cell_manifest"
+                                                    "materialized_dataset",
+                                                    "dataset_integrity"
                                                 ],
                       "required_artifact_roles":  [
                                                       "primary_dataset"
@@ -39,14 +37,15 @@
 
                                            ],
                       "benchmark_track":  "primary",
-                      "expected_benchmark_result_type":  "screen_qc",
+                      "expected_benchmark_result_type":  "dataset_integrity_and_label_qc",
                       "allowed_auxiliary_capabilities":  [
 
                                                          ],
                       "narrative_requirements":  [
                                                      "State the analysis unit and uncertainty.",
                                                      "Separate measured or derived findings from predictions and hypotheses.",
-                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                     "Report blockers and limitations without claiming validation beyond the evidence.",
+                                                     "State that the processed artifact has perturbation labels but no cell-by-guide count matrix, so guide assignment, ambient-guide estimation, and MOI inference are not evaluated in this case."
                                                  ],
                       "followup_actions":  [
 
@@ -55,18 +54,16 @@
                   {
                       "case_id":  "agent_replogle_target",
                       "dataset_id":  "replogle_k562_essential_2022",
-                      "objective":  "target reliability follow-up",
+                      "objective":  "target and control coverage plus target-reliability applicability for the processed Replogle artifact",
                       "expected_turns":  1,
                       "expected_capability_dag":  [
-                                                      "target.guide_efficacy.v1",
-                                                      "target.responder.mixscape.v1",
-                                                      "target.reliability.aggregate.v1"
+                                                      "diagnostic.dataset_integrity.v1"
                                                   ],
                       "expected_statuses":  [
                                                 "completed"
                                             ],
                       "required_result_roles":  [
-                                                    "target_reliability"
+                                                    "dataset_integrity"
                                                 ],
                       "required_artifact_roles":  [
                                                       "primary_dataset"
@@ -82,14 +79,15 @@
 
                                            ],
                       "benchmark_track":  "primary",
-                      "expected_benchmark_result_type":  "target_reliability",
+                      "expected_benchmark_result_type":  "target_coverage_applicability",
                       "allowed_auxiliary_capabilities":  [
 
                                                          ],
                       "narrative_requirements":  [
                                                      "State the analysis unit and uncertainty.",
                                                      "Separate measured or derived findings from predictions and hypotheses.",
-                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                     "Report blockers and limitations without claiming validation beyond the evidence.",
+                                                     "Quantify target and non-targeting-control coverage from observed labels, but do not claim validated guide efficacy or target reliability without guide counts and independent replicate evidence."
                                                  ],
                       "followup_actions":  [
 
@@ -113,7 +111,11 @@
                                                     "mixscape_responder"
                                                 ],
                       "required_artifact_roles":  [
-                                                      "primary_dataset"
+                                                      "primary_dataset",
+                                                      "guide_matrix",
+                                                      "guide_map",
+                                                      "rna_barcodes",
+                                                      "cell_metadata"
                                                   ],
                       "scope_claim_constraints":  [
                                                       "no_cell_as_replicate",
@@ -140,22 +142,32 @@
                                            ]
                   },
                   {
-                      "case_id":  "agent_papalexi_stale",
+                      "case_id":  "agent_papalexi_target",
                       "dataset_id":  "papalexi_thp1_eccite",
-                      "objective":  "label confirmation and stale handling",
-                      "expected_turns":  2,
+                      "objective":  "guide assignment, retained-cell QC, responder classification, and candidate target reliability using the frozen Papalexi GDO assets",
+                      "expected_turns":  1,
                       "expected_capability_dag":  [
-                                                      "state.reference.fit.v1",
-                                                      "state.annotation_candidates.v1"
+                                                      "guide.assignment.nb_mixture.v1",
+                                                      "screen.retained_cells.v1",
+                                                      "diagnostic.design_balance.v1",
+                                                      "target.guide_efficacy.v1",
+                                                      "target.responder.mixscape.v1",
+                                                      "target.reliability.aggregate.v1"
                                                   ],
                       "expected_statuses":  [
                                                 "completed"
                                             ],
                       "required_result_roles":  [
-                                                    "state_annotation_candidates"
+                                                    "guide_assignment",
+                                                    "retained_cell_manifest",
+                                                    "target_reliability"
                                                 ],
                       "required_artifact_roles":  [
-                                                      "primary_dataset"
+                                                      "primary_dataset",
+                                                      "guide_matrix",
+                                                      "guide_map",
+                                                      "rna_barcodes",
+                                                      "cell_metadata"
                                                   ],
                       "scope_claim_constraints":  [
                                                       "no_cell_as_replicate",
@@ -168,38 +180,35 @@
 
                                            ],
                       "benchmark_track":  "primary",
-                      "expected_benchmark_result_type":  "state_annotation_stale",
+                      "expected_benchmark_result_type":  "screen_and_target_reliability",
                       "allowed_auxiliary_capabilities":  [
 
                                                          ],
                       "narrative_requirements":  [
                                                      "State the analysis unit and uncertainty.",
                                                      "Separate measured or derived findings from predictions and hypotheses.",
-                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                     "Report blockers and limitations without claiming validation beyond the evidence.",
+                                                     "Keep direct target-gene efficacy, signature-level efficacy, responder fraction, and guide heterogeneity separate; all outputs remain candidate until the real benchmark and expert profile gates pass."
                                                  ],
                       "followup_actions":  [
-                                               {
-                                                   "type":  "design_confirmation",
-                                                   "catalog_key":  "papalexi_state_label_mapping",
-                                                   "prompt":  "A curator has now confirmed the staged state-label mapping. Re-open the current project state, identify which prior results became stale, and continue without reusing stale evidence."
-                                               }
+
                                            ]
                   },
                   {
-                      "case_id":  "agent_norman_sceptre",
+                      "case_id":  "agent_norman_design",
                       "dataset_id":  "norman_k562_crispra_2019",
-                      "objective":  "high-MOI SCEPTRE",
+                      "objective":  "combinatorial construct integrity and statistical-method applicability for the Norman predefined dual-sgRNA CRISPRa design",
                       "expected_turns":  1,
                       "expected_capability_dag":  [
-                                                      "screen.retained_cells.v1",
-                                                      "diagnostic.design_balance.v1",
-                                                      "association.sceptre.v1"
+                                                      "intake.materialize.v1",
+                                                      "diagnostic.dataset_integrity.v1"
                                                   ],
                       "expected_statuses":  [
                                                 "completed"
                                             ],
                       "required_result_roles":  [
-                                                    "conditional_association"
+                                                    "materialized_dataset",
+                                                    "dataset_integrity"
                                                 ],
                       "required_artifact_roles":  [
                                                       "primary_dataset"
@@ -215,14 +224,15 @@
 
                                            ],
                       "benchmark_track":  "primary",
-                      "expected_benchmark_result_type":  "high_moi_association",
+                      "expected_benchmark_result_type":  "combinatorial_design_diagnostic",
                       "allowed_auxiliary_capabilities":  [
 
                                                          ],
                       "narrative_requirements":  [
                                                      "State the analysis unit and uncertainty.",
                                                      "Separate measured or derived findings from predictions and hypotheses.",
-                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                     "Report blockers and limitations without claiming validation beyond the evidence.",
+                                                     "Do not relabel the predefined dual-sgRNA construct design as random high-MOI exposure, and do not run or claim SCEPTRE without a cell-by-guide count matrix and a compatible assignment mechanism."
                                                  ],
                       "followup_actions":  [
 
@@ -278,20 +288,22 @@
                                            ]
                   },
                   {
-                      "case_id":  "agent_kang_edger",
+                      "case_id":  "agent_kang_design",
                       "dataset_id":  "kang18_8vs8_pbmc",
-                      "objective":  "replicated edgeR effect; state explicitly that Kang is not Perturb-seq",
+                      "objective":  "paired-donor design audit and edgeR reference suitability; state explicitly that Kang is not Perturb-seq and is not routed through guide-dependent product analysis",
                       "expected_turns":  1,
                       "expected_capability_dag":  [
-                                                      "diagnostic.design_balance.v1",
-                                                      "calibration.replicate_null.v1",
-                                                      "de.pseudobulk.edger.v1"
+                                                      "intake.materialize.v1",
+                                                      "diagnostic.dataset_integrity.v1",
+                                                      "diagnostic.design_balance.v1"
                                                   ],
                       "expected_statuses":  [
                                                 "completed"
                                             ],
                       "required_result_roles":  [
-                                                    "differential_expression"
+                                                    "materialized_dataset",
+                                                    "dataset_integrity",
+                                                    "design_balance"
                                                 ],
                       "required_artifact_roles":  [
                                                       "primary_dataset"
@@ -307,14 +319,15 @@
 
                                            ],
                       "benchmark_track":  "supplemental",
-                      "expected_benchmark_result_type":  "replicated_de_supplement",
+                      "expected_benchmark_result_type":  "paired_design_audit",
                       "allowed_auxiliary_capabilities":  [
 
                                                          ],
                       "narrative_requirements":  [
                                                      "State the analysis unit and uncertainty.",
                                                      "Separate measured or derived findings from predictions and hypotheses.",
-                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                     "Report blockers and limitations without claiming validation beyond the evidence.",
+                                                     "Treat Kang as an external replicate-aware statistical reference: report donor pairing and contrast estimability, but do not fabricate guide assignment, MOI, target reliability, or a trusted product-path edgeR receipt."
                                                  ],
                       "followup_actions":  [
 

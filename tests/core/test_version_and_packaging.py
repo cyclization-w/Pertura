@@ -102,6 +102,7 @@ def test_distribution_checker_declares_wheel_and_sdist_contracts() -> None:
         "pertura_workflow/capabilities/planner_routes.json" in script["WHEEL_REQUIRED"]
     )
     assert "ui/package-lock.json" in script["SDIST_REQUIRED"]
+    assert "scripts/export_papalexi_guide_assets.R" in script["SDIST_REQUIRED"]
     assert (
         "pertura_runtime/agent_bundle/bundle.json"
         in script["WHEEL_REQUIRED"]

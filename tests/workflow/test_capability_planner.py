@@ -147,6 +147,50 @@ def test_target_reliability_route_guides_diagnostic_dependency_chain() -> None:
     assert diagnostic_plan.required_upstream == analysis_plan.required_upstream
 
 
+def test_retained_cells_accepts_unresolved_ambient_only_as_validation_gate() -> None:
+    contract = _contract()
+    scope = ScopeKey(dataset_id=contract.dataset_id)
+    results = (
+        _result(
+            contract,
+            scope,
+            capability_id="guide.assignment.nb_mixture.v1",
+            result_kind="guide_assignment",
+        ),
+        _result(
+            contract,
+            scope,
+            capability_id="screen.moi_doublet.v1",
+            result_kind="moi_doublet",
+        ),
+        _result(
+            contract,
+            scope,
+            capability_id="guide.ambient.v1",
+            result_kind="guide_ambient",
+            status=DiagnosticStatus.unresolved,
+        ),
+    )
+
+    resolution = resolve_dependencies(
+        CapabilityRegistry.load_default(include_external=False).get(
+            "screen.retained_cells.v1"
+        ),
+        contract=contract,
+        required_scope=scope,
+        committed_results=results,
+        registry=CapabilityRegistry.load_default(include_external=False),
+    )
+
+    assert resolution.ok
+    ambient = next(
+        item
+        for item in resolution.dependency_verdicts
+        if item["capability_id"] == "guide.ambient.v1"
+    )
+    assert ambient["usable"] is True
+
+
 def test_dependency_resolution_rebuilds_hash_kind_and_state() -> None:
     registry = CapabilityRegistry.load_default(include_external=False)
     spec = registry.get("effect.guide_target_sensitivity.v1")
