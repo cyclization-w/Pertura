@@ -228,6 +228,8 @@ def test_perturbseq_doctor_rejects_api_import_failure(
 
 def test_environment_setup_streams_micromamba_output(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("PERTURA_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("MAMBA_ROOT_PREFIX", str(tmp_path / "inherited-home-root"))
+    monkeypatch.setenv("CONDA_PKGS_DIRS", str(tmp_path / "inherited-home-pkgs"))
     binary = micromamba_path()
     binary.parent.mkdir(parents=True)
     binary.write_bytes(b"fixture-micromamba")
@@ -267,6 +269,15 @@ def test_environment_setup_streams_micromamba_output(monkeypatch, tmp_path: Path
     assert create_kwargs["stdout"] is sys.stderr
     assert create_kwargs["stderr"] is sys.stderr
     assert "capture_output" not in create_kwargs
+    controlled = create_kwargs["env"]
+    cache = tmp_path / "cache"
+    assert controlled["MAMBA_ROOT_PREFIX"] == str(cache / "mamba-root")
+    assert controlled["CONDA_PKGS_DIRS"] == str(cache / "pkgs")
+    assert controlled["TEMP"] == str(cache / "tmp")
+    assert controlled["TMP"] == str(cache / "tmp")
+    if sys.platform != "win32":
+        assert controlled["TMPDIR"] == str(cache / "tmp")
+    assert all(kwargs.get("env") == controlled for _, kwargs in calls[:2])
     assert result["doctor"]["ok"] is True
     assert (
         prefix / "pertura-environment-manifest.json"

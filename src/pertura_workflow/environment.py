@@ -144,6 +144,11 @@ def setup_environment(profile_name: str = PROFILE) -> dict[str, Any]:
     prefix = environment_prefix(profile_name)
     spec_path = resources.files("pertura_workflow").joinpath("environments", f"{profile_name}.yml")
     prefix.parent.mkdir(parents=True, exist_ok=True)
+    subprocess_env = _minimal_env()
+    for key in ("MAMBA_ROOT_PREFIX", "CONDA_PKGS_DIRS", "TEMP", "TMP"):
+        Path(subprocess_env[key]).mkdir(parents=True, exist_ok=True)
+    if "TMPDIR" in subprocess_env:
+        Path(subprocess_env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
     command = [str(binary), "create", "--yes", "--no-rc", "--prefix", str(prefix), "--file", str(spec_path)]
     print(
         f"[pertura] creating {profile_name} at {prefix}",
@@ -156,6 +161,7 @@ def setup_environment(profile_name: str = PROFILE) -> dict[str, Any]:
         stderr=sys.stderr,
         timeout=3600,
         check=False,
+        env=subprocess_env,
     )
     if completed.returncode != 0:
         raise RuntimeError(
@@ -176,6 +182,7 @@ def setup_environment(profile_name: str = PROFILE) -> dict[str, Any]:
             stderr=sys.stderr,
             timeout=3600,
             check=False,
+            env=subprocess_env,
         )
         if bootstrap.returncode != 0:
             raise RuntimeError(
@@ -190,6 +197,7 @@ def setup_environment(profile_name: str = PROFILE) -> dict[str, Any]:
         capture_output=True,
         timeout=120,
         check=True,
+        env=subprocess_env,
     )
     packages = json.loads(package_list.stdout)
     manifest = {
@@ -483,5 +491,13 @@ def _expected_versions(profile_name: str) -> dict[str, str]:
 
 
 def _minimal_env() -> dict[str, str]:
-    allowed = ("SYSTEMROOT", "WINDIR", "TEMP", "TMP", "HOME", "USERPROFILE", "PATH")
-    return {key: os.environ[key] for key in allowed if key in os.environ}
+    allowed = ("SYSTEMROOT", "WINDIR", "HOME", "USERPROFILE", "PATH")
+    environment = {key: os.environ[key] for key in allowed if key in os.environ}
+    root = cache_root()
+    environment["MAMBA_ROOT_PREFIX"] = str(root / "mamba-root")
+    environment["CONDA_PKGS_DIRS"] = str(root / "pkgs")
+    environment["TEMP"] = str(root / "tmp")
+    environment["TMP"] = str(root / "tmp")
+    if os.name != "nt":
+        environment["TMPDIR"] = str(root / "tmp")
+    return environment
