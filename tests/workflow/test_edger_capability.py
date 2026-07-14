@@ -241,6 +241,36 @@ def test_edger_output_validation_rejects_malformed_outputs(
         )
 
 
+@pytest.mark.parametrize(
+    ("column", "value", "message"),
+    [
+        ("F", -0.01, r"F must be nonnegative for gene G1: -0.01"),
+        (
+            "dispersion",
+            -0.01,
+            r"dispersion must be nonnegative for gene G1: -0.01",
+        ),
+    ],
+)
+def test_edger_output_validation_reports_gene_for_negative_statistics(
+    tmp_path: Path, column: str, value: float, message: str
+) -> None:
+    _write_valid_edger_outputs(tmp_path)
+    rows = list(
+        csv.DictReader((tmp_path / "edger_results.csv").open(encoding="utf-8"))
+    )
+    rows[0][column] = str(value)
+    _write_csv(tmp_path / "edger_results.csv", list(rows[0]), rows)
+
+    with pytest.raises(RuntimeError, match=message):
+        _validate_edger_outputs(
+            tmp_path,
+            baseline="baseline",
+            target="target",
+            expected_environment_lock=_EXPECTED_LOCK,
+        )
+
+
 def _write_small_edger_input(source: Path) -> None:
     source.mkdir()
     (source / "counts.csv").write_text(
@@ -439,3 +469,4 @@ def test_edger_runner_aligns_dispersion_to_filtered_gene_order() -> None:
     assert "names(dispersion) <- rownames(y)" in runner
     assert "dispersion <- rep(dispersion, nrow(y))" in runner
     assert "any(!is.finite(table$dispersion))" in runner
+    assert "unname(as.character(capture.output(sessionInfo())))" in runner

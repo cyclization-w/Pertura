@@ -64,6 +64,8 @@ environment <- list(
   edgeR = as.character(packageVersion("edgeR")),
   limma = as.character(packageVersion("limma")),
   jsonlite = as.character(packageVersion("jsonlite")),
-  sessionInfo = capture.output(sessionInfo())
+  # capture.output() may retain names on some R builds. jsonlite then emits an
+  # object rather than the provider-neutral string array expected by Pertura.
+  sessionInfo = unname(as.character(capture.output(sessionInfo())))
 )
 write(toJSON(environment, auto_unbox = TRUE, pretty = TRUE), config$environment_path)

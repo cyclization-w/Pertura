@@ -1,16 +1,16 @@
-# Pertura 0.2.0a15 服务器 Benchmark 操作指南
+# Pertura 0.2.0a16 服务器 Benchmark 操作指南
 
 本文面向服务器端执行者。目标是验证 Pertura 是否能完成预先定义的 Perturb-seq 分析流程、产生正确的统计结果，并控制 LLM 的科学 claim。当前不评价生产级用户体验。
 
 ## 1. 固定 checkpoint
 
-服务器只运行 `v0.2.0a15-prebench` 对应的 commit 和 wheel：
+服务器只运行 `v0.2.0a16-prebench` 对应的 commit 和 wheel：
 
 ```bash
 git clone https://github.com/cyclization-w/Pertura.git /data1/$USER/Project/Pertura
 cd /data1/$USER/Project/Pertura
 git fetch --tags
-git checkout v0.2.0a15-prebench
+git checkout v0.2.0a16-prebench
 
 git rev-parse HEAD
 git status --porcelain

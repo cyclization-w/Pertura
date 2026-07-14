@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 import os
@@ -132,13 +133,25 @@ def _write_case(
         writer.writerow(["gene", *cells])
         for gene_index in range(30):
             row = [f"G{gene_index + 1:02d}"]
-            for cell_index, meta in enumerate(metadata):
-                base = 18 + (gene_index % 7) * 3 + (cell_index % 3)
+            for meta in metadata:
+                base = 30 + (gene_index % 7) * 4
+                # Keep the golden portable and byte-for-byte deterministic while
+                # avoiding the zero-variance pseudobulks produced by the former
+                # repeating 0/1/2 cell pattern. Paired samples share the same
+                # gene-by-unit shift; independent cell noise supplies modest
+                # within-unit overdispersion without relying on an RNG runtime.
+                unit_shift = _stable_signed_offset(
+                    "unit", gene_index, meta["replicate"], radius=5
+                )
+                cell_shift = _stable_signed_offset(
+                    "cell", gene_index, meta["cell_id"], radius=6
+                )
+                count = base + unit_shift + cell_shift
                 if meta["condition"] == "target" and gene_index < 5:
-                    base *= 2
+                    count += base
                 elif meta["condition"] == "target" and 5 <= gene_index < 10:
-                    base = max(1, base // 2)
-                row.append(int(base))
+                    count -= base // 2
+                row.append(max(1, int(count)))
             writer.writerow(row)
     metadata_path = directory / "metadata.csv"
     with metadata_path.open("w", newline="", encoding="utf-8") as handle:
@@ -146,6 +159,16 @@ def _write_case(
         writer.writeheader()
         writer.writerows(metadata)
     return counts_path, metadata_path
+
+
+def _stable_signed_offset(*parts: object, radius: int) -> int:
+    """Return a portable deterministic integer in ``[-radius, radius]``."""
+
+    if radius < 0:
+        raise ValueError("radius must be nonnegative")
+    payload = "\x1f".join(str(part) for part in parts).encode("utf-8")
+    value = int.from_bytes(hashlib.sha256(payload).digest()[:8], "big")
+    return value % (2 * radius + 1) - radius
 
 
 def _run_pertura_case(

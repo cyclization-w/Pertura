@@ -252,13 +252,23 @@ def _validate_edger_outputs(
     if not set(result_genes).issubset(count_genes):
         _invalid_output("edgeR result contains genes absent from pseudobulk counts")
     for row in result_rows:
-        _finite_number(row["logFC"], "edgeR logFC")
-        f_statistic = _finite_number(row["F"], "edgeR F")
-        p_value = _finite_number(row["PValue"], "edgeR PValue")
-        fdr = _finite_number(row["FDR"], "edgeR FDR")
-        dispersion = _finite_number(row["dispersion"], "edgeR dispersion")
-        if f_statistic < 0 or dispersion < 0:
-            _invalid_output("edgeR F and dispersion must be nonnegative")
+        gene = row["gene"]
+        _finite_number(row["logFC"], f"edgeR logFC for gene {gene}")
+        f_statistic = _finite_number(row["F"], f"edgeR F for gene {gene}")
+        p_value = _finite_number(row["PValue"], f"edgeR PValue for gene {gene}")
+        fdr = _finite_number(row["FDR"], f"edgeR FDR for gene {gene}")
+        dispersion = _finite_number(
+            row["dispersion"], f"edgeR dispersion for gene {gene}"
+        )
+        if f_statistic < 0:
+            _invalid_output(
+                f"edgeR F must be nonnegative for gene {gene}: {f_statistic}"
+            )
+        if dispersion < 0:
+            _invalid_output(
+                "edgeR dispersion must be nonnegative "
+                f"for gene {gene}: {dispersion}"
+            )
         if not (0 <= p_value <= 1) or not (0 <= fdr <= 1):
             _invalid_output("edgeR PValue and FDR must lie in [0, 1]")
 
