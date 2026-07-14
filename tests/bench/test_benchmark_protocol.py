@@ -207,7 +207,9 @@ def test_papalexi_guide_asset_export_is_source_bound_and_sparse() -> None:
     assert '"guide_map.tsv"' in script
     assert '"cell_metadata.tsv"' in script
     assert "identical(colnames(rna_counts), colnames(guide_counts))" in script
-    assert "install.packages(source_package, repos = NULL, type = \"source\"" in script
+    assert 'requireNamespace("thp1.eccite.SeuratData", quietly = TRUE)' in script
+    assert 'SeuratData::LoadData(ds = "thp1.eccite")' in script
+    assert "install.packages(" not in script
     assert "InstallData(" not in script
     assert "download.file(" not in script
 

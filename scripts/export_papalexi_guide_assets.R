@@ -43,13 +43,22 @@ if (!identical(unname(seuratdata_sha), expected_seuratdata_sha)) {
   stop("SeuratData source commit drift")
 }
 
-install.packages(source_package, repos = NULL, type = "source", quiet = TRUE)
+if (!requireNamespace("thp1.eccite.SeuratData", quietly = TRUE)) {
+  stop(
+    "thp1.eccite.SeuratData is not installed; install the checksum-verified ",
+    "source package in the Papalexi conversion environment before exporting"
+  )
+}
 if (!identical(as.character(packageVersion("thp1.eccite.SeuratData")), "3.1.5")) {
   stop("thp1.eccite.SeuratData version drift")
 }
 
-suppressMessages(SeuratData::LoadData(ds = "thp1.eccite", type = "thp1.eccite"))
-object <- get("thp1.eccite", envir = .GlobalEnv)
+# The frozen dataset package has already been installed and verified during
+# conversion environment setup. Loading must be read-only: reinstalling here
+# mutates the benchmark environment and can fail when its library is locked.
+# SeuratData 0.2.2.9002 accepts raw/default/azimuth for `type`; the dataset
+# name belongs only in `ds`.
+object <- suppressMessages(SeuratData::LoadData(ds = "thp1.eccite"))
 if (!inherits(object, "Seurat")) {
   stop("Papalexi dataset package did not load a Seurat object")
 }
