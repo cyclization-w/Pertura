@@ -90,25 +90,79 @@ def _dense(matrix: Any, *, rows: int, columns: int, max_memory_gb: float, label:
     return matrix.toarray() if sparse.issparse(matrix) else np.asarray(matrix)
 
 
-def _normalized_subset(source: Any, cell_ids: list[str]) -> Any:
+def _normalized_subset(
+    source: Any,
+    cell_ids: list[str],
+    *,
+    max_memory_gb: float,
+    label: str,
+    chunk_rows: int = 1024,
+) -> Any:
+    import anndata as ad
     import numpy as np
     import scanpy as sc
     from scipy import sparse
 
-    index = source.obs_names.astype(str).get_indexer(cell_ids)
-    missing = [cell_ids[position] for position, value in enumerate(index) if value < 0]
+    if chunk_rows <= 0:
+        raise ValueError("chunk_rows must be positive")
+    source_names = source.obs_names.astype(str)
+    requested = set(cell_ids)
+    missing = sorted(requested.difference(source_names))
     if missing:
         raise ValueError(f"Papalexi artifact is missing {len(missing)} selected cells")
-    index = np.sort(index)
-    subset = source[index, :].to_memory()
-    if sparse.issparse(subset.X):
-        values = subset.X.data
+
+    # Backed fancy row indexing can repeatedly scan a sparse HDF5 dataset when
+    # selected cells are scattered through the file.  Walk the source once in
+    # contiguous row chunks and retain the requested rows from each chunk.
+    selected = np.flatnonzero(source_names.isin(requested))
+    source_type = type(source.X).__name__
+    source_is_sparse = sparse.issparse(source.X) or source_type in {
+        "_CSRDataset",
+        "_CSCDataset",
+    }
+    if not source_is_sparse:
+        estimated = len(selected) * int(source.n_vars) * 8 * 2
+        if estimated > max_memory_gb * 1024**3:
+            raise MemoryError(
+                f"{label} requires about {estimated / 1024**3:.3f} GB, "
+                f"exceeding max_memory_gb={max_memory_gb}"
+            )
+
+    print(
+        f"REF-03: sequentially scanning {source.n_obs} source rows for "
+        f"{len(selected)} {label}",
+        flush=True,
+    )
+    pieces: list[Any] = []
+    for start in range(0, int(source.n_obs), chunk_rows):
+        stop = min(start + chunk_rows, int(source.n_obs))
+        in_chunk = selected[(selected >= start) & (selected < stop)]
+        if not len(in_chunk):
+            continue
+        block = source.X[start:stop, :]
+        if hasattr(block, "to_memory"):
+            block = block.to_memory()
+        block = block[in_chunk - start, :]
+        pieces.append(block.tocsr() if sparse.issparse(block) else np.asarray(block))
+    if not pieces:
+        raise ValueError(f"Papalexi selection produced no {label}")
+    if sparse.issparse(pieces[0]):
+        matrix = sparse.vstack(pieces, format="csr")
+        values = matrix.data
     else:
-        values = np.asarray(subset.X).reshape(-1)
+        matrix = np.concatenate(pieces, axis=0)
+        values = matrix.reshape(-1)
     if values.size and (not np.isfinite(values).all() or (values < 0).any()):
         raise ValueError("state reference requires finite nonnegative expression")
+
+    subset = ad.AnnData(
+        X=matrix,
+        obs=source.obs.iloc[selected].copy(),
+        var=source.var.copy(),
+    )
     sc.pp.normalize_total(subset, target_sum=1e4)
     sc.pp.log1p(subset)
+    print(f"REF-03: loaded and normalized {subset.n_obs} {label}", flush=True)
     return subset
 
 
@@ -286,9 +340,17 @@ def generate(
     print(f"REF-03-A: loading {len(control_ids)} calibration control cells", flush=True)
     source = ad.read_h5ad(artifact, backed="r")
     try:
-        control = _normalized_subset(source, control_ids)
+        control = _normalized_subset(
+            source,
+            control_ids,
+            max_memory_gb=max_memory_gb,
+            label="calibration control cells",
+        )
         evaluation_data = _normalized_subset(
-            source, [row["cell_id"] for row in evaluation]
+            source,
+            [row["cell_id"] for row in evaluation],
+            max_memory_gb=max_memory_gb,
+            label="evaluation cells",
         )
     finally:
         if getattr(source, "file", None) is not None:

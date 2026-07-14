@@ -89,4 +89,16 @@ def test_ref03_is_independent_and_enforces_protocol_boundaries() -> None:
     assert '"strong_claim_allowed": "false"' in script
     assert '"technical_id_overwritten": "false"' in script
     assert "distance_rejection_quantile" in script
-    assert "np.sort(index)" in script
+    assert "source[index, :].to_memory()" not in script
+    assert "source.X[start:stop, :]" in script
+    assert "for start in range(0, int(source.n_obs), chunk_rows)" in script
+
+
+def test_ref03_backed_selection_uses_sequential_row_chunks() -> None:
+    root = Path(__file__).resolve().parents[2]
+    script = (root / "scripts" / "generate_paper_ref03.py").read_text(
+        encoding="utf-8"
+    )
+    assert "source[index, :]" not in script
+    assert "selected[(selected >= start) & (selected < stop)]" in script
+    assert "source.X[start:stop, :]" in script
