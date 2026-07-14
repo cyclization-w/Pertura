@@ -1,0 +1,619 @@
+{
+  "schema_version": "pertura-paper-agent-tasks-v1",
+  "benchmark_name": "Pertura Perturb-seq agent evaluation",
+  "execution_protocol": {
+    "conditions": [
+      "free_codeact",
+      "prompt_only",
+      "pertura_full"
+    ],
+    "repeats": 2,
+    "primary_task_turns": 12,
+    "supplemental_task_turns": 2,
+    "primary_scored_runs": 72,
+    "supplemental_scored_runs": 12,
+    "total_scored_runs": 84,
+    "primary_workflows": 3,
+    "supplemental_workflows": 1,
+    "total_agent_sessions": 24,
+    "session_rule": "Each dataset workflow uses a fresh workspace, conversation, and provider session for each condition and repeat. Turns within that workflow share only prior visible outputs and registered artifacts from the same session.",
+    "fairness_controls": [
+      "same_dataset_and_split",
+      "same_task_objective",
+      "same_model",
+      "same_context_and_token_budget",
+      "same_max_turns",
+      "same_timeout",
+      "same_cpu_memory_and_thread_limits",
+      "same_scientific_environments",
+      "same_independent_evaluator"
+    ],
+    "global_hard_gates": [
+      "required_artifacts_present",
+      "analysis_unit_is_scientifically_valid",
+      "calibration_evaluation_split_respected",
+      "no_silent_method_fallback",
+      "no_prediction_as_measurement",
+      "no_prior_as_measurement",
+      "no_candidate_as_validated",
+      "no_cell_as_replicate",
+      "limitations_and_blockers_visible"
+    ]
+  },
+  "conditions": {
+    "free_codeact": {
+      "description": "The model receives the task, data, generic code execution, and scientific environments, but no Pertura skills, domain tools, or authority enforcement."
+    },
+    "prompt_only": {
+      "description": "The model additionally receives static Perturb-seq analysis and safety guidance, but no Pertura domain tools or authority enforcement."
+    },
+    "pertura_full": {
+      "description": "The model receives bundled skills, five Pertura domain tools, dependency-aware execution, authority enforcement, and runtime-rendered conclusions."
+    }
+  },
+  "workflows": [
+    {
+      "workflow_id": "WF-REPL",
+      "role": "primary",
+      "dataset_id": "replogle_k562_essential_2022",
+      "turns": [
+        {
+          "task_id": "REPL-01",
+          "turn_index": 1,
+          "title": "Dataset and experimental-design audit",
+          "objective": "Audit this screen before analysis. Identify the expression representation, perturbation and control identities, independent experimental units, relevant batch structure, unresolved design facts, and which downstream analyses are scientifically supported. Produce a concise design audit and an analysis plan without guessing missing facts.",
+          "split_usage": ["calibration", "evaluation"],
+          "depends_on_tasks": [],
+          "capability_scenarios": ["CAP-01"],
+          "expected_capability_dag": [
+            "intake.materialize.v1",
+            "diagnostic.contract_integrity.v1",
+            "diagnostic.dataset_integrity.v1",
+            "diagnostic.design_balance.v1"
+          ],
+          "required_artifact_roles": [
+            "dataset_profile",
+            "design_audit",
+            "supported_analysis_plan"
+          ],
+          "task_hard_gates": [
+            "counts_and_transformed_expression_not_conflated",
+            "independent_units_not_invented",
+            "unresolved_design_facts_remain_unresolved",
+            "unsupported_methods_not_recommended_as_ready"
+          ],
+          "metric_ids": [
+            "design_field_accuracy",
+            "analysis_unit_accuracy",
+            "confounding_detection",
+            "supported_method_precision"
+          ],
+          "reference_requirement": "Direct metadata tabulation plus frozen study-design confirmations."
+        },
+        {
+          "task_id": "REPL-02",
+          "turn_index": 2,
+          "title": "Guide and screen quality assessment",
+          "objective": "Assess perturbation-label and screen quality. Determine which guide-assignment, ambient-guide, MOI, multi-guide, doublet, and retained-cell conclusions are supported by the available files. Distinguish metadata labels from raw guide-count evidence and return explicit retained/excluded-cell accounting.",
+          "split_usage": ["evaluation"],
+          "depends_on_tasks": ["REPL-01"],
+          "capability_scenarios": ["CAP-02", "CAP-03"],
+          "expected_capability_dag": [
+            "diagnostic.guide_assignment.v1",
+            "guide.integrity.v1",
+            "screen.moi_doublet.v1",
+            "screen.retained_cells.v1"
+          ],
+          "expected_nonexecutions": [
+            "guide.ambient.v1",
+            "guide.assignment.nb_mixture.v1"
+          ],
+          "required_artifact_roles": [
+            "guide_assignment_audit",
+            "screen_qc",
+            "retained_cell_manifest"
+          ],
+          "task_hard_gates": [
+            "metadata_labels_not_presented_as_raw_guide_count_validation",
+            "ambient_model_not_claimed_without_guide_counts",
+            "multi_guide_not_equated_with_transcriptomic_doublet",
+            "retained_and_excluded_counts_reconcile"
+          ],
+          "metric_ids": [
+            "assignment_evidence_class_accuracy",
+            "unsupported_guide_count_claims",
+            "retained_identity_match",
+            "exclusion_reason_accuracy"
+          ],
+          "reference_requirement": "Frozen perturbation labels, design facts, and deterministic retained-cell rules."
+        },
+        {
+          "task_id": "REPL-03",
+          "turn_index": 3,
+          "title": "Guide efficacy and target reliability",
+          "objective": "Evaluate perturbation efficacy and target reliability for the selected evaluation targets. Separate direct target-expression evidence from signature evidence, quantify guide-to-guide heterogeneity and leave-one-guide-out sensitivity, and identify targets that remain unresolved.",
+          "split_usage": ["evaluation"],
+          "depends_on_tasks": ["REPL-02"],
+          "capability_scenarios": ["CAP-05"],
+          "expected_capability_dag": [
+            "target.guide_efficacy.v1",
+            "effect.guide_target_sensitivity.v1",
+            "target.reliability.aggregate.v1"
+          ],
+          "required_artifact_roles": [
+            "guide_efficacy_table",
+            "guide_sensitivity_table",
+            "target_reliability_table"
+          ],
+          "task_hard_gates": [
+            "crispri_direction_handled_correctly",
+            "signature_not_presented_as_direct_measurement",
+            "guide_heterogeneity_visible",
+            "unresolved_targets_not_promoted"
+          ],
+          "metric_ids": [
+            "target_direction_accuracy",
+            "guide_consistency_error",
+            "loo_effect_error",
+            "resolved_target_precision"
+          ],
+          "reference_requirement": "Independent target-expression and guide-level recomputation on evaluation identities."
+        },
+        {
+          "task_id": "REPL-04",
+          "turn_index": 4,
+          "title": "Response programs, pathway context, and next panel",
+          "objective": "Characterize shared and target-specific response programs among supported targets, assess program and perturbation-cluster stability, evaluate regulator and pathway context, surface contradictory evidence, and propose a constrained follow-up panel. Clearly distinguish measured effects from candidate mechanisms and literature priors.",
+          "split_usage": ["evaluation"],
+          "depends_on_tasks": ["REPL-03"],
+          "capability_scenarios": ["CAP-07", "CAP-08", "CAP-09"],
+          "expected_capability_dag": [
+            "effect.matrix.assemble.v1",
+            "module.import.gmt.v1",
+            "module.learn.nmf.v1",
+            "effect.module_global.v1",
+            "program.response.signed_nmf.v1",
+            "program.perturbation.cluster.v1",
+            "regulator.activity.ulm.v1",
+            "network.perturbation_regulator.v1",
+            "enrichment.ora.v1",
+            "enrichment.gsea_prerank.v1",
+            "literature.europepmc.v1",
+            "interpretation.evidence_map.v1",
+            "design.next_panel.v1"
+          ],
+          "required_artifact_roles": [
+            "effect_matrix",
+            "module_programs",
+            "perturbation_clusters",
+            "pathway_regulator_results",
+            "evidence_map",
+            "next_panel"
+          ],
+          "task_hard_gates": [
+            "missing_effects_not_zero_imputed",
+            "module_and_cluster_instability_visible",
+            "prior_not_presented_as_measurement",
+            "candidate_network_edges_not_presented_as_causal",
+            "next_panel_constraints_satisfied"
+          ],
+          "metric_ids": [
+            "effect_matrix_integrity",
+            "module_stability",
+            "pathway_reference_concordance",
+            "source_class_accuracy",
+            "panel_constraint_satisfaction"
+          ],
+          "reference_requirement": "Frozen GMT/network/literature snapshots plus independent module, enrichment, and panel evaluators."
+        }
+      ]
+    },
+    {
+      "workflow_id": "WF-PAPA",
+      "role": "primary",
+      "dataset_id": "papalexi_thp1_eccite",
+      "turns": [
+        {
+          "task_id": "PAPA-01",
+          "turn_index": 1,
+          "title": "Multimodal guide assignment and screen QC",
+          "objective": "Audit the RNA and guide modalities, align cell barcodes, validate the guide-to-target map, estimate assignment uncertainty and ambient contamination, distinguish guide multiplicity from cell doublets, and produce a retained-cell manifest for downstream analysis.",
+          "split_usage": ["calibration", "evaluation"],
+          "depends_on_tasks": [],
+          "capability_scenarios": ["CAP-01", "CAP-02", "CAP-03"],
+          "expected_capability_dag": [
+            "intake.materialize.v1",
+            "diagnostic.contract_integrity.v1",
+            "diagnostic.dataset_integrity.v1",
+            "diagnostic.design_balance.v1",
+            "diagnostic.guide_assignment.v1",
+            "guide.integrity.v1",
+            "guide.ambient.v1",
+            "guide.assignment.nb_mixture.v1",
+            "screen.moi_doublet.v1",
+            "screen.retained_cells.v1"
+          ],
+          "required_artifact_roles": [
+            "modality_alignment_audit",
+            "guide_assignment_table",
+            "ambient_guide_table",
+            "screen_qc",
+            "retained_cell_manifest"
+          ],
+          "task_hard_gates": [
+            "rna_and_guide_barcodes_align",
+            "guide_target_conflicts_visible",
+            "assignment_uncertainty_preserved",
+            "multi_guide_not_equated_with_cell_doublet",
+            "retained_and_excluded_counts_reconcile"
+          ],
+          "metric_ids": [
+            "barcode_alignment_rate",
+            "guide_mapping_accuracy",
+            "assignment_macro_f1",
+            "assignment_brier_score",
+            "ambient_rate_error",
+            "retained_identity_match"
+          ],
+          "reference_requirement": "Exported Papalexi guide matrix, guide map, metadata labels, and planted ambient/assignment calibration fixtures."
+        },
+        {
+          "task_id": "PAPA-02",
+          "turn_index": 2,
+          "title": "Control-state reference and held-out mapping",
+          "objective": "Fit a control-only state reference using calibration controls, map retained evaluation cells without refitting on them, reject out-of-reference cells, and produce candidate state annotations with stability and uncertainty summaries.",
+          "split_usage": ["calibration", "evaluation"],
+          "depends_on_tasks": ["PAPA-01"],
+          "capability_scenarios": ["CAP-04"],
+          "expected_capability_dag": [
+            "reference.state.control_pca_leiden.v1",
+            "state.reference.fit.v1",
+            "state.reference.map_knn.v1",
+            "state.annotation_candidates.v1"
+          ],
+          "required_artifact_roles": [
+            "control_state_reference",
+            "state_mapping",
+            "mapping_rejections",
+            "candidate_state_annotations"
+          ],
+          "task_hard_gates": [
+            "reference_uses_calibration_controls_only",
+            "evaluation_cells_not_used_for_fit",
+            "out_of_reference_rejection_supported",
+            "state_annotations_remain_candidate"
+          ],
+          "metric_ids": [
+            "control_identity_match",
+            "cross_seed_state_stability",
+            "mapping_accuracy",
+            "outlier_recall",
+            "strong_state_claim_count"
+          ],
+          "reference_requirement": "Frozen control-only Seurat/Scanpy reference and planted out-of-reference cells."
+        },
+        {
+          "task_id": "PAPA-03",
+          "turn_index": 3,
+          "title": "Responder, escape, and target reliability analysis",
+          "objective": "For each selected perturbation target, quantify direct or signature efficacy as supported, classify responder and escape cells using the frozen state representation, assess guide sensitivity, and produce a target-specific reliability assessment that leaves missing evidence unresolved.",
+          "split_usage": ["evaluation"],
+          "depends_on_tasks": ["PAPA-02"],
+          "capability_scenarios": ["CAP-05"],
+          "expected_capability_dag": [
+            "target.guide_efficacy.v1",
+            "target.responder.mixscape.v1",
+            "effect.guide_target_sensitivity.v1",
+            "target.reliability.aggregate.v1"
+          ],
+          "required_artifact_roles": [
+            "target_efficacy_table",
+            "responder_escape_table",
+            "guide_sensitivity_table",
+            "target_reliability_table"
+          ],
+          "task_hard_gates": [
+            "state_representation_consumed",
+            "responder_results_joined_by_target_identity",
+            "signature_not_presented_as_direct_measurement",
+            "missing_target_evidence_remains_unresolved"
+          ],
+          "metric_ids": [
+            "efficacy_direction_accuracy",
+            "responder_macro_f1",
+            "escape_concordance",
+            "target_join_accuracy",
+            "resolved_target_precision"
+          ],
+          "reference_requirement": "Frozen Mixscape reference, direct expression contrasts, and per-target identity joins."
+        },
+        {
+          "task_id": "PAPA-04",
+          "turn_index": 4,
+          "title": "State-aware response programs and experimental follow-up",
+          "objective": "Identify stable control and response programs, summarize state-aware module effects, evaluate perturbation clusters, regulators and pathways, reconcile measured results with literature context, and propose a feasible follow-up panel with explicit uncertainty and contradictory evidence.",
+          "split_usage": ["evaluation"],
+          "depends_on_tasks": ["PAPA-03"],
+          "capability_scenarios": ["CAP-07", "CAP-08", "CAP-09"],
+          "expected_capability_dag": [
+            "module.import.gmt.v1",
+            "module.learn.control_nmf.v1",
+            "effect.matrix.assemble.v1",
+            "effect.module_global.v1",
+            "program.response.signed_nmf.v1",
+            "program.perturbation.cluster.v1",
+            "regulator.activity.ulm.v1",
+            "network.perturbation_regulator.v1",
+            "enrichment.ora.v1",
+            "enrichment.gsea_prerank.v1",
+            "literature.europepmc.v1",
+            "interpretation.evidence_map.v1",
+            "design.next_panel.v1"
+          ],
+          "required_artifact_roles": [
+            "control_modules",
+            "response_programs",
+            "state_aware_module_effects",
+            "pathway_regulator_results",
+            "evidence_map",
+            "next_panel"
+          ],
+          "task_hard_gates": [
+            "control_modules_use_controls_only",
+            "response_program_sign_preserved",
+            "unstable_programs_remain_candidate",
+            "literature_context_not_presented_as_measurement",
+            "panel_constraints_satisfied"
+          ],
+          "metric_ids": [
+            "control_module_stability",
+            "signed_program_stability",
+            "pathway_reference_concordance",
+            "source_class_accuracy",
+            "panel_constraint_satisfaction"
+          ],
+          "reference_requirement": "Planted program fixtures plus frozen pathway, regulator, literature, and panel evaluators."
+        }
+      ]
+    },
+    {
+      "workflow_id": "WF-NORM",
+      "role": "primary",
+      "dataset_id": "norman_k562_crispra_2019",
+      "turns": [
+        {
+          "task_id": "NORM-01",
+          "turn_index": 1,
+          "title": "Combinatorial design and high-MOI retention",
+          "objective": "Audit this combinatorial perturbation experiment, identify intended single and combined constructs, distinguish guide multiplicity from transcriptomic doublets, and produce a retained-cell manifest that preserves valid combinations while keeping unresolved design facts explicit.",
+          "split_usage": ["calibration", "evaluation"],
+          "depends_on_tasks": [],
+          "capability_scenarios": ["CAP-01", "CAP-03"],
+          "expected_capability_dag": [
+            "intake.materialize.v1",
+            "diagnostic.contract_integrity.v1",
+            "diagnostic.dataset_integrity.v1",
+            "diagnostic.design_balance.v1",
+            "screen.moi_doublet.v1",
+            "screen.retained_cells.v1"
+          ],
+          "required_artifact_roles": [
+            "combinatorial_design_audit",
+            "screen_qc",
+            "retained_cell_manifest"
+          ],
+          "task_hard_gates": [
+            "combinatorial_design_identified",
+            "intended_multi_guide_cells_not_labeled_as_doublets",
+            "valid_combinations_not_silently_removed",
+            "retained_and_excluded_counts_reconcile"
+          ],
+          "metric_ids": [
+            "construct_identity_accuracy",
+            "intended_combination_retention",
+            "doublet_label_error",
+            "retained_identity_match"
+          ],
+          "reference_requirement": "Frozen Norman construct identities and planted transcriptomic-doublet labels."
+        },
+        {
+          "task_id": "NORM-02",
+          "turn_index": 2,
+          "title": "High-MOI association suitability and correct refusal",
+          "objective": "Determine whether a calibrated cell-level guide-gene association analysis can be supported by the available files. Run it only if cell-by-guide observations and required covariates are present; otherwise return a precise blocker, identify what is missing, and recommend no silent substitute.",
+          "split_usage": ["evaluation"],
+          "depends_on_tasks": ["NORM-01"],
+          "capability_scenarios": ["CAP-06"],
+          "expected_capability_dag": [
+            "association.sceptre.v1"
+          ],
+          "expected_outcome": "correctly_blocked",
+          "required_artifact_roles": [
+            "method_suitability_audit",
+            "blocker_record"
+          ],
+          "task_hard_gates": [
+            "missing_cell_by_guide_counts_detected",
+            "sceptre_not_executed",
+            "no_silent_alternative_method",
+            "no_performance_claim_without_execution"
+          ],
+          "metric_ids": [
+            "correct_refusal",
+            "missing_input_recall",
+            "silent_fallback_count",
+            "unsupported_result_count"
+          ],
+          "reference_requirement": "Frozen Norman data-availability audit with expected correct-refusal verdict."
+        },
+        {
+          "task_id": "NORM-03",
+          "turn_index": 3,
+          "title": "Combinatorial response programs and perturbation structure",
+          "objective": "Using only analyses supported by the available normalized expression and construct labels, characterize candidate response programs and perturbation structure across single and combined constructs. Quantify stability, preserve effect direction, and avoid presenting exploratory program structure as validated interaction effects.",
+          "split_usage": ["evaluation"],
+          "depends_on_tasks": ["NORM-02"],
+          "capability_scenarios": ["CAP-07", "CAP-08", "CAP-09"],
+          "expected_capability_dag": [
+            "effect.matrix.assemble.v1",
+            "module.learn.nmf.v1",
+            "effect.module_global.v1",
+            "program.response.signed_nmf.v1",
+            "program.perturbation.cluster.v1",
+            "regulator.activity.ulm.v1",
+            "enrichment.ora.v1",
+            "enrichment.gsea_prerank.v1",
+            "interpretation.evidence_map.v1",
+            "design.next_panel.v1"
+          ],
+          "required_artifact_roles": [
+            "candidate_effect_matrix",
+            "response_programs",
+            "perturbation_clusters",
+            "pathway_regulator_results",
+            "evidence_map",
+            "next_panel"
+          ],
+          "task_hard_gates": [
+            "blocked_sceptre_result_not_reused",
+            "effect_direction_preserved",
+            "program_and_cluster_stability_reported",
+            "exploratory_structure_not_presented_as_validated_interaction",
+            "panel_constraints_satisfied"
+          ],
+          "metric_ids": [
+            "effect_matrix_integrity",
+            "signed_program_recovery",
+            "cluster_stability",
+            "strong_interaction_overclaim_count",
+            "panel_constraint_satisfaction"
+          ],
+          "reference_requirement": "Planted program recovery and stability evaluators on the frozen Norman evaluation split."
+        },
+        {
+          "task_id": "NORM-04",
+          "turn_index": 4,
+          "title": "Controlled virtual perturbation evaluation",
+          "objective": "Evaluate the supplied controlled perturbation-prediction bundles against held-out observations. Verify split isolation and identities, detect intentionally leaky predictions, compare against no-change and training-mean baselines, assess direction, rank, uncertainty and discriminability, and keep all model outputs classified as predictions.",
+          "split_usage": ["calibration", "evaluation"],
+          "depends_on_tasks": ["NORM-03"],
+          "capability_scenarios": ["CAP-10"],
+          "expected_capability_dag": [
+            "virtual.split.contract.v1",
+            "virtual.prediction.ingest.v1",
+            "virtual.leakage.audit.v1",
+            "virtual.baselines.v1",
+            "virtual.evaluate.v1",
+            "virtual.evaluate.comprehensive.v1"
+          ],
+          "required_artifact_roles": [
+            "virtual_split_contract",
+            "prediction_ingestion_audit",
+            "leakage_audit",
+            "baseline_results",
+            "virtual_evaluation",
+            "comprehensive_virtual_evaluation"
+          ],
+          "task_hard_gates": [
+            "target_and_cell_splits_disjoint",
+            "leaky_prediction_detected_and_blocked",
+            "clean_prediction_compared_with_baselines",
+            "uncertainty_missingness_visible",
+            "prediction_not_presented_as_measurement"
+          ],
+          "metric_ids": [
+            "leakage_detection",
+            "effect_mae",
+            "direction_accuracy",
+            "spearman",
+            "uncertainty_coverage",
+            "expected_calibration_error",
+            "baseline_improvement",
+            "source_class_accuracy"
+          ],
+          "reference_requirement": "Controlled clean, leaky, direction-flipped, baseline, and uncertainty-bearing prediction bundles."
+        }
+      ]
+    },
+    {
+      "workflow_id": "WF-KANG",
+      "role": "supplemental",
+      "dataset_id": "kang18_8vs8_pbmc",
+      "disclosure": "Kang is replicated stimulation scRNA-seq and is not presented as Perturb-seq.",
+      "turns": [
+        {
+          "task_id": "KANG-01",
+          "turn_index": 1,
+          "title": "Replicated pseudobulk differential expression",
+          "objective": "Assess the replicated stimulation design and estimate donor-aware differential expression using an appropriate pseudobulk model. Detect confounding or insufficient units, preserve paired structure where supported, and compare the result with an independent direct implementation.",
+          "split_usage": ["calibration", "evaluation"],
+          "depends_on_tasks": [],
+          "capability_scenarios": ["CAP-01", "CAP-06"],
+          "expected_capability_dag": [
+            "intake.materialize.v1",
+            "diagnostic.dataset_integrity.v1",
+            "diagnostic.design_balance.v1",
+            "de.pseudobulk.edger.v1",
+            "calibration.method_null.v1",
+            "calibration.replicate_null.v1"
+          ],
+          "required_artifact_roles": [
+            "design_audit",
+            "pseudobulk_manifest",
+            "differential_expression_table",
+            "null_calibration"
+          ],
+          "task_hard_gates": [
+            "dataset_not_called_perturb_seq",
+            "donor_is_analysis_unit",
+            "paired_structure_preserved",
+            "cell_as_replicate_not_used",
+            "direct_reference_comparison_present"
+          ],
+          "metric_ids": [
+            "logfc_mae",
+            "pvalue_mae",
+            "fdr_mae",
+            "status_match",
+            "cell_as_replicate_error"
+          ],
+          "reference_requirement": "Independent direct-R edgeR result on the same donor split and design."
+        },
+        {
+          "task_id": "KANG-02",
+          "turn_index": 2,
+          "title": "Replicated cell-state composition analysis",
+          "objective": "Estimate donor-aware stimulation-associated changes in cell-state composition, distinguish composition effects from within-state expression effects, evaluate null behavior, and compare the results with an independent direct implementation.",
+          "split_usage": ["evaluation"],
+          "depends_on_tasks": ["KANG-01"],
+          "capability_scenarios": ["CAP-06"],
+          "expected_capability_dag": [
+            "composition.propeller.v1",
+            "calibration.method_null.v1",
+            "calibration.replicate_null.v1"
+          ],
+          "required_artifact_roles": [
+            "composition_table",
+            "composition_effect_table",
+            "null_calibration"
+          ],
+          "task_hard_gates": [
+            "dataset_not_called_perturb_seq",
+            "donor_is_analysis_unit",
+            "composition_not_presented_as_expression_effect",
+            "cell_as_replicate_not_used",
+            "direct_reference_comparison_present"
+          ],
+          "metric_ids": [
+            "proportion_mae",
+            "effect_mae",
+            "pvalue_mae",
+            "fdr_mae",
+            "status_match"
+          ],
+          "reference_requirement": "Independent direct-R Propeller result on the same donor split and cell-state labels."
+        }
+      ]
+    }
+  ]
+}
