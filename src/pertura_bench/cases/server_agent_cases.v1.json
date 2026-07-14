@@ -339,7 +339,6 @@
                       "objective":  "Propeller composition; state explicitly that Kang is not Perturb-seq",
                       "expected_turns":  1,
                       "expected_capability_dag":  [
-                                                      "state.reference.map_knn.v1",
                                                       "diagnostic.design_balance.v1",
                                                       "composition.propeller.v1"
                                                   ],

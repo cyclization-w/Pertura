@@ -323,6 +323,13 @@ def test_server_agent_cases_match_observed_dataset_semantics() -> None:
     assert "de.pseudobulk.edger.v1" not in kang["expected_capability_dag"]
     assert "not Perturb-seq" in kang["objective"]
 
+    kang_propeller = cases["agent_kang_propeller"]
+    assert kang_propeller["expected_capability_dag"] == [
+        "diagnostic.design_balance.v1",
+        "composition.propeller.v1",
+    ]
+    assert "state.reference.map_knn.v1" not in kang_propeller["expected_capability_dag"]
+
 
 def test_real_capability_policy_matches_available_artifacts() -> None:
     root = Path(__file__).resolve().parents[2]
