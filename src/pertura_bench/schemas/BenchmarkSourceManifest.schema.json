@@ -81,11 +81,44 @@
       "title": "Intended Uses",
       "type": "array"
     },
+    "license_review_basis": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Review Basis"
+    },
     "license_review_url": {
       "format": "uri",
       "maxLength": 2083,
       "minLength": 1,
       "title": "License Review Url",
+      "type": "string"
+    },
+    "license_reviewed_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Reviewed By"
+    },
+    "license_status": {
+      "default": "required",
+      "enum": [
+        "reviewed",
+        "required"
+      ],
+      "title": "License Status",
       "type": "string"
     },
     "manifest_id": {

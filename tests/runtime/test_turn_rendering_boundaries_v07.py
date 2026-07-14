@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pertura_runtime.project.models import TurnDraft, TurnFindingDraft, TurnStatus
-from pertura_runtime.project.turns import render_turn_draft
+from pertura_runtime.project.turns import render_baseline_turn_draft, render_turn_draft
 
 
 def test_turn_rendering_reads_stale_state_from_result_metadata() -> None:
@@ -66,3 +66,29 @@ def test_out_of_scope_result_is_non_supporting() -> None:
     )
 
     assert "non_supporting_status" in final.findings[0]["limitations"]
+
+
+def test_baseline_renderer_preserves_provider_claim_for_scoring_without_authority() -> None:
+    draft = TurnDraft(
+        headline="Baseline analysis",
+        findings=(
+            TurnFindingDraft(
+                finding_id="provider-claim",
+                text="The perturbation produced a measured response.",
+                declared_role="measured",
+                result_ids=(),
+            ),
+        ),
+    )
+
+    final = render_baseline_turn_draft(
+        turn_id="turn-baseline",
+        status=TurnStatus.completed,
+        draft=draft,
+    )
+
+    assert final.claim_authority is False
+    assert final.findings[0]["role"] == "measured"
+    assert final.findings[0]["ceiling"] == "unscored_provider_claim"
+    assert final.findings[0]["result_ids"] == []
+    assert final.hypotheses == ()

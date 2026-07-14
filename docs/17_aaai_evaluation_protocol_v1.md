@@ -1,6 +1,6 @@
 # Pertura AAAI Evaluation Protocol v1
 
-Status: frozen pre-benchmark protocol for `0.2.0a11`.
+Status: frozen pre-benchmark protocol for `0.2.0a13`.
 
 This protocol evaluates two distinct questions:
 
@@ -36,7 +36,7 @@ source manifest
 -> benchmark execution
 ```
 
-Absolute cache paths are local sidecars and never part of canonical identity. Calibration data may be used for parameter/profile development. Evaluation data must not be used to select thresholds, prompts, methods, references, or scoring rules.
+Absolute cache paths are local sidecars and never part of canonical identity. Calibration and evaluation subset locks additionally bind ordered cell-identity manifests; overlapping cell identities fail before execution. Dataset licenses remain `required` until an identified human reviewer records the review basis; fetch/conversion code cannot mark a license reviewed automatically. Calibration data may be used for parameter/profile development. Evaluation data must not be used to select thresholds, prompts, methods, references, or scoring rules.
 
 Before execution, freeze three external catalogs:
 
@@ -60,7 +60,7 @@ A real-data capability verdict contains:
 - input, runner, spec, policy, and environment hashes;
 - limitations.
 
-Execution success alone is not scientific validation. A required missing reference is `not_available`, not passed. A metric without a prespecified threshold is `reported_only`, not validated.
+The frozen policy expands to 61 planned scientific jobs. Full-dataset jobs are evaluation-only; only prespecified frozen-subset jobs use calibration data. Execution success alone is not scientific validation. A required missing reference is `not_available`, not passed. A metric without a prespecified threshold is `reported_only`, not validated.
 
 ### 3.1 Replogle
 
@@ -128,7 +128,7 @@ The comparison is a system comparison. Differences must not be attributed solely
 
 ### 4.2 Fairness constraints
 
-Across conditions freeze:
+Across conditions freeze. The harness records scheduler/cgroup enforcement of memory and one scientific job; a prompt-only declaration is insufficient:
 
 - the same Claude model and version;
 - the same dataset split and task objective;
@@ -142,7 +142,7 @@ Condition-specific tool exposure and instructions are published verbatim. Baseli
 
 ### 4.3 Cases and repetitions
 
-Use eight frozen cases:
+Use six frozen primary Perturb-seq cases:
 
 1. Replogle guide/screen QC;
 2. Replogle target reliability follow-up;
@@ -150,20 +150,20 @@ Use eight frozen cases:
 4. Papalexi label confirmation and stale handling;
 5. Norman high-MOI SCEPTRE analysis;
 6. Norman virtual evaluation and next-panel reasoning;
-7. Kang edgeR replicated effect analysis;
-8. Kang Propeller composition analysis.
+
+Kang edgeR and Propeller agent tasks are reported separately as supplemental statistical demonstrations. They are not part of the primary agent comparison because Kang is not Perturb-seq.
 
 Run each case/condition twice:
 
 ```text
-8 cases x 3 conditions x 2 repetitions = 48 primary agent executions
+6 cases x 3 conditions x 2 repetitions = 36 primary agent executions
 ```
 
 Two repetitions are a deliberate time and cost compromise. They measure gross workflow stability, not a population distribution. A failed or timed-out run remains an outcome. One rerun is allowed only for a documented infrastructure failure that occurred before usable scientific output; both attempts remain logged.
 
 ## 5. Agent outputs and hard gates
 
-Every run exports a provider-neutral envelope:
+Every run exports a provider-neutral envelope. All three conditions must produce the same condition-neutral scientific result schema so correctness can be compared independently of Pertura-specific receipts or tool IDs:
 
 ```text
 input_manifest.json
@@ -174,6 +174,7 @@ reports/
 execution_verdict.json
 judge/grade.json
 usage.json
+benchmark_result.json
 ```
 
 For `pertura_full`, automatic hard gates include:
@@ -190,6 +191,7 @@ For `pertura_full`, automatic hard gates include:
 
 For `prompt_only` and `free_codeact`, hard gates focus on:
 
+- the shared `benchmark_result.json` schema and case-specific frozen reference metrics;
 - required analysis artifacts and output completeness;
 - correct statistical unit and method compatibility;
 - explicit blockers rather than fabricated results;
@@ -225,7 +227,7 @@ Human reviewers inspect all failed runs and at least 20% of passed runs. Reviewe
 
 ## 8. Statistical analysis
 
-The eight task cases are the primary strata; cells, genes, findings, and tool events are not independent experimental units.
+The six primary task cases are the primary strata; cells, genes, findings, and tool events are not independent experimental units.
 
 For each endpoint:
 
@@ -236,7 +238,7 @@ For each endpoint:
 - report effect sizes and uncertainty regardless of p-values;
 - do not describe stochastic repeats as biological replicates.
 
-With eight cases and two repetitions, emphasis is on effect direction, magnitude, failure modes, and transparent case-level results rather than strong population-level significance claims.
+With six primary cases and two repetitions, emphasis is on effect direction, magnitude, failure modes, and transparent case-level results rather than strong population-level significance claims.
 
 ## 9. Success interpretation
 
@@ -259,7 +261,7 @@ Failure to meet a criterion is a study result, not permission to alter the proto
 4. Freeze commit, wheel, environments, skills, cases, metrics, and analysis script
 5. Bind the evaluation manifest and server-plan hashes
 6. Run real scientific capability evaluation
-7. Run 48 primary agent executions
+7. Run 36 primary agent executions
 8. Seal and export all execution artifacts
 9. Run automatic hard gates
 10. Run the fixed narrative judge
@@ -276,7 +278,7 @@ Failure to meet a criterion is a study result, not permission to alter the proto
 - [ ] design, parameter, and metric-reference catalogs are frozen;
 - [ ] required scientific reference verdicts and continuous metrics exist;
 - [ ] all three conditions run through one condition-aware harness;
-- [ ] all 48 executions have a terminal verdict, including failures;
+- [ ] all 36 primary executions have a terminal verdict, including failures;
 - [ ] judge-unavailable runs are not silently regraded by another model;
 - [ ] all failed and at least 20% of passed runs have human review;
 - [ ] the analysis script and endpoint definitions were frozen before unblinding;

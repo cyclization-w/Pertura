@@ -466,19 +466,41 @@ def _frozen_real_lock_bindings(
         "artifact": artifact.artifact_sha256,
     }
     if tier == "frozen_subset":
-        if subset is None or subset.source_lock_hash != artifact.canonical_hash:
+        if (
+            subset is None
+            or subset.source_lock_hash != artifact.canonical_hash
+            or not subset.selected_ids_sha256
+            or not subset.selection_manifest_sha256
+        ):
             return None
         bindings.update(
             {
                 "subset_lock": subset.canonical_hash,
                 "subset": subset.output_sha256,
                 "subset_spec": subset.subset_spec_hash,
+                "subset_selected_ids": subset.selected_ids_sha256,
+                "subset_selection_manifest": subset.selection_manifest_sha256,
             }
         )
     return bindings
 
 
 def _real_verdict_current(root: Path, spec: CapabilityBenchmarkSpec) -> bool:
+    return _real_verdict_state(root, spec, require_validation=True)
+
+
+def _real_verdict_complete(root: Path, spec: CapabilityBenchmarkSpec) -> bool:
+    return _real_verdict_state(root, spec, require_validation=False)
+
+
+def _real_verdict_state(
+    root: Path,
+    spec: CapabilityBenchmarkSpec,
+    *,
+    require_validation: bool,
+) -> bool:
+    from pertura_bench.real_run_policy import real_runs_for_spec
+
     directory = root / "benchmarks" / "verdicts" / "real"
     registry = CapabilityRegistry.load_default(include_external=False)
     capability = registry.get(spec.capability_id, spec.capability_version)
@@ -489,78 +511,97 @@ def _real_verdict_current(root: Path, spec: CapabilityBenchmarkSpec) -> bool:
         checkpoint = _load_checkpoint_binding(root)
     except (FileNotFoundError, ValueError, OSError):
         return False
-    expected_count = 0
-    for dataset_id in spec.required_real_datasets:
-        for tier in ("frozen_subset", "full_dataset"):
-            for split in ("calibration", "evaluation"):
-                expected_count += 1
-                path = directory / (
-                    f"{dataset_id}__{spec.capability_id}__{tier}__{split}.json"
-                )
-                if not path.is_file():
-                    return False
-                try:
-                    verdict = CapabilityBenchmarkVerdict.model_validate_json(
-                        path.read_text(encoding="utf-8")
-                    )
-                    case = _real_case(
-                        spec,
-                        tier,
-                        dataset_id,
-                        split=split,
-                        parameter_catalog=parameter_catalog,
-                        parameter_catalog_hash=parameter_catalog_hash,
-                        design_catalog_hash=design_catalog_hash,
-                        metric_catalog_hash=metric_catalog_hash,
-                    )
-                    expected = _real_identity_hashes(
-                        root,
-                        case=case,
-                        spec=capability,
-                        dataset_id=dataset_id,
-                        split=split,
-                        tier=tier,
-                        parameter_catalog_hash=parameter_catalog_hash,
-                        design_catalog_hash=design_catalog_hash,
-                        metric_catalog_hash=metric_catalog_hash,
-                    )
-                except (ValueError, OSError, json.JSONDecodeError):
-                    return False
-                lock_bindings = _frozen_real_lock_bindings(
-                    root, dataset_id, tier, split
-                )
-                if lock_bindings is None:
-                    return False
-                expected.update(lock_bindings)
-                expected.update(
-                    {
-                        "checkpoint_git": checkpoint["git_commit"],
-                        "checkpoint_wheel": checkpoint["wheel_sha256"],
-                        "checkpoint_plan": checkpoint["server_plan_hash"],
-                    }
-                )
-                if (
-                    verdict.outcome != "passed"
-                    or verdict.case_hash != case.canonical_hash
-                    or verdict.capability_id != spec.capability_id
-                    or verdict.capability_version != spec.capability_version
-                    or verdict.tier != tier
-                    or verdict.execution_mode != "product_path"
-                    or verdict.runner_hash != runner_hash(capability.executor)
-                    or verdict.input_hashes != expected
-                    or not verdict.scientific_result_hash
-                    or not _SHA256_VALUE.fullmatch(verdict.scientific_result_hash)
-                    or verdict.environment_lock_hash
-                    != expected.get("environment_lock")
-                    or not verdict.hard_gates
-                    or not all(verdict.hard_gates.values())
-                    or verdict.scientific_metrics_status not in {"passed", "reported_only"}
-                    or not verdict.reference_hashes
-                    or not verdict.continuous_metrics
-                ):
-                    return False
-    return expected_count > 0
-
+    runs = real_runs_for_spec(spec)
+    if not runs:
+        return True
+    for run in runs:
+        dataset_id = run["dataset_id"]
+        tier = run["tier"]
+        split = run["split"]
+        path = directory / (
+            f"{dataset_id}__{spec.capability_id}__{tier}__{split}.json"
+        )
+        if not path.is_file():
+            return False
+        try:
+            verdict = CapabilityBenchmarkVerdict.model_validate_json(
+                path.read_text(encoding="utf-8")
+            )
+            case = _real_case(
+                spec,
+                tier,
+                dataset_id,
+                split=split,
+                parameter_catalog=parameter_catalog,
+                parameter_catalog_hash=parameter_catalog_hash,
+                design_catalog_hash=design_catalog_hash,
+                metric_catalog_hash=metric_catalog_hash,
+            )
+            expected = _real_identity_hashes(
+                root,
+                case=case,
+                spec=capability,
+                dataset_id=dataset_id,
+                split=split,
+                tier=tier,
+                parameter_catalog_hash=parameter_catalog_hash,
+                design_catalog_hash=design_catalog_hash,
+                metric_catalog_hash=metric_catalog_hash,
+            )
+        except (ValueError, OSError, json.JSONDecodeError):
+            return False
+        lock_bindings = _frozen_real_lock_bindings(
+            root, dataset_id, tier, split
+        )
+        if lock_bindings is None:
+            return False
+        expected.update(lock_bindings)
+        expected.update(
+            {
+                "checkpoint_git": checkpoint["git_commit"],
+                "checkpoint_wheel": checkpoint["wheel_sha256"],
+                "checkpoint_plan": checkpoint["server_plan_hash"],
+            }
+        )
+        dataset_mapping = dict(
+            parameter_catalog.get("datasets", {}).get(dataset_id) or {}
+        )
+        expected.update(
+            {
+                f"asset:{item['role']}": str(item["content_sha256"])
+                for item in dataset_mapping.get("agent_assets") or ()
+            }
+        )
+        identity_current = (
+            verdict.case_hash == case.canonical_hash
+            and verdict.capability_id == spec.capability_id
+            and verdict.capability_version == spec.capability_version
+            and verdict.tier == tier
+            and verdict.execution_mode == "product_path"
+            and verdict.runner_hash == runner_hash(capability.executor)
+            and verdict.input_hashes == expected
+            and verdict.environment_lock_hash == expected.get("environment_lock")
+        )
+        if not identity_current:
+            return False
+        if not require_validation:
+            if verdict.outcome in {"not_available", "not_configured", "not_run_environment_missing"}:
+                return False
+            if verdict.outcome == "passed" and verdict.scientific_metrics_status == "not_available":
+                return False
+            continue
+        if (
+            verdict.outcome != "passed"
+            or not verdict.scientific_result_hash
+            or not _SHA256_VALUE.fullmatch(verdict.scientific_result_hash)
+            or not verdict.hard_gates
+            or not all(verdict.hard_gates.values())
+            or verdict.scientific_metrics_status != "passed"
+            or not verdict.reference_hashes
+            or not verdict.continuous_metrics
+        ):
+            return False
+    return True
 
 def _write_text_lf(path: Path, text: str) -> None:
     with path.open("w", encoding="utf-8", newline="\n") as handle:

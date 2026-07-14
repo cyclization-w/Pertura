@@ -287,6 +287,56 @@ def _package_version_check(root: Path) -> tuple[str, ReleaseCheck]:
     )
 
 
+def _agent_run_current(
+    root: Path,
+    verdict: dict[str, Any],
+    grade: dict[str, Any],
+    input_manifest: dict[str, Any],
+    *,
+    case: dict[str, Any],
+    catalog_hash: str,
+) -> bool:
+    from pertura_bench.agent_judge import JUDGE_MODEL, RUBRIC
+    from pertura_bench.real_execution import _load_checkpoint_binding
+
+    try:
+        current_checkpoint = _load_checkpoint_binding(root)
+    except (FileNotFoundError, ValueError, OSError):
+        return False
+    condition = str(verdict.get("condition") or "")
+    repeat_index = int(verdict.get("repeat_index") or 0)
+    manifest = dict(grade.get("manifest") or {})
+    hard_gates = dict(verdict.get("hard_gates") or {})
+    required_gates = {
+        "terminal_completed",
+        "benchmark_result_present",
+        "benchmark_result_schema_valid",
+        "scientific_reference_metrics",
+        "scope_claim_constraints",
+        "claim_surface_condition",
+        "resource_budget_enforced",
+    }
+    return (
+        verdict.get("schema_version")
+        == "pertura-server-agent-execution-verdict-v2"
+        and verdict.get("status") in {"passed", "failed"}
+        and condition in {"pertura_full", "prompt_only", "free_codeact"}
+        and repeat_index in {1, 2}
+        and input_manifest.get("case") == case
+        and input_manifest.get("case_catalog_hash") == catalog_hash
+        and input_manifest.get("condition") == condition
+        and int(input_manifest.get("repeat_index") or 0) == repeat_index
+        and input_manifest.get("provider_config_hash")
+        == verdict.get("provider_config_hash")
+        and input_manifest.get("checkpoint_binding") == current_checkpoint
+        and required_gates.issubset(hard_gates)
+        and grade.get("status") in {"passed", "failed"}
+        and grade.get("fallback_used") is False
+        and manifest.get("model") == JUDGE_MODEL
+        and manifest.get("rubric_hash") == canonical_hash(RUBRIC)
+        and manifest.get("fallback_allowed") is False
+    )
+
 def audit_v020(
     repo_root: str | Path, *, require_clean_worktree: bool = True
 ) -> dict[str, Any]:
@@ -532,12 +582,38 @@ def audit_v020(
             "fixture",
         )
     )
+    from pertura_bench.capability_bench import (
+        _real_verdict_complete,
+        _real_verdict_current,
+        benchmark_specs,
+    )
+    from pertura_bench.real_run_policy import real_runs_for_spec
+
+    primary_real_specs = tuple(
+        spec
+        for spec in benchmark_specs()
+        if any(run["track"] == "primary" for run in real_runs_for_spec(spec))
+    )
+    real_benchmark_complete = bool(primary_real_specs) and all(
+        _real_verdict_complete(root, spec) for spec in primary_real_specs
+    )
+    candidate_validation_passed = bool(primary_real_specs) and all(
+        _real_verdict_current(root, spec) for spec in primary_real_specs
+    )
     checks.append(
         ReleaseCheck(
-            "candidate_real_benchmarks",
-            capability_matrix.real_benchmark_ready,
-            "real-data candidate benchmark verdicts must be generated on the server",
+            "candidate_real_benchmark_completion",
+            real_benchmark_complete,
+            "all primary real-data runs must be current and must have computed verdicts",
             "real",
+        )
+    )
+    checks.append(
+        ReleaseCheck(
+            "candidate_real_validation_target",
+            candidate_validation_passed,
+            "all primary real-data scientific metrics must pass their frozen references",
+            "release",
         )
     )
 
@@ -548,47 +624,87 @@ def audit_v020(
         os.environ.get("PERTURA_REAL_AGENT_VERDICT_ROOT")
         or root / "benchmarks" / "verdicts" / "agent"
     ).resolve()
+    primary_agent_cases = tuple(
+        case
+        for case in server_agent_catalog["cases"]
+        if str(case.get("benchmark_track") or "primary") == "primary"
+    )
     required_agent_runs = {
         (case["case_id"], condition, repeat_index)
-        for case in server_agent_catalog["cases"]
+        for case in primary_agent_cases
         for condition in server_agent_catalog["conditions"]
         for repeat_index in (1, 2)
     }
+    case_by_id = {case["case_id"]: case for case in primary_agent_cases}
+    agent_catalog_hash = canonical_hash(server_agent_catalog)
     observed_agent_runs: dict[tuple[str, str, int], dict[str, Any]] = {}
     if agent_verdict_root.is_dir():
         for path in agent_verdict_root.rglob("execution_verdict.json"):
             try:
                 verdict = json.loads(path.read_text(encoding="utf-8"))
                 grade_path = path.parent / "judge" / "grade.json"
-                grade = (
-                    json.loads(grade_path.read_text(encoding="utf-8"))
-                    if grade_path.is_file()
-                    else {}
-                )
+                input_path = path.parent / "input_manifest.json"
+                if not grade_path.is_file() or not input_path.is_file():
+                    continue
+                grade = json.loads(grade_path.read_text(encoding="utf-8"))
+                input_manifest = json.loads(input_path.read_text(encoding="utf-8"))
                 key = (
                     str(verdict.get("case_id") or ""),
                     str(verdict.get("condition") or ""),
                     int(verdict.get("repeat_index") or 0),
                 )
-                if key in required_agent_runs:
-                    observed_agent_runs[key] = {"verdict": verdict, "grade": grade}
+                case = case_by_id.get(key[0])
+                if key in required_agent_runs and case is not None and _agent_run_current(
+                    root,
+                    verdict,
+                    grade,
+                    input_manifest,
+                    case=case,
+                    catalog_hash=agent_catalog_hash,
+                ):
+                    observed_agent_runs[key] = {
+                        "verdict": verdict,
+                        "grade": grade,
+                    }
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 continue
-    passed_agent_runs = sum(
-        item["verdict"].get("status") == "passed"
-        and item["grade"].get("status") == "passed"
+    graded_agent_runs = sum(
+        item["verdict"].get("status") in {"passed", "failed"}
+        and item["grade"].get("status") in {"passed", "failed"}
         for item in observed_agent_runs.values()
     )
-    real_agent_behavior_ready = (
+    real_agent_behavior_complete = (
         set(observed_agent_runs) == required_agent_runs
-        and passed_agent_runs == len(required_agent_runs)
+        and graded_agent_runs == len(required_agent_runs)
+    )
+    required_pertura_runs = {
+        key for key in required_agent_runs if key[1] == "pertura_full"
+    }
+    passed_pertura_runs = sum(
+        observed_agent_runs.get(key, {}).get("verdict", {}).get("status")
+        == "passed"
+        and observed_agent_runs.get(key, {}).get("grade", {}).get("status")
+        == "passed"
+        for key in required_pertura_runs
+    )
+    pertura_agent_target_met = (
+        real_agent_behavior_complete
+        and passed_pertura_runs == len(required_pertura_runs)
     )
     checks.append(
         ReleaseCheck(
-            "real_agent_workflow_verdicts",
-            real_agent_behavior_ready,
-            f"{passed_agent_runs}/{len(required_agent_runs)} controlled agent runs passed execution hard gates and deepseek-v4-pro grades",
+            "real_agent_workflow_completion",
+            real_agent_behavior_complete,
+            f"{graded_agent_runs}/{len(required_agent_runs)} current controlled runs executed and graded",
             "real_agent",
+        )
+    )
+    checks.append(
+        ReleaseCheck(
+            "pertura_agent_performance_target",
+            pertura_agent_target_met,
+            f"{passed_pertura_runs}/{len(required_pertura_runs)} primary Pertura runs passed hard gates and narrative target; baseline performance is reported, not required to pass",
+            "release",
         )
     )
 
@@ -668,7 +784,7 @@ def audit_v020(
     real_benchmark_ready = all(
         item.passed for item in checks if item.category == "real"
     )
-    real_agent_behavior_ready = all(
+    real_agent_behavior_complete = all(
         item.passed for item in checks if item.category == "real_agent"
     )
     release_specific_ready = all(
@@ -682,7 +798,7 @@ def audit_v020(
             local_fixture_ready,
             optional_environment_ready,
             real_benchmark_ready,
-            real_agent_behavior_ready,
+            real_agent_behavior_complete,
             release_specific_ready,
         )
     )
@@ -693,8 +809,12 @@ def audit_v020(
         )
     if not real_benchmark_ready:
         remaining.append("real-data artifact/subset locks, frozen design/parameter/reference catalogs, and capability verdicts")
-    if not real_agent_behavior_ready:
-        remaining.append("48 three-condition agent runs and deepseek-v4-pro narrative grades")
+    if not real_agent_behavior_complete:
+        remaining.append("36 primary three-condition agent runs and deepseek-v4-pro narrative grades")
+    if not candidate_validation_passed:
+        remaining.append("primary scientific metrics have not all passed frozen references")
+    if not pertura_agent_target_met:
+        remaining.append("primary Pertura agent runs have not all met execution and narrative targets")
     if "crispri_screen_v1.yaml" not in profiles:
         remaining.append("expert-adjudicated CRISPRi profile")
     if "crispra_screen_v1.yaml" not in profiles:
@@ -720,8 +840,12 @@ def audit_v020(
         "local_agent_protocol_ready": local_agent_ready,
         "optional_environment_ready": optional_environment_ready,
         "local_environment_ready": optional_environment_ready,
+        "real_benchmark_complete": real_benchmark_ready,
         "real_benchmark_ready": real_benchmark_ready,
-        "real_agent_behavior_ready": real_agent_behavior_ready,
+        "real_agent_behavior_complete": real_agent_behavior_complete,
+        "real_agent_behavior_ready": real_agent_behavior_complete,
+        "candidate_validation_passed": candidate_validation_passed,
+        "pertura_agent_target_met": pertura_agent_target_met,
         "skill_bundle_ready": bool(skill_state["skill_bundle_ready"]),
         "claude_skill_adapter_ready": bool(
             skill_state["claude_skill_adapter_ready"]

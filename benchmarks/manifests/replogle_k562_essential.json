@@ -12,5 +12,6 @@
   },
   "intended_uses": ["intake", "crispri_qc", "target_reliability"],
   "license_review_url": "https://plus.figshare.com/articles/dataset/20029387",
+  "license_status": "required",
   "download_tier": "nightly_or_manual"
 }

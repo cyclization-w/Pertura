@@ -1,16 +1,16 @@
-# Pertura 0.2.0a11 服务器 Benchmark 操作指南
+# Pertura 0.2.0a13 服务器 Benchmark 操作指南
 
 本文面向服务器端执行者。目标是验证 Pertura 是否能完成预先定义的 Perturb-seq 分析流程、产生正确的统计结果，并控制 LLM 的科学 claim。当前不评价生产级用户体验。
 
 ## 1. 固定 checkpoint
 
-服务器只运行 `v0.2.0a11-prebench` 对应的 commit 和 wheel：
+服务器只运行 `v0.2.0a13-prebench` 对应的 commit 和 wheel：
 
 ```bash
 git clone https://github.com/cyclization-w/Pertura.git /data1/$USER/Project/Pertura
 cd /data1/$USER/Project/Pertura
 git fetch --tags
-git checkout v0.2.0a11-prebench
+git checkout v0.2.0a13-prebench
 
 git rev-parse HEAD
 git status --porcelain
@@ -114,6 +114,8 @@ python -m pertura_bench subset <dataset_id> --split evaluation   --cache /data1/
 
 任何 checksum、转换脚本、subset rule、源版本或 split 变化都必须产生新 lock/hash。
 
+Before exporting the bound plan, a human must review each dataset license and record reviewer/basis in the source manifest used for the checkpoint. The generated scientific plan contains 61 explicit jobs; full-dataset runs are evaluation-only. Formal agent jobs require scheduler/cgroup resource enforcement and every condition must emit outputs/benchmark_result.json for the same frozen metric-reference evaluation.
+
 ## 5. 先做 backed schema inspection
 
 真实列名不得硬编码，也不得由 agent 猜测。对锁定 artifact 做只读、backed inspection，记录：
@@ -183,7 +185,7 @@ status 为 completed 但缺 reference、必需输出或 metric，不能算完整
 2. `prompt_only`
 3. `free_codeact`
 
-八个 case、每个 condition 两次，共 48 次 primary run。每次创建全新 project、analysis run、conversation、provider session、authority namespace 和输出目录。
+六个 Perturb-seq primary case、每个 condition 两次，共 36 次 primary run。两个 Kang agent case 仅作 supplemental statistical demonstration。每次创建全新 project、analysis run、conversation、provider session、authority namespace 和输出目录。
 
 ```bash
 for condition in pertura_full prompt_only free_codeact
@@ -234,11 +236,11 @@ source/conversion/subset locks
 three frozen catalogs
 bound server plan
 scientific execution verdicts
-48 agent run directories
+36 primary agent run directories
 judge manifests/grades
 usage and runtime metrics
 human-review log
 Git/wheel/environment/case hashes
 ```
 
-正式 readiness 仍要求真实 scientific metrics、48 个 agent verdict、expert-adjudicated CRISPRi/CRISPRa profile 和通过 doctor 的必需环境。reported-only 或 synthetic 结果不能解除这些 blocker。
+正式 readiness 仍要求真实 scientific metrics、36 个 primary agent verdict、expert-adjudicated CRISPRi/CRISPRa profile 和通过 doctor 的必需环境。reported-only 或 synthetic 结果不能解除这些 blocker。

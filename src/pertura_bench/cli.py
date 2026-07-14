@@ -127,6 +127,16 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
     )
     agent_server.add_argument("--repeat-index", type=int, choices=(1, 2), required=True)
+    agent_server.add_argument("--parameter-catalog", type=Path)
+    agent_server.add_argument("--design-confirmations", type=Path)
+    agent_server.add_argument("--metric-reference-catalog", type=Path)
+    agent_server.add_argument(
+        "--resource-enforcement",
+        choices=("scheduler", "cgroup", "unverified"),
+        default="unverified",
+    )
+    agent_server.add_argument("--enforced-memory-gb", type=float)
+    agent_server.add_argument("--enforced-n-jobs", type=int)
     agent_regrade = agent_sub.add_parser("regrade")
     agent_regrade.add_argument("execution_root", type=Path)
     agent_sub.add_parser("server-cases")
@@ -386,6 +396,12 @@ def main(argv: list[str] | None = None) -> int:
                 output=args.output,
                 condition=args.condition,
                 repeat_index=args.repeat_index,
+                parameter_catalog_path=args.parameter_catalog,
+                design_confirmations_path=args.design_confirmations,
+                metric_reference_catalog_path=args.metric_reference_catalog,
+                resource_enforcement=args.resource_enforcement,
+                enforced_memory_gb=args.enforced_memory_gb,
+                enforced_n_jobs=args.enforced_n_jobs,
             )
         elif args.agent_command == "regrade":
             from pertura_bench.agent_server_execution import regrade_server_agent_case

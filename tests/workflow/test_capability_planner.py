@@ -390,3 +390,32 @@ def test_trusted_effect_resolution_flattens_scientific_dependencies() -> None:
         "calibration",
     }
     assert all(item["usable"] for item in resolution.dependency_verdicts)
+
+
+def test_planner_does_not_route_substring_objectives() -> None:
+    contract = _contract()
+    plan = plan_analysis(
+        "please perform differential expression and explain it",
+        contract=contract,
+    )
+    assert plan.status == "blocked"
+    assert plan.capability_id is None
+    assert any("exactly match" in blocker for blocker in plan.blockers)
+
+
+def test_explicit_capability_is_validated_without_objective_keyword_veto() -> None:
+    contract = _contract()
+    retained = _result(
+        contract,
+        ScopeKey(dataset_id=contract.dataset_id),
+        capability_id="screen.retained_cells.v1",
+        result_kind="retained_cell_manifest",
+    )
+    plan = plan_analysis(
+        "custom user objective with no route alias",
+        contract=contract,
+        committed_results=(retained,),
+        requested_capability_id="de.pseudobulk.edger.v1",
+    )
+    assert plan.status == "ready"
+    assert plan.capability_id == "de.pseudobulk.edger.v1"

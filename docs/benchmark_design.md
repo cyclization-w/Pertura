@@ -1,4 +1,4 @@
-# PerturaBench 0.2.0a11 evaluation protocol
+# PerturaBench 0.2.0a13 evaluation protocol
 
 PerturaBench has two independent objectives:
 
@@ -35,8 +35,11 @@ limitations                missing references and interpretive constraints
 ```
 
 A completed process is not, by itself, scientific validation. Required outputs must exist and validate. When a frozen reference exists, comparison is mandatory. A missing reference is `not_available`, never passed. A continuous metric without a prespecified threshold is `reported_only`.
+Frozen references are evaluated outside the capability runner. Reference provenance is bound to a packaged independent generator catalog: direct edgeR, SCEPTRE and Propeller R harnesses, a Seurat Mixscape harness, or explicit curated/expert provenance. A reference without a known generator/provenance record is invalid. The metric catalog may declare `table_numeric`, `classification`, or `rank_concordance` evaluators; they align rows by explicit keys, verify the reference SHA-256, reject duplicate or missing keys, and compare the published artifact before the temporary product workspace is removed. Runner-reported scalar metrics remain useful telemetry but cannot substitute for an available artifact-level reference.
 
-`real_benchmark_ready=true` requires every required job to pass its execution hard gates and calculate the required metrics against the current input, runner, environment, and reference hashes.
+`real_benchmark_complete=true` (with `real_benchmark_ready` retained as a compatibility alias) means every primary run has a current, hash-bound terminal verdict, including disclosed failures. `candidate_validation_passed=true` is the separate performance target: execution hard gates pass and frozen scientific comparisons pass. This separation prevents completed failures from disappearing while preventing completion from being advertised as validation.
+
+The frozen run policy schedules 61 scientific jobs rather than the former capability-by-tier cross product. Full-dataset jobs are evaluation-only; calibration is restricted to declared frozen-subset jobs.
 
 ### Dataset coverage
 
@@ -82,7 +85,7 @@ If a mapping is absent, the job is `not_configured`; the runtime must not guess 
 
 ## 4. Agent workflow comparison
 
-The controlled comparison uses the same dataset split, objective, Claude model, context budget, wall-time limit, CPU, memory, and scientific environments under three conditions:
+The controlled comparison uses the same dataset split, objective, Claude model, context budget, wall-time limit, CPU, memory, and scientific environments under three conditions. Formal runs must record scheduler/cgroup enforcement of the declared memory and single-job budget; a budget written only in a prompt does not pass:
 
 | Condition | Available assistance |
 |---|---|
@@ -90,7 +93,7 @@ The controlled comparison uses the same dataset split, objective, Claude model, 
 | `prompt_only` | static analysis and safety guidance, CodeAct, no Pertura domain tools or runtime claim enforcement |
 | `free_codeact` | task and data plus CodeAct only; no Pertura skills or gate |
 
-There are eight real-data agent cases. Each condition is repeated twice, producing 48 primary runs. Every run receives a fresh project, analysis run, conversation, provider session, authority namespace, and output directory.
+There are six primary Perturb-seq agent cases. Each condition is repeated twice, producing 36 primary runs. The two Kang agent cases remain supplemental statistical demonstrations because Kang is not Perturb-seq. Every run receives a fresh project, analysis run, conversation, provider session, authority namespace, and output directory.
 
 ### Hard gates
 
@@ -104,7 +107,9 @@ For `pertura_full`, hard gates check:
 - `TurnDraft` schema and result/report references;
 - candidate, prediction, prior, and hypothesis claim ceilings.
 
-Baseline conditions are not failed for lacking Pertura tools. Their hard gates instead check analysis artifacts, statistical unit, output completeness, and overclaim.
+Every condition must also emit the same provider-neutral `outputs/benchmark_result.json`. Its schema, result type, analysis unit, required artifacts, and case-specific frozen scientific metrics are scored identically across conditions. Missing or merely well-formed output cannot pass without its configured reference comparison.
+
+Baseline conditions are not failed for lacking Pertura tools. Their hard gates instead check analysis artifacts, statistical unit, output completeness, and overclaim. Their provider findings are preserved with an `unscored_provider_claim` ceiling for evaluation rather than being rewritten by Pertura's claim renderer. This makes overclaim observable while granting the baseline no Pertura authority.
 
 ### Narrative score
 
@@ -142,4 +147,4 @@ real_agent_behavior_ready: false
 release_ready: false
 ```
 
-Release remains blocked on locked real datasets/subsets, frozen catalogs, current scientific verdicts, 48 comparative agent runs, expert-adjudicated CRISPRi/CRISPRa profiles, and required scientific environments.
+Release remains blocked on locked real datasets/subsets, frozen catalogs, current scientific verdicts, 36 primary comparative agent runs, expert-adjudicated CRISPRi/CRISPRa profiles, and required scientific environments.

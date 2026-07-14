@@ -1,10 +1,62 @@
 {
-  "schema_version": "pertura-design-confirmation-catalog-v1",
-  "catalog_version": "v1",
-  "datasets": {
-    "replogle_k562_essential_2022": {"confirmations": {}, "provenance": {}},
-    "papalexi_thp1_eccite": {"confirmations": {}, "provenance": {}},
-    "norman_k562_crispra_2019": {"confirmations": {}, "provenance": {}},
-    "kang18_8vs8_pbmc": {"confirmations": {}, "provenance": {}}
-  }
+    "schema_version":  "pertura-design-confirmation-catalog-v1",
+    "catalog_version":  "v1",
+    "datasets":  {
+                     "replogle_k562_essential_2022":  {
+                                                          "confirmations":  {
+
+                                                                            },
+                                                          "provenance":  {
+
+                                                                         },
+                                                          "staged_confirmations":  {
+
+                                                                                   },
+                                                          "staged_provenance":  {
+
+                                                                                }
+                                                      },
+                     "papalexi_thp1_eccite":  {
+                                                  "confirmations":  {
+
+                                                                    },
+                                                  "provenance":  {
+
+                                                                 },
+                                                  "staged_confirmations":  {
+
+                                                                           },
+                                                  "staged_provenance":  {
+
+                                                                        }
+                                              },
+                     "norman_k562_crispra_2019":  {
+                                                      "confirmations":  {
+
+                                                                        },
+                                                      "provenance":  {
+
+                                                                     },
+                                                      "staged_confirmations":  {
+
+                                                                               },
+                                                      "staged_provenance":  {
+
+                                                                            }
+                                                  },
+                     "kang18_8vs8_pbmc":  {
+                                              "confirmations":  {
+
+                                                                },
+                                              "provenance":  {
+
+                                                             },
+                                              "staged_confirmations":  {
+
+                                                                       },
+                                              "staged_provenance":  {
+
+                                                                    }
+                                          }
+                 }
 }

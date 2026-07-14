@@ -37,6 +37,25 @@ results; declared_role is only a draft hint. Do not wrap the JSON in Markdown.
 """
 
 
+BASELINE_OUTPUT_CONTRACT = """# Controlled agent benchmark output contract
+
+Work only from the registered local inputs. Preserve input files and write code,
+tables, figures and other analysis artifacts under outputs/.
+
+No domain-specific workflow tools, receipts, promotion engine or scientific
+claim renderer are available in this benchmark condition. Report the analysis
+you actually performed, its statistical unit, unresolved design facts,
+limitations and alternative explanations. Do not invent result identifiers.
+
+End every provider turn with exactly one JSON object matching
+pertura-turn-draft-v1 with: schema_version, language, headline, findings,
+hypotheses, limitations, questions_for_user, next_steps and artifact_refs.
+Each finding must include finding_id, text, declared_role, an empty result_ids
+list and limitations. Declared roles are preserved for benchmark scoring but do
+not receive scientific authority. Do not wrap the JSON in Markdown.
+"""
+
+
 def build_default_task(input_source: Path | None) -> str:
     source_text = str(input_source) if input_source else "the files under input/"
     return f"""Analyze this Perturb-seq project with the Pertura capability workflow.
@@ -141,6 +160,10 @@ def write_prompt_files(workspace: ClaudeRunWorkspace, *, task: str, python_envir
     system_prompt = build_system_prompt(workspace, python_environment=python_environment, interaction_mode=interaction_mode, stage_id=stage_id, tool_surface=tool_surface, benchmark_condition=benchmark_condition)
     if tool_surface != "capability":
         raise ValueError("only the production capability tool surface is available")
-    output_contract = CAPABILITY_OUTPUT_CONTRACT
+    output_contract = (
+        BASELINE_OUTPUT_CONTRACT
+        if benchmark_condition in {"prompt_only", "free_codeact"}
+        else CAPABILITY_OUTPUT_CONTRACT
+    )
     workspace.write_task_files(task=task, system_prompt=system_prompt, output_contract=output_contract)
     return system_prompt

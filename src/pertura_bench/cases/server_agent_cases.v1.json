@@ -20,12 +20,10 @@
                                                       "screen.retained_cells.v1"
                                                   ],
                       "expected_statuses":  [
-                                                "completed",
-                                                "needs_input",
-                                                "blocked"
+                                                "completed"
                                             ],
                       "required_result_roles":  [
-
+                                                    "retained_cell_manifest"
                                                 ],
                       "required_artifact_roles":  [
                                                       "primary_dataset"
@@ -38,6 +36,19 @@
                       "max_memory_gb":  4,
                       "timeout_seconds":  1800,
                       "followup_prompts":  [
+
+                                           ],
+                      "benchmark_track":  "primary",
+                      "expected_benchmark_result_type":  "screen_qc",
+                      "allowed_auxiliary_capabilities":  [
+
+                                                         ],
+                      "narrative_requirements":  [
+                                                     "State the analysis unit and uncertainty.",
+                                                     "Separate measured or derived findings from predictions and hypotheses.",
+                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                 ],
+                      "followup_actions":  [
 
                                            ]
                   },
@@ -52,12 +63,10 @@
                                                       "target.reliability.aggregate.v1"
                                                   ],
                       "expected_statuses":  [
-                                                "completed",
-                                                "needs_input",
-                                                "blocked"
+                                                "completed"
                                             ],
                       "required_result_roles":  [
-
+                                                    "target_reliability"
                                                 ],
                       "required_artifact_roles":  [
                                                       "primary_dataset"
@@ -70,6 +79,19 @@
                       "max_memory_gb":  4,
                       "timeout_seconds":  1800,
                       "followup_prompts":  [
+
+                                           ],
+                      "benchmark_track":  "primary",
+                      "expected_benchmark_result_type":  "target_reliability",
+                      "allowed_auxiliary_capabilities":  [
+
+                                                         ],
+                      "narrative_requirements":  [
+                                                     "State the analysis unit and uncertainty.",
+                                                     "Separate measured or derived findings from predictions and hypotheses.",
+                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                 ],
+                      "followup_actions":  [
 
                                            ]
                   },
@@ -84,12 +106,11 @@
                                                       "target.responder.mixscape.v1"
                                                   ],
                       "expected_statuses":  [
-                                                "completed",
-                                                "needs_input",
-                                                "blocked"
+                                                "completed"
                                             ],
                       "required_result_roles":  [
-
+                                                    "state_mapping",
+                                                    "mixscape_responder"
                                                 ],
                       "required_artifact_roles":  [
                                                       "primary_dataset"
@@ -102,6 +123,19 @@
                       "max_memory_gb":  4,
                       "timeout_seconds":  1800,
                       "followup_prompts":  [
+
+                                           ],
+                      "benchmark_track":  "primary",
+                      "expected_benchmark_result_type":  "state_and_responder",
+                      "allowed_auxiliary_capabilities":  [
+
+                                                         ],
+                      "narrative_requirements":  [
+                                                     "State the analysis unit and uncertainty.",
+                                                     "Separate measured or derived findings from predictions and hypotheses.",
+                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                 ],
+                      "followup_actions":  [
 
                                            ]
                   },
@@ -115,12 +149,10 @@
                                                       "state.annotation_candidates.v1"
                                                   ],
                       "expected_statuses":  [
-                                                "completed",
-                                                "needs_input",
-                                                "blocked"
+                                                "completed"
                                             ],
                       "required_result_roles":  [
-
+                                                    "state_annotation_candidates"
                                                 ],
                       "required_artifact_roles":  [
                                                       "primary_dataset"
@@ -133,7 +165,24 @@
                       "max_memory_gb":  4,
                       "timeout_seconds":  1800,
                       "followup_prompts":  [
-                                               "A curator confirms the state label mapping recorded in the benchmark design-confirmation catalog. Re-open the current project state, identify which prior results became stale, and continue without reusing stale evidence."
+
+                                           ],
+                      "benchmark_track":  "primary",
+                      "expected_benchmark_result_type":  "state_annotation_stale",
+                      "allowed_auxiliary_capabilities":  [
+
+                                                         ],
+                      "narrative_requirements":  [
+                                                     "State the analysis unit and uncertainty.",
+                                                     "Separate measured or derived findings from predictions and hypotheses.",
+                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                 ],
+                      "followup_actions":  [
+                                               {
+                                                   "type":  "design_confirmation",
+                                                   "catalog_key":  "papalexi_state_label_mapping",
+                                                   "prompt":  "A curator has now confirmed the staged state-label mapping. Re-open the current project state, identify which prior results became stale, and continue without reusing stale evidence."
+                                               }
                                            ]
                   },
                   {
@@ -147,12 +196,10 @@
                                                       "association.sceptre.v1"
                                                   ],
                       "expected_statuses":  [
-                                                "completed",
-                                                "needs_input",
-                                                "blocked"
+                                                "completed"
                                             ],
                       "required_result_roles":  [
-
+                                                    "conditional_association"
                                                 ],
                       "required_artifact_roles":  [
                                                       "primary_dataset"
@@ -165,6 +212,19 @@
                       "max_memory_gb":  4,
                       "timeout_seconds":  1800,
                       "followup_prompts":  [
+
+                                           ],
+                      "benchmark_track":  "primary",
+                      "expected_benchmark_result_type":  "high_moi_association",
+                      "allowed_auxiliary_capabilities":  [
+
+                                                         ],
+                      "narrative_requirements":  [
+                                                     "State the analysis unit and uncertainty.",
+                                                     "Separate measured or derived findings from predictions and hypotheses.",
+                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                 ],
+                      "followup_actions":  [
 
                                            ]
                   },
@@ -182,15 +242,16 @@
                                                       "design.next_panel.v1"
                                                   ],
                       "expected_statuses":  [
-                                                "completed",
-                                                "needs_input",
-                                                "blocked"
+                                                "completed"
                                             ],
                       "required_result_roles":  [
-
+                                                    "prediction_bundle",
+                                                    "virtual_evaluation",
+                                                    "next_panel_design"
                                                 ],
                       "required_artifact_roles":  [
-                                                      "primary_dataset"
+                                                      "primary_dataset",
+                                                      "prediction_bundle"
                                                   ],
                       "scope_claim_constraints":  [
                                                       "no_cell_as_replicate",
@@ -200,6 +261,19 @@
                       "max_memory_gb":  4,
                       "timeout_seconds":  1800,
                       "followup_prompts":  [
+
+                                           ],
+                      "benchmark_track":  "primary",
+                      "expected_benchmark_result_type":  "virtual_evaluation",
+                      "allowed_auxiliary_capabilities":  [
+
+                                                         ],
+                      "narrative_requirements":  [
+                                                     "State the analysis unit and uncertainty.",
+                                                     "Separate measured or derived findings from predictions and hypotheses.",
+                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                 ],
+                      "followup_actions":  [
 
                                            ]
                   },
@@ -214,12 +288,10 @@
                                                       "de.pseudobulk.edger.v1"
                                                   ],
                       "expected_statuses":  [
-                                                "completed",
-                                                "needs_input",
-                                                "blocked"
+                                                "completed"
                                             ],
                       "required_result_roles":  [
-
+                                                    "differential_expression"
                                                 ],
                       "required_artifact_roles":  [
                                                       "primary_dataset"
@@ -232,6 +304,19 @@
                       "max_memory_gb":  4,
                       "timeout_seconds":  1800,
                       "followup_prompts":  [
+
+                                           ],
+                      "benchmark_track":  "supplemental",
+                      "expected_benchmark_result_type":  "replicated_de_supplement",
+                      "allowed_auxiliary_capabilities":  [
+
+                                                         ],
+                      "narrative_requirements":  [
+                                                     "State the analysis unit and uncertainty.",
+                                                     "Separate measured or derived findings from predictions and hypotheses.",
+                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                 ],
+                      "followup_actions":  [
 
                                            ]
                   },
@@ -246,12 +331,10 @@
                                                       "composition.propeller.v1"
                                                   ],
                       "expected_statuses":  [
-                                                "completed",
-                                                "needs_input",
-                                                "blocked"
+                                                "completed"
                                             ],
                       "required_result_roles":  [
-
+                                                    "composition_effect"
                                                 ],
                       "required_artifact_roles":  [
                                                       "primary_dataset"
@@ -264,6 +347,19 @@
                       "max_memory_gb":  4,
                       "timeout_seconds":  1800,
                       "followup_prompts":  [
+
+                                           ],
+                      "benchmark_track":  "supplemental",
+                      "expected_benchmark_result_type":  "composition_supplement",
+                      "allowed_auxiliary_capabilities":  [
+
+                                                         ],
+                      "narrative_requirements":  [
+                                                     "State the analysis unit and uncertainty.",
+                                                     "Separate measured or derived findings from predictions and hypotheses.",
+                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                 ],
+                      "followup_actions":  [
 
                                            ]
                   }

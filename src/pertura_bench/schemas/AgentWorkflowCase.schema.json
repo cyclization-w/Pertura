@@ -42,6 +42,14 @@
   },
   "additionalProperties": false,
   "properties": {
+    "allowed_auxiliary_capabilities": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Auxiliary Capabilities",
+      "type": "array"
+    },
     "benchmark_condition": {
       "default": "pertura_full",
       "enum": [
@@ -50,6 +58,15 @@
         "free_codeact"
       ],
       "title": "Benchmark Condition",
+      "type": "string"
+    },
+    "benchmark_track": {
+      "default": "primary",
+      "enum": [
+        "primary",
+        "supplemental"
+      ],
+      "title": "Benchmark Track",
       "type": "string"
     },
     "case_id": {
@@ -71,6 +88,18 @@
     "description": {
       "title": "Description",
       "type": "string"
+    },
+    "expected_benchmark_result_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Benchmark Result Type"
     },
     "expected_capability_dag": {
       "default": [],
@@ -99,6 +128,15 @@
       "default": 1,
       "title": "Expected Turns",
       "type": "integer"
+    },
+    "followup_actions": {
+      "default": [],
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Followup Actions",
+      "type": "array"
     },
     "max_memory_gb": {
       "default": 4.0,

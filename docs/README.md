@@ -1,6 +1,6 @@
 # Pertura documentation
 
-This index describes the capability-first product at the `0.2.0a11` pre-benchmark checkpoint. Historical evidence-lattice, stage, smoke, and paper-facing materials are isolated under `legacy/` and are not current product architecture.
+This index describes the capability-first product at the `0.2.0a13` pre-benchmark checkpoint. Historical evidence-lattice, stage, smoke, and paper-facing materials are isolated under `legacy/` and are not current product architecture.
 
 ## Current reading order
 
@@ -41,7 +41,7 @@ ResultEnvelope -> pertura_core.promotion -> TurnFinal / report
 ## Expected checkpoint
 
 ```text
-build_version: 0.2.0a11
+build_version: 0.2.0a13
 repository_ready: true
 runtime_spine_ready: true
 dependency_policy_ready: true
@@ -53,7 +53,7 @@ real_agent_behavior_ready: false
 release_ready: false
 ```
 
-Optional environment readiness is machine-specific. Real-data locks, frozen catalogs, scientific verdicts, 48 comparative agent runs, and expert-adjudicated CRISPRi/CRISPRa profiles remain release blockers.
+Optional environment readiness is machine-specific. Real-data locks, frozen catalogs, scientific verdicts, 36 primary comparative agent runs, and expert-adjudicated CRISPRi/CRISPRa profiles remain release blockers.
 
 ## Historical material
 

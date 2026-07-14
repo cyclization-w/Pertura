@@ -1,6 +1,6 @@
 # v0.2 capability-first implementation status
 
-This file records the `0.2.0a11` pre-benchmark checkpoint. It is not the final `0.2.0` scientific release.
+This file records the `0.2.0a13` pre-benchmark checkpoint. It is not the final `0.2.0` scientific release.
 
 ## Frozen product boundary
 
@@ -43,15 +43,16 @@ This file records the `0.2.0a11` pre-benchmark checkpoint. It is not the final `
 
 - Thirty-five exploratory capabilities have 210 deterministic synthetic cases.
 - Twelve local fake-provider cases exercise project, asset, turn, resume, stale, repair, and report behavior.
-- Scientific real-data verdict v3 separates execution hard gates from reference comparisons and continuous metrics.
-- Three external catalogs bind confirmed design facts, capability parameters/assets, and metric references.
-- The agent catalog defines eight tasks under `pertura_full`, `prompt_only`, and `free_codeact`, repeated twice: 48 primary server runs.
+- Scientific real-data verdict v3 separates current run completion from frozen-reference performance. The explicit run policy schedules 61 jobs and never duplicates full data as calibration.
+- Three external catalogs bind confirmed design facts, capability parameters/assets, and metric references. Metric references additionally bind independent packaged generators or explicit curated/expert provenance.
+- The primary agent catalog defines six Perturb-seq tasks under `pertura_full`, `prompt_only`, and `free_codeact`, repeated twice: 36 primary server runs. Two Kang tasks remain supplemental.
+- Every primary agent condition must emit the same condition-neutral benchmark result and pass case-specific scientific reference metrics. Formal resource gates require scheduler/cgroup enforcement; prompt declarations do not count.
 - Synthetic or reported-only verdicts cannot promote capability trust.
 
 Expected release audit after all local freezes are regenerated:
 
 ```text
-build_version: 0.2.0a11
+build_version: 0.2.0a13
 repository_ready: true
 runtime_spine_ready: true
 project_lifecycle_ready: true
@@ -101,7 +102,7 @@ Release remains blocked until:
 1. Replogle, Papalexi, Norman, and Kang artifact/conversion/subset locks exist.
 2. Design-confirmation, real-parameter, and metric-reference catalogs are frozen.
 3. Required scientific jobs have current hard gates and method-specific metrics/references.
-4. All 48 comparative agent runs and required narrative/human review are complete.
+4. All 36 primary comparative agent runs and required narrative/human review are complete.
 5. CRISPRi and CRISPRa production reliability profiles reference expert-adjudicated calibration/evaluation sets.
 6. Every required scientific environment passes doctor and is bound into verdict provenance.
 

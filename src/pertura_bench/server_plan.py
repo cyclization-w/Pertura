@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from pertura_bench.capability_models import CapabilityBenchmarkSpec, ServerBenchmarkPlan
+from pertura_bench.real_run_policy import real_runs_for_spec, validate_real_run_policy
 from pertura_core.hashing import canonical_hash, file_sha256
 from pertura_workflow.capabilities import CapabilityRegistry
 
@@ -45,6 +46,7 @@ def build_server_plan(
         if repo_root is None
         else Path(repo_root).resolve()
     )
+    validate_real_run_policy(specs)
     try:
         from pertura_bench.operations import source_manifests
 
@@ -235,6 +237,23 @@ def build_server_plan(
     metric_catalog, metric_catalog_hash = load_metric_reference_catalog(
         metric_reference_catalog_path
     )
+    agent_asset_ids_by_dataset: dict[str, list[str]] = {}
+    for dataset_id, dataset_mapping in real_parameter_catalog["datasets"].items():
+        for asset in dataset_mapping.get("agent_assets") or ():
+            role = str(asset["role"])
+            artifact_id = f"artifact:{dataset_id}:agent:{role}"
+            agent_asset_ids_by_dataset.setdefault(dataset_id, []).append(artifact_id)
+            artifacts.append(
+                {
+                    "artifact_id": artifact_id,
+                    "kind": "registered_agent_asset",
+                    "dataset_id": dataset_id,
+                    "role": role,
+                    "relative_path": str(asset["relative_path"]),
+                    "content_sha256": str(asset["content_sha256"]),
+                    "lock_relative_path": None,
+                }
+            )
     for bench_spec in specs:
         capability = registry.get(
             bench_spec.capability_id, bench_spec.capability_version
@@ -251,7 +270,11 @@ def build_server_plan(
                 "python-science-v1",
             )
         )
-        for dataset_id in bench_spec.required_real_datasets:
+        for real_run in real_runs_for_spec(bench_spec):
+            dataset_id = real_run["dataset_id"]
+            tier = real_run["tier"]
+            split = real_run["split"]
+            track = real_run["track"]
             artifact_ids = artifact_ids_by_dataset[dataset_id]
             parameter_coverage = _real_parameter_coverage(
                 registry,
@@ -261,122 +284,136 @@ def build_server_plan(
                 target_capability_id=bench_spec.capability_id,
                 target_case=bench_spec.cases[0],
             )
-            for tier in ("frozen_subset", "full_dataset"):
-                for split in ("calibration", "evaluation"):
-                    if tier == "frozen_subset":
-                        preparation_dependency = subset_jobs[(dataset_id, split)]
-                        artifact_id = artifact_ids[split]
-                    else:
-                        preparation_dependency = preparation_roots[dataset_id]
-                        artifact_id = artifact_ids["converted"]
-                    job_id = (
-                        f"benchmark:{dataset_id}:{bench_spec.capability_id}:"
-                        f"{tier}:{split}"
-                    )
-                    jobs.append(
-                        {
-                            "job_id": job_id,
-                            "kind": "capability",
-                            "dataset_id": dataset_id,
-                            "capability_id": bench_spec.capability_id,
-                            "capability_version": bench_spec.capability_version,
-                            "tier": tier,
-                            "split": split,
-                            # Scheduler ordering materializes only the locked input.
-                            # Scientific upstreams execute below in one persistent runtime.
-                            "depends_on": [preparation_dependency],
-                            "runtime_execution": {
-                                "scope": "single_persistent_pertura_runtime",
-                                "dependency_resolution": "runtime_owned",
-                                "capability_dag": runtime_dag,
-                                "authoritative_commit_store": True,
-                            },
-                            "benchmark_catalogs": {
-                                "parameters": {
-                                    "version": real_parameter_catalog["catalog_version"],
-                                    "hash": real_parameter_catalog_hash,
-                                },
-                                "design_confirmations": {
-                                    "version": design_catalog["catalog_version"],
-                                    "hash": design_catalog_hash,
-                                },
-                                "metric_references": {
-                                    "version": metric_catalog["catalog_version"],
-                                    "hash": metric_catalog_hash,
-                                },
-                            },
-                            "real_parameter_catalog": {
-                                "version": real_parameter_catalog["catalog_version"],
-                                "hash": real_parameter_catalog_hash,
-                            },
-                            "real_parameter_coverage": [
-                                dict(item) | {"tier": tier, "split": split}
-                                for item in parameter_coverage
-                            ],
-                            "configuration_state": (
-                                "configured"
-                                if all(item["configured"] for item in parameter_coverage)
-                                else "not_configured"
-                            ),
-                            "checkpoint_requirement": {
-                                "required": True,
-                                "binding_fields": list(_BINDING_FIELDS),
-                                "binding_source": "server_plan.checkpoint_binding",
-                            },
-                            "environment_profile": environment_profile,
-                            "command": {
-                                "argv": [
-                                    "python",
-                                    "-m",
-                                    "pertura_bench",
-                                    "run",
-                                    bench_spec.capability_id,
-                                    "--tier",
-                                    tier,
-                                    "--dataset",
-                                    dataset_id,
-                                    "--split",
-                                    split,
-                                    "--cache",
-                                    "$PERTURA_BENCH_CACHE",
-                                    "--output",
-                                    "$PERTURA_BENCH_OUTPUT",
-                                    "--repo",
-                                    "$PERTURA_REPO",
-                                    "--parameter-catalog",
-                                    "$PERTURA_BENCH_PARAMETER_CATALOG",
-                                    "--design-confirmations",
-                                    "$PERTURA_BENCH_DESIGN_CONFIRMATIONS",
-                                    "--metric-reference-catalog",
-                                    "$PERTURA_BENCH_METRIC_REFERENCES",
-                                ]
-                            },
-                            "consumes": [artifact_id],
-                            "produces": [
-                                f"verdict:{dataset_id}:{bench_spec.capability_id}:{tier}:{split}"
-                            ],
-                            "resources": {
-                                "cpus": (
-                                    8
-                                    if bench_spec.capability_id
-                                    == "association.sceptre.v1"
-                                    else 4
-                                ),
-                                "memory_gb": (
-                                    64
-                                    if dataset_id == "replogle_k562_essential_2022"
-                                    else 32
-                                ),
-                                "walltime_minutes": 720,
-                            },
-                            "failure_policy": {
-                                "missing_lock": "not_available",
-                                "missing_environment": "not_run_environment_missing",
-                                "missing_real_parameters": "failed_not_configured",
-                                "timeout": "failed_no_fallback",
-                            },
-                        }
-                    )
+            metric_configuration_state = _metric_configuration_state(
+                metric_catalog,
+                dataset_id=dataset_id,
+                identity=(
+                    f"{bench_spec.capability_id}@{bench_spec.capability_version}"
+                ),
+                tier=tier,
+                split=split,
+                namespace="capabilities",
+            )
+            if tier == "frozen_subset":
+                preparation_dependency = subset_jobs[(dataset_id, split)]
+                artifact_id = artifact_ids[split]
+            else:
+                preparation_dependency = preparation_roots[dataset_id]
+                artifact_id = artifact_ids["converted"]
+            job_id = (
+                f"benchmark:{dataset_id}:{bench_spec.capability_id}:"
+                f"{tier}:{split}"
+            )
+            jobs.append(
+                {
+                    "job_id": job_id,
+                    "kind": "capability",
+                    "dataset_id": dataset_id,
+                    "capability_id": bench_spec.capability_id,
+                    "capability_version": bench_spec.capability_version,
+                    "tier": tier,
+                    "split": split,
+                    "benchmark_track": track,
+                    # Scheduler ordering materializes only the locked input.
+                    # Scientific upstreams execute below in one persistent runtime.
+                    "depends_on": [preparation_dependency],
+                    "runtime_execution": {
+                        "scope": "single_persistent_pertura_runtime",
+                        "dependency_resolution": "runtime_owned",
+                        "capability_dag": runtime_dag,
+                        "authoritative_commit_store": True,
+                    },
+                    "benchmark_catalogs": {
+                        "parameters": {
+                            "version": real_parameter_catalog["catalog_version"],
+                            "hash": real_parameter_catalog_hash,
+                        },
+                        "design_confirmations": {
+                            "version": design_catalog["catalog_version"],
+                            "hash": design_catalog_hash,
+                        },
+                        "metric_references": {
+                            "version": metric_catalog["catalog_version"],
+                            "hash": metric_catalog_hash,
+                        },
+                    },
+                    "real_parameter_catalog": {
+                        "version": real_parameter_catalog["catalog_version"],
+                        "hash": real_parameter_catalog_hash,
+                    },
+                    "real_parameter_coverage": [
+                        dict(item) | {"tier": tier, "split": split}
+                        for item in parameter_coverage
+                    ],
+                    "metric_configuration_state": metric_configuration_state,
+                    "configuration_state": (
+                        "configured"
+                        if all(item["configured"] for item in parameter_coverage)
+                        and metric_configuration_state == "frozen_reference"
+                        else "reported_only"
+                        if all(item["configured"] for item in parameter_coverage)
+                        and metric_configuration_state == "reported_only"
+                        else "not_configured"
+                    ),
+                    "checkpoint_requirement": {
+                        "required": True,
+                        "binding_fields": list(_BINDING_FIELDS),
+                        "binding_source": "server_plan.checkpoint_binding",
+                    },
+                    "environment_profile": environment_profile,
+                    "command": {
+                        "argv": [
+                            "python",
+                            "-m",
+                            "pertura_bench",
+                            "run",
+                            bench_spec.capability_id,
+                            "--tier",
+                            tier,
+                            "--dataset",
+                            dataset_id,
+                            "--split",
+                            split,
+                            "--cache",
+                            "$PERTURA_BENCH_CACHE",
+                            "--output",
+                            "$PERTURA_BENCH_OUTPUT",
+                            "--repo",
+                            "$PERTURA_REPO",
+                            "--parameter-catalog",
+                            "$PERTURA_BENCH_PARAMETER_CATALOG",
+                            "--design-confirmations",
+                            "$PERTURA_BENCH_DESIGN_CONFIRMATIONS",
+                            "--metric-reference-catalog",
+                            "$PERTURA_BENCH_METRIC_REFERENCES",
+                        ]
+                    },
+                    "consumes": [artifact_id],
+                    "produces": [
+                        f"verdict:{dataset_id}:{bench_spec.capability_id}:{tier}:{split}"
+                    ],
+                    "resources": {
+                        "cpus": (
+                            8
+                            if bench_spec.capability_id
+                            == "association.sceptre.v1"
+                            else 4
+                        ),
+                        "memory_gb": (
+                            64
+                            if dataset_id == "replogle_k562_essential_2022"
+                            else 32
+                        ),
+                        "walltime_minutes": 720,
+                    },
+                    "failure_policy": {
+                        "missing_lock": "not_available",
+                        "missing_environment": "not_run_environment_missing",
+                        "missing_real_parameters": "failed_not_configured",
+                        "timeout": "failed_no_fallback",
+                    },
+                }
+            )
 
     agent_catalog_path = root / "src" / "pertura_bench" / "cases" / "server_agent_cases.v1.json"
     agent_catalog = json.loads(agent_catalog_path.read_text(encoding="utf-8"))
@@ -384,7 +421,17 @@ def build_server_plan(
     if conditions != ("pertura_full", "prompt_only", "free_codeact"):
         raise ValueError("agent benchmark catalog must declare the three controlled conditions")
     for case in agent_catalog["cases"]:
+        if str(case.get("benchmark_track") or "primary") != "primary":
+            continue
         dataset_id = case["dataset_id"]
+        metric_configuration_state = _metric_configuration_state(
+            metric_catalog,
+            dataset_id=dataset_id,
+            identity=str(case["case_id"]),
+            tier="frozen_subset",
+            split="evaluation",
+            namespace="agent_cases",
+        )
         if dataset_id not in artifact_ids_by_dataset:
             raise ValueError(f"agent case lacks prepared dataset: {dataset_id}")
         for condition in conditions:
@@ -398,8 +445,15 @@ def build_server_plan(
                     "objective": case["objective"],
                     "benchmark_condition": condition,
                     "repeat_index": repeat_index,
+                    "benchmark_track": "primary",
                     "provider": "claude-agent-sdk",
                     "model_source": "PERTURA_CLAUDE_MODEL",
+                    "metric_configuration_state": metric_configuration_state,
+                    "configuration_state": (
+                        "configured"
+                        if metric_configuration_state == "frozen_reference"
+                        else "not_configured"
+                    ),
                     "controlled_comparison": {
                         "same_dataset_split": "evaluation",
                         "same_objective": True,
@@ -424,9 +478,18 @@ def build_server_plan(
                             "--output", "$PERTURA_BENCH_OUTPUT", "--repo", "$PERTURA_REPO",
                             "--condition", condition,
                             "--repeat-index", str(repeat_index),
+                            "--parameter-catalog", "$PERTURA_BENCH_PARAMETER_CATALOG",
+                            "--design-confirmations", "$PERTURA_BENCH_DESIGN_CONFIRMATIONS",
+                            "--metric-reference-catalog", "$PERTURA_BENCH_METRIC_REFERENCES",
+                            "--resource-enforcement", "scheduler",
+                            "--enforced-memory-gb", str(float(case.get("max_memory_gb", 4.0))),
+                            "--enforced-n-jobs", "1",
                         ]
                     },
-                    "consumes": [artifact_ids_by_dataset[dataset_id]["evaluation"]],
+                    "consumes": [
+                        artifact_ids_by_dataset[dataset_id]["evaluation"],
+                        *agent_asset_ids_by_dataset.get(dataset_id, ()),
+                    ],
                     "produces": [
                         f"agent-verdict:{case['case_id']}:{condition}:repeat-{repeat_index}",
                         f"agent-grade:{case['case_id']}:{condition}:repeat-{repeat_index}",
@@ -621,6 +684,26 @@ def _preparation_job(
         },
     }
 
+
+def _metric_configuration_state(
+    catalog: Mapping[str, Any],
+    *,
+    dataset_id: str,
+    identity: str,
+    tier: str,
+    split: str,
+    namespace: str,
+) -> str:
+    dataset = dict(catalog.get("datasets", {}).get(dataset_id) or {})
+    entry = dict(dataset.get(namespace, {}).get(identity) or {})
+    variants = entry.get("runs")
+    if isinstance(variants, Mapping):
+        entry = dict(variants.get(f"{tier}:{split}") or {})
+    if entry.get("metrics") or entry.get("evaluators"):
+        return "frozen_reference"
+    if entry.get("reported_metrics"):
+        return "reported_only"
+    return "not_configured"
 
 def _capability_runtime_dag(
     registry: CapabilityRegistry, target_capability_id: str

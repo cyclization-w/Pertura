@@ -7,6 +7,7 @@
   "intended_uses": ["replicated_pseudobulk", "edger_scientific_golden"],
   "perturb_seq_claim_allowed": false,
   "license_review_url": "https://bioconductor.org/packages/release/data/experiment/html/muscData.html",
+  "license_status": "required",
   "output_sha256": null,
   "note": "This is an independent statistical golden set, not a Perturb-seq dataset. Release evaluation requires a frozen conversion lock."
 }

@@ -71,6 +71,54 @@ def render_turn_draft(*, turn_id: str, status: TurnStatus, draft: TurnDraft, res
     )
 
 
+def render_baseline_turn_draft(
+    *, turn_id: str, status: TurnStatus, draft: TurnDraft
+) -> TurnFinal:
+    """Preserve provider claims for controlled scoring without granting authority.
+
+    Baseline conditions intentionally do not use Pertura result provenance or
+    claim-ceiling enforcement. Their declared roles and prose must remain
+    visible to the benchmark so overclaim can be measured rather than silently
+    corrected by the product renderer.
+    """
+
+    findings = tuple(
+        {
+            "finding_id": finding.finding_id,
+            "text": finding.text,
+            "role": finding.declared_role,
+            "ceiling": "unscored_provider_claim",
+            "result_ids": [],
+            "limitations": list(finding.limitations),
+        }
+        for finding in draft.findings
+    )
+    markdown = _render_markdown(
+        headline=draft.headline,
+        findings=list(findings),
+        hypotheses=list(draft.hypotheses),
+        limitations=list(draft.limitations),
+        questions=list(draft.questions_for_user),
+        next_steps=list(draft.next_steps),
+        artifact_refs=list(draft.artifact_refs),
+    )
+    return TurnFinal(
+        turn_id=turn_id,
+        status=status,
+        language=draft.language,
+        headline=draft.headline,
+        markdown=markdown,
+        findings=findings,
+        hypotheses=draft.hypotheses,
+        limitations=draft.limitations,
+        questions_for_user=draft.questions_for_user,
+        next_steps=draft.next_steps,
+        artifact_refs=draft.artifact_refs,
+        result_ids=(),
+        claim_authority=False,
+    )
+
+
 def working_note_final(*, turn_id: str, status: TurnStatus, raw_output: str, error: str) -> TurnFinal:
     markdown = (
         "# Working note\n\n"

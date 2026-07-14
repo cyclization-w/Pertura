@@ -84,7 +84,7 @@ def plan_analysis(
     normalized = _norm(objective)
     blockers: list[str] = []
 
-    selected = _route_objective(normalized, facts, blockers)
+    selected: str | None = None
     if requested_capability_id:
         requested_plan = plan_requested_capability(
             requested_capability_id,
@@ -95,19 +95,24 @@ def plan_analysis(
             objective=normalized,
             environment_ready=environment_ready,
         )
-        requested = registry.get(requested_capability_id)
         blockers.extend(requested_plan.blockers)
-        if selected and requested.capability_id != selected:
-            blockers.append(
-                f"requested capability {requested.capability_id} is incompatible with "
-                f"the design-aware route {selected}"
-            )
-        else:
-            selected = requested.capability_id
+        selected = requested_capability_id
+    else:
+        selected = _route_objective(normalized, facts, blockers)
 
     if selected is None:
         if not blockers:
-            blockers.append("objective does not map to a supported capability")
+            aliases = sorted(
+                {
+                    _norm(alias)
+                    for route in _planner_routes()
+                    for alias in route.get("objectives") or ()
+                }
+            )
+            blockers.append(
+                "objective does not exactly match a supported alias; choose a "
+                "capability explicitly or use one of: " + ", ".join(aliases)
+            )
         return CapabilityPlan(
             status="blocked",
             objective=normalized,
@@ -561,6 +566,8 @@ def _planner_routes() -> tuple[dict[str, Any], ...]:
         raise ValueError("planner routes must declare capability_id")
     if len(capability_ids) != len(set(capability_ids)):
         raise ValueError("planner routes contain duplicate capability_id")
+    if any("contains_any" in item for item in routes):
+        raise ValueError("planner routes cannot use substring matching")
     return tuple(
         sorted(
             routes,
@@ -585,10 +592,7 @@ def _route_for_capability(capability_id: str) -> Mapping[str, Any] | None:
 
 def _objective_matches(route: Mapping[str, Any], objective: str) -> bool:
     objectives = {_norm(item) for item in route.get("objectives") or ()}
-    contains = tuple(_norm(item) for item in route.get("contains_any") or ())
-    return objective in objectives or any(
-        token and token in objective for token in contains
-    )
+    return objective in objectives
 
 
 def _route_applies(route: Mapping[str, Any], facts: Mapping[str, Any]) -> bool:

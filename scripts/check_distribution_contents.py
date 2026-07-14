@@ -36,12 +36,17 @@ WHEEL_REQUIRED = (
     "pertura_bench/cases/real_parameters.v1.json",
     "pertura_bench/cases/design_confirmations.v1.json",
     "pertura_bench/cases/metric_references.v1.json",
+    "pertura_bench/cases/reference_generators.v1.json",
     "pertura_bench/schemas/CapabilityBenchmarkCase.schema.json",
     "pertura_bench/schemas/ProjectLifecycle.schema.json",
+    "pertura_bench/schemas/AgentBenchmarkResult.schema.json",
     "pertura_bench/schemas/AgentWorkflowCase.schema.json",
     "pertura_bench/schemas/AgentWorkflowVerdict.schema.json",
     "pertura_bench/schemas/JudgeManifest.schema.json",
     "pertura_bench/runners/edger_reference.R",
+    "pertura_bench/runners/propeller_reference.R",
+    "pertura_bench/runners/sceptre_reference.R",
+    "pertura_bench/runners/seurat_mixscape_reference.R",
     "pertura_core/compatibility/v0.2/tool-surface.json",
 )
 

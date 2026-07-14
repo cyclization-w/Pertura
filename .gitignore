@@ -4,6 +4,7 @@ __pycache__/
 *.pyo
 *.pyd
 .pytest_cache/
+.pytest_tmp/
 .coverage
 htmlcov/
 .mypy_cache/
@@ -23,6 +24,7 @@ env/
 # Local runtime state
 .claude_runs/
 .p07_runs/
+.p12_runs/
 .smoke_runs/
 .pertura_workspace/
 .tmp/

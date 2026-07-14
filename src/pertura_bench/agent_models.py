@@ -38,6 +38,10 @@ class AgentWorkflowCase(AgentModel):
     provider_config_hash: str | None = None
     max_memory_gb: float = 4.0
     timeout_seconds: int = 300
+    benchmark_track: Literal["primary", "supplemental"] = "primary"
+    expected_benchmark_result_type: str | None = None
+    allowed_auxiliary_capabilities: tuple[str, ...] = ()
+    followup_actions: tuple[dict[str, Any], ...] = ()
 
     @property
     def case_hash(self) -> str:
@@ -48,6 +52,35 @@ class AgentHardGateResult(AgentModel):
     gate_id: str
     passed: bool
     detail: str
+
+
+class AgentBenchmarkFinding(AgentModel):
+    finding_id: str
+    text: str
+    metric_ids: tuple[str, ...] = ()
+    artifact_roles: tuple[str, ...] = ()
+
+
+class AgentBenchmarkResult(AgentModel):
+    """Condition-neutral scientific output for controlled comparison.
+
+    It is a benchmark measurement surface, not Pertura claim authority.
+    """
+
+    schema_version: Literal["pertura-agent-benchmark-result-v1"] = (
+        "pertura-agent-benchmark-result-v1"
+    )
+    case_id: str
+    dataset_id: str
+    result_type: str
+    analysis_unit: str
+    status: Literal["completed", "blocked", "failed"]
+    findings: tuple[AgentBenchmarkFinding, ...] = ()
+    metrics: dict[str, float | int | str | bool | None] = Field(
+        default_factory=dict
+    )
+    limitations: tuple[str, ...] = ()
+    artifact_roles: tuple[str, ...] = ()
 
 
 class AgentNarrativeScore(AgentModel):

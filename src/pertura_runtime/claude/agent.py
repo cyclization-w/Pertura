@@ -201,6 +201,7 @@ class ClaudePerturaAgent:
             status=TurnStatus.cancelled,
             raw_output="Provider turn cancelled.",
             resolve_result=self.product_runtime.resolve_result_for_turn,
+            render_mode=self._turn_render_mode(),
         )
 
     async def close(self) -> None:
@@ -276,6 +277,7 @@ class ClaudePerturaAgent:
                     "message_count": self.manifest.message_count,
                 },
                 trace={"provider_session_id": self.manifest.session_id},
+                render_mode=self._turn_render_mode(),
             )
             self.workspace.update_manifest({
                 "runtime_final_path": f"turns/{final.turn_id}/turn_final.md",
@@ -301,6 +303,13 @@ class ClaudePerturaAgent:
         })
         self.workspace.finalize(status=status, result=runtime_final, error=error)
         return runtime_final
+
+    def _turn_render_mode(self) -> str:
+        return (
+            "baseline"
+            if self.config.benchmark_condition in {"prompt_only", "free_codeact"}
+            else "pertura"
+        )
 
     async def _repair_turn_draft(self, raw_output: str, error: str) -> str:
         if not self.manifest.session_id:

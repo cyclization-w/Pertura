@@ -90,6 +90,19 @@ class _FakeRuntime:
         self.calls.append((capability_id, id(self), dict(kwargs["parameters"])))
         return {"result_id": result["result_id"], "status": "completed"}
 
+    def evaluate_virtual_model(self, **kwargs: Any) -> dict[str, Any]:
+        capability_id = str(kwargs["capability_id"])
+        assert "dependencies" not in kwargs
+        result = {
+            "result_id": "result-virtual",
+            "capability_id": capability_id,
+            "capability_version": "0.1.0",
+            "output_paths": [],
+        }
+        self.broker.committed.append({"result": result})
+        self.calls.append((capability_id, id(self), dict(kwargs["parameters"])))
+        return {"result_id": result["result_id"], "status": "supported"}
+
 
 def _real_case() -> CapabilityBenchmarkCase:
     return CapabilityBenchmarkCase(
@@ -228,24 +241,26 @@ def test_server_plan_expands_all_dimensions_and_requires_checkpoint_binding() ->
         assert_server_plan_executable(plan)
 
     capability_jobs = [item for item in plan.jobs if item["kind"] == "capability"]
-    expected_jobs = sum(
-        len(spec.required_real_datasets) * 4 for spec in benchmark_specs()
-    )
+    from pertura_bench.real_run_policy import real_runs_for_spec
+
+    expected_jobs = sum(len(real_runs_for_spec(spec)) for spec in benchmark_specs())
     assert len(capability_jobs) == expected_jobs
     for spec in benchmark_specs():
-        for dataset_id in spec.required_real_datasets:
-            dimensions = {
-                (item["tier"], item["split"])
-                for item in capability_jobs
-                if item["dataset_id"] == dataset_id
-                and item["capability_id"] == spec.capability_id
-            }
-            assert dimensions == {
-                ("frozen_subset", "calibration"),
-                ("frozen_subset", "evaluation"),
-                ("full_dataset", "calibration"),
-                ("full_dataset", "evaluation"),
-            }
+        expected_runs = {
+            (item["dataset_id"], item["tier"], item["split"])
+            for item in real_runs_for_spec(spec)
+        }
+        observed_runs = {
+            (item["dataset_id"], item["tier"], item["split"])
+            for item in capability_jobs
+            if item["capability_id"] == spec.capability_id
+        }
+        assert observed_runs == expected_runs
+        assert ("full_dataset", "calibration") not in {
+            (item["tier"], item["split"])
+            for item in capability_jobs
+            if item["capability_id"] == spec.capability_id
+        }
     for job in capability_jobs:
         assert len(job["depends_on"]) == 1
         assert job["depends_on"][0].startswith("prepare:")
@@ -261,11 +276,8 @@ def test_server_plan_expands_all_dimensions_and_requires_checkpoint_binding() ->
             item["configured"] or str(item["reason"]).startswith("not_configured:")
             for item in coverage
         )
-        assert job["configuration_state"] == (
-            "configured"
-            if all(item["configured"] for item in coverage)
-            else "not_configured"
-        )
+        assert job["metric_configuration_state"] == "not_configured"
+        assert job["configuration_state"] == "not_configured"
         assert job["real_parameter_catalog"]["version"] == "v1"
         assert job["real_parameter_catalog"]["hash"].startswith("sha256:")
         assert job["checkpoint_requirement"]["required"] is True
@@ -280,7 +292,7 @@ def test_server_plan_expands_all_dimensions_and_requires_checkpoint_binding() ->
         assert "--metric-reference-catalog" in argv
 
     agent_jobs = [item for item in plan.jobs if item["kind"] == "agent_workflow"]
-    assert len(agent_jobs) == 8 * 3 * 2
+    assert len(agent_jobs) == 6 * 3 * 2
     grouped: dict[str, list[dict]] = {}
     for job in agent_jobs:
         grouped.setdefault(job["case_id"], []).append(job)
@@ -296,6 +308,12 @@ def test_server_plan_expands_all_dimensions_and_requires_checkpoint_binding() ->
         assert all(item["controlled_comparison"]["same_model"] for item in case_jobs)
         assert all("--condition" in item["command"]["argv"] for item in case_jobs)
         assert all("--repeat-index" in item["command"]["argv"] for item in case_jobs)
+        assert all("--parameter-catalog" in item["command"]["argv"] for item in case_jobs)
+        assert all("--design-confirmations" in item["command"]["argv"] for item in case_jobs)
+        assert all("--metric-reference-catalog" in item["command"]["argv"] for item in case_jobs)
+        assert all(item["metric_configuration_state"] == "not_configured" for item in case_jobs)
+        assert all(item["configuration_state"] == "not_configured" for item in case_jobs)
+        assert all("--resource-enforcement" in item["command"]["argv"] for item in case_jobs)
 
     for binding_name in (
         "parameter_catalog_hash",
@@ -327,3 +345,67 @@ def test_server_plan_expands_all_dimensions_and_requires_checkpoint_binding() ->
     tampered["server_plan_hash"] = "sha256:" + "0" * 64
     with pytest.raises(ValueError, match="server_plan_hash"):
         validate_checkpoint_binding(plan, tampered)
+
+
+def test_real_dag_dispatches_virtual_capability_with_hash_bound_asset(
+    tmp_path: Path,
+) -> None:
+    artifact = tmp_path / "artifact.h5ad"
+    artifact.write_bytes(b"fixture")
+    prediction = tmp_path / "predictions.zarr"
+    prediction.mkdir()
+    (prediction / "values.bin").write_bytes(b"predictions")
+    runtime = _FakeRuntime(tmp_path)
+    registry = _FakeRegistry(
+        [_FakeSpec("virtual.v1", "0.1.0", "virtual")]
+    )
+    case = CapabilityBenchmarkCase(
+        capability_id="virtual.v1",
+        capability_version="0.1.0",
+        tier="frozen_subset",
+        scenario="happy",
+        fixture_id="locked/fixture/frozen_subset/evaluation",
+        dataset_id="fixture",
+        expected_statuses=("supported",),
+    )
+    catalog = {
+        "schema_version": "pertura-real-parameter-catalog-v1",
+        "catalog_version": "fixture-v1",
+        "datasets": {
+            "fixture": {
+                "capabilities": {
+                    "virtual.v1@0.1.0": {
+                        "parameters": {
+                            "prediction_path": {
+                                "asset_ref": "prediction_bundle"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+    }
+    result, order = execute_capability_dag(
+        runtime,
+        registry=registry,  # type: ignore[arg-type]
+        target_capability_id="virtual.v1",
+        target_capability_version="0.1.0",
+        contract_id="contract-one",
+        artifact=artifact,
+        dataset_id="fixture",
+        tier="frozen_subset",
+        split="evaluation",
+        lock_hashes={"artifact": "sha256:" + "1" * 64},
+        parameter_catalog=catalog,
+        parameter_catalog_hash="sha256:" + "2" * 64,
+        case=case,
+        auxiliary_assets={
+            "prediction_bundle": (
+                prediction,
+                "sha256:" + "3" * 64,
+            )
+        },
+    )
+    assert order == ("virtual.v1",)
+    assert result["result_id"] == "result-virtual"
+    assert runtime.calls[0][2]["prediction_path"] == str(prediction)

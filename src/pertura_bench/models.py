@@ -28,6 +28,9 @@ class BenchmarkSourceManifest(CanonicalModel):
     conversion: str | None = None
     intended_uses: tuple[str, ...]
     license_review_url: HttpUrl
+    license_status: Literal["reviewed", "required"] = "required"
+    license_reviewed_by: str | None = None
+    license_review_basis: str | None = None
     output_sha256: str | None = None
     perturb_seq_claim_allowed: bool = True
     download_tier: str | None = None
@@ -48,6 +51,18 @@ class BenchmarkSourceManifest(CanonicalModel):
                 raise ValueError("benchmark source size must be positive")
         if self.output_sha256 and not _SHA256.fullmatch(self.output_sha256):
             raise ValueError("output_sha256 must use the canonical sha256: prefix")
+        if self.license_status == "reviewed" and not (
+            self.license_reviewed_by and self.license_review_basis
+        ):
+            raise ValueError(
+                "reviewed benchmark licenses require reviewer and review basis"
+            )
+        if self.license_status == "required" and (
+            self.license_reviewed_by or self.license_review_basis
+        ):
+            raise ValueError(
+                "unreviewed benchmark licenses cannot carry review attestations"
+            )
         return self
 
 
@@ -108,6 +123,8 @@ class BenchmarkSubsetLock(CanonicalModel):
     n_cells: int = Field(gt=0)
     n_genes: int = Field(gt=0)
     subset_script_hash: str
+    selected_ids_sha256: str | None = None
+    selection_manifest_sha256: str | None = None
 
 
 class BenchmarkSplitManifest(CanonicalModel):

@@ -378,7 +378,6 @@ def runner_hash(executor: str) -> str:
         "capability_registry": capability_root / "registry.py",
         "planner": workflow_root / "planner.py",
         "planner_routes": capability_root / "planner_routes.json",
-        "method_router": workflow_root / "method_router.py",
         "product_runtime": runtime_root / "product.py",
         "verifier_broker": runtime_root / "verifier" / "broker.py",
         "authority_store": runtime_root / "verifier" / "store.py",

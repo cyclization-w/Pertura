@@ -50,6 +50,7 @@ def test_fetch_detects_size_checksum_and_duplicate_lock(tmp_path: Path) -> None:
     first, _ = fetch_benchmark(manifest, tmp_path / "cache", opener=opener)
     second, _ = fetch_benchmark(manifest, tmp_path / "cache", opener=opener)
     assert first.canonical_hash == second.canonical_hash
+    assert first.license_status == "required"
     lock_path = tmp_path / "cache" / "fixture.lock.json"
     tampered = json.loads(lock_path.read_text(encoding="utf-8"))
     tampered["artifact_sha256"] = "sha256:" + "f" * 64
@@ -92,3 +93,24 @@ def test_expert_split_minimums_and_proxy_validation_fail_closed() -> None:
             validated=True, doi="10.1/test", supplement="table", importer_version="1",
             importer_hash="sha256:" + "1" * 64,
         )
+
+
+def test_license_cannot_be_marked_reviewed_without_human_attestation(
+    tmp_path: Path,
+) -> None:
+    manifest_path = tmp_path / "reviewed.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "pertura-benchmark-source-v1",
+                "dataset_id": "fixture-reviewed",
+                "source": "manual",
+                "intended_uses": ["test"],
+                "license_review_url": "https://example.test/license",
+                "license_status": "reviewed",
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="require reviewer and review basis"):
+        load_source_manifest(manifest_path)

@@ -1,300 +1,251 @@
 {
-  "routes": [
-    {
-      "capability_id": "association.sceptre.v1",
-      "contains_any": [
-        "differential",
-        "measured_effect",
-        "pseudobulk"
-      ],
-      "objectives": [
-        "association",
-        "de",
-        "differential_expression",
-        "expression",
-        "measured_effect",
-        "pseudobulk"
-      ],
-      "priority": 200,
-      "requires": [
-        "controls_defined",
-        "guide_assignment_validated",
-        "guide_counts_available"
-      ],
-      "when": {
-        "moi_in": [
-          "high"
-        ]
-      },
-      "when_blocker": "SCEPTRE requires an explicitly high-MOI design"
-    },
-    {
-      "capability_id": "de.pseudobulk.edger.v1",
-      "contains_any": [
-        "differential",
-        "measured_effect",
-        "pseudobulk"
-      ],
-      "min_replicates": 2,
-      "min_replicates_blocker": "no replicate-aware expression route is available",
-      "objectives": [
-        "association",
-        "de",
-        "differential_expression",
-        "expression",
-        "measured_effect",
-        "pseudobulk"
-      ],
-      "priority": 190,
-      "requires": [
-        "controls_defined",
-        "guide_assignment_validated"
-      ],
-      "when": {
-        "moi_in": [
-          "low"
-        ]
-      },
-      "when_blocker": "edgeR requires an explicitly confirmed low-MOI design"
-    },
-    {
-      "capability_id": "composition.propeller.v1",
-      "contains_any": [
-        "cell_state_composition"
-      ],
-      "min_replicates": 2,
-      "min_replicates_blocker": "replicate-aware composition requires at least two units",
-      "objectives": [
-        "cell_state_composition",
-        "composition",
-        "composition_effect"
-      ],
-      "priority": 150,
-      "requires": [
-        "state_reference_available"
-      ]
-    },
-    {
-      "capability_id": "state.reference.fit.v1",
-      "contains_any": [
-        "state_reference"
-      ],
-      "objectives": [
-        "reference_state",
-        "state_fit",
-        "state_reference"
-      ],
-      "priority": 100
-    },
-    {
-      "capability_id": "state.reference.map_knn.v1",
-      "objectives": [
-        "knn_mapping",
-        "map_state",
-        "state_mapping"
-      ],
-      "priority": 100
-    },
-    {
-      "capability_id": "state.annotation_candidates.v1",
-      "objectives": [
-        "annotation_candidates",
-        "state_annotation"
-      ],
-      "priority": 100
-    },
-    {
-      "capability_id": "module.learn.control_nmf.v1",
-      "contains_any": [
-        "control_nmf",
-        "reference_module"
-      ],
-      "objectives": [
-        "control_nmf",
-        "module",
-        "nmf",
-        "reference_module"
-      ],
-      "priority": 100
-    },
-    {
-      "capability_id": "effect.guide_target_sensitivity.v1",
-      "objectives": [
-        "guide_loo",
-        "guide_sensitivity",
-        "leave_one_guide"
-      ],
-      "priority": 100
-    },
-    {
-      "capability_id": "effect.module_global.v1",
-      "objectives": [
-        "global_effect",
-        "module_effect"
-      ],
-      "priority": 100
-    },
-    {
-      "capability_id": "calibration.method_null.v1",
-      "objectives": [
-        "method_null",
-        "null_calibration"
-      ],
-      "priority": 100
-    },
-    {
-      "capability_id": "target.reliability.aggregate.v1",
-      "contains_any": [
-        "target_reliability"
-      ],
-      "objectives": [
-        "reliability",
-        "target_reliability"
-      ],
-      "priority": 180,
-      "requires": [
-        "controls_defined",
-        "guide_assignment_validated"
-      ]
-    },
-    {
-      "capability_id": "effect.matrix.assemble.v1",
-      "contains_any": [
-        "assemble effect matrix"
-      ],
-      "objectives": [
-        "effect_matrix",
-        "assemble_effect_matrix"
-      ],
-      "priority": 130
-    },
-    {
-      "capability_id": "program.response.signed_nmf.v1",
-      "contains_any": [
-        "response program"
-      ],
-      "objectives": [
-        "response_program",
-        "signed_nmf",
-        "response_programs"
-      ],
-      "priority": 130
-    },
-    {
-      "capability_id": "program.perturbation.cluster.v1",
-      "contains_any": [
-        "perturbation cluster"
-      ],
-      "objectives": [
-        "perturbation_cluster",
-        "cluster_perturbations"
-      ],
-      "priority": 130
-    },
-    {
-      "capability_id": "enrichment.ora.v1",
-      "contains_any": [
-        "over representation"
-      ],
-      "objectives": [
-        "ora",
-        "over_representation",
-        "pathway_ora"
-      ],
-      "priority": 135
-    },
-    {
-      "capability_id": "enrichment.gsea_prerank.v1",
-      "contains_any": [
-        "preranked gsea"
-      ],
-      "objectives": [
-        "gsea",
-        "gsea_prerank",
-        "pathway_gsea"
-      ],
-      "priority": 140
-    },
-    {
-      "capability_id": "regulator.activity.ulm.v1",
-      "contains_any": [
-        "regulator activity"
-      ],
-      "objectives": [
-        "regulator_activity",
-        "ulm"
-      ],
-      "priority": 140
-    },
-    {
-      "capability_id": "network.perturbation_regulator.v1",
-      "contains_any": [
-        "regulator network"
-      ],
-      "objectives": [
-        "regulator_network",
-        "perturbation_regulator_network"
-      ],
-      "priority": 145
-    },
-    {
-      "capability_id": "literature.europepmc.v1",
-      "contains_any": [
-        "europe pmc",
-        "literature search"
-      ],
-      "objectives": [
-        "literature",
-        "europe_pmc",
-        "literature_support"
-      ],
-      "priority": 130
-    },
-    {
-      "capability_id": "interpretation.evidence_map.v1",
-      "contains_any": [
-        "evidence map"
-      ],
-      "objectives": [
-        "evidence_map",
-        "interpret_results",
-        "interpretation"
-      ],
-      "priority": 130
-    },
-    {
-      "capability_id": "virtual.split.contract.v1",
-      "contains_any": [
-        "virtual split"
-      ],
-      "objectives": [
-        "virtual_split",
-        "evaluation_split"
-      ],
-      "priority": 130
-    },
-    {
-      "capability_id": "virtual.prediction.ingest.v1",
-      "contains_any": [
-        "prediction bundle"
-      ],
-      "objectives": [
-        "prediction_ingest",
-        "ingest_predictions"
-      ],
-      "priority": 130
-    },
-    {
-      "capability_id": "design.next_panel.v1",
-      "contains_any": [
-        "next panel"
-      ],
-      "objectives": [
-        "next_panel",
-        "next_experiment_design"
-      ],
-      "priority": 140
-    }
-  ],
-  "schema_version": "pertura-capability-planner-routes-v1"
+    "routes":  [
+                   {
+                       "capability_id":  "association.sceptre.v1",
+                       "objectives":  [
+                                          "association",
+                                          "de",
+                                          "differential_expression",
+                                          "expression",
+                                          "measured_effect",
+                                          "pseudobulk",
+                                          "differential",
+                                          "high_moi_sceptre",
+                                          "high_moi_association"
+                                      ],
+                       "priority":  200,
+                       "requires":  [
+                                        "controls_defined",
+                                        "guide_assignment_validated",
+                                        "guide_counts_available"
+                                    ],
+                       "when":  {
+                                    "moi_in":  [
+                                                   "high"
+                                               ]
+                                },
+                       "when_blocker":  "SCEPTRE requires an explicitly high-MOI design"
+                   },
+                   {
+                       "capability_id":  "de.pseudobulk.edger.v1",
+                       "min_replicates":  2,
+                       "min_replicates_blocker":  "no replicate-aware expression route is available",
+                       "objectives":  [
+                                          "association",
+                                          "de",
+                                          "differential_expression",
+                                          "expression",
+                                          "measured_effect",
+                                          "pseudobulk",
+                                          "differential",
+                                          "replicated_edger_effect",
+                                          "replicated_low_moi_expression",
+                                          "pseudobulk_edger"
+                                      ],
+                       "priority":  190,
+                       "requires":  [
+                                        "controls_defined",
+                                        "guide_assignment_validated"
+                                    ],
+                       "when":  {
+                                    "moi_in":  [
+                                                   "low"
+                                               ]
+                                },
+                       "when_blocker":  "edgeR requires an explicitly confirmed low-MOI design"
+                   },
+                   {
+                       "capability_id":  "composition.propeller.v1",
+                       "min_replicates":  2,
+                       "min_replicates_blocker":  "replicate-aware composition requires at least two units",
+                       "objectives":  [
+                                          "cell_state_composition",
+                                          "composition",
+                                          "composition_effect",
+                                          "propeller_composition"
+                                      ],
+                       "priority":  150,
+                       "requires":  [
+                                        "state_reference_available"
+                                    ]
+                   },
+                   {
+                       "capability_id":  "state.reference.fit.v1",
+                       "objectives":  [
+                                          "reference_state",
+                                          "state_fit",
+                                          "state_reference"
+                                      ],
+                       "priority":  100
+                   },
+                   {
+                       "capability_id":  "state.reference.map_knn.v1",
+                       "objectives":  [
+                                          "knn_mapping",
+                                          "map_state",
+                                          "state_mapping"
+                                      ],
+                       "priority":  100
+                   },
+                   {
+                       "capability_id":  "state.annotation_candidates.v1",
+                       "objectives":  [
+                                          "annotation_candidates",
+                                          "state_annotation"
+                                      ],
+                       "priority":  100
+                   },
+                   {
+                       "capability_id":  "module.learn.control_nmf.v1",
+                       "objectives":  [
+                                          "control_nmf",
+                                          "module",
+                                          "nmf",
+                                          "reference_module"
+                                      ],
+                       "priority":  100
+                   },
+                   {
+                       "capability_id":  "effect.guide_target_sensitivity.v1",
+                       "objectives":  [
+                                          "guide_loo",
+                                          "guide_sensitivity",
+                                          "leave_one_guide"
+                                      ],
+                       "priority":  100
+                   },
+                   {
+                       "capability_id":  "effect.module_global.v1",
+                       "objectives":  [
+                                          "global_effect",
+                                          "module_effect"
+                                      ],
+                       "priority":  100
+                   },
+                   {
+                       "capability_id":  "calibration.method_null.v1",
+                       "objectives":  [
+                                          "method_null",
+                                          "null_calibration"
+                                      ],
+                       "priority":  100
+                   },
+                   {
+                       "capability_id":  "target.reliability.aggregate.v1",
+                       "objectives":  [
+                                          "reliability",
+                                          "target_reliability"
+                                      ],
+                       "priority":  180,
+                       "requires":  [
+                                        "controls_defined",
+                                        "guide_assignment_validated"
+                                    ]
+                   },
+                   {
+                       "capability_id":  "effect.matrix.assemble.v1",
+                       "objectives":  [
+                                          "effect_matrix",
+                                          "assemble_effect_matrix"
+                                      ],
+                       "priority":  130
+                   },
+                   {
+                       "capability_id":  "program.response.signed_nmf.v1",
+                       "objectives":  [
+                                          "response_program",
+                                          "signed_nmf",
+                                          "response_programs"
+                                      ],
+                       "priority":  130
+                   },
+                   {
+                       "capability_id":  "program.perturbation.cluster.v1",
+                       "objectives":  [
+                                          "perturbation_cluster",
+                                          "cluster_perturbations"
+                                      ],
+                       "priority":  130
+                   },
+                   {
+                       "capability_id":  "enrichment.ora.v1",
+                       "objectives":  [
+                                          "ora",
+                                          "over_representation",
+                                          "pathway_ora"
+                                      ],
+                       "priority":  135
+                   },
+                   {
+                       "capability_id":  "enrichment.gsea_prerank.v1",
+                       "objectives":  [
+                                          "gsea",
+                                          "gsea_prerank",
+                                          "pathway_gsea",
+                                          "preranked_gsea"
+                                      ],
+                       "priority":  140
+                   },
+                   {
+                       "capability_id":  "regulator.activity.ulm.v1",
+                       "objectives":  [
+                                          "regulator_activity",
+                                          "ulm"
+                                      ],
+                       "priority":  140
+                   },
+                   {
+                       "capability_id":  "network.perturbation_regulator.v1",
+                       "objectives":  [
+                                          "regulator_network",
+                                          "perturbation_regulator_network"
+                                      ],
+                       "priority":  145
+                   },
+                   {
+                       "capability_id":  "literature.europepmc.v1",
+                       "objectives":  [
+                                          "literature",
+                                          "europe_pmc",
+                                          "literature_support",
+                                          "literature_search"
+                                      ],
+                       "priority":  130
+                   },
+                   {
+                       "capability_id":  "interpretation.evidence_map.v1",
+                       "objectives":  [
+                                          "evidence_map",
+                                          "interpret_results",
+                                          "interpretation"
+                                      ],
+                       "priority":  130
+                   },
+                   {
+                       "capability_id":  "virtual.split.contract.v1",
+                       "objectives":  [
+                                          "virtual_split",
+                                          "evaluation_split"
+                                      ],
+                       "priority":  130
+                   },
+                   {
+                       "capability_id":  "virtual.prediction.ingest.v1",
+                       "objectives":  [
+                                          "prediction_ingest",
+                                          "ingest_predictions",
+                                          "prediction_bundle"
+                                      ],
+                       "priority":  130
+                   },
+                   {
+                       "capability_id":  "design.next_panel.v1",
+                       "objectives":  [
+                                          "next_panel",
+                                          "next_experiment_design"
+                                      ],
+                       "priority":  140
+                   }
+               ],
+    "schema_version":  "pertura-capability-planner-routes-v1"
 }

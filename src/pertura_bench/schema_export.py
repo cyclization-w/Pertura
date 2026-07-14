@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from pertura_bench.agent_models import (
+    AgentBenchmarkResult,
     AgentWorkflowCase,
     AgentWorkflowVerdict,
     JudgeManifest,
@@ -31,6 +32,7 @@ from pertura_bench.models import (
 
 
 BENCHMARK_MODELS = (
+    AgentBenchmarkResult,
     AgentWorkflowCase,
     AgentWorkflowVerdict,
     JudgeManifest,

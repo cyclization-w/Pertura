@@ -1,0 +1,46 @@
+{
+  "schema_version": "pertura-reference-generator-catalog-v1",
+  "catalog_version": "v1",
+  "generators": {
+    "edger_direct_r_v1": {
+      "kind": "script",
+      "script": "runners/edger_reference.R",
+      "environment_profile": "edger-v1",
+      "independent_from_capability_runner": true
+    },
+    "propeller_direct_r_v1": {
+      "kind": "script",
+      "script": "runners/propeller_reference.R",
+      "environment_profile": "composition-v1",
+      "independent_from_capability_runner": true
+    },
+    "sceptre_direct_r_v1": {
+      "kind": "script",
+      "script": "runners/sceptre_reference.R",
+      "environment_profile": "sceptre-v1",
+      "independent_from_capability_runner": true
+    },
+    "seurat_mixscape_v1": {
+      "kind": "script",
+      "script": "runners/seurat_mixscape_reference.R",
+      "environment_profile": "external-seurat-reference",
+      "independent_from_capability_runner": true
+    },
+    "expert_adjudicated_v1": {
+      "kind": "curated_external",
+      "required_provenance": [
+        "reviewer_ids",
+        "adjudicator_id",
+        "source_artifact_sha256"
+      ]
+    },
+    "published_official_output_v1": {
+      "kind": "curated_external",
+      "required_provenance": [
+        "doi_or_pmid",
+        "table_or_supplement",
+        "source_artifact_sha256"
+      ]
+    }
+  }
+}

@@ -12,5 +12,6 @@
   },
   "intended_uses": ["intake", "single_combo_scope", "future_virtual_evaluator"],
   "license_review_url": "https://figshare.com/articles/dataset/27766323",
+  "license_status": "required",
   "download_tier": "nightly_or_manual"
 }

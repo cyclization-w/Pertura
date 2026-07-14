@@ -13,6 +13,7 @@ from pertura_runtime.project.models import (
 from pertura_runtime.project.store import ProjectStore
 from pertura_runtime.project.turns import (
     parse_turn_draft,
+    render_baseline_turn_draft,
     render_turn_draft,
     working_note_final,
     write_turn_final,
@@ -108,9 +109,27 @@ class TurnCheckpointManager:
         artifact_ids: tuple[str, ...] = (),
         usage: dict[str, Any] | None = None,
         trace: dict[str, Any] | None = None,
+        render_mode: str = "pertura",
     ) -> TurnFinal:
         if self.turn is None:
             raise RuntimeError("turn has not started")
+        if render_mode not in {"pertura", "baseline"}:
+            raise ValueError(f"unsupported turn render mode: {render_mode}")
+
+        def render(draft: Any) -> TurnFinal:
+            if render_mode == "baseline":
+                return render_baseline_turn_draft(
+                    turn_id=self.turn.turn_id,
+                    status=status,
+                    draft=draft,
+                )
+            return render_turn_draft(
+                turn_id=self.turn.turn_id,
+                status=status,
+                draft=draft,
+                resolve_result=resolve_result,
+            )
+
         repaired = raw_output
         first_error: Exception | None = None
         try:
@@ -129,12 +148,7 @@ class TurnCheckpointManager:
                         error=f"{type(first_error).__name__}: {first_error}; repair failed: {type(repair_exc).__name__}: {repair_exc}",
                     )
                 else:
-                    final = render_turn_draft(
-                        turn_id=self.turn.turn_id,
-                        status=status,
-                        draft=draft,
-                        resolve_result=resolve_result,
-                    )
+                    final = render(draft)
             else:
                 final = working_note_final(
                     turn_id=self.turn.turn_id,
@@ -143,12 +157,7 @@ class TurnCheckpointManager:
                     error=f"{type(exc).__name__}: {exc}",
                 )
         else:
-            final = render_turn_draft(
-                turn_id=self.turn.turn_id,
-                status=status,
-                draft=draft,
-                resolve_result=resolve_result,
-            )
+            final = render(draft)
         write_turn_final(self.project.run_workspace(self.run_id).root, final)
         self.project.store.complete_turn(
             self.turn.turn_id,

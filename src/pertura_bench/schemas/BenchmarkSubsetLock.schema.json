@@ -29,6 +29,30 @@
       "title": "Schema Version",
       "type": "string"
     },
+    "selected_ids_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Ids Sha256"
+    },
+    "selection_manifest_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selection Manifest Sha256"
+    },
     "source_lock_hash": {
       "title": "Source Lock Hash",
       "type": "string"

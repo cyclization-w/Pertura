@@ -114,7 +114,7 @@ def fetch_benchmark(
         artifact_sha256="sha256:" + sha256.hexdigest(),
         size_bytes=destination.stat().st_size,
         upstream_checksum="md5:" + md5.hexdigest(),
-        license_status="reviewed",
+        license_status=manifest.license_status,
     )
     lock_path = cache_path / f"{manifest.dataset_id}.lock.json"
     if lock_path.exists():
@@ -150,7 +150,7 @@ def finalize_conversion(
         conversion_script_hash=file_sha256(script),
         parameters={"output_format": output.suffix.lower().lstrip(".")},
         package_versions=package_versions or {},
-        license_status="reviewed",
+        license_status=manifest.license_status,
     )
 
 
@@ -220,9 +220,19 @@ def subset_h5ad(input_path: str | Path, output_path: str | Path, spec: Benchmark
         selected.extend(indices.tolist())
     if not selected:
         raise ValueError("benchmark subset selection retained no cells")
-    subset = data[sorted(selected)].to_memory()
+    selected_indices = sorted(selected)
+    selected_ids = [str(data.obs_names[index]) for index in selected_indices]
+    if len(selected_ids) != len(set(selected_ids)):
+        raise ValueError("benchmark subset contains duplicate cell identities")
+    subset = data[selected_indices].to_memory()
     destination.parent.mkdir(parents=True, exist_ok=True)
     subset.write_h5ad(destination)
+    selection_manifest = destination.parent / "selection.ids.json"
+    selection_manifest.write_text(
+        json.dumps(selected_ids, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     script = Path(__file__).resolve()
     return BenchmarkSubsetLock(
         dataset_id=spec.dataset_id,
@@ -232,6 +242,8 @@ def subset_h5ad(input_path: str | Path, output_path: str | Path, spec: Benchmark
         n_cells=subset.n_obs,
         n_genes=subset.n_vars,
         subset_script_hash=file_sha256(script),
+        selected_ids_sha256=canonical_hash(selected_ids),
+        selection_manifest_sha256=file_sha256(selection_manifest),
     )
 
 

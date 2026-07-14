@@ -9,6 +9,10 @@ import numpy as np
 from pertura_core import CapabilityRunRequest, DatasetContract, ScopeKey
 from pertura_workflow.capabilities import CapabilityRegistry
 from pertura_workflow.capabilities.executors import execute_capability
+from pertura_workflow.capabilities.guide_candidates import (
+    _scrublet_subset_plan,
+    run_moi_doublet,
+)
 
 
 def _contract(
@@ -569,3 +573,32 @@ def test_candidate_r_adapters_accept_complete_protocol_outputs(monkeypatch, tmp_
     assert propeller.status.value == "completed_with_caution"
     assert propeller.metrics["n_independent_units_per_arm"] == 3
     assert propeller.metrics["n_states"] == 2
+
+
+def test_scrublet_plan_scans_only_selected_cells_and_detected_features() -> None:
+    class Inspection:
+        X = np.asarray(
+            [
+                [1, 0, 9, 0],
+                [0, 7, 9, 0],
+                [2, 0, 9, 0],
+                [0, 8, 9, 0],
+                [3, 0, 9, 0],
+            ],
+            dtype=float,
+        )
+        n_vars = 4
+
+    feature_mask, nonzero_count, dense_source = _scrublet_subset_plan(
+        Inspection(), np.asarray([0, 2, 4]), chunk_rows=2
+    )
+
+    assert dense_source is True
+    assert nonzero_count == 6
+    assert feature_mask.tolist() == [True, False, True, False]
+    import inspect
+
+    assert "inspection.to_memory()" not in inspect.getsource(run_moi_doublet)
+    assert "inspection[selected_indices, feature_mask].to_memory()" in inspect.getsource(
+        run_moi_doublet
+    )

@@ -1,0 +1,306 @@
+from __future__ import annotations
+
+import math
+import re
+from pathlib import Path
+from typing import Any, Mapping, Sequence
+
+from pertura_core.hashing import file_sha256
+
+
+def evaluate_artifact_metrics(
+    result: Mapping[str, Any],
+    evaluators: Sequence[Mapping[str, Any]],
+    *,
+    output_root: Path | None,
+    reference_root: Path | None,
+) -> dict[str, Any]:
+    """Compare capability artifacts with independently frozen references."""
+
+    continuous: dict[str, float | int | str | None] = {}
+    comparisons: list[bool] = []
+    reference_hashes: dict[str, str] = {}
+    required_outputs: set[str] = set()
+    limitations: list[str] = []
+    for raw in evaluators:
+        evaluator_id = str(raw.get("evaluator_id") or "")
+        evaluator_type = str(raw.get("type") or "")
+        observed_name = str(raw.get("observed_output") or "")
+        reference_name = str(raw.get("reference_path") or "")
+        reference_hash = str(raw.get("reference_sha256") or "")
+        required_outputs.add(observed_name)
+        if output_root is None or reference_root is None:
+            comparisons.append(False)
+            limitations.append(
+                f"{evaluator_id}: artifact/reference roots are unavailable"
+            )
+            continue
+        try:
+            observed_path = _resolve_observed_output(
+                result, output_root=output_root, logical_name=observed_name
+            )
+            reference_path = _resolve_relative_file(
+                reference_root, reference_name, label="metric reference"
+            )
+            if file_sha256(reference_path) != reference_hash:
+                raise ValueError("metric reference checksum mismatch")
+            reference_hashes[f"metric_reference:{evaluator_id}"] = reference_hash
+            observed = _read_table(observed_path)
+            reference = _read_table(reference_path)
+            if evaluator_type == "table_numeric":
+                passed, metrics = _compare_numeric_tables(observed, reference, raw)
+            elif evaluator_type == "classification":
+                passed, metrics = _compare_classification(observed, reference, raw)
+            elif evaluator_type == "rank_concordance":
+                passed, metrics = _compare_rank(observed, reference, raw)
+            else:
+                raise ValueError(f"unsupported metric evaluator type: {evaluator_type}")
+        except (FileNotFoundError, ImportError, OSError, TypeError, ValueError) as exc:
+            comparisons.append(False)
+            limitations.append(f"{evaluator_id}: {exc}")
+            continue
+        comparisons.append(passed)
+        continuous.update(
+            {f"{evaluator_id}.{name}": value for name, value in metrics.items()}
+        )
+        if not passed:
+            limitations.append(
+                f"{evaluator_id}: frozen artifact comparison did not meet its threshold"
+            )
+    return {
+        "comparisons": tuple(comparisons),
+        "continuous_metrics": continuous,
+        "reference_hashes": reference_hashes,
+        "required_outputs": tuple(sorted(required_outputs)),
+        "limitations": tuple(limitations),
+    }
+
+
+def validate_artifact_evaluator(raw: Mapping[str, Any], *, context: str) -> None:
+    evaluator_id = str(raw.get("evaluator_id") or "")
+    evaluator_type = str(raw.get("type") or "")
+    observed_output = str(raw.get("observed_output") or "")
+    reference_path = str(raw.get("reference_path") or "")
+    reference_hash = str(raw.get("reference_sha256") or "")
+    if not evaluator_id or evaluator_type not in {
+        "table_numeric",
+        "classification",
+        "rank_concordance",
+    }:
+        raise ValueError(f"invalid artifact evaluator identity: {context}")
+    if (not observed_output or "\\" in observed_output or ":" in observed_output or Path(observed_output).is_absolute()):
+        raise ValueError(f"artifact evaluator output must be logical/relative: {context}")
+    relative = Path(reference_path)
+    if (not reference_path or "\\" in reference_path or ":" in reference_path or relative.is_absolute() or ".." in relative.parts):
+        raise ValueError(f"artifact evaluator reference escapes catalog root: {context}")
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", reference_hash) is None:
+        raise ValueError(f"artifact evaluator reference hash is invalid: {context}")
+    key_columns = raw.get("key_columns")
+    if not isinstance(key_columns, list) or not key_columns:
+        raise ValueError(f"artifact evaluator requires key_columns: {context}")
+    if evaluator_type == "table_numeric":
+        value_columns = raw.get("value_columns")
+        if not isinstance(value_columns, list) or not value_columns:
+            raise ValueError(
+                f"numeric artifact evaluator requires value_columns: {context}"
+            )
+        if float(raw.get("absolute_tolerance", 0.0)) < 0 or float(
+            raw.get("relative_tolerance", 0.0)
+        ) < 0:
+            raise ValueError(f"numeric tolerances must be non-negative: {context}")
+    elif evaluator_type == "classification":
+        if not str(raw.get("observed_label_column") or "") or not str(
+            raw.get("reference_label_column") or ""
+        ):
+            raise ValueError(
+                f"classification evaluator requires label columns: {context}"
+            )
+    elif evaluator_type == "rank_concordance":
+        if not str(raw.get("observed_value_column") or "") or not str(
+            raw.get("reference_value_column") or ""
+        ):
+            raise ValueError(
+                f"rank evaluator requires value columns: {context}"
+            )
+
+
+def _resolve_observed_output(
+    result: Mapping[str, Any], *, output_root: Path, logical_name: str
+) -> Path:
+    root = output_root.resolve()
+    candidates: list[Path] = []
+    for raw in result.get("output_paths") or ():
+        path = Path(str(raw))
+        candidate = path.resolve() if path.is_absolute() else (root / path).resolve()
+        if candidate != root and root not in candidate.parents:
+            continue
+        if str(raw) == logical_name or candidate.name == Path(logical_name).name:
+            candidates.append(candidate)
+        elif candidate.as_posix().endswith(Path(logical_name).as_posix()):
+            candidates.append(candidate)
+    unique = sorted(set(candidates))
+    if len(unique) != 1 or not unique[0].is_file():
+        raise FileNotFoundError(
+            f"observed output {logical_name!r} is missing or ambiguous"
+        )
+    return unique[0]
+
+
+def _resolve_relative_file(root: Path, relative_name: str, *, label: str) -> Path:
+    base = root.resolve()
+    path = (base / relative_name).resolve()
+    if path != base and base not in path.parents:
+        raise ValueError(f"{label} escapes its declared root")
+    if not path.is_file():
+        raise FileNotFoundError(f"{label} is missing: {relative_name}")
+    return path
+
+
+def _read_table(path: Path):
+    try:
+        import pandas as pd
+    except ImportError as exc:  # pragma: no cover - benchmark environment contract
+        raise ImportError("pandas is required for artifact metric evaluation") from exc
+    suffix = path.suffix.lower()
+    if suffix in {".parquet", ".pq"}:
+        return pd.read_parquet(path)
+    if suffix in {".tsv", ".txt"}:
+        return pd.read_csv(path, sep="\t")
+    if suffix == ".csv":
+        return pd.read_csv(path)
+    if suffix == ".json":
+        return pd.read_json(path)
+    raise ValueError(f"unsupported metric table format: {suffix}")
+
+
+def _aligned_tables(observed, reference, key_columns: Sequence[str]):
+    keys = [str(item) for item in key_columns]
+    for table, label in ((observed, "observed"), (reference, "reference")):
+        missing = [name for name in keys if name not in table.columns]
+        if missing:
+            raise ValueError(f"{label} table lacks key columns: {missing}")
+        if table.duplicated(keys).any():
+            raise ValueError(f"{label} table contains duplicate metric keys")
+    observed_indexed = observed.set_index(keys).sort_index()
+    reference_indexed = reference.set_index(keys).sort_index()
+    if not observed_indexed.index.equals(reference_indexed.index):
+        raise ValueError("observed/reference key sets differ")
+    return observed_indexed, reference_indexed
+
+
+def _compare_numeric_tables(observed, reference, spec: Mapping[str, Any]):
+    import numpy as np
+
+    observed, reference = _aligned_tables(
+        observed, reference, spec.get("key_columns") or ()
+    )
+    columns = [str(item) for item in spec.get("value_columns") or ()]
+    if not columns:
+        raise ValueError("table_numeric evaluator requires value_columns")
+    abs_tolerance = float(spec.get("absolute_tolerance", 0.0))
+    rel_tolerance = float(spec.get("relative_tolerance", 0.0))
+    metrics: dict[str, float | int] = {}
+    passed = True
+    for column in columns:
+        if column not in observed or column not in reference:
+            raise ValueError(f"numeric comparison column is missing: {column}")
+        left = observed[column].to_numpy(dtype=float)
+        right = reference[column].to_numpy(dtype=float)
+        finite = np.isfinite(left) & np.isfinite(right)
+        absolute = np.abs(left - right)
+        relative = absolute / np.maximum(np.abs(right), 1e-12)
+        cell_passed = finite & (
+            (absolute <= abs_tolerance) | (relative <= rel_tolerance)
+        )
+        failures = int((~cell_passed).sum())
+        metrics[f"{column}.max_absolute_error"] = (
+            float(absolute[finite].max()) if finite.any() else math.inf
+        )
+        metrics[f"{column}.max_relative_error"] = (
+            float(relative[finite].max()) if finite.any() else math.inf
+        )
+        metrics[f"{column}.failed_values"] = failures
+        passed = passed and failures == 0
+    metrics["row_count"] = int(len(observed))
+    return passed, metrics
+
+
+def _compare_classification(observed, reference, spec: Mapping[str, Any]):
+    observed, reference = _aligned_tables(
+        observed, reference, spec.get("key_columns") or ()
+    )
+    observed_column = str(spec.get("observed_label_column") or "verdict")
+    reference_column = str(spec.get("reference_label_column") or "verdict")
+    if observed_column not in observed or reference_column not in reference:
+        raise ValueError("classification label column is missing")
+    if observed[observed_column].isna().any() or reference[
+        reference_column
+    ].isna().any():
+        raise ValueError("classification labels contain missing values")
+    predictions = observed[observed_column].astype(str)
+    truth = reference[reference_column].astype(str)
+    labels = sorted(set(predictions) | set(truth))
+    recalls: dict[str, float] = {}
+    f1_values: list[float] = []
+    for label in labels:
+        true_positive = int(((predictions == label) & (truth == label)).sum())
+        false_positive = int(((predictions == label) & (truth != label)).sum())
+        false_negative = int(((predictions != label) & (truth == label)).sum())
+        precision = true_positive / max(true_positive + false_positive, 1)
+        recall = true_positive / max(true_positive + false_negative, 1)
+        recalls[label] = recall
+        f1_values.append(
+            2 * precision * recall / max(precision + recall, 1e-12)
+        )
+    accuracy = float((predictions == truth).mean())
+    macro_f1 = float(sum(f1_values) / max(len(f1_values), 1))
+    metrics: dict[str, float | int] = {
+        "accuracy": accuracy,
+        "macro_f1": macro_f1,
+        "row_count": int(len(truth)),
+    }
+    for label, recall in recalls.items():
+        metrics[f"recall.{label}"] = recall
+    passed = accuracy >= float(spec.get("minimum_accuracy", 0.0))
+    passed = passed and macro_f1 >= float(spec.get("minimum_macro_f1", 0.0))
+    blocked_label = spec.get("blocked_label")
+    if blocked_label is not None:
+        non_blocked_truth = truth != str(blocked_label)
+        false_block_count = int(
+            ((predictions == str(blocked_label)) & non_blocked_truth).sum()
+        )
+        non_blocked_count = int(non_blocked_truth.sum())
+        false_block = (
+            false_block_count / non_blocked_count
+            if non_blocked_count
+            else 0.0
+        )
+        metrics["false_block_rate"] = false_block
+        metrics["false_block_count"] = false_block_count
+        metrics["non_blocked_reference_count"] = non_blocked_count
+        passed = passed and false_block <= float(
+            spec.get("maximum_false_block_rate", 1.0)
+        )
+    return passed, metrics
+
+
+def _compare_rank(observed, reference, spec: Mapping[str, Any]):
+    observed, reference = _aligned_tables(
+        observed, reference, spec.get("key_columns") or ()
+    )
+    observed_column = str(spec.get("observed_value_column") or "effect")
+    reference_column = str(spec.get("reference_value_column") or "effect")
+    if observed_column not in observed or reference_column not in reference:
+        raise ValueError("rank comparison value column is missing")
+    left = observed[observed_column].astype(float)
+    right = reference[reference_column].astype(float)
+    if not all(math.isfinite(value) for value in (*left.tolist(), *right.tolist())):
+        raise ValueError("rank comparison contains NA or infinite values")
+    correlation = float(left.rank(method="average").corr(right.rank(method="average")))
+    if not math.isfinite(correlation):
+        raise ValueError("rank correlation is undefined")
+    minimum = float(spec.get("minimum_spearman", 0.0))
+    return correlation >= minimum, {
+        "spearman": correlation,
+        "row_count": int(len(left)),
+    }

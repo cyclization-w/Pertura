@@ -362,6 +362,9 @@ def run_moi_doublet(
     }
 
     doublet_scores: dict[str, float] = {}
+    scrublet_input_cells = 0
+    scrublet_input_features = 0
+    scrublet_estimated_peak_bytes = 0
     threshold = float(request.parameters.get("doublet_threshold", 0.25))
     metadata_value = request.parameters.get("metadata_path")
     if metadata_value:
@@ -388,17 +391,71 @@ def run_moi_doublet(
                 budget = resource_budget(request.parameters)
                 inspection = ad.read_h5ad(h5ad_path, backed="r")
                 try:
-                    estimated = budget.dense_bytes(
-                        int(inspection.n_obs), int(inspection.n_vars), arrays=3
+                    import numpy as np
+
+                    assignment_cells = {
+                        str(item.get("raw_barcode"))
+                        for item in assignments
+                        if item.get("raw_barcode")
+                    }
+                    selected_indices = np.flatnonzero(
+                        inspection.obs_names.astype(str).isin(assignment_cells)
                     )
+                    if not len(selected_indices):
+                        return blocked(
+                            spec,
+                            request,
+                            contract,
+                            "assignment barcodes have no overlap with Scrublet expression input",
+                        )
+                    if len(selected_indices) < 3:
+                        return blocked(
+                            spec,
+                            request,
+                            contract,
+                            "Scrublet requires at least three assignment-overlapping cells",
+                        )
+                    feature_mask, nonzero_count, dense_source = _scrublet_subset_plan(
+                        inspection,
+                        selected_indices,
+                        chunk_rows=budget.chunk_rows,
+                    )
+                    selected_features = int(feature_mask.sum())
+                    if not selected_features:
+                        return blocked(
+                            spec,
+                            request,
+                            contract,
+                            "Scrublet expression subset has no detected features",
+                        )
+                    if dense_source:
+                        materialized_bytes = budget.dense_bytes(
+                            len(selected_indices), selected_features, arrays=4
+                        )
+                    else:
+                        materialized_bytes = 4 * (
+                            int(nonzero_count) * 16
+                            + (len(selected_indices) + 1) * 8
+                        )
+                    component_count = max(2, min(50, selected_features, len(selected_indices) - 1))
+                    estimated = (
+                        materialized_bytes
+                        + budget.dense_bytes(
+                            len(selected_indices), component_count, arrays=8
+                        )
+                        + selected_features * 32
+                    )
+                    scrublet_input_cells = int(len(selected_indices))
+                    scrublet_input_features = selected_features
+                    scrublet_estimated_peak_bytes = int(estimated)
                     if estimated > budget.max_bytes:
                         return blocked(
                             spec,
                             request,
                             contract,
-                            f"Scrublet working-set estimate {estimated / 1024**3:.3f} GB exceeds max_memory_gb={budget.max_memory_gb}",
+                            f"Scrublet selected working-set estimate {estimated / 1024**3:.3f} GB exceeds max_memory_gb={budget.max_memory_gb}",
                         )
-                    data = inspection.to_memory()
+                    data = inspection[selected_indices, feature_mask].to_memory()
                 finally:
                     if getattr(inspection, "file", None):
                         inspection.file.close()
@@ -409,6 +466,8 @@ def run_moi_doublet(
                 }
             except ModuleNotFoundError:
                 cautions.append("Scrublet environment is unavailable; doublet status is unresolved")
+            except (MemoryError, ValueError) as exc:
+                return blocked(spec, request, contract, str(exc))
         else:
             cautions.append("no doublet scores or expression input were provided")
     predicted = {
@@ -437,9 +496,41 @@ def run_moi_doublet(
             "n_multi_guide": sum(multi_guide.values()),
             "n_predicted_doublet": sum(predicted.values()),
             "doublet_status": "estimated" if doublet_scores else "unresolved",
+            "scrublet_input_cells": scrublet_input_cells,
+            "scrublet_input_features": scrublet_input_features,
+            "scrublet_estimated_peak_bytes": scrublet_estimated_peak_bytes,
         },
         outputs=(output,),
     )
+
+
+def _scrublet_subset_plan(inspection, selected_indices, *, chunk_rows: int):
+    import numpy as np
+    from scipy import sparse
+
+    if inspection.X is None:
+        raise ValueError("Scrublet expression matrix is missing")
+    detected = np.zeros(int(inspection.n_vars), dtype=np.int64)
+    nonzero_count = 0
+    dense_source = False
+    for start in range(0, len(selected_indices), max(1, int(chunk_rows))):
+        indices = selected_indices[start : start + max(1, int(chunk_rows))]
+        block = inspection.X[indices, :]
+        block = block.to_memory() if hasattr(block, "to_memory") else block
+        if sparse.issparse(block):
+            matrix = block.tocsr()
+            detected += np.asarray((matrix != 0).sum(axis=0)).ravel()
+            nonzero_count += int(matrix.nnz)
+        else:
+            dense_source = True
+            matrix = np.asarray(block)
+            detected += np.count_nonzero(matrix, axis=0)
+            nonzero_count += int(np.count_nonzero(matrix))
+    minimum_cells = max(1, min(3, len(selected_indices)))
+    feature_mask = detected >= minimum_cells
+    if not feature_mask.any():
+        feature_mask = detected > 0
+    return feature_mask, nonzero_count, dense_source
 
 
 def run_retained_cells(

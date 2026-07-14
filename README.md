@@ -5,7 +5,7 @@
 Pertura lets an LLM inspect files, write Python/R, use Bash and notebooks, while keeping scientific statements tied to committed analysis results. The agent remains flexible; dataset contracts, dependency resolution, execution provenance, claim ceilings, and report rendering live outside the model.
 
 > [!IMPORTANT]
-> **Current status: `0.2.0a11` research alpha.** Local product and synthetic protocols are implemented. Expanded capabilities remain exploratory and `synthetic_only` until real-data server benchmarks are complete. Pertura is not a production-validated scientific or clinical decision system.
+> **Current status: `0.2.0a13` research alpha.** Local product and synthetic protocols are implemented. Expanded capabilities remain exploratory and `synthetic_only` until real-data server benchmarks are complete. Pertura is not a production-validated scientific or clinical decision system.
 
 ## Why Pertura?
 
@@ -163,7 +163,7 @@ flowchart TD
     S["210 synthetic capability cases"] --> C["Code and protocol readiness"]
     L["12 local workflow cases"] --> C
     D["Locked real datasets"] --> R["Scientific v3 verdicts"]
-    A["8 cases x 3 conditions x 2 repeats"] --> W["Agent workflow verdicts"]
+    A["6 primary cases x 3 conditions x 2 repeats"] --> W["Agent workflow verdicts"]
     R --> B["Benchmark evidence"]
     W --> B
 ```
@@ -187,7 +187,7 @@ metric-references.json
 
 The initial datasets are Replogle, Papalexi, Norman, and Kang. Kang is used only as a replicated statistical reference, not presented as Perturb-seq.
 
-The agent comparison runs the same Claude model, data, task, context, time, and resources under `pertura_full`, `prompt_only`, and `free_codeact`. Eight cases, three conditions, and two repeats produce 48 primary runs. Narrative judging uses fixed `deepseek-v4-pro` with no fallback.
+The agent comparison runs the same Claude model, data, task, context, time, scheduler/cgroup-enforced resources, and scientific reference catalog under `pertura_full`, `prompt_only`, and `free_codeact`. Every condition writes the same provider-neutral `benchmark_result.json`; formatting alone cannot pass without case-specific frozen scientific metrics. Six Perturb-seq cases, three conditions, and two repeats produce 36 primary runs. The two Kang agent cases are supplemental statistical demonstrations and do not enter the primary system comparison. Narrative judging uses fixed `deepseek-v4-pro` with no fallback.
 
 See [benchmark design](docs/benchmark_design.md) and the [server operations guide](docs/16_server_benchmark_operations_and_extension_guide.md).
 
@@ -196,7 +196,7 @@ See [benchmark design](docs/benchmark_design.md) and the [server operations guid
 The checked-in protocol targets:
 
 ```text
-build_version:              0.2.0a11
+build_version:              0.2.0a13
 repository_ready:           true
 runtime_spine_ready:        true
 dependency_policy_ready:    true

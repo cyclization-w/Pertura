@@ -20,7 +20,7 @@ from pertura_bench.capability_models import CapabilityBenchmarkCase
 from pertura_bench.cli import main as benchmark_main
 from pertura_bench.models import BenchmarkArtifactLock, BenchmarkSubsetLock
 from pertura_bench.operations import require_repo_root, source_manifests
-from pertura_core.hashing import file_sha256
+from pertura_core.hashing import canonical_hash, file_sha256
 
 
 def test_candidate_matrix_uses_current_verdicts_not_code_presence() -> None:
@@ -113,7 +113,7 @@ def test_synthetic_verdicts_are_deterministic_and_real_tier_requires_locks(
         cache=tmp_path,
         output=tmp_path / "verdicts",
     )
-    assert {item["outcome"] for item in real} == {"not_available"}
+    assert {item["outcome"] for item in real} == {"not_configured"}
 
 
 def test_server_plan_is_scheduler_neutral_and_has_no_manual_placeholders() -> None:
@@ -458,3 +458,87 @@ def test_repo_root_guard_points_outer_checkout_to_inner_repo(tmp_path: Path) -> 
     )
     with pytest.raises(ValueError, match="detected nested Pertura checkout"):
         require_repo_root(tmp_path)
+
+
+def test_real_lock_chain_rejects_overlapping_calibration_and_evaluation_cells(
+    tmp_path: Path,
+) -> None:
+    import pertura_bench.operations as benchmark_operations
+
+    root = Path(__file__).resolve().parents[2]
+    dataset_id = "replogle_k562_essential_2022"
+    manifest = source_manifests(root)[dataset_id][1]
+    converted = tmp_path / "datasets" / dataset_id / "converted"
+    converted.mkdir(parents=True)
+    artifact = converted / "artifact.h5ad"
+    artifact.write_bytes(b"locked full artifact")
+    artifact_lock = BenchmarkArtifactLock(
+        dataset_id=dataset_id,
+        source_manifest_hash=manifest.canonical_hash,
+        artifact_sha256=file_sha256(artifact),
+        size_bytes=artifact.stat().st_size,
+        license_status="reviewed",
+    )
+    (converted / "artifact.lock.json").write_text(
+        json.dumps(artifact_lock.model_dump(mode="json")),
+        encoding="utf-8",
+    )
+    (converted / "artifact.local.json").write_text(
+        json.dumps(
+            {
+                "artifact_path": str(artifact),
+                "lock_id": artifact_lock.lock_id,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    selections = {
+        "calibration": ["cell-a", "cell-overlap"],
+        "evaluation": ["cell-overlap", "cell-b"],
+    }
+    for split, cell_ids in selections.items():
+        subset_root = (
+            tmp_path / "datasets" / dataset_id / "subset" / split
+        )
+        subset_root.mkdir(parents=True)
+        subset = subset_root / "artifact.h5ad"
+        subset.write_bytes(f"subset-{split}".encode("utf-8"))
+        selection = subset_root / "selection.ids.json"
+        selection.write_text(
+            json.dumps(cell_ids, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        lock = BenchmarkSubsetLock(
+            dataset_id=dataset_id,
+            subset_spec_hash="sha256:" + ("1" if split == "calibration" else "2") * 64,
+            source_lock_hash=artifact_lock.canonical_hash,
+            output_sha256=file_sha256(subset),
+            n_cells=len(cell_ids),
+            n_genes=3,
+            subset_script_hash=file_sha256(Path(benchmark_operations.__file__)),
+            selected_ids_sha256=canonical_hash(cell_ids),
+            selection_manifest_sha256=file_sha256(selection),
+        )
+        (subset_root / "subset.lock.json").write_text(
+            json.dumps(lock.model_dump(mode="json")),
+            encoding="utf-8",
+        )
+        (subset_root / "subset.local.json").write_text(
+            json.dumps(
+                {
+                    "artifact_path": str(subset),
+                    "lock_id": lock.subset_lock_id,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    with pytest.raises(ValueError, match="overlap by 1 cell identities"):
+        resolve_real_artifact_chain(
+            root,
+            dataset_id=dataset_id,
+            tier="frozen_subset",
+            split="evaluation",
+            cache=tmp_path,
+        )

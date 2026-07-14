@@ -1,0 +1,130 @@
+{
+  "$defs": {
+    "AgentBenchmarkFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_roles": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Roles",
+          "type": "array"
+        },
+        "finding_id": {
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "metric_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Metric Ids",
+          "type": "array"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding_id",
+        "text"
+      ],
+      "title": "AgentBenchmarkFinding",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Condition-neutral scientific output for controlled comparison.\n\nIt is a benchmark measurement surface, not Pertura claim authority.",
+  "properties": {
+    "analysis_unit": {
+      "title": "Analysis Unit",
+      "type": "string"
+    },
+    "artifact_roles": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Artifact Roles",
+      "type": "array"
+    },
+    "case_id": {
+      "title": "Case Id",
+      "type": "string"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "findings": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/AgentBenchmarkFinding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "metrics": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "title": "Metrics",
+      "type": "object"
+    },
+    "result_type": {
+      "title": "Result Type",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "pertura-agent-benchmark-result-v1",
+      "default": "pertura-agent-benchmark-result-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "blocked",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "case_id",
+    "dataset_id",
+    "result_type",
+    "analysis_unit",
+    "status"
+  ],
+  "title": "AgentBenchmarkResult",
+  "type": "object"
+}

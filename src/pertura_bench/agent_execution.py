@@ -7,6 +7,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from pertura_bench.synthetic_execution import force_loopback_transport
 from pertura_bench.agent_models import (
     AgentHardGateResult,
     AgentWorkflowCase,
@@ -101,7 +102,10 @@ async def _run_case(case: AgentWorkflowCase, root: Path) -> dict[str, Any]:
     authority_root = root / "authority"
     previous = os.environ.get("PERTURA_AUTHORITY_ROOT")
     os.environ["PERTURA_AUTHORITY_ROOT"] = str(authority_root)
-    runtime = PerturaProductRuntime(workspace, project_workspace=project, run_id=run.run_id)
+    runtime = PerturaProductRuntime(
+        workspace, project_workspace=project, run_id=run.run_id
+    )
+    force_loopback_transport(runtime)
     registry = DataAssetRegistry(project_id=project.project.project_id, store=project.store, object_root=project.objects_dir)
     try:
         if case.scenario == "project_h5ad":

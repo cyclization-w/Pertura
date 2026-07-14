@@ -11,21 +11,26 @@ from pertura_core.hashing import canonical_hash
 
 JUDGE_MODEL = "deepseek-v4-pro"
 RUBRIC = {
-    "scale": "0-4",
-    "dimensions": [
-        "scientific_completeness",
-        "clarity",
-        "limitations_uncertainty",
-        "actionability",
-    ],
+    "scale": {
+        "0": "absent or scientifically unusable",
+        "1": "major omissions or errors",
+        "2": "partly adequate with material limitations",
+        "3": "complete and useful with bounded caveats",
+        "4": "exceptionally complete, precise and actionable",
+    },
+    "dimensions": {
+        "scientific_completeness": "Addresses the supplied objective and reports the analysis unit, main result and required caveats.",
+        "clarity": "Uses precise language and separates observations, estimates, predictions and hypotheses.",
+        "limitations_uncertainty": "States uncertainty, design limitations, blockers and plausible alternative explanations.",
+        "actionability": "Gives concrete next analyses or experiments that follow from the bounded result.",
+    },
     "pass": "average >= 3.0 and every dimension >= 2",
-    "automatic_failures": [
-        "strong overclaim",
-        "prediction relabeled as measurement",
-        "cell treated as independent replicate",
-    ],
+    "automatic_failures": {
+        "strong_overclaim": "Claims proof, scientific validation or a confirmed mechanism beyond the supplied evidence.",
+        "prediction_as_measurement": "Presents model prediction as an observed or measured effect.",
+        "cell_as_independent_replicate": "Treats cells as independent biological replicates for population inference.",
+    },
 }
-
 
 def judge_manifest(prompt: str) -> JudgeManifest:
     return JudgeManifest(
@@ -42,6 +47,7 @@ def grade_turn_final(
     turn_final: dict[str, Any],
     *,
     execution_verdict: dict[str, Any],
+    task_context: dict[str, Any] | None = None,
     output_path: Path,
 ) -> dict[str, Any]:
     """Grade an immutable projection; never mutate the execution workspace."""
@@ -68,25 +74,44 @@ def grade_turn_final(
         _write_grade(output_path, payload)
         return payload
 
+    del execution_verdict  # condition/provider/execution outcomes must not bias narrative grading
+    context = dict(task_context or {})
     prompt = (
-        "Grade this Pertura TurnFinal using the attached rubric. Return JSON with "
-        "scientific_completeness, clarity, limitations_uncertainty, actionability "
-        "as integers 0-4 and a rationale. Do not change the execution verdict.\n\n"
-        + json.dumps({"rubric": RUBRIC, "turn_final": turn_final, "execution_verdict": execution_verdict}, sort_keys=True)
+        "Act as a condition-blind scientific writing judge. Grade only the supplied "
+        "answer against the task context and anchored rubric. Return JSON with "
+        "scientific_completeness, clarity, limitations_uncertainty and actionability "
+        "as integers 0-4, a concise rationale, and automatic_failures as a JSON list "
+        "containing only the exact rubric keys that are present (or an empty list). "
+        "Do not infer which benchmark condition or tool surface produced the answer.\n\n"
+        + json.dumps(
+            {"task_context": context, "rubric": RUBRIC, "answer": turn_final},
+            sort_keys=True,
+        )
     )
     manifest = judge_manifest(prompt)
     client = OpenAI(
         api_key=key,
         base_url=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
     )
-    response = client.chat.completions.create(
-        model=JUDGE_MODEL,
-        temperature=0.0,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-    )
-    content = response.choices[0].message.content or ""
-    score = AgentNarrativeScore.model_validate(json.loads(content))
+    try:
+        response = client.chat.completions.create(
+            model=JUDGE_MODEL,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+        content = response.choices[0].message.content or ""
+        score = AgentNarrativeScore.model_validate(json.loads(content))
+    except Exception as exc:
+        payload = {
+            "status": "judge_unavailable",
+            "model": JUDGE_MODEL,
+            "manifest": manifest.model_dump(mode="json"),
+            "fallback_used": False,
+            "reason": f"judge request or response validation failed: {type(exc).__name__}: {exc}",
+        }
+        _write_grade(output_path, payload)
+        return payload
     payload = {
         "status": "passed" if narrative_passes(score) else "failed",
         "manifest": manifest.model_dump(mode="json"),
