@@ -1,6 +1,6 @@
 suppressPackageStartupMessages({
   library(muscData)
-  library(zellkonverter)
+  library(anndataR)
   library(jsonlite)
   library(digest)
 })
@@ -10,11 +10,16 @@ if (length(args) != 1) stop("usage: Rscript convert_kang_to_h5ad.R OUTPUT.h5ad")
 output <- normalizePath(args[[1]], mustWork = FALSE)
 dir.create(dirname(output), recursive = TRUE, showWarnings = FALSE)
 object <- muscData::Kang18_8vs8()
-anndata_environment <- "0.11.4"
-zellkonverter::writeH5AD(
+if (!"counts" %in% SummarizedExperiment::assayNames(object)) {
+  stop("Kang18_8vs8 is missing the required counts assay")
+}
+anndataR::write_h5ad(
   object,
   output,
-  version = anndata_environment
+  compression = "gzip",
+  mode = "w",
+  x_mapping = "counts",
+  layers_mapping = FALSE
 )
 
 manifest <- list(
@@ -22,11 +27,12 @@ manifest <- list(
   dataset_id = "kang18_8vs8_pbmc",
   output = output,
   sha256 = paste0("sha256:", digest(file = output, algo = "sha256")),
+  writer = "anndataR::write_h5ad",
   packages = c(
     R = paste(R.version$major, R.version$minor, sep = "."),
     muscData = as.character(packageVersion("muscData")),
-    zellkonverter = as.character(packageVersion("zellkonverter")),
-    anndata_environment = anndata_environment
+    anndataR = as.character(packageVersion("anndataR")),
+    rhdf5 = as.character(packageVersion("rhdf5"))
   ),
   session_info = capture.output(sessionInfo())
 )

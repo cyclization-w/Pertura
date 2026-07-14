@@ -81,15 +81,17 @@ def test_conversion_lock_binds_script_without_local_paths(tmp_path: Path) -> Non
     assert lock.conversion_script_hash.startswith("sha256:")
 
 
-def test_kang_conversion_pins_anndata_environment() -> None:
+def test_kang_conversion_uses_native_r_h5ad_writer() -> None:
     root = Path(__file__).resolve().parents[2]
     script = (root / "scripts" / "convert_kang_to_h5ad.R").read_text(
         encoding="utf-8"
     )
 
-    assert 'anndata_environment <- "0.11.4"' in script
-    assert "version = anndata_environment" in script
-    assert "anndata_environment = anndata_environment" in script
+    assert "library(anndataR)" in script
+    assert "anndataR::write_h5ad(" in script
+    assert 'x_mapping = "counts"' in script
+    assert 'writer = "anndataR::write_h5ad"' in script
+    assert "zellkonverter" not in script
 
 
 def test_expert_split_minimums_and_proxy_validation_fail_closed() -> None:
