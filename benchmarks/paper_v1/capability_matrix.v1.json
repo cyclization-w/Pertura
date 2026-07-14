@@ -1,0 +1,621 @@
+{
+  "schema_version": "pertura-paper-capability-matrix-v1",
+  "benchmark_name": "Pertura Perturb-seq capability evaluation",
+  "scope": {
+    "capability_count": 44,
+    "scenario_count": 10,
+    "primary_datasets": [
+      "replogle_k562_essential_2022",
+      "papalexi_thp1_eccite",
+      "norman_k562_crispra_2019"
+    ],
+    "supplemental_datasets": [
+      "kang18_8vs8_pbmc"
+    ],
+    "principle": "Each capability receives an individual verdict while coherent scientific DAGs share data loading, dependencies, and reference artifacts."
+  },
+  "evidence_levels": [
+    "passed_real_reference",
+    "passed_planted_reference",
+    "passed_protocol",
+    "correctly_blocked",
+    "not_applicable",
+    "not_configured",
+    "failed"
+  ],
+  "verdict_dimensions": [
+    "applicability",
+    "artifact_correctness",
+    "scientific_metric_or_reference",
+    "dependency_consumption",
+    "claim_ceiling"
+  ],
+  "scenarios": [
+    {
+      "scenario_id": "CAP-01",
+      "title": "Dataset intake and experimental-design identifiability",
+      "datasets": [
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019",
+        "kang18_8vs8_pbmc"
+      ],
+      "scientific_questions": [
+        "Can the runtime distinguish counts, normalized expression, and transformed layers?",
+        "Can it identify controls, perturbations, independent units, MOI, and guide design without guessing?",
+        "Does it block analyses when replicate structure or estimands are not identifiable?"
+      ],
+      "critical_failures": [
+        "wrong_expression_layer",
+        "duplicate_or_misaligned_cell_ids",
+        "missing_independent_replicates",
+        "replicate_condition_confounding",
+        "inferred_moi_used_as_confirmed",
+        "non_perturb_seq_dataset_misclassified"
+      ],
+      "capabilities": [
+        {
+          "capability_id": "intake.materialize.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Materialize the declared matrix and identities without changing cell or gene identity.",
+          "negative_expectation": "Block nonnumeric, misaligned, duplicated, or over-budget inputs before scientific analysis.",
+          "reference": "Source H5AD dimensions, identity hashes, layer metadata, and sparse/dense invariants.",
+          "metrics": ["cell_count_error", "gene_count_error", "identity_hash_match", "matrix_scale_classification"]
+        },
+        {
+          "capability_id": "diagnostic.contract_integrity.v1",
+          "target_evidence_level": "passed_protocol",
+          "positive_expectation": "Report confirmed, inferred, and unresolved contract fields separately.",
+          "negative_expectation": "Never promote inferred design facts to confirmed facts.",
+          "reference": "Frozen design-confirmation records and planted unresolved fields.",
+          "metrics": ["confirmed_field_precision", "unresolved_field_recall", "false_confirmation_count"]
+        },
+        {
+          "capability_id": "diagnostic.dataset_integrity.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Detect matrix, identity, missingness, and layer-integrity problems.",
+          "negative_expectation": "Block planted structural corruption and report the affected artifact.",
+          "reference": "Source artifact profile plus planted corruption fixtures.",
+          "metrics": ["integrity_issue_recall", "integrity_issue_precision", "false_pass_count"]
+        },
+        {
+          "capability_id": "diagnostic.design_balance.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Summarize perturbation, control, replicate, donor, and batch balance at the correct unit.",
+          "negative_expectation": "Block or caution on confounding, missing replicates, and unsupported estimands.",
+          "reference": "Direct tabulations from frozen cell-selection metadata.",
+          "metrics": ["unit_count_error", "arm_balance_error", "confounding_detection", "cell_as_replicate_error"]
+        }
+      ]
+    },
+    {
+      "scenario_id": "CAP-02",
+      "title": "Guide identity, assignment, and ambient contamination",
+      "datasets": [
+        "papalexi_thp1_eccite",
+        "replogle_k562_essential_2022"
+      ],
+      "scientific_questions": [
+        "Are RNA and guide barcodes aligned?",
+        "Are guide-to-target mappings complete and nonconflicting?",
+        "Can true assignments be separated from ambient guide counts and uncertain cells?"
+      ],
+      "critical_failures": [
+        "rna_guide_barcode_mismatch",
+        "reverse_complement_or_orientation_error",
+        "conflicting_guide_target_map",
+        "ambient_counts_treated_as_assignment",
+        "metadata_assignment_treated_as_raw_count_validation",
+        "missing_guide_count_matrix"
+      ],
+      "capabilities": [
+        {
+          "capability_id": "diagnostic.guide_assignment.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Audit barcode alignment, assignment coverage, multiplicity, and guide-target consistency.",
+          "negative_expectation": "Report label-only assignment as label-only and block raw-count claims when guide counts are absent.",
+          "reference": "Papalexi exported guide matrix, guide map, RNA barcodes, and metadata assignments.",
+          "metrics": ["barcode_alignment_rate", "assignment_coverage", "mapping_conflict_count", "unsupported_raw_count_claims"]
+        },
+        {
+          "capability_id": "guide.integrity.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Verify guide feature, barcode, target-map, and matrix identity consistency.",
+          "negative_expectation": "Block mismatched or duplicate guide assets.",
+          "reference": "Checksummed Papalexi guide assets and planted alignment attacks.",
+          "metrics": ["guide_identity_match", "barcode_identity_match", "duplicate_guide_detection", "mismatch_detection"]
+        },
+        {
+          "capability_id": "guide.ambient.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Estimate guide-specific ambient contamination without relabeling uncertain cells as measured assignments.",
+          "negative_expectation": "Detect planted ambient-heavy guides and retain uncertainty.",
+          "reference": "Planted guide-count mixtures calibrated to Papalexi sparsity and count depth.",
+          "metrics": ["ambient_rate_mae", "ambient_guide_recall", "false_assignment_rate"]
+        },
+        {
+          "capability_id": "guide.assignment.nb_mixture.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Recover positive assignments and posterior uncertainty from sparse guide counts.",
+          "negative_expectation": "Block when only labels are available or when the guide matrix exceeds resource limits.",
+          "reference": "Planted negative-binomial mixtures plus Papalexi metadata concordance as a real-data proxy.",
+          "metrics": ["precision", "recall", "macro_f1", "brier_score", "expected_calibration_error"]
+        }
+      ]
+    },
+    {
+      "scenario_id": "CAP-03",
+      "title": "MOI, multi-guide cells, doublets, and retained-cell policy",
+      "datasets": [
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019"
+      ],
+      "scientific_questions": [
+        "Does the runtime distinguish intended guide combinations from cell doublets?",
+        "Does the retained-cell policy follow confirmed MOI and guide design?",
+        "Do downstream analyses actually consume the retained-cell manifest?"
+      ],
+      "critical_failures": [
+        "multi_guide_equals_doublet",
+        "intended_combinations_removed",
+        "unknown_moi_silently_filtered",
+        "zero_retained_cells_allowed",
+        "retained_manifest_declared_but_not_consumed"
+      ],
+      "capabilities": [
+        {
+          "capability_id": "screen.moi_doublet.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Separate guide multiplicity, intended combinations, and transcriptomic doublets under confirmed design facts.",
+          "negative_expectation": "Never label Norman intended combinations as doublets solely because multiple guides are present.",
+          "reference": "Norman construct identities, Papalexi multiplicity metadata, and planted transcriptomic doublets.",
+          "metrics": ["intended_combination_retention", "doublet_recall", "doublet_precision", "design_inconsistent_exclusion_count"]
+        },
+        {
+          "capability_id": "screen.retained_cells.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Emit deterministic retained and excluded cell identities with explicit reasons.",
+          "negative_expectation": "Block zero-row selections and stale, wrong-scope, or missing upstream QC.",
+          "reference": "Frozen selection metadata and direct rule application.",
+          "metrics": ["retained_identity_match", "exclusion_reason_accuracy", "zero_row_block", "downstream_rows_consumed"]
+        }
+      ]
+    },
+    {
+      "scenario_id": "CAP-04",
+      "title": "Control-state reference, mapping, and candidate annotation",
+      "datasets": [
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019"
+      ],
+      "scientific_questions": [
+        "Is the reference fitted only on eligible control cells?",
+        "Are out-of-reference evaluation cells rejected rather than forcibly mapped?",
+        "Are inferred state labels kept at candidate authority?"
+      ],
+      "critical_failures": [
+        "perturbed_cells_leak_into_reference",
+        "evaluation_cells_leak_into_fit",
+        "no_mapping_rejection",
+        "missing_frozen_representation",
+        "candidate_annotation_promoted_to_validated"
+      ],
+      "capabilities": [
+        {
+          "capability_id": "reference.state.control_pca_leiden.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Fit PCA and Leiden only on split-scoped controls and record seeds and features.",
+          "negative_expectation": "Block noncontrol or evaluation leakage.",
+          "reference": "Independent Scanpy/Seurat control-only reference and input identity audit.",
+          "metrics": ["control_only_input_match", "ari", "cross_seed_stability", "leakage_count"]
+        },
+        {
+          "capability_id": "state.reference.fit.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Produce a frozen sparse feature/PCA/kNN reference under the memory budget.",
+          "negative_expectation": "Block full-matrix densification and insufficient controls before allocation.",
+          "reference": "Independent control-only representation and planted sparse resource fixture.",
+          "metrics": ["feature_set_concordance", "embedding_distance", "neighbor_concordance", "peak_memory_gb"]
+        },
+        {
+          "capability_id": "state.reference.map_knn.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Map retained evaluation cells in chunks and reject out-of-reference states.",
+          "negative_expectation": "Block missing retained-cell dependencies and avoid forced nearest-state assignment.",
+          "reference": "Planted held-out states plus Papalexi evaluation mapping.",
+          "metrics": ["mapping_accuracy", "outlier_recall", "rejection_rate", "excluded_cell_accounting"]
+        },
+        {
+          "capability_id": "state.annotation_candidates.v1",
+          "target_evidence_level": "passed_protocol",
+          "positive_expectation": "Generate evidence-linked candidate state annotations.",
+          "negative_expectation": "Keep ambiguous or unsupported labels unresolved and nonstrong.",
+          "reference": "Planted marker sets and candidate-authority policy.",
+          "metrics": ["candidate_label_accuracy", "unresolved_recall", "strong_claim_count"]
+        }
+      ]
+    },
+    {
+      "scenario_id": "CAP-05",
+      "title": "Perturbation efficacy, responder heterogeneity, and target reliability",
+      "datasets": [
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019"
+      ],
+      "scientific_questions": [
+        "Is efficacy supported by direct expression, a response signature, or both?",
+        "Are responder, escape, guide heterogeneity, and replicate overlap represented per target?",
+        "Are target-level results joined by stable target identity rather than dataset-level shortcuts?"
+      ],
+      "critical_failures": [
+        "signature_treated_as_direct_measurement",
+        "wrong_crispri_crispra_direction",
+        "one_target_result_reused_for_other_targets",
+        "guide_heterogeneity_hidden_by_pooling",
+        "candidate_efficacy_promoted_to_strong",
+        "target_absent_from_expression_matrix"
+      ],
+      "capabilities": [
+        {
+          "capability_id": "target.guide_efficacy.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Estimate direct and signature efficacy with design-correct direction and uncertainty.",
+          "negative_expectation": "Keep absent targets and signature-only evidence unresolved.",
+          "reference": "Direct target-expression contrasts and frozen signature references.",
+          "metrics": ["direction_accuracy", "effect_mae", "target_presence_handling", "source_class_accuracy"]
+        },
+        {
+          "capability_id": "target.responder.mixscape.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Classify per-target responder and escape cells from the frozen control representation.",
+          "negative_expectation": "Block missing state representations and never reuse another target's classification.",
+          "reference": "Frozen Seurat/Pertpy Mixscape reference on Papalexi.",
+          "metrics": ["responder_precision", "responder_recall", "escape_concordance", "per_target_coverage"]
+        },
+        {
+          "capability_id": "target.reliability.v2",
+          "target_evidence_level": "passed_protocol",
+          "positive_expectation": "Remain compatible for frozen v0.2 behavior without becoming the primary scientific path.",
+          "negative_expectation": "Never bypass the aggregate target-identity and dependency rules.",
+          "reference": "Compatibility snapshot and authority-policy regression.",
+          "metrics": ["compatibility_hash_match", "unexpected_strong_claim_count"]
+        },
+        {
+          "capability_id": "target.reliability.aggregate.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Join guide efficacy, responder evidence, QC, and replicate support per target_uid.",
+          "negative_expectation": "Mark missing target-specific inputs unresolved rather than borrowing dataset-level evidence.",
+          "reference": "Direct per-target joins from frozen upstream artifacts.",
+          "metrics": ["target_join_accuracy", "resolved_target_precision", "unresolved_target_recall", "cross_target_leakage_count"]
+        },
+        {
+          "capability_id": "effect.guide_target_sensitivity.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Report pooled, unpooled, leave-one-guide-out, and direction-consistency sensitivity per target.",
+          "negative_expectation": "Expose rather than hide guide-specific reversals and unstable targets.",
+          "reference": "Independent guide-level recomputation from frozen effect tables.",
+          "metrics": ["loo_effect_error", "direction_consistency_error", "unstable_target_recall"]
+        }
+      ]
+    },
+    {
+      "scenario_id": "CAP-06",
+      "title": "Effect estimation, independent replication, and null calibration",
+      "datasets": [
+        "kang18_8vs8_pbmc",
+        "norman_k562_crispra_2019"
+      ],
+      "scientific_questions": [
+        "Is the independent experimental unit used rather than the cell?",
+        "Is method selection compatible with MOI, guide data, and the estimand?",
+        "Are effect, composition, and null-calibration claims kept distinct?"
+      ],
+      "critical_failures": [
+        "cell_as_replicate",
+        "unknown_moi_routes_method",
+        "confounded_design_silent_fallback",
+        "sceptre_without_cell_by_guide_counts",
+        "composition_treated_as_expression",
+        "two_unit_result_treated_as_strong"
+      ],
+      "capabilities": [
+        {
+          "capability_id": "de.pseudobulk.edger.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Fit paired or unpaired pseudobulk edgeR at the donor/replicate unit.",
+          "negative_expectation": "Block confounding and caution on insufficient independent units.",
+          "reference": "Independent direct-R edgeR execution on Kang.",
+          "metrics": ["logfc_mae", "f_statistic_mae", "pvalue_mae", "fdr_mae", "status_match"]
+        },
+        {
+          "capability_id": "association.sceptre.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Control type-I error and recover planted high-MOI guide-gene associations.",
+          "negative_expectation": "Correctly block Norman when cell-by-guide counts are unavailable.",
+          "reference": "Synthetic high-MOI truth plus Norman suitability refusal.",
+          "metrics": ["type_i_error", "power", "fdr", "effect_rank_concordance", "correct_refusal"]
+        },
+        {
+          "capability_id": "composition.propeller.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Estimate donor-level cell-state composition effects.",
+          "negative_expectation": "Block cell-level pseudoreplication and confounded designs.",
+          "reference": "Independent direct-R Propeller execution on Kang.",
+          "metrics": ["proportion_mae", "effect_mae", "pvalue_mae", "fdr_mae", "status_match"]
+        },
+        {
+          "capability_id": "calibration.method_null.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Quantify null behavior for the selected statistical method.",
+          "negative_expectation": "Never label missing or uncomputed null metrics as passed.",
+          "reference": "Planted null permutations with frozen seeds.",
+          "metrics": ["type_i_error", "uniformity_statistic", "false_calibration_pass_count"]
+        },
+        {
+          "capability_id": "calibration.replicate_null.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Assess replicate-aware null contrasts without breaking the design structure.",
+          "negative_expectation": "Reject permutations that exchange nonexchangeable donors or batches.",
+          "reference": "Design-preserving planted replicate-null fixtures.",
+          "metrics": ["exchangeability_violation_count", "null_effect_bias", "type_i_error"]
+        }
+      ]
+    },
+    {
+      "scenario_id": "CAP-07",
+      "title": "Effect matrices and module discovery",
+      "datasets": [
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019"
+      ],
+      "scientific_questions": [
+        "Can target-level effects be assembled without silently filling missing or blocked results?",
+        "Are imported and learned modules evaluated with the correct gene universe?",
+        "Are learned modules stable across rank and seed rather than treated as unique truth?"
+      ],
+      "critical_failures": [
+        "single_cell_expression_used_as_effect_matrix",
+        "missing_effects_filled_with_zero",
+        "gmt_gene_universe_ignored",
+        "single_rank_single_seed_nmf",
+        "perturbed_cells_leak_into_control_nmf",
+        "candidate_module_promoted_to_validated"
+      ],
+      "capabilities": [
+        {
+          "capability_id": "effect.matrix.assemble.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Assemble target-by-feature effects with explicit missingness and source identities.",
+          "negative_expectation": "Preserve blocked and missing targets instead of zero imputation.",
+          "reference": "Independent join of frozen target-effect artifacts.",
+          "metrics": ["matrix_value_mae", "missingness_match", "target_identity_match"]
+        },
+        {
+          "capability_id": "effect.module_global.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Aggregate signed feature effects into module-level target effects.",
+          "negative_expectation": "Report insufficient module coverage and preserve effect direction.",
+          "reference": "Independent weighted module aggregation.",
+          "metrics": ["module_effect_mae", "direction_accuracy", "coverage_accounting"]
+        },
+        {
+          "capability_id": "module.import.gmt.v1",
+          "target_evidence_level": "passed_protocol",
+          "positive_expectation": "Import deterministic gene sets with provenance and overlap statistics.",
+          "negative_expectation": "Reject malformed, empty, duplicate, or wrong-role GMT assets.",
+          "reference": "Frozen GMT parser reference and planted malformed files.",
+          "metrics": ["gene_set_count_match", "membership_match", "malformed_file_recall"]
+        },
+        {
+          "capability_id": "module.learn.nmf.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Recover planted sparse modules across multiple ranks and seeds.",
+          "negative_expectation": "Block over-budget densification and expose unstable solutions.",
+          "reference": "Planted modules calibrated to real sparse matrices.",
+          "metrics": ["module_recovery", "component_matching", "cross_seed_stability", "reconstruction_error"]
+        },
+        {
+          "capability_id": "module.learn.control_nmf.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Learn stable modules only from retained split-scoped controls.",
+          "negative_expectation": "Detect perturbed/evaluation-cell leakage and unconsumed control dependencies.",
+          "reference": "Planted control programs and control-cell identity audit.",
+          "metrics": ["control_identity_match", "module_recovery", "cross_seed_stability", "leakage_count"]
+        }
+      ]
+    },
+    {
+      "scenario_id": "CAP-08",
+      "title": "Response programs, regulators, pathways, and perturbation networks",
+      "datasets": [
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019"
+      ],
+      "scientific_questions": [
+        "Are positive and negative response directions preserved?",
+        "Are perturbation clusters stable and supported by effect data?",
+        "Are regulator and pathway priors kept separate from measured effects?"
+      ],
+      "critical_failures": [
+        "effect_sign_lost",
+        "unstable_cluster_reported_as_structure",
+        "wrong_ora_background",
+        "gsea_uses_only_significant_genes",
+        "regulator_prior_treated_as_measurement",
+        "network_edge_treated_as_causal"
+      ],
+      "capabilities": [
+        {
+          "capability_id": "program.response.signed_nmf.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Recover planted signed response programs while preserving direction.",
+          "negative_expectation": "Expose sign ambiguity and unstable components.",
+          "reference": "Planted signed target-by-gene programs.",
+          "metrics": ["signed_program_recovery", "direction_accuracy", "cross_seed_stability"]
+        },
+        {
+          "capability_id": "program.perturbation.cluster.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Cluster perturbations from frozen effects with bootstrap stability.",
+          "negative_expectation": "Keep unstable assignments unresolved.",
+          "reference": "Planted perturbation groups plus real-data stability analysis.",
+          "metrics": ["ari", "cluster_stability", "unstable_assignment_recall"]
+        },
+        {
+          "capability_id": "regulator.activity.ulm.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Recover signed regulator activity from effect profiles and a frozen network.",
+          "negative_expectation": "Keep prior network support distinct from measured activity.",
+          "reference": "Planted regulator activities and frozen network snapshot.",
+          "metrics": ["activity_mae", "direction_accuracy", "rank_concordance", "source_class_accuracy"]
+        },
+        {
+          "capability_id": "network.perturbation_regulator.v1",
+          "target_evidence_level": "passed_protocol",
+          "positive_expectation": "Construct evidence-linked perturbation-regulator candidate edges.",
+          "negative_expectation": "Never render candidate or prior-supported edges as causal measurements.",
+          "reference": "Planted edge provenance and claim-role policy.",
+          "metrics": ["edge_identity_match", "provenance_completeness", "causal_overclaim_count"]
+        },
+        {
+          "capability_id": "enrichment.ora.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Compute ORA with the declared tested-gene universe and multiple-testing correction.",
+          "negative_expectation": "Block missing universes and report low-overlap modules.",
+          "reference": "Independent hypergeometric calculation on frozen GMT.",
+          "metrics": ["overlap_count_match", "pvalue_mae", "fdr_mae", "universe_match"]
+        },
+        {
+          "capability_id": "enrichment.gsea_prerank.v1",
+          "target_evidence_level": "passed_real_reference",
+          "positive_expectation": "Evaluate full signed rankings against frozen gene sets.",
+          "negative_expectation": "Reject truncated significant-only lists and duplicate ranks.",
+          "reference": "Independent preranked GSEA implementation with frozen seeds.",
+          "metrics": ["nes_mae", "pvalue_mae", "fdr_mae", "pathway_rank_concordance"]
+        }
+      ]
+    },
+    {
+      "scenario_id": "CAP-09",
+      "title": "Evidence synthesis, literature context, and next-panel design",
+      "datasets": [
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019"
+      ],
+      "scientific_questions": [
+        "Are measured results, predictions, priors, and hypotheses kept separate?",
+        "Are contradictions and missing target-specific evidence visible?",
+        "Does next-panel design prioritize uncertainty and coverage rather than effect size alone?"
+      ],
+      "critical_failures": [
+        "literature_prior_treated_as_dataset_measurement",
+        "candidate_promoted_to_validated_mechanism",
+        "contradictory_evidence_omitted",
+        "stale_result_reused",
+        "next_panel_uses_effect_size_only",
+        "result_or_artifact_citation_missing"
+      ],
+      "capabilities": [
+        {
+          "capability_id": "literature.europepmc.v1",
+          "target_evidence_level": "passed_protocol",
+          "positive_expectation": "Return reproducible, cited literature priors from a frozen response snapshot.",
+          "negative_expectation": "Never convert literature support into a measured dataset result.",
+          "reference": "Frozen Europe PMC query/response fixtures.",
+          "metrics": ["record_identity_match", "citation_completeness", "measured_claim_count"]
+        },
+        {
+          "capability_id": "interpretation.evidence_map.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Map findings to measured, prediction, prior, and hypothesis sources with contradictions.",
+          "negative_expectation": "Reject stale, unsupported, or cross-target evidence for strong claims.",
+          "reference": "Planted mixed-source evidence graph.",
+          "metrics": ["source_class_accuracy", "contradiction_recall", "citation_completeness", "strong_overclaim_count"]
+        },
+        {
+          "capability_id": "design.next_panel.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Select a constrained panel balancing uncertainty, coverage, guide support, and feasibility.",
+          "negative_expectation": "Do not rank solely by effect size or use unsupported strong evidence.",
+          "reference": "Planted constrained-selection problems with known feasible optima or Pareto sets.",
+          "metrics": ["constraint_satisfaction", "coverage", "uncertainty_capture", "unsupported_selection_count"]
+        }
+      ]
+    },
+    {
+      "scenario_id": "CAP-10",
+      "title": "Virtual perturbation prediction ingestion, leakage, and evaluation",
+      "datasets": [
+        "norman_k562_crispra_2019"
+      ],
+      "scientific_questions": [
+        "Are training, calibration, and evaluation targets and cells separated?",
+        "Are prediction identities, directions, uncertainty, and baselines validated before scoring?",
+        "Are predictions prevented from becoming measured scientific claims?"
+      ],
+      "critical_failures": [
+        "train_evaluation_target_overlap",
+        "train_evaluation_cell_overlap",
+        "prediction_gene_or_cell_misalignment",
+        "leaky_prediction_not_detected",
+        "baseline_missing",
+        "prediction_treated_as_measurement"
+      ],
+      "capabilities": [
+        {
+          "capability_id": "virtual.split.contract.v1",
+          "target_evidence_level": "passed_protocol",
+          "positive_expectation": "Bind disjoint target, construct, and cell identities to virtual-model splits.",
+          "negative_expectation": "Reject any planted train/evaluation overlap.",
+          "reference": "Frozen Norman split manifest and planted overlap attacks.",
+          "metrics": ["target_overlap_count", "cell_overlap_count", "construct_overlap_count", "overlap_detection"]
+        },
+        {
+          "capability_id": "virtual.prediction.ingest.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Ingest chunked predictions with stable cell, target, gene, direction, and uncertainty identities.",
+          "negative_expectation": "Reject missing, duplicate, transposed, drifted, or over-budget prediction bundles.",
+          "reference": "Controlled Norman prediction bundles with planted identity attacks.",
+          "metrics": ["identity_match", "orientation_detection", "duplicate_detection", "value_hash_match"]
+        },
+        {
+          "capability_id": "virtual.leakage.audit.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Detect intentionally leaky predictions and certify only clean split contact.",
+          "negative_expectation": "Block scoring after any forbidden test contact.",
+          "reference": "Clean and intentionally leaky controlled prediction bundles.",
+          "metrics": ["leakage_recall", "leakage_precision", "false_certification_count"]
+        },
+        {
+          "capability_id": "virtual.baselines.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Generate deterministic no-change and training-mean baselines without evaluation leakage.",
+          "negative_expectation": "Reject baselines that use evaluation outcomes.",
+          "reference": "Independent blockwise baseline calculations.",
+          "metrics": ["baseline_value_mae", "baseline_hash_match", "evaluation_contact_count"]
+        },
+        {
+          "capability_id": "virtual.evaluate.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Score effect magnitude, direction, and rank against held-out observed effects.",
+          "negative_expectation": "Keep model outputs in the prediction source class.",
+          "reference": "Independent blockwise evaluator on controlled Norman predictions.",
+          "metrics": ["effect_mae", "effect_rmse", "direction_accuracy", "spearman", "source_class_accuracy"]
+        },
+        {
+          "capability_id": "virtual.evaluate.comprehensive.v1",
+          "target_evidence_level": "passed_planted_reference",
+          "positive_expectation": "Add uncertainty calibration, bootstrap intervals, discriminability, and baseline comparisons.",
+          "negative_expectation": "Report missing uncertainty or references as unavailable rather than passed.",
+          "reference": "Controlled predictions with known uncertainty and discriminability structure.",
+          "metrics": ["coverage", "expected_calibration_error", "bootstrap_interval_error", "discriminability", "baseline_improvement"]
+        }
+      ]
+    }
+  ]
+}
