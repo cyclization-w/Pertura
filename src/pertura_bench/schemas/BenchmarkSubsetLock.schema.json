@@ -25,9 +25,37 @@
       "type": "string"
     },
     "schema_version": {
-      "default": "pertura-benchmark-subset-lock-v1",
+      "default": "pertura-benchmark-subset-lock-v2",
+      "enum": [
+        "pertura-benchmark-subset-lock-v1",
+        "pertura-benchmark-subset-lock-v2"
+      ],
       "title": "Schema Version",
       "type": "string"
+    },
+    "selected_control_units_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Control Units Sha256"
+    },
+    "selected_groups_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Groups Sha256"
     },
     "selected_ids_sha256": {
       "anyOf": [
@@ -52,6 +80,11 @@
       ],
       "default": null,
       "title": "Selection Manifest Sha256"
+    },
+    "selection_summary": {
+      "additionalProperties": true,
+      "title": "Selection Summary",
+      "type": "object"
     },
     "source_lock_hash": {
       "title": "Source Lock Hash",

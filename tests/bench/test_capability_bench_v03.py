@@ -189,7 +189,23 @@ def test_scientific_digest_excludes_clock_paths_and_runtime_ids() -> None:
                 "role": "input",
             }
         ],
-        "metadata": {"path": "C:/run-a/data.csv", "validation_status": "synthetic_only"},
+        "metadata": {
+            "path": "C:/run-a/data.csv",
+            "validation_status": "synthetic_only",
+            "dependency_consumption_records": [
+                {
+                    "dependency_result_id": "result_a",
+                    "dependency_result_hash": "sha256:" + "4" * 64,
+                    "dependency_artifact_hash": "sha256:" + "5" * 64,
+                    "usage": "row_filter",
+                    "consumer_capability_id": "guide.integrity.v1",
+                    "rows_available": 10,
+                    "rows_consumed": 8,
+                    "columns_consumed": 4,
+                    "derived_output_hashes": ["sha256:" + "6" * 64],
+                }
+            ],
+        },
         "run_id": "run_a",
         "request_id": "request_a",
         "result_id": "result_a",
@@ -202,6 +218,12 @@ def test_scientific_digest_excludes_clock_paths_and_runtime_ids() -> None:
             "request_id": "request_b",
             "result_id": "result_b",
             "completed_at_utc": "2030-01-01T00:00:00Z",
+        }
+    )
+    changed["metadata"]["dependency_consumption_records"][0].update(
+        {
+            "dependency_result_id": "result_b",
+            "dependency_result_hash": "sha256:" + "7" * 64,
         }
     )
     changed["scope"]["scope_id"] = "scope_two"
@@ -471,9 +493,20 @@ def test_subset_from_lock_chain_uses_portable_spec_and_persists_sidecars(
     (spec_dir / f"{dataset_id}.evaluation.json").write_text(
         json.dumps(
             {
-                "label_column": "condition",
-                "labels": ["control", "perturbed"],
-                "max_cells_per_label": 10,
+                "schema_version": "pertura-benchmark-subset-spec-v2",
+                "split_id": "fixture-evaluation-v2",
+                "unit_id_column": "replicate",
+                "group_column": "condition",
+                "strata_columns": ["replicate"],
+                "control_selector": {
+                    "column": "condition",
+                    "op": "eq",
+                    "value": "control",
+                },
+                "selected_groups": ["perturbed"],
+                "selected_control_units": ["r2", "r4"],
+                "max_cells_per_stratum": 10,
+                "minimum_units_per_arm": 2,
                 "seed": 1729,
             }
         ),

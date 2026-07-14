@@ -103,6 +103,20 @@ class AgentNarrativeScore(AgentModel):
         return sum((self.scientific_completeness, self.clarity, self.limitations_uncertainty, self.actionability)) / 4
 
 
+class JudgeAnswerProjection(AgentModel):
+    """Condition-blind narrative surface supplied to the external judge."""
+
+    schema_version: Literal["pertura-judge-answer-projection-v1"] = (
+        "pertura-judge-answer-projection-v1"
+    )
+    headline: str
+    finding_texts: tuple[str, ...] = ()
+    hypotheses: tuple[str, ...] = ()
+    limitations: tuple[str, ...] = ()
+    next_steps: tuple[str, ...] = ()
+    artifact_citations: tuple[str, ...] = ()
+
+
 class JudgeManifest(AgentModel):
     schema_version: Literal["pertura-agent-judge-manifest-v1"] = "pertura-agent-judge-manifest-v1"
     provider: str

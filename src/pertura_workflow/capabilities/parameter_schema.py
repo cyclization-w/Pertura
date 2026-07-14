@@ -20,6 +20,12 @@ EXECUTOR_PARAMETER_ADDITIONS: dict[str, frozenset[str]] = {
     "guide_nb_mixture": frozenset({"row_manifest_path", "column_manifest_path", "modality", "layer"}),
     "guide_ambient": frozenset({"row_manifest_path", "column_manifest_path", "modality", "layer"}),
 }
+EXECUTOR_DELEGATES: dict[str, tuple[str, ...]] = {
+    # Wrapper executors may call a runner imported from another module.  The
+    # local AST walk cannot see across that import boundary, so the delegation
+    # is explicit and audited rather than silently omitted.
+    "control_nmf": ("nmf_modules",),
+}
 RESOURCE_PARAMETER_NAMES = frozenset({"max_memory_gb", "n_jobs", "chunk_rows"})
 @lru_cache(maxsize=None)
 def executor_parameter_names(executor_name: str) -> frozenset[str]:
@@ -63,6 +69,8 @@ def executor_parameter_names(executor_name: str) -> frozenset[str]:
             if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
                 if child.func.id in functions and child.func.id not in visited:
                     queue.append(child.func.id)
+    for delegate in EXECUTOR_DELEGATES.get(executor_name, ()):
+        parameters.update(executor_parameter_names(delegate))
     return frozenset(parameters)
 
 

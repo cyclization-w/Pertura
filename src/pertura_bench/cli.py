@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from pertura_core.hashing import canonical_hash
+from pertura_core.hashing import canonical_hash, file_sha256
 
 from pertura_bench.models import BenchmarkSubsetSpec
 from pertura_bench.operations import (
@@ -137,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     agent_server.add_argument("--enforced-memory-gb", type=float)
     agent_server.add_argument("--enforced-n-jobs", type=int)
+    agent_server.add_argument("--resource-evidence", type=Path)
     agent_regrade = agent_sub.add_parser("regrade")
     agent_regrade.add_argument("execution_root", type=Path)
     agent_sub.add_parser("server-cases")
@@ -157,6 +158,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--parameter-catalog", type=Path)
     run.add_argument("--design-confirmations", type=Path)
     run.add_argument("--metric-reference-catalog", type=Path)
+    run.add_argument("--resource-evidence", type=Path)
+    run.add_argument("--enforced-memory-gb", type=float)
+    run.add_argument("--enforced-n-jobs", type=int)
 
     run_matrix = sub.add_parser("run-matrix")
     run_matrix.add_argument("--tier", choices=_TIERS, default="synthetic_ci")
@@ -168,6 +172,9 @@ def main(argv: list[str] | None = None) -> int:
     run_matrix.add_argument("--parameter-catalog", type=Path)
     run_matrix.add_argument("--design-confirmations", type=Path)
     run_matrix.add_argument("--metric-reference-catalog", type=Path)
+    run_matrix.add_argument("--resource-evidence", type=Path)
+    run_matrix.add_argument("--enforced-memory-gb", type=float)
+    run_matrix.add_argument("--enforced-n-jobs", type=int)
     run_matrix.add_argument(
         "--write-frozen-synthetic-verdicts", action="store_true"
     )
@@ -178,6 +185,31 @@ def main(argv: list[str] | None = None) -> int:
     server.add_argument("--parameter-catalog", type=Path)
     server.add_argument("--design-confirmations", type=Path)
     server.add_argument("--metric-reference-catalog", type=Path)
+
+    bind_plan = sub.add_parser("bind-server-plan")
+    bind_plan.add_argument("--template", type=Path, required=True)
+    bind_plan.add_argument("--git-commit", required=True)
+    bind_plan.add_argument("--wheel", type=Path, required=True)
+    bind_plan.add_argument("--resource-lock-manifest", type=Path, required=True)
+    bind_plan.add_argument("--prediction-lock-manifest", type=Path)
+    bind_plan.add_argument("--subset-catalog", type=Path, required=True)
+    bind_plan.add_argument("--output", type=Path, required=True)
+
+    references = sub.add_parser("references")
+    reference_sub = references.add_subparsers(dest="reference_command", required=True)
+    reference_generate = reference_sub.add_parser("generate")
+    reference_generate.add_argument("--dataset", required=True)
+    reference_generate.add_argument("--split", choices=("calibration", "evaluation"), required=True)
+    reference_generate.add_argument("--subset-lock", type=Path, required=True)
+    reference_generate.add_argument("--generator-script", type=Path, required=True)
+    reference_generate.add_argument("--environment-lock", type=Path, required=True)
+    reference_generate.add_argument("--parameters", type=Path, required=True)
+    reference_generate.add_argument("--output", type=Path, required=True)
+    reference_validate = reference_sub.add_parser("validate")
+    reference_validate.add_argument("root", type=Path)
+    reference_freeze = reference_sub.add_parser("freeze")
+    reference_freeze.add_argument("root", type=Path)
+    reference_freeze.add_argument("--output", type=Path, required=True)
 
     args, extra = parser.parse_known_args(argv)
     commands_with_repo = {
@@ -297,6 +329,7 @@ def main(argv: list[str] | None = None) -> int:
             input_path = args.input
             output_path = args.output
             subset_spec = BenchmarkSubsetSpec(
+                schema_version="pertura-benchmark-subset-spec-v1",
                 dataset_id=args.dataset_id,
                 source_lock_hash=args.source_lock_hash,
                 split=args.split,
@@ -402,6 +435,7 @@ def main(argv: list[str] | None = None) -> int:
                 resource_enforcement=args.resource_enforcement,
                 enforced_memory_gb=args.enforced_memory_gb,
                 enforced_n_jobs=args.enforced_n_jobs,
+                resource_evidence_path=args.resource_evidence,
             )
         elif args.agent_command == "regrade":
             from pertura_bench.agent_server_execution import regrade_server_agent_case
@@ -432,6 +466,9 @@ def main(argv: list[str] | None = None) -> int:
                 parameter_catalog_path=args.parameter_catalog,
                 design_confirmations_path=args.design_confirmations,
                 metric_reference_catalog_path=args.metric_reference_catalog,
+                resource_evidence_path=args.resource_evidence,
+                enforced_memory_gb=args.enforced_memory_gb,
+                enforced_n_jobs=args.enforced_n_jobs,
             ),
         }
     elif args.command == "run-matrix":
@@ -458,6 +495,9 @@ def main(argv: list[str] | None = None) -> int:
                     parameter_catalog_path=args.parameter_catalog,
                     design_confirmations_path=args.design_confirmations,
                     metric_reference_catalog_path=args.metric_reference_catalog,
+                    resource_evidence_path=args.resource_evidence,
+                    enforced_memory_gb=args.enforced_memory_gb,
+                    enforced_n_jobs=args.enforced_n_jobs,
                 )
                 for capability_id in CANDIDATE_CAPABILITIES
                 if args.dataset is None
@@ -481,6 +521,90 @@ def main(argv: list[str] | None = None) -> int:
             design_confirmations_path=args.design_confirmations,
             metric_reference_catalog_path=args.metric_reference_catalog,
         )
+    elif args.command == "bind-server-plan":
+        from pertura_bench.capability_models import ServerBenchmarkPlan
+        from pertura_bench.server_plan import bind_server_plan
+
+        for source in (
+            args.template,
+            args.wheel,
+            args.resource_lock_manifest,
+            args.subset_catalog,
+        ):
+            if not source.is_file():
+                parser.error(f"checkpoint input is missing: {source}")
+        if args.prediction_lock_manifest is not None and not args.prediction_lock_manifest.is_file():
+            parser.error(
+                f"prediction lock manifest is missing: {args.prediction_lock_manifest}"
+            )
+        template = ServerBenchmarkPlan.model_validate_json(
+            args.template.read_text(encoding="utf-8")
+        )
+        resource_manifest = json.loads(
+            args.resource_lock_manifest.read_text(encoding="utf-8")
+        )
+        license_states: list[str] = []
+        def collect_license_states(value: object) -> None:
+            if isinstance(value, dict):
+                if "license_status" in value:
+                    license_states.append(str(value["license_status"]))
+                for item in value.values():
+                    collect_license_states(item)
+            elif isinstance(value, list):
+                for item in value:
+                    collect_license_states(item)
+        collect_license_states(resource_manifest)
+        if not license_states or any(state != "reviewed" for state in license_states):
+            parser.error(
+                "all source locks in the resource manifest must have license_status=reviewed"
+            )
+        resource_lock_set_hash = file_sha256(args.resource_lock_manifest)
+        subset_catalog_hash = file_sha256(args.subset_catalog)
+        prediction_bundle_set_hash = (
+            file_sha256(args.prediction_lock_manifest)
+            if args.prediction_lock_manifest is not None
+            else canonical_hash({"prediction_bundles": "not_configured"})
+        )
+        bound = bind_server_plan(
+            template,
+            git_commit=args.git_commit,
+            wheel_sha256=file_sha256(args.wheel),
+            resource_lock_set_hash=resource_lock_set_hash,
+            prediction_bundle_set_hash=prediction_bundle_set_hash,
+            subset_catalog_hash=subset_catalog_hash,
+        )
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(
+            json.dumps(bound.model_dump(mode="json"), indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        payload = {
+            "output": str(args.output.resolve()),
+            "checkpoint_binding": bound.checkpoint_binding,
+            "executable": bound.executable,
+        }
+    elif args.command == "references":
+        from pertura_bench.references import (
+            freeze_reference,
+            generate_reference,
+            validate_reference,
+        )
+
+        if args.reference_command == "generate":
+            payload = generate_reference(
+                dataset_id=args.dataset,
+                split=args.split,
+                subset_lock=args.subset_lock,
+                generator_script=args.generator_script,
+                environment_lock=args.environment_lock,
+                parameters=args.parameters,
+                output=args.output,
+            )
+        elif args.reference_command == "validate":
+            payload = validate_reference(args.root)
+        else:
+            payload = freeze_reference(args.root, args.output)
     elif args.command == "edger-golden":
         from pertura_bench.edger_golden import run_edger_golden
 

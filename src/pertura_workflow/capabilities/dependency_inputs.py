@@ -34,8 +34,6 @@ def retained_cells_for_request(
     if len({item.object_id for item in bindings}) != 1:
         raise ValueError("retained-cell dependency is ambiguous")
     dependency_result_id = bindings[0].object_id
-    from pertura_workflow.capabilities.execution_context import mark_dependency_consumed
-    mark_dependency_consumed(bindings[0].object_hash)
     projection_path = staging / "_dependency_results.json"
     if not projection_path.is_file():
         raise ValueError("retained-cell dependency projection is missing")
@@ -92,6 +90,19 @@ def retained_cells_for_request(
                 )
     if not retained:
         raise ValueError("retained-cell manifest retains no cells")
+    from pertura_workflow.capabilities.execution_context import (
+        record_dependency_consumption,
+    )
+
+    record_dependency_consumption(
+        dependency_result_id=dependency_result_id,
+        dependency_result_hash=bindings[0].object_hash,
+        dependency_artifact_hash=str(expected_hash),
+        usage="row_filter",
+        rows_available=len(seen),
+        rows_consumed=len(retained),
+        columns_consumed=1,
+    )
     return retained
 
 

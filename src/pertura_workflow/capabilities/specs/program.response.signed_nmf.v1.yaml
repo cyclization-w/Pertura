@@ -41,7 +41,7 @@ parameters_schema:
     ranks:
       type: array
       items:
-        type: string
+        type: integer
     seed:
       type: integer
     stability_threshold:

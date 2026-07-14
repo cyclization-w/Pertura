@@ -307,23 +307,29 @@ def subset_h5ad(input_path: str | Path, output_path: str | Path, spec: Benchmark
     source = Path(input_path).resolve()
     destination = Path(output_path).resolve()
     data = ad.read_h5ad(source, backed="r")
-    if spec.label_column not in data.obs.columns:
-        raise ValueError(f"missing label column: {spec.label_column}")
     rng = np.random.default_rng(spec.seed)
-    selected: list[int] = []
-    observed = data.obs[spec.label_column].astype(str).to_numpy()
-    for label in sorted(spec.labels):
-        indices = np.flatnonzero(observed == label)
-        if len(indices) > spec.max_cells_per_label:
-            indices = np.sort(rng.choice(indices, spec.max_cells_per_label, replace=False))
-        selected.extend(indices.tolist())
+    if spec.schema_version.endswith("v1"):
+        if spec.label_column not in data.obs.columns:
+            raise ValueError(f"missing label column: {spec.label_column}")
+        selected: list[int] = []
+        observed = data.obs[spec.label_column].astype(str).to_numpy()
+        for label in sorted(spec.labels):
+            indices = np.flatnonzero(observed == label)
+            if len(indices) > spec.max_cells_per_label:
+                indices = np.sort(
+                    rng.choice(indices, spec.max_cells_per_label, replace=False)
+                )
+            selected.extend(indices.tolist())
+        summary = {"selection_version": "v1", "labels": list(spec.labels)}
+    else:
+        selected, summary = _select_v2_cells(data.obs, spec, rng)
     if not selected:
         raise ValueError("benchmark subset selection retained no cells")
     selected_indices = sorted(selected)
     selected_ids = [str(data.obs_names[index]) for index in selected_indices]
     if len(selected_ids) != len(set(selected_ids)):
         raise ValueError("benchmark subset contains duplicate cell identities")
-    subset = data[selected_indices].to_memory()
+    subset = _chunked_anndata_subset(data, selected_indices, spec)
     destination.parent.mkdir(parents=True, exist_ok=True)
     subset.write_h5ad(destination)
     selection_manifest = destination.parent / "selection.ids.json"
@@ -334,6 +340,11 @@ def subset_h5ad(input_path: str | Path, output_path: str | Path, spec: Benchmark
     )
     script = Path(__file__).resolve()
     return BenchmarkSubsetLock(
+        schema_version=(
+            "pertura-benchmark-subset-lock-v1"
+            if spec.schema_version.endswith("v1")
+            else "pertura-benchmark-subset-lock-v2"
+        ),
         dataset_id=spec.dataset_id,
         subset_spec_hash=spec.canonical_hash,
         source_lock_hash=spec.source_lock_hash,
@@ -343,7 +354,162 @@ def subset_h5ad(input_path: str | Path, output_path: str | Path, spec: Benchmark
         subset_script_hash=file_sha256(script),
         selected_ids_sha256=canonical_hash(selected_ids),
         selection_manifest_sha256=file_sha256(selection_manifest),
+        selected_groups_sha256=(
+            canonical_hash(sorted(spec.selected_groups))
+            if spec.selected_groups
+            else None
+        ),
+        selected_control_units_sha256=(
+            canonical_hash(sorted(spec.selected_control_units))
+            if spec.selected_control_units
+            else None
+        ),
+        selection_summary=summary,
     )
+
+
+def _filter_mask(obs, filter_spec: dict[str, Any]):
+    import numpy as np
+
+    column = str(filter_spec["column"])
+    if column not in obs.columns:
+        raise ValueError(f"missing subset filter column: {column}")
+    values = obs[column].astype(str)
+    operator = str(filter_spec["op"])
+    if operator == "eq":
+        return (values == str(filter_spec["value"])).to_numpy()
+    if operator == "not_eq":
+        return (values != str(filter_spec["value"])).to_numpy()
+    choices = {str(item) for item in filter_spec.get("values") or ()}
+    mask = values.isin(choices).to_numpy()
+    return np.logical_not(mask) if operator == "not_in" else mask
+
+
+def _select_v2_cells(obs, spec: BenchmarkSubsetSpec, rng) -> tuple[list[int], dict[str, Any]]:
+    import numpy as np
+
+    required = {
+        str(spec.unit_id_column),
+        str(spec.group_column),
+        *spec.strata_columns,
+    }
+    missing = sorted(required - set(obs.columns))
+    if missing:
+        raise ValueError("missing v2 subset columns: " + ", ".join(missing))
+    mask = np.ones(len(obs), dtype=bool)
+    for filter_spec in spec.include_filters:
+        mask &= _filter_mask(obs, filter_spec)
+    for filter_spec in spec.exclude_filters:
+        mask &= ~_filter_mask(obs, filter_spec)
+
+    groups = obs[str(spec.group_column)].astype(str).to_numpy()
+    units = obs[str(spec.unit_id_column)].astype(str).to_numpy()
+    case_mask = np.isin(groups, list(spec.selected_groups))
+    control_mask = np.zeros(len(obs), dtype=bool)
+    if spec.control_selector is not None:
+        control_mask = _filter_mask(obs, spec.control_selector)
+        if not spec.selected_control_units:
+            raise ValueError(
+                "v2 control selection requires explicit selected_control_units"
+            )
+        control_mask &= np.isin(units, list(spec.selected_control_units))
+    mask &= case_mask | control_mask
+    candidate = np.flatnonzero(mask)
+    if not len(candidate):
+        raise ValueError("v2 subset filters retained no cells")
+
+    # Sample independently within role and declared strata.  This preserves
+    # replicate/donor structure without ever loading the expression matrix.
+    buckets: dict[tuple[str, ...], list[int]] = {}
+    for index in candidate.tolist():
+        role = "control" if control_mask[index] else "case"
+        key = (role,) + tuple(
+            str(obs.iloc[index][column]) for column in spec.strata_columns
+        )
+        buckets.setdefault(key, []).append(index)
+    selected: list[int] = []
+    counts: dict[str, int] = {}
+    for key in sorted(buckets):
+        indices = np.asarray(buckets[key], dtype=int)
+        if len(indices) > spec.max_cells_per_stratum:
+            indices = np.sort(
+                rng.choice(indices, spec.max_cells_per_stratum, replace=False)
+            )
+        selected.extend(indices.tolist())
+        counts["|".join(key)] = int(len(indices))
+
+    selected_units = sorted({units[index] for index in selected})
+    arms = sorted({groups[index] for index in selected if not control_mask[index]})
+    units_by_arm = {
+        arm: sorted(
+            {
+                units[index]
+                for index in selected
+                if not control_mask[index] and groups[index] == arm
+            }
+        )
+        for arm in arms
+    }
+    undersized = [
+        arm
+        for arm, arm_units in units_by_arm.items()
+        if len(arm_units) < spec.minimum_units_per_arm
+    ]
+    selected_control_units = sorted(
+        {units[index] for index in selected if control_mask[index]}
+    )
+    if undersized:
+        raise ValueError(
+            "subset arms have fewer independent units than minimum_units_per_arm: "
+            + ", ".join(undersized)
+        )
+    if spec.control_selector is not None and len(selected_control_units) < spec.minimum_units_per_arm:
+        raise ValueError(
+            "subset controls have fewer independent units than minimum_units_per_arm"
+        )
+    return selected, {
+        "selection_version": "v2",
+        "split_id": spec.split_id,
+        "split": spec.split,
+        "selected_groups": arms,
+        "selected_unit_count": len(selected_units),
+        "selected_control_units": selected_control_units,
+        "selected_control_unit_count": len(selected_control_units),
+        "units_by_arm": units_by_arm,
+        "stratum_counts": counts,
+    }
+
+
+def _chunked_anndata_subset(data, selected_indices: list[int], spec: BenchmarkSubsetSpec):
+    import anndata as ad
+    import numpy as np
+    from scipy import sparse
+
+    chunk_rows = int(spec.selection.get("chunk_rows", 1024))
+    if chunk_rows < 1:
+        raise ValueError("subset chunk_rows must be positive")
+
+    def subset_matrix(matrix):
+        blocks = []
+        for start in range(0, len(selected_indices), chunk_rows):
+            rows = selected_indices[start : start + chunk_rows]
+            block = matrix[rows, :]
+            if hasattr(block, "to_memory"):
+                block = block.to_memory()
+            if sparse.issparse(block):
+                blocks.append(block.tocsr())
+            else:
+                blocks.append(sparse.csr_matrix(np.asarray(block)))
+        return sparse.vstack(blocks, format="csr")
+
+    subset = ad.AnnData(
+        X=subset_matrix(data.X),
+        obs=data.obs.iloc[selected_indices].copy(),
+        var=data.var.copy(),
+    )
+    for name in data.layers.keys():
+        subset.layers[name] = subset_matrix(data.layers[name])
+    return subset
 
 
 def write_annotation_packet(modality: str, output_dir: str | Path) -> dict[str, str]:

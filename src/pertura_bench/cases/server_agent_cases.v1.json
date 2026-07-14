@@ -239,29 +239,23 @@
                                            ]
                   },
                   {
-                      "case_id":  "agent_norman_virtual",
+                      "case_id":  "agent_norman_sceptre_refusal",
                       "dataset_id":  "norman_k562_crispra_2019",
-                      "objective":  "virtual evaluator and next panel",
+                      "objective":  "SCEPTRE suitability audit for the Norman processed combinatorial CRISPRa artifact; refuse performance analysis when cell-by-guide counts are unavailable",
                       "expected_turns":  1,
                       "expected_capability_dag":  [
-                                                      "virtual.split.contract.v1",
-                                                      "virtual.prediction.ingest.v1",
-                                                      "virtual.leakage.audit.v1",
-                                                      "virtual.baselines.v1",
-                                                      "virtual.evaluate.comprehensive.v1",
-                                                      "design.next_panel.v1"
+                                                      "intake.materialize.v1",
+                                                      "diagnostic.dataset_integrity.v1"
                                                   ],
                       "expected_statuses":  [
                                                 "completed"
                                             ],
                       "required_result_roles":  [
-                                                    "prediction_bundle",
-                                                    "virtual_evaluation",
-                                                    "next_panel_design"
+                                                    "materialized_dataset",
+                                                    "dataset_integrity"
                                                 ],
                       "required_artifact_roles":  [
-                                                      "primary_dataset",
-                                                      "prediction_bundle"
+                                                      "primary_dataset"
                                                   ],
                       "scope_claim_constraints":  [
                                                       "no_cell_as_replicate",
@@ -274,14 +268,16 @@
 
                                            ],
                       "benchmark_track":  "primary",
-                      "expected_benchmark_result_type":  "virtual_evaluation",
+                      "expected_benchmark_result_type":  "sceptre_suitability_refusal",
                       "allowed_auxiliary_capabilities":  [
 
                                                          ],
                       "narrative_requirements":  [
                                                      "State the analysis unit and uncertainty.",
                                                      "Separate measured or derived findings from predictions and hypotheses.",
-                                                     "Report blockers and limitations without claiming validation beyond the evidence."
+                                                     "Report blockers and limitations without claiming validation beyond the evidence.",
+                                                     "State that the processed Norman artifact lacks a cell-by-guide count matrix and therefore cannot support a real SCEPTRE performance verdict.",
+                                                     "Do not substitute expression labels for guide counts and do not silently fall back to another association method."
                                                  ],
                       "followup_actions":  [
 

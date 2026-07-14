@@ -22,7 +22,8 @@ parameters_schema:
   type: object
   properties:
     bootstraps:
-      type: string
+      type: integer
+      minimum: 1
     chunk_rows:
       type: integer
       minimum: 1

@@ -388,17 +388,18 @@ def _load_matrix(
         return matrix, obs, var, {"name": "X", "source": source_class}
     if suffix == ".h5ad":
         import anndata as ad
-        import numpy as np
 
         data = ad.read_h5ad(source, backed="r")
         layer = str(parameters.get("layer") or "X")
         matrix = data.X if layer == "X" else data.layers[layer]
-        estimate = int(data.n_obs) * int(data.n_vars) * 8 / 1024**3
-        if not hasattr(matrix, "to_memory") and estimate > max_memory_gb:
-            raise MemoryError(
-                f"dense H5AD layer estimate {estimate:.3f} GB exceeds max_memory_gb={max_memory_gb}"
-            )
-        matrix = matrix.to_memory() if hasattr(matrix, "to_memory") else np.asarray(matrix)
+        matrix = _backed_matrix_to_csr(
+            matrix,
+            rows=int(data.n_obs),
+            columns=int(data.n_vars),
+            max_memory_gb=max_memory_gb,
+            chunk_rows=int(parameters.get("chunk_rows") or 1024),
+            label=f"H5AD layer {layer}",
+        )
         obs = [
             {"raw_barcode": str(name), "normalized_barcode": _normalize_barcode(str(name))}
             for name in data.obs_names
@@ -418,7 +419,14 @@ def _load_matrix(
         if modality not in data.mod:
             raise ValueError(f"MuData modality is missing: {modality}")
         adata = data.mod[modality]
-        matrix = adata.X.to_memory() if hasattr(adata.X, "to_memory") else adata.X
+        matrix = _backed_matrix_to_csr(
+            adata.X,
+            rows=int(adata.n_obs),
+            columns=int(adata.n_vars),
+            max_memory_gb=max_memory_gb,
+            chunk_rows=int(parameters.get("chunk_rows") or 1024),
+            label=f"MuData modality {modality}",
+        )
         obs = [
             {"raw_barcode": str(name), "normalized_barcode": _normalize_barcode(str(name))}
             for name in adata.obs_names
@@ -470,6 +478,51 @@ def _load_matrix(
         var = [{"feature_id": str(name)} for name in data.var_names]
         return data.X, obs, var, {"name": "X", "source": "tenx_counts"}
     raise ValueError(f"unsupported materialization format: {source.name}")
+
+
+def _backed_matrix_to_csr(
+    matrix,
+    *,
+    rows: int,
+    columns: int,
+    max_memory_gb: float,
+    chunk_rows: int,
+    label: str,
+):
+    """Stream a backed dense/sparse matrix into CSR without a full dense read."""
+
+    import numpy as np
+    from scipy import sparse
+
+    if chunk_rows < 1:
+        raise ValueError("chunk_rows must be positive")
+    sample_rows = min(rows, max(1, min(chunk_rows, 1024)))
+    sample = matrix[:sample_rows, :]
+    if hasattr(sample, "to_memory"):
+        sample = sample.to_memory()
+    sample_nnz = int(sample.nnz) if sparse.issparse(sample) else int(
+        np.count_nonzero(np.asarray(sample))
+    )
+    density = sample_nnz / max(1, sample_rows * columns)
+    estimated_nnz = max(sample_nnz, int(rows * columns * density))
+    estimated_bytes = estimated_nnz * 12 + (rows + 1) * 8
+    budget_bytes = int(max_memory_gb * 1024**3)
+    if estimated_bytes > int(budget_bytes * 0.55):
+        raise MemoryError(
+            f"{label} estimated CSR requires {estimated_bytes / 1024**3:.3f} GB "
+            f"before working-memory headroom, exceeding max_memory_gb={max_memory_gb}"
+        )
+    blocks = []
+    for start in range(0, rows, chunk_rows):
+        block = matrix[start : min(rows, start + chunk_rows), :]
+        if hasattr(block, "to_memory"):
+            block = block.to_memory()
+        blocks.append(
+            block.tocsr()
+            if sparse.issparse(block)
+            else sparse.csr_matrix(np.asarray(block))
+        )
+    return sparse.vstack(blocks, format="csr")
 
 
 def _nonnegative_number(value: Any, *, integer: bool) -> float | int:

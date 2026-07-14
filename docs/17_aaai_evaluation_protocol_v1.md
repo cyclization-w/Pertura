@@ -1,6 +1,6 @@
 # Pertura AAAI Evaluation Protocol v1
 
-Status: frozen pre-benchmark protocol for `0.2.0a16`.
+Status: frozen pre-benchmark protocol for `0.2.0a17`.
 
 This protocol evaluates two distinct questions:
 
@@ -95,8 +95,12 @@ Evaluate:
 - preservation of predefined single and combinatorial dual-sgRNA construct labels;
 - absence of multi-guide-as-doublet errors;
 - correct refusal to reinterpret the artifact as random high-MOI guide exposure or run SCEPTRE without a cell-by-guide count matrix;
-- virtual split leakage detection;
-- baseline win rate, collapse, direction, rank, discriminability, and uncertainty metrics.
+- correct fail-closed SCEPTRE suitability/refusal when cell-by-guide counts are absent.
+
+Virtual split, leakage, baseline, rank, uncertainty, and next-panel metrics are
+supplemental and run only when a prediction bundle, split, and reference are
+independently frozen. Their absence is `not_configured` and does not block the
+primary comparison.
 
 ### 3.4 Kang
 
@@ -150,7 +154,7 @@ Use six frozen primary Perturb-seq cases:
 3. Papalexi state/Mixscape analysis;
 4. Papalexi GDO guide assignment, retained-cell QC, and candidate target reliability;
 5. Norman predefined dual-sgRNA construct integrity and method applicability;
-6. Norman virtual evaluation and next-panel reasoning;
+6. Norman SCEPTRE suitability audit and correct refusal without cell-by-guide counts;
 
 Kang paired-donor design auditing and Propeller agent tasks are reported separately as supplemental statistical demonstrations. Kang is not Perturb-seq and is never assigned a guide design or MOI. Its edgeR result is evaluated through the direct-R scientific golden/reference harness rather than the guide-dependent Pertura product route.
 

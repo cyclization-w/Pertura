@@ -71,51 +71,70 @@ def write_json(staging: Path, name: str, payload: dict[str, Any]) -> Path:
     return path
 
 
-class _TrackedDependency(dict[str, Any]):
-    """Mark a projected result only when capability code actually inspects it."""
-
-    def _mark(self) -> None:
-        from pertura_workflow.capabilities.execution_context import mark_dependency_consumed
-
-        hashes = {str(dict.get(self, "canonical_hash") or "")}
-        hashes.update(
-            str(item.get("object_hash") or "")
-            for item in (dict.get(self, "dependency_refs") or ())
-            if isinstance(item, dict)
-        )
-        mark_dependency_consumed(*(item for item in hashes if item))
-
-    def __getitem__(self, key: str) -> Any:
-        self._mark()
-        return super().__getitem__(key)
-
-    def get(self, key: str, default: Any = None) -> Any:
-        self._mark()
-        return super().get(key, default)
-
-    def __iter__(self):
-        self._mark()
-        return super().__iter__()
-
-    def items(self):
-        self._mark()
-        return super().items()
-
-    def keys(self):
-        self._mark()
-        return super().keys()
-
-    def values(self):
-        self._mark()
-        return super().values()
-
-
 def dependency_results(staging: Path) -> list[dict[str, Any]]:
     path = staging / "_dependency_results.json"
     if not path.is_file():
         return []
     payload = json.loads(path.read_text(encoding="utf-8"))
-    return [_TrackedDependency(item) for item in payload.get("results") or ()]
+    return [dict(item) for item in payload.get("results") or ()]
+
+
+def consume_dependency_result(
+    result: dict[str, Any],
+    *,
+    usage: str,
+    rows_consumed: int | None = None,
+    rows_available: int | None = None,
+    columns_consumed: int | None = None,
+) -> None:
+    from pertura_workflow.capabilities.execution_context import (
+        record_dependency_consumption,
+    )
+
+    digest = str(result.get("canonical_hash") or "")
+    if not digest:
+        raise ValueError("dependency result lacks a canonical hash")
+    record_dependency_consumption(
+        dependency_result_id=str(result.get("result_id") or ""),
+        dependency_result_hash=digest,
+        dependency_artifact_hash=digest,
+        usage=usage,
+        rows_consumed=rows_consumed,
+        rows_available=rows_available,
+        columns_consumed=columns_consumed,
+    )
+
+
+def consume_dependency_output(
+    result: dict[str, Any],
+    path: Path,
+    *,
+    usage: str,
+    rows_consumed: int | None = None,
+    rows_available: int | None = None,
+    columns_consumed: int | None = None,
+) -> None:
+    from pertura_workflow.capabilities.execution_context import (
+        record_dependency_consumption,
+    )
+
+    expected = str((result.get("output_hashes") or {}).get(path.name) or "")
+    observed = path_sha256(path)
+    if not expected or observed != expected:
+        from pertura_workflow.capabilities.execution_context import execution_context
+
+        if not execution_context().get("enforce_dependency_consumption"):
+            return
+        raise ValueError(f"dependency output hash drift: {path.name}")
+    record_dependency_consumption(
+        dependency_result_id=str(result.get("result_id") or ""),
+        dependency_result_hash=str(result.get("canonical_hash") or ""),
+        dependency_artifact_hash=observed,
+        usage=usage,
+        rows_consumed=rows_consumed,
+        rows_available=rows_available,
+        columns_consumed=columns_consumed,
+    )
 
 
 def runtime_dependencies(staging: Path) -> list[dict[str, Any]]:

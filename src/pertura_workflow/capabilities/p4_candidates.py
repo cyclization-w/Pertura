@@ -18,7 +18,8 @@ import numpy as np
 from pertura_core import AnalysisStatus, CapabilityRunRequest, CapabilitySpec, DatasetContract
 from pertura_core.hashing import canonical_hash
 from pertura_workflow.capabilities.candidate_common import (
-    blocked, dependency_results, envelope, runtime_dependencies, write_json,
+    blocked, consume_dependency_output, consume_dependency_result, dependency_results,
+    envelope, runtime_dependencies, write_json,
 )
 from pertura_workflow.capabilities.execution_context import execution_context
 from pertura_workflow.environment import environment_prefix, micromamba_path
@@ -590,6 +591,8 @@ def run_interpretation_evidence_map(spec, request, contract, staging):
         if any(item not in available for item in result_ids):
             reasons.append("unknown_result_reference")
         referenced = [available[item] for item in result_ids if item in available]
+        for dependency in referenced:
+            consume_dependency_result(dependency, usage="scientific_input")
         source_classes = {str(item.get("source_class") or "") for item in referenced}
         if role in {"measured", "derived", "contradiction"} and not result_ids:
             reasons.append("result_provenance_required")
@@ -642,6 +645,7 @@ def _effect_tables(staging):
         for value in result.get("local_output_paths") or ():
             path = Path(value)
             if path.is_file() and path.name in names:
+                consume_dependency_output(result, path, usage="scientific_input")
                 found.append((result, path))
     return found
 
@@ -672,6 +676,7 @@ def _dependency_file(staging, name):
         for value in result.get("local_output_paths") or ():
             path = Path(value)
             if path.is_file() and path.name == name:
+                consume_dependency_output(result, path, usage="scientific_input")
                 return path
     return None
 

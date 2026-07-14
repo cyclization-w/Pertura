@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pertura"
-version = "0.2.0a16"
+version = "0.2.0a17"
 description = "Execution-grounded evidence runtime for Perturb-seq CodeAct agents."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -81,6 +81,5 @@ testpaths = ["tests"]
 markers = [
   "legacy: read-only compatibility, stage, registrar, and classic workflow regression",
 ]
-
 
 

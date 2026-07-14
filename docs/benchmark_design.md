@@ -1,4 +1,4 @@
-# PerturaBench 0.2.0a16 evaluation protocol
+# PerturaBench 0.2.0a17 evaluation protocol
 
 PerturaBench has two independent objectives:
 
@@ -35,7 +35,7 @@ limitations                missing references and interpretive constraints
 ```
 
 A completed process is not, by itself, scientific validation. Required outputs must exist and validate. When a frozen reference exists, comparison is mandatory. A missing reference is `not_available`, never passed. A continuous metric without a prespecified threshold is `reported_only`.
-Frozen references are evaluated outside the capability runner. Reference provenance is bound to a packaged independent generator catalog: direct edgeR, SCEPTRE and Propeller R harnesses, a Seurat Mixscape harness, or explicit curated/expert provenance. A reference without a known generator/provenance record is invalid. The metric catalog may declare `table_numeric`, `classification`, or `rank_concordance` evaluators; they align rows by explicit keys, verify the reference SHA-256, reject duplicate or missing keys, and compare the published artifact before the temporary product workspace is removed. Runner-reported scalar metrics remain useful telemetry but cannot substitute for an available artifact-level reference.
+Frozen references are evaluated outside the capability runner. Reference provenance is bound to a packaged independent generator catalog: direct edgeR, SCEPTRE and Propeller R harnesses, a Seurat Mixscape harness, or explicit curated/expert provenance. A reference without a known generator/provenance record is invalid. The metric catalog may declare `table_numeric`, `classification`, `rank_concordance`, `posterior_calibration`, `cluster_agreement`, `null_calibration`, or `effect_error` evaluators; they align rows by explicit keys, verify observed and reference SHA-256 identities, reject duplicate or missing keys, and compare persistent product artifacts. Runner-reported scalar metrics remain `reported_only` telemetry and cannot substitute for an artifact-level reference.
 
 `real_benchmark_complete=true` (with `real_benchmark_ready` retained as a compatibility alias) means every primary run has a current, hash-bound terminal verdict, including disclosed failures. `candidate_validation_passed=true` is the separate performance target: execution hard gates pass and frozen scientific comparisons pass. This separation prevents completed failures from disappearing while preventing completion from being advertised as validation.
 
@@ -47,7 +47,7 @@ The artifact-aware frozen run policy schedules 39 scientific jobs rather than a 
 |---|---|
 | Replogle K562 CRISPRi | intake/count integrity; perturbation-label and non-targeting-control coverage; target-reliability applicability limits. The frozen processed artifact has no cell-by-guide count matrix, so guide assignment, ambient-guide estimation, and MOI are not scored from it. |
 | Papalexi THP-1 ECCITE | raw GDO guide integrity/assignment from a separately hash-bound auxiliary export; retained-cell QC; control-only state reference; cross-seed stability; mapping rejection; Mixscape responder/escape concordance; candidate target-reliability classification. |
-| Norman K562 CRISPRa | preservation and correct interpretation of predefined dual-sgRNA constructs; explicit rejection of an inapplicable random high-MOI/SCEPTRE route; virtual-model leakage, baseline, evaluator, and next-panel metrics. |
+| Norman K562 CRISPRa | preservation and correct interpretation of predefined dual-sgRNA constructs; explicit rejection of an inapplicable random high-MOI/SCEPTRE route. P5 virtual-model metrics are optional and require a separately frozen prediction bundle, split, and reference. |
 | Kang 8-vs-8 PBMC | direct-R edgeR numerical agreement; Propeller proportion/effect/FDR agreement; paired-donor, replicate, and confounding hard gates. Kang is an external statistical reference, is not represented as Perturb-seq, and is not given fabricated guide/MOI facts. |
 
 ### Local synthetic protocol

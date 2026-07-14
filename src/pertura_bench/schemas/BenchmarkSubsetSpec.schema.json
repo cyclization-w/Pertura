@@ -1,20 +1,73 @@
 {
   "additionalProperties": false,
+  "description": "Portable real-data subset selection.\n\nVersion 1 remains loadable for the frozen synthetic fixtures.  Formal\nreal-data execution requires version 2, which splits independent groups\nbefore cells and binds controls to explicitly selected units.",
   "properties": {
     "canonical_hash": {
       "default": "",
       "title": "Canonical Hash",
       "type": "string"
     },
+    "control_selector": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Control Selector"
+    },
     "dataset_id": {
       "title": "Dataset Id",
       "type": "string"
     },
+    "exclude_filters": {
+      "default": [],
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Exclude Filters",
+      "type": "array"
+    },
+    "group_column": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Group Column"
+    },
+    "include_filters": {
+      "default": [],
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Include Filters",
+      "type": "array"
+    },
     "label_column": {
-      "title": "Label Column",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label Column"
     },
     "labels": {
+      "default": [],
       "items": {
         "type": "string"
       },
@@ -27,8 +80,24 @@
       "title": "Max Cells Per Label",
       "type": "integer"
     },
+    "max_cells_per_stratum": {
+      "default": 500,
+      "exclusiveMinimum": 0,
+      "title": "Max Cells Per Stratum",
+      "type": "integer"
+    },
+    "minimum_units_per_arm": {
+      "default": 2,
+      "exclusiveMinimum": 0,
+      "title": "Minimum Units Per Arm",
+      "type": "integer"
+    },
     "schema_version": {
-      "default": "pertura-benchmark-subset-spec-v1",
+      "default": "pertura-benchmark-subset-spec-v2",
+      "enum": [
+        "pertura-benchmark-subset-spec-v1",
+        "pertura-benchmark-subset-spec-v2"
+      ],
       "title": "Schema Version",
       "type": "string"
     },
@@ -36,6 +105,22 @@
       "default": 1729,
       "title": "Seed",
       "type": "integer"
+    },
+    "selected_control_units": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Selected Control Units",
+      "type": "array"
+    },
+    "selected_groups": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Selected Groups",
+      "type": "array"
     },
     "selection": {
       "additionalProperties": true,
@@ -54,18 +139,48 @@
       "title": "Split",
       "type": "string"
     },
+    "split_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Split Id"
+    },
+    "strata_columns": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Strata Columns",
+      "type": "array"
+    },
     "subset_spec_id": {
       "default": "",
       "title": "Subset Spec Id",
       "type": "string"
+    },
+    "unit_id_column": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Unit Id Column"
     }
   },
   "required": [
     "dataset_id",
     "source_lock_hash",
-    "split",
-    "label_column",
-    "labels"
+    "split"
   ],
   "title": "BenchmarkSubsetSpec",
   "type": "object"

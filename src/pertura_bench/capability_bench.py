@@ -224,6 +224,9 @@ def run_protocol_cases(
     parameter_catalog_path: str | Path | None = None,
     design_confirmations_path: str | Path | None = None,
     metric_reference_catalog_path: str | Path | None = None,
+    resource_evidence_path: str | Path | None = None,
+    enforced_memory_gb: float | None = None,
+    enforced_n_jobs: int | None = None,
 ) -> list[dict[str, Any]]:
     matching = [item for item in benchmark_specs() if item.capability_id == capability_id]
     if not matching:
@@ -241,6 +244,9 @@ def run_protocol_cases(
             parameter_catalog_path=parameter_catalog_path,
             design_confirmations_path=design_confirmations_path,
             metric_reference_catalog_path=metric_reference_catalog_path,
+            resource_evidence_path=resource_evidence_path,
+            enforced_memory_gb=enforced_memory_gb,
+            enforced_n_jobs=enforced_n_jobs,
         )
     elif tier in {"unit", "synthetic_ci"}:
         verdicts = [
@@ -563,8 +569,13 @@ def _real_verdict_state(
                 "checkpoint_plan": checkpoint["server_plan_hash"],
             }
         )
-        dataset_mapping = dict(
-            parameter_catalog.get("datasets", {}).get(dataset_id) or {}
+        from pertura_bench.real_execution import select_real_parameter_run
+
+        dataset_mapping = select_real_parameter_run(
+            parameter_catalog,
+            dataset_id=dataset_id,
+            tier=tier,
+            split=split,
         )
         expected.update(
             {

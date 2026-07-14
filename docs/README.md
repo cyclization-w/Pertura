@@ -1,6 +1,6 @@
 # Pertura documentation
 
-This index describes the capability-first product at the `0.2.0a16` pre-benchmark checkpoint. Historical evidence-lattice, stage, smoke, and paper-facing materials are isolated under `legacy/` and are not current product architecture.
+This index describes the capability-first product at the `0.2.0a17` pre-benchmark checkpoint. Historical evidence-lattice, stage, smoke, and paper-facing materials are isolated under `legacy/` and are not current product architecture.
 
 ## Current reading order
 
@@ -41,7 +41,7 @@ ResultEnvelope -> pertura_core.promotion -> TurnFinal / report
 ## Expected checkpoint
 
 ```text
-build_version: 0.2.0a16
+build_version: 0.2.0a17
 repository_ready: true
 runtime_spine_ready: true
 dependency_policy_ready: true

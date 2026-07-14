@@ -28,6 +28,49 @@ def consumed_dependency_hashes() -> tuple[str, ...]:
     return tuple(sorted(str(item) for item in consumed))
 
 
+def record_dependency_consumption(
+    *,
+    dependency_result_id: str,
+    dependency_result_hash: str,
+    dependency_artifact_hash: str,
+    usage: str,
+    consumer_capability_id: str | None = None,
+    rows_consumed: int | None = None,
+    rows_available: int | None = None,
+    columns_consumed: int | None = None,
+    derived_output_hashes: tuple[str, ...] = (),
+) -> None:
+    """Record scientific use of a dependency, not mere metadata access."""
+
+    context = _CONTEXT.get()
+    records = context.get("dependency_consumption_records")
+    if not isinstance(records, list):
+        return
+    record = {
+        "dependency_result_id": str(dependency_result_id),
+        "dependency_result_hash": str(dependency_result_hash),
+        "dependency_artifact_hash": str(dependency_artifact_hash),
+        "usage": str(usage),
+        "consumer_capability_id": str(
+            consumer_capability_id or context.get("consumer_capability_id") or ""
+        ),
+        "rows_consumed": rows_consumed,
+        "rows_available": rows_available,
+        "columns_consumed": columns_consumed,
+        "derived_output_hashes": list(derived_output_hashes),
+    }
+    if record not in records:
+        records.append(record)
+    mark_dependency_consumed(dependency_result_hash)
+
+
+def dependency_consumption_records() -> tuple[dict[str, Any], ...]:
+    records = _CONTEXT.get().get("dependency_consumption_records")
+    if not isinstance(records, list):
+        return ()
+    return tuple(dict(item) for item in records)
+
+
 @contextmanager
 def bind_execution_context(payload: dict[str, Any] | None) -> Iterator[None]:
     token = _CONTEXT.set(dict(payload or {}))

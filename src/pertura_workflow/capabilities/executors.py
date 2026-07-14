@@ -132,6 +132,7 @@ def _validate_standard(spec: CapabilitySpec, request: CapabilityRunRequest, cont
         return
     policy = dict(spec.metadata.get("dependency_policy") or {})
     consumed = set(result.metadata.get("consumed_dependency_hashes") or ())
+    records = tuple(result.metadata.get("dependency_consumption_records") or ())
     direct_dependencies = {
         item.role: item
         for item in request.dependencies
@@ -147,6 +148,26 @@ def _validate_standard(spec: CapabilitySpec, request: CapabilityRunRequest, cont
         if binding.object_hash not in consumed:
             raise ValueError(
                 f"executor did not consume declared {usage} dependency: {dependency}; expected {binding.object_hash}; observed {sorted(consumed)}"
+            )
+        matching = [
+            item
+            for item in records
+            if item.get("dependency_result_hash") == binding.object_hash
+            and item.get("usage") == usage
+            and str(item.get("dependency_artifact_hash") or "").startswith("sha256:")
+        ]
+        if not matching:
+            raise ValueError(
+                f"executor did not record artifact-level {usage} consumption: {dependency}"
+            )
+        if usage == "row_filter" and any(
+            item.get("rows_consumed") is None
+            or int(item.get("rows_consumed") or 0) <= 0
+            or item.get("rows_available") is None
+            for item in matching
+        ):
+            raise ValueError(
+                f"row-filter dependency lacks nonzero before/after counts: {dependency}"
             )
 
 
@@ -355,6 +376,8 @@ def execute_capability(
     inside_worker = bool(context.get("inside_environment_worker"))
     enforce_isolation = bool(context.get("enforce_environment_execution"))
     context.setdefault("consumed_dependency_hashes", set())
+    context.setdefault("dependency_consumption_records", [])
+    context.setdefault("consumer_capability_id", spec.capability_id)
     with bind_execution_context(context):
         if isolated and enforce_isolation and not inside_worker:
             result = _execute_in_profile(
@@ -371,11 +394,19 @@ def execute_capability(
                     spec.metadata.get("environment_profile") or ""
                 )
                 result = result.model_copy(update={"metadata": metadata})
-        from pertura_workflow.capabilities.execution_context import consumed_dependency_hashes
+        from pertura_workflow.capabilities.execution_context import (
+            consumed_dependency_hashes,
+            dependency_consumption_records,
+        )
         context_consumed = consumed_dependency_hashes()
+        context_records = dependency_consumption_records()
     metadata = dict(result.metadata)
     existing_consumed = set(metadata.get("consumed_dependency_hashes") or ())
     existing_consumed.update(context_consumed)
+    existing_records = list(metadata.get("dependency_consumption_records") or ())
+    for record in context_records:
+        if record not in existing_records:
+            existing_records.append(record)
     metadata.update({
         "capability_spec_hash": capability_scientific_hash(spec),
         "dependency_consumption_enforced": bool(
@@ -385,6 +416,7 @@ def execute_capability(
             dict(spec.metadata.get("dependency_policy") or {})
         ),
         "consumed_dependency_hashes": sorted(existing_consumed),
+        "dependency_consumption_records": existing_records,
     })
     payload = result.model_dump(mode="json")
     payload["canonical_hash"] = ""

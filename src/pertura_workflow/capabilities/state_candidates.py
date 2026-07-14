@@ -15,6 +15,7 @@ from pertura_workflow.capabilities.candidate_common import (
     resolve_input,
     resource_budget,
     write_json,
+    consume_dependency_output,
 )
 from pertura_workflow.capabilities.dependency_inputs import retained_cells_for_request
 from pertura_workflow.capabilities.modules import run_nmf_modules
@@ -281,6 +282,25 @@ def run_state_reference_map(
     )
     model = np.load(model_path, allow_pickle=False)
     data = ad.read_h5ad(h5ad_path, backed="r")
+    retained = retained_cells_for_request(staging, request, required=True)
+    retained_set = set(retained or ())
+    retained_indices = np.asarray(
+        [
+            index
+            for index, cell in enumerate(data.obs_names.astype(str))
+            if cell in retained_set
+        ],
+        dtype=int,
+    )
+    if not len(retained_indices):
+        if getattr(data, "file", None):
+            data.file.close()
+        return blocked(
+            spec,
+            request,
+            contract,
+            "retained-cell manifest has no overlap with state mapping input",
+        )
     genes = [str(item) for item in data.var_names]
     gene_index = {name: index for index, name in enumerate(genes)}
     missing = [str(name) for name in model["hvg_names"] if str(name) not in gene_index]
@@ -302,9 +322,9 @@ def run_state_reference_map(
     try:
         import pyarrow as pa
         import pyarrow.parquet as pq
-        for start in range(0, int(data.n_obs), budget.chunk_rows):
-            stop = min(int(data.n_obs), start + budget.chunk_rows)
-            raw = data.X[start:stop, :]
+        for start in range(0, len(retained_indices), budget.chunk_rows):
+            chunk_indices = retained_indices[start : start + budget.chunk_rows]
+            raw = data.X[chunk_indices, :]
             raw = raw.to_memory() if hasattr(raw, "to_memory") else raw
             if sparse.issparse(raw):
                 raw = raw.tocsr()
@@ -319,15 +339,27 @@ def run_state_reference_map(
             pcs = (normalized - model["pca_mean"]) @ model["pca_components"].T
             indices = neighbors.kneighbors(pcs, return_distance=False)
             rows = []
-            cell_ids = [str(item) for item in data.obs_names[start:stop]]
-            for cell, neighbor_indices in zip(cell_ids, indices):
+            cell_ids = [str(data.obs_names[index]) for index in chunk_indices]
+            for cell, neighbor_indices, cell_pcs in zip(cell_ids, indices, pcs):
                 votes = [labels[int(index)] for index in neighbor_indices]
                 counts = {label: votes.count(label) for label in set(votes)}
                 label, count = max(counts.items(), key=lambda item: (item[1], item[0]))
                 probability = count / len(votes)
                 technical = label if probability >= threshold else "unresolved_state"
                 unresolved += technical == "unresolved_state"
-                rows.append({"cell_id": cell, "technical_state_id": technical, "mapping_probability": probability, "candidate_human_label": None})
+                row = {
+                    "cell_id": cell,
+                    "technical_state_id": technical,
+                    "mapping_probability": probability,
+                    "candidate_human_label": None,
+                }
+                row.update(
+                    {
+                        f"PC{index + 1}": float(value)
+                        for index, value in enumerate(cell_pcs)
+                    }
+                )
+                rows.append(row)
             table = pa.Table.from_pandas(pd.DataFrame(rows), preserve_index=False)
             writer = writer or pq.ParquetWriter(output, table.schema)
             writer.write_table(table)
@@ -344,8 +376,13 @@ def run_state_reference_map(
             "schema_version": "pertura-state-reference-map-v1",
             "mapping_probability_threshold": threshold,
             "n_cells": mapped_count,
+            "excluded_cell_count": int(data.n_obs) - mapped_count,
             "unresolved_state_count": unresolved,
             "reference_model_name": model_path.name,
+            "reference_hvg_names": [str(item) for item in model["hvg_names"]],
+            "pca_columns": [
+                f"PC{index + 1}" for index in range(model["pca_components"].shape[0])
+            ],
             "reference_refit": False,
         },
     )
@@ -361,7 +398,11 @@ def run_state_reference_map(
         status=AnalysisStatus.completed_with_caution if caution else AnalysisStatus.completed,
         summary=f"Mapped {mapped_count} cells to the frozen control reference; {unresolved} remained unresolved.",
         cautions=caution,
-        metrics={"n_cells": mapped_count, "unresolved_state_count": unresolved},
+        metrics={
+            "n_cells": mapped_count,
+            "excluded_cell_count": int(data.n_obs) - mapped_count,
+            "unresolved_state_count": unresolved,
+        },
         outputs=(output, manifest),
         metadata={"reference_refit": False, "mapping_probability_threshold": threshold},
     )
@@ -475,7 +516,20 @@ def run_control_nmf(
             *environment["problems"],
             metadata={"setup_command": "pertura env setup python-science-v1"},
         )
-    return run_nmf_modules(spec, request, contract, staging)
+    reference_model = _parameter_or_dependency_path(
+        contract,
+        staging,
+        None,
+        suffix=".npz",
+        capability_id="state.reference.fit.v1",
+    )
+    child = request.model_copy(
+        update={
+            "parameters": dict(request.parameters)
+            | {"reference_model_path": str(reference_model)}
+        }
+    )
+    return run_nmf_modules(spec, child, contract, staging)
 
 
 def _parameter_or_dependency_path(
@@ -496,5 +550,8 @@ def _parameter_or_dependency_path(
         for path in result.get("local_output_paths") or []:
             candidate = Path(path)
             if candidate.suffix.lower() == suffix and candidate.is_file():
+                consume_dependency_output(
+                    result, candidate, usage="scientific_input"
+                )
                 return candidate
     raise ValueError(f"{capability_id} dependency does not expose a {suffix} output")

@@ -79,6 +79,22 @@ def _options() -> ClaudeRuntimeOptions:
     )
 
 
+def _resource_evidence() -> dict[str, object]:
+    return {
+        "schema_version": "pertura-resource-evidence-v1",
+        "mode": "scheduler",
+        "scheduler_job_id": "test-job-1",
+        "requested_memory_gb": 4.0,
+        "actual_memory_gb": 4.0,
+        "peak_rss_mb": 128.0,
+        "cpu_count": 1,
+        "n_jobs": 1,
+        "timeout_seconds": 60,
+        "wall_clock_seconds": 1.0,
+        "thread_environment": {"OMP_NUM_THREADS": "1"},
+    }
+
+
 def test_baseline_hard_gate_scores_preserved_claim_without_pertura_results(tmp_path) -> None:
     output = _benchmark_output(tmp_path)
     gates = evaluate_server_agent_hard_gates(
@@ -95,6 +111,7 @@ def test_baseline_hard_gate_scores_preserved_claim_without_pertura_results(tmp_p
         resource_enforcement="scheduler",
         enforced_memory_gb=4.0,
         enforced_n_jobs=1,
+        resource_evidence=_resource_evidence(),
     )
 
     assert all(gates.values())

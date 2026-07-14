@@ -48,11 +48,11 @@ parameters_schema:
     resolutions:
       type: array
       items:
-        type: string
+        type: number
     seeds:
       type: array
       items:
-        type: string
+        type: integer
   required:
   - h5ad_path
   - control_column

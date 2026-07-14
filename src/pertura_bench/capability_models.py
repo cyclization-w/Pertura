@@ -158,6 +158,7 @@ class CapabilityBenchmarkVerdict(CanonicalModel):
     ] = "not_required"
     reference_hashes: dict[str, str] = Field(default_factory=dict)
     continuous_metrics: dict[str, float | int | str | None] = Field(default_factory=dict)
+    metric_bindings: tuple[dict[str, str], ...] = ()
     limitations: tuple[str, ...] = ()
     observed_status: str | None = None
     observed_blockers: tuple[str, ...] = ()
@@ -242,10 +243,12 @@ class ServerBenchmarkPlan(CanonicalModel):
             "agent_case_catalog_hash": None,
             "skill_bundle_hash": None,
             "capability_spec_hash": None,
+            "parameter_schema_hash": None,
             "judge_manifest_hash": None,
             "report_turn_schema_hash": None,
             "template_digest": None,
             "resource_lock_set_hash": None,
+            "subset_catalog_hash": None,
             "prediction_bundle_set_hash": None,
             "server_plan_hash": None,
             "parameter_catalog_hash": None,
@@ -267,10 +270,12 @@ class ServerBenchmarkPlan(CanonicalModel):
             "agent_case_catalog_hash",
             "skill_bundle_hash",
             "capability_spec_hash",
+            "parameter_schema_hash",
             "judge_manifest_hash",
             "report_turn_schema_hash",
             "template_digest",
             "resource_lock_set_hash",
+            "subset_catalog_hash",
             "prediction_bundle_set_hash",
             "server_plan_hash",
             "parameter_catalog_hash",

@@ -73,7 +73,7 @@ def test_frozen_and_reported_only_metrics_are_distinct() -> None:
             "tolerance": 0.01,
         }
     ]
-    failed = _evaluate_metric_references(
+    indexed = _evaluate_metric_references(
         {"metrics": {"ari": 0.91}},
         dataset_id="fixture",
         capability_id="fixture.capability.v1",
@@ -81,8 +81,9 @@ def test_frozen_and_reported_only_metrics_are_distinct() -> None:
         catalog=frozen,
         catalog_hash="sha256:" + "3" * 64,
     )
-    assert failed["status"] == "failed"
-    assert failed["continuous_metrics"]["ari__error"] > 0.01
+    assert indexed["status"] == "reported_only"
+    assert indexed["continuous_metrics"]["ari__error"] > 0.01
+    assert indexed["metric_bindings"] == ()
 
 
 def test_external_catalog_hashes_bind_server_plan(tmp_path: Path) -> None:
@@ -123,21 +124,37 @@ def test_external_catalog_hashes_bind_server_plan(tmp_path: Path) -> None:
     assert plan.checkpoint_binding["metric_reference_catalog_hash"].startswith(
         "sha256:"
     )
-    assert len([job for job in plan.jobs if job["kind"] == "agent_workflow"]) == 36
+    agent_jobs = [job for job in plan.jobs if job["kind"] == "agent_workflow"]
+    assert len(agent_jobs) == 48
+    assert sum(job["benchmark_track"] == "primary" for job in agent_jobs) == 36
+    assert sum(job["benchmark_track"] == "supplemental" for job in agent_jobs) == 12
     prediction_artifact = next(
         item
         for item in plan.artifacts
         if item["artifact_id"]
-        == "artifact:norman_k562_crispra_2019:agent:prediction_bundle"
+        == "artifact:norman_k562_crispra_2019:evaluation:agent:prediction_bundle"
     )
     assert prediction_artifact["content_sha256"] == "sha256:" + "9" * 64
-    norman_jobs = [
+    norman_primary_jobs = [
         item
         for item in plan.jobs
-        if item.get("case_id") == "agent_norman_virtual"
+        if item.get("case_id") == "agent_norman_sceptre_refusal"
     ]
-    assert norman_jobs
-    assert all(prediction_artifact["artifact_id"] in item["consumes"] for item in norman_jobs)
+    assert norman_primary_jobs
+    assert all(
+        prediction_artifact["artifact_id"] not in item["consumes"]
+        for item in norman_primary_jobs
+    )
+    optional_p5_jobs = [
+        item
+        for item in plan.jobs
+        if item.get("capability_id") == "virtual.evaluate.comprehensive.v1"
+    ]
+    assert optional_p5_jobs
+    assert all(
+        item["optional_execution_gate"]["release_blocking"] is False
+        for item in optional_p5_jobs
+    )
 
 
 def test_agent_narrative_automatic_failure_overrides_high_scores() -> None:
@@ -305,8 +322,8 @@ def test_agent_common_result_uses_frozen_case_specific_metric_reference() -> Non
         catalog=catalog,
         catalog_hash="sha256:" + "6" * 64,
     )
-    assert passed["status"] == "passed"
-    assert failed["status"] == "failed"
+    assert passed["status"] == "reported_only"
+    assert failed["status"] == "reported_only"
 
 
 def test_metric_catalog_requires_bound_reference_generator_and_provenance(

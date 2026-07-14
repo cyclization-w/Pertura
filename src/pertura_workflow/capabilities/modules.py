@@ -97,12 +97,17 @@ def run_nmf_modules(spec: CapabilitySpec, request: CapabilityRunRequest, contrac
     if not control_column or not control_values:
         return _blocked(spec, request, contract, ("confirmed control_column and control_values are required",))
     budget = resource_budget(params)
+    from pertura_workflow.capabilities.dependency_inputs import retained_cells_for_request
+
+    retained = retained_cells_for_request(staging, request, required=False)
     data = ad.read_h5ad(path, backed="r")
     if control_column not in data.obs.columns:
         if getattr(data, "file", None):
             data.file.close()
         return _blocked(spec, request, contract, (f"control column is missing: {control_column}",))
     mask = data.obs[control_column].astype(str).isin(control_values).to_numpy()
+    if retained is not None:
+        mask &= data.obs_names.astype(str).isin(retained)
     control_indices = np.flatnonzero(mask)
     genes = np.asarray([str(item) for item in data.var_names])
     obs_names = np.asarray([str(item) for item in data.obs_names])
@@ -135,10 +140,29 @@ def run_nmf_modules(spec: CapabilitySpec, request: CapabilityRunRequest, contrac
         matrix = np.divide(matrix, library[:, None], out=np.zeros_like(matrix, dtype=float), where=library[:, None] > 0) * 1e4
         matrix = np.log1p(matrix)
         variance = matrix.var(axis=0)
+    reference_hvg: list[str] = []
+    reference_model_path = params.get("reference_model_path")
+    if reference_model_path:
+        reference_model = np.load(Path(str(reference_model_path)), allow_pickle=False)
+        reference_hvg = [str(item) for item in reference_model["hvg_names"]]
     n_hvg = min(2000, int((variance > 0).sum()))
     if n_hvg < 2:
         return _blocked(spec, request, contract, ("fewer than two variable control genes are available",))
-    hvg_index = np.argsort(variance)[-n_hvg:]
+    if reference_hvg:
+        gene_index = {str(gene): index for index, gene in enumerate(genes)}
+        hvg_index = np.asarray(
+            [gene_index[gene] for gene in reference_hvg if gene in gene_index],
+            dtype=int,
+        )
+        if len(hvg_index) < 2:
+            return _blocked(
+                spec,
+                request,
+                contract,
+                ("state reference exposes fewer than two matching HVGs",),
+            )
+    else:
+        hvg_index = np.argsort(variance)[-n_hvg:]
     matrix = matrix[:, hvg_index]
     genes = genes[hvg_index]
     ranks = [int(item) for item in params.get("ranks") or [5, 10, 15, 20]]
@@ -204,7 +228,7 @@ def run_nmf_modules(spec: CapabilitySpec, request: CapabilityRunRequest, contrac
         summary=f"Learned {chosen['rank']} control-derived NMF modules.", cautions=tuple(cautions),
         metrics={"chosen_rank": chosen["rank"], "stability": chosen["stability"], "n_control_cells": int(mask.sum())},
         output_paths=outputs, output_hashes={name: file_sha256(staging / name) for name in outputs},
-        dependencies=request.dependencies, metadata={"fit_population": "confirmed_controls_only", "module_role": "reference"},
+        dependencies=request.dependencies, metadata={"fit_population": "confirmed_controls_only", "module_role": "reference", "retained_manifest_applied": retained is not None, "state_reference_hvg_applied": bool(reference_hvg)},
     )
 
 

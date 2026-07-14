@@ -22,6 +22,7 @@ def evaluate_artifact_metrics(
     reference_hashes: dict[str, str] = {}
     required_outputs: set[str] = set()
     limitations: list[str] = []
+    metric_bindings: list[dict[str, str]] = []
     for raw in evaluators:
         evaluator_id = str(raw.get("evaluator_id") or "")
         evaluator_type = str(raw.get("type") or "")
@@ -45,6 +46,7 @@ def evaluate_artifact_metrics(
             if file_sha256(reference_path) != reference_hash:
                 raise ValueError("metric reference checksum mismatch")
             reference_hashes[f"metric_reference:{evaluator_id}"] = reference_hash
+            observed_hash = file_sha256(observed_path)
             observed = _read_table(observed_path)
             reference = _read_table(reference_path)
             if evaluator_type == "table_numeric":
@@ -53,6 +55,20 @@ def evaluate_artifact_metrics(
                 passed, metrics = _compare_classification(observed, reference, raw)
             elif evaluator_type == "rank_concordance":
                 passed, metrics = _compare_rank(observed, reference, raw)
+            elif evaluator_type == "posterior_calibration":
+                passed, metrics = _compare_posterior_calibration(
+                    observed, reference, raw
+                )
+            elif evaluator_type == "cluster_agreement":
+                passed, metrics = _compare_cluster_agreement(
+                    observed, reference, raw
+                )
+            elif evaluator_type == "null_calibration":
+                passed, metrics = _compare_null_calibration(
+                    observed, reference, raw
+                )
+            elif evaluator_type == "effect_error":
+                passed, metrics = _compare_effect_error(observed, reference, raw)
             else:
                 raise ValueError(f"unsupported metric evaluator type: {evaluator_type}")
         except (FileNotFoundError, ImportError, OSError, TypeError, ValueError) as exc:
@@ -60,6 +76,16 @@ def evaluate_artifact_metrics(
             limitations.append(f"{evaluator_id}: {exc}")
             continue
         comparisons.append(passed)
+        metric_bindings.append(
+            {
+                "metric_id": evaluator_id,
+                "observed_artifact_role": observed_name,
+                "observed_artifact_hash": observed_hash,
+                "reference_id": reference_name,
+                "reference_hash": reference_hash,
+                "evaluator_id": evaluator_id,
+            }
+        )
         continuous.update(
             {f"{evaluator_id}.{name}": value for name, value in metrics.items()}
         )
@@ -73,6 +99,7 @@ def evaluate_artifact_metrics(
         "reference_hashes": reference_hashes,
         "required_outputs": tuple(sorted(required_outputs)),
         "limitations": tuple(limitations),
+        "metric_bindings": tuple(metric_bindings),
     }
 
 
@@ -86,6 +113,10 @@ def validate_artifact_evaluator(raw: Mapping[str, Any], *, context: str) -> None
         "table_numeric",
         "classification",
         "rank_concordance",
+        "posterior_calibration",
+        "cluster_agreement",
+        "null_calibration",
+        "effect_error",
     }:
         raise ValueError(f"invalid artifact evaluator identity: {context}")
     if (not observed_output or "\\" in observed_output or ":" in observed_output or Path(observed_output).is_absolute()):
@@ -122,6 +153,32 @@ def validate_artifact_evaluator(raw: Mapping[str, Any], *, context: str) -> None
             raise ValueError(
                 f"rank evaluator requires value columns: {context}"
             )
+    elif evaluator_type == "posterior_calibration":
+        if not str(raw.get("probability_column") or "") or not str(
+            raw.get("reference_label_column") or ""
+        ):
+            raise ValueError(
+                f"posterior calibration requires probability and label columns: {context}"
+            )
+    elif evaluator_type == "cluster_agreement":
+        if not str(raw.get("observed_label_column") or "") or not str(
+            raw.get("reference_label_column") or ""
+        ):
+            raise ValueError(
+                f"cluster agreement requires label columns: {context}"
+            )
+    elif evaluator_type == "null_calibration":
+        if not str(raw.get("pvalue_column") or "") or not str(
+            raw.get("reference_signal_column") or ""
+        ):
+            raise ValueError(
+                f"null calibration requires p-value and signal columns: {context}"
+            )
+    elif evaluator_type == "effect_error":
+        if not str(raw.get("observed_value_column") or "") or not str(
+            raw.get("reference_value_column") or ""
+        ):
+            raise ValueError(f"effect error requires value columns: {context}")
 
 
 def _resolve_observed_output(
@@ -241,6 +298,7 @@ def _compare_classification(observed, reference, spec: Mapping[str, Any]):
     truth = reference[reference_column].astype(str)
     labels = sorted(set(predictions) | set(truth))
     recalls: dict[str, float] = {}
+    precisions: dict[str, float] = {}
     f1_values: list[float] = []
     for label in labels:
         true_positive = int(((predictions == label) & (truth == label)).sum())
@@ -249,6 +307,7 @@ def _compare_classification(observed, reference, spec: Mapping[str, Any]):
         precision = true_positive / max(true_positive + false_positive, 1)
         recall = true_positive / max(true_positive + false_negative, 1)
         recalls[label] = recall
+        precisions[label] = precision
         f1_values.append(
             2 * precision * recall / max(precision + recall, 1e-12)
         )
@@ -256,11 +315,14 @@ def _compare_classification(observed, reference, spec: Mapping[str, Any]):
     macro_f1 = float(sum(f1_values) / max(len(f1_values), 1))
     metrics: dict[str, float | int] = {
         "accuracy": accuracy,
+        "macro_precision": float(sum(precisions.values()) / max(len(precisions), 1)),
+        "macro_recall": float(sum(recalls.values()) / max(len(recalls), 1)),
         "macro_f1": macro_f1,
         "row_count": int(len(truth)),
     }
     for label, recall in recalls.items():
         metrics[f"recall.{label}"] = recall
+        metrics[f"precision.{label}"] = precisions[label]
     passed = accuracy >= float(spec.get("minimum_accuracy", 0.0))
     passed = passed and macro_f1 >= float(spec.get("minimum_macro_f1", 0.0))
     blocked_label = spec.get("blocked_label")
@@ -304,3 +366,136 @@ def _compare_rank(observed, reference, spec: Mapping[str, Any]):
         "spearman": correlation,
         "row_count": int(len(left)),
     }
+
+
+def _compare_posterior_calibration(observed, reference, spec: Mapping[str, Any]):
+    import numpy as np
+
+    observed, reference = _aligned_tables(
+        observed, reference, spec.get("key_columns") or ()
+    )
+    probability_column = str(spec["probability_column"])
+    label_column = str(spec["reference_label_column"])
+    if probability_column not in observed or label_column not in reference:
+        raise ValueError("posterior calibration columns are missing")
+    probability = observed[probability_column].to_numpy(dtype=float)
+    truth = reference[label_column].to_numpy(dtype=float)
+    if not np.isfinite(probability).all() or not np.isfinite(truth).all():
+        raise ValueError("posterior calibration contains non-finite values")
+    if ((probability < 0) | (probability > 1)).any() or not set(truth).issubset({0.0, 1.0}):
+        raise ValueError("posterior probabilities/labels are outside their valid range")
+    brier = float(np.mean((probability - truth) ** 2))
+    bins = max(2, int(spec.get("bins", 10)))
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    ece = 0.0
+    for index in range(bins):
+        in_bin = (probability >= edges[index]) & (
+            probability <= edges[index + 1]
+            if index == bins - 1
+            else probability < edges[index + 1]
+        )
+        if in_bin.any():
+            ece += float(in_bin.mean()) * abs(
+                float(probability[in_bin].mean()) - float(truth[in_bin].mean())
+            )
+    passed = brier <= float(spec.get("maximum_brier", 1.0))
+    passed = passed and ece <= float(spec.get("maximum_ece", 1.0))
+    return passed, {"brier": brier, "ece": ece, "row_count": int(len(truth))}
+
+
+def _compare_cluster_agreement(observed, reference, spec: Mapping[str, Any]):
+    observed, reference = _aligned_tables(
+        observed, reference, spec.get("key_columns") or ()
+    )
+    observed_column = str(spec["observed_label_column"])
+    reference_column = str(spec["reference_label_column"])
+    if observed_column not in observed or reference_column not in reference:
+        raise ValueError("cluster agreement label columns are missing")
+    left = observed[observed_column].astype(str).tolist()
+    right = reference[reference_column].astype(str).tolist()
+    ari = _adjusted_rand_index(left, right)
+    metrics: dict[str, float | int] = {"ari": ari, "row_count": len(left)}
+    passed = ari >= float(spec.get("minimum_ari", 0.0))
+    rejection_column = spec.get("rejection_column")
+    reference_rejection_column = spec.get("reference_rejection_column")
+    if rejection_column and reference_rejection_column:
+        if rejection_column not in observed or reference_rejection_column not in reference:
+            raise ValueError("mapping rejection columns are missing")
+        rejection = observed[rejection_column].astype(bool)
+        expected = reference[reference_rejection_column].astype(bool)
+        rejection_accuracy = float((rejection == expected).mean())
+        metrics["mapping_rejection_accuracy"] = rejection_accuracy
+        passed = passed and rejection_accuracy >= float(
+            spec.get("minimum_rejection_accuracy", 0.0)
+        )
+    return passed, metrics
+
+
+def _adjusted_rand_index(left: Sequence[str], right: Sequence[str]) -> float:
+    from collections import Counter
+
+    if len(left) != len(right) or not left:
+        raise ValueError("ARI inputs must be non-empty and aligned")
+    contingency = Counter(zip(left, right))
+    left_counts = Counter(left)
+    right_counts = Counter(right)
+    choose2 = lambda value: value * (value - 1) / 2
+    sum_cells = sum(choose2(value) for value in contingency.values())
+    sum_left = sum(choose2(value) for value in left_counts.values())
+    sum_right = sum(choose2(value) for value in right_counts.values())
+    total = choose2(len(left))
+    if total == 0:
+        return 1.0
+    expected = sum_left * sum_right / total
+    maximum = 0.5 * (sum_left + sum_right)
+    return 1.0 if maximum == expected else float((sum_cells - expected) / (maximum - expected))
+
+
+def _compare_null_calibration(observed, reference, spec: Mapping[str, Any]):
+    import numpy as np
+
+    observed, reference = _aligned_tables(
+        observed, reference, spec.get("key_columns") or ()
+    )
+    pvalue_column = str(spec["pvalue_column"])
+    signal_column = str(spec["reference_signal_column"])
+    if pvalue_column not in observed or signal_column not in reference:
+        raise ValueError("null calibration columns are missing")
+    pvalues = observed[pvalue_column].to_numpy(dtype=float)
+    signal = reference[signal_column].astype(bool).to_numpy()
+    if not np.isfinite(pvalues).all() or ((pvalues < 0) | (pvalues > 1)).any():
+        raise ValueError("p-values are non-finite or outside [0, 1]")
+    alpha = float(spec.get("alpha", 0.05))
+    rejected = pvalues <= alpha
+    null = ~signal
+    type_i = float(rejected[null].mean()) if null.any() else None
+    power = float(rejected[signal].mean()) if signal.any() else None
+    discoveries = int(rejected.sum())
+    fdr = float((rejected & null).sum() / discoveries) if discoveries else 0.0
+    metrics = {"type_i_error": type_i, "power": power, "fdr": fdr, "discoveries": discoveries}
+    passed = type_i is None or type_i <= float(spec.get("maximum_type_i_error", 1.0))
+    passed = passed and fdr <= float(spec.get("maximum_fdr", 1.0))
+    passed = passed and (power is None or power >= float(spec.get("minimum_power", 0.0)))
+    return passed, metrics
+
+
+def _compare_effect_error(observed, reference, spec: Mapping[str, Any]):
+    import numpy as np
+
+    observed, reference = _aligned_tables(
+        observed, reference, spec.get("key_columns") or ()
+    )
+    observed_column = str(spec["observed_value_column"])
+    reference_column = str(spec["reference_value_column"])
+    if observed_column not in observed or reference_column not in reference:
+        raise ValueError("effect comparison columns are missing")
+    left = observed[observed_column].to_numpy(dtype=float)
+    right = reference[reference_column].to_numpy(dtype=float)
+    if not np.isfinite(left).all() or not np.isfinite(right).all():
+        raise ValueError("effect comparison contains non-finite values")
+    error = left - right
+    mae = float(np.mean(np.abs(error)))
+    rmse = float(np.sqrt(np.mean(error ** 2)))
+    passed = mae <= float(spec.get("maximum_mae", math.inf))
+    passed = passed and rmse <= float(spec.get("maximum_rmse", math.inf))
+    return passed, {"mae": mae, "rmse": rmse, "row_count": int(len(left))}

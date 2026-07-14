@@ -293,7 +293,13 @@ def test_server_plan_expands_all_dimensions_and_requires_checkpoint_binding() ->
         assert "--metric-reference-catalog" in argv
 
     agent_jobs = [item for item in plan.jobs if item["kind"] == "agent_workflow"]
-    assert len(agent_jobs) == 6 * 3 * 2
+    assert len(agent_jobs) == 8 * 3 * 2
+    assert len(
+        [item for item in agent_jobs if item["benchmark_track"] == "primary"]
+    ) == 6 * 3 * 2
+    assert len(
+        [item for item in agent_jobs if item["benchmark_track"] == "supplemental"]
+    ) == 2 * 3 * 2
     grouped: dict[str, list[dict]] = {}
     for job in agent_jobs:
         grouped.setdefault(job["case_id"], []).append(job)

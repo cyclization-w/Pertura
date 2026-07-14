@@ -48,11 +48,15 @@ parameters_schema:
     ranks:
       type: array
       items:
-        type: string
+        type: integer
+    reference_model_path:
+      type: string
+      description: Registered asset ID with role capability_artifact.
+      x-pertura-asset-role: capability_artifact
     seeds:
       type: array
       items:
-        type: string
+        type: integer
   required: []
   additionalProperties: false
   examples:

@@ -101,23 +101,93 @@ class BenchmarkArtifactLock(CanonicalModel):
 
 
 class BenchmarkSubsetSpec(CanonicalModel):
-    schema_version: str = "pertura-benchmark-subset-spec-v1"
+    """Portable real-data subset selection.
+
+    Version 1 remains loadable for the frozen synthetic fixtures.  Formal
+    real-data execution requires version 2, which splits independent groups
+    before cells and binds controls to explicitly selected units.
+    """
+
+    schema_version: Literal[
+        "pertura-benchmark-subset-spec-v1",
+        "pertura-benchmark-subset-spec-v2",
+    ] = "pertura-benchmark-subset-spec-v2"
     subset_spec_id: str = ""
     id_field = "subset_spec_id"
     id_prefix = "subset_spec"
 
     dataset_id: str
     source_lock_hash: str
+    split_id: str | None = None
     split: Literal["calibration", "evaluation"]
-    label_column: str
-    labels: tuple[str, ...]
+    unit_id_column: str | None = None
+    group_column: str | None = None
+    strata_columns: tuple[str, ...] = ()
+    include_filters: tuple[dict[str, Any], ...] = ()
+    exclude_filters: tuple[dict[str, Any], ...] = ()
+    control_selector: dict[str, Any] | None = None
+    selected_groups: tuple[str, ...] = ()
+    selected_control_units: tuple[str, ...] = ()
+    max_cells_per_stratum: int = Field(default=500, gt=0)
+    minimum_units_per_arm: int = Field(default=2, gt=0)
+    # v1 compatibility fields.  They are rejected for formal v2 specs.
+    label_column: str | None = None
+    labels: tuple[str, ...] = ()
     max_cells_per_label: int = Field(default=500, gt=0)
     seed: int = 1729
     selection: dict[str, Any] = Field(default_factory=dict)
 
+    @model_validator(mode="after")
+    def _validate_version(self) -> "BenchmarkSubsetSpec":
+        if not _SHA256.fullmatch(self.source_lock_hash):
+            raise ValueError("source_lock_hash must use the canonical sha256: prefix")
+        if self.schema_version.endswith("v1"):
+            if not self.label_column or not self.labels:
+                raise ValueError("v1 subset specs require label_column and labels")
+            return self
+        required = {
+            "split_id": self.split_id,
+            "unit_id_column": self.unit_id_column,
+            "group_column": self.group_column,
+        }
+        missing = [name for name, value in required.items() if not value]
+        if missing:
+            raise ValueError("v2 subset spec is missing: " + ", ".join(missing))
+        if not self.selected_groups:
+            raise ValueError("v2 subset specs require selected_groups")
+        if len(set(self.selected_groups)) != len(self.selected_groups):
+            raise ValueError("selected_groups must be unique")
+        if len(set(self.selected_control_units)) != len(self.selected_control_units):
+            raise ValueError("selected_control_units must be unique")
+        if self.label_column or self.labels:
+            raise ValueError("v2 subset specs cannot use v1 label fields")
+        for filter_spec in (*self.include_filters, *self.exclude_filters):
+            _validate_subset_filter(filter_spec)
+        if self.control_selector is not None:
+            _validate_subset_filter(self.control_selector)
+        return self
+
+
+def _validate_subset_filter(filter_spec: dict[str, Any]) -> None:
+    if not isinstance(filter_spec, dict):
+        raise ValueError("subset filters must be objects")
+    column = str(filter_spec.get("column") or "")
+    operator = str(filter_spec.get("op") or "")
+    if not column or operator not in {"eq", "not_eq", "in", "not_in"}:
+        raise ValueError("subset filter requires column and supported op")
+    if operator in {"eq", "not_eq"} and "value" not in filter_spec:
+        raise ValueError("scalar subset filters require value")
+    if operator in {"in", "not_in"} and not isinstance(
+        filter_spec.get("values"), (list, tuple)
+    ):
+        raise ValueError("set subset filters require values")
+
 
 class BenchmarkSubsetLock(CanonicalModel):
-    schema_version: str = "pertura-benchmark-subset-lock-v1"
+    schema_version: Literal[
+        "pertura-benchmark-subset-lock-v1",
+        "pertura-benchmark-subset-lock-v2",
+    ] = "pertura-benchmark-subset-lock-v2"
     subset_lock_id: str = ""
     id_field = "subset_lock_id"
     id_prefix = "subset_lock"
@@ -131,6 +201,9 @@ class BenchmarkSubsetLock(CanonicalModel):
     subset_script_hash: str
     selected_ids_sha256: str | None = None
     selection_manifest_sha256: str | None = None
+    selected_groups_sha256: str | None = None
+    selected_control_units_sha256: str | None = None
+    selection_summary: dict[str, Any] = Field(default_factory=dict)
 
 
 class BenchmarkSplitManifest(CanonicalModel):

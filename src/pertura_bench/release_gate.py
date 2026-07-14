@@ -834,7 +834,19 @@ def audit_v020(
         "conversation_turn_ready": (root / "src/pertura_runtime/project/lifecycle.py").is_file(),
         "report_revision_ready": (root / "src/pertura_runtime/project/models.py").is_file(),
         "dependency_policy_ready": not dependency_policy_incomplete,
+        "split_protocol_ready": all(
+            (
+                (root / "src/pertura_bench/models.py").is_file(),
+                (root / "src/pertura_bench/operations.py").is_file(),
+            )
+        ),
         "sparse_execution_ready": not sparse_problems,
+        "metric_evaluator_ready": (
+            root / "src/pertura_bench/metric_evaluators.py"
+        ).is_file(),
+        "checkpoint_binding_ready": (
+            root / "src/pertura_bench/server_plan.py"
+        ).is_file(),
         "code_ready": code_ready,
         "local_fixture_ready": local_fixture_ready,
         "local_agent_protocol_ready": local_agent_ready,

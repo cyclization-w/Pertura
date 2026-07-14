@@ -16,6 +16,8 @@ from pertura_workflow.capabilities.candidate_common import (
     envelope,
     resolve_input,
     write_json,
+    consume_dependency_output,
+    consume_dependency_result,
 )
 from pertura_workflow.environment import doctor_environment
 from pertura_workflow.capabilities.dependency_inputs import retained_cells_for_request
@@ -69,6 +71,40 @@ def run_mixscape_responder(
         return blocked(spec, request, contract, "pert_key and control are required for Mixscape")
     budget = resource_budget(request.parameters)
     retained = retained_cells_for_request(staging, request, required=True)
+    state_result = next(
+        (
+            item
+            for item in dependency_results(staging)
+            if item.get("capability_id") == "state.reference.map_knn.v1"
+        ),
+        None,
+    )
+    if state_result is None:
+        return blocked(spec, request, contract, "state mapping dependency is missing")
+    state_outputs = {
+        Path(path).name: Path(path)
+        for path in state_result.get("local_output_paths") or ()
+        if Path(path).is_file()
+    }
+    mapping_path = state_outputs.get("state_mapping.parquet")
+    mapping_manifest_path = state_outputs.get("state_mapping.json")
+    if mapping_path is None or mapping_manifest_path is None:
+        return blocked(
+            spec, request, contract, "state mapping dependency lacks PCA mapping artifacts"
+        )
+    mapping_table = pd.read_parquet(mapping_path)
+    mapping_manifest = json.loads(mapping_manifest_path.read_text(encoding="utf-8"))
+    pca_columns = [str(item) for item in mapping_manifest.get("pca_columns") or ()]
+    hvg_names = [str(item) for item in mapping_manifest.get("reference_hvg_names") or ()]
+    if not pca_columns or not hvg_names or not set(pca_columns).issubset(mapping_table.columns):
+        return blocked(
+            spec, request, contract, "state mapping dependency lacks frozen PCA/HVG content"
+        )
+    consume_dependency_output(state_result, mapping_path, usage="scientific_input")
+    consume_dependency_output(
+        state_result, mapping_manifest_path, usage="scientific_input"
+    )
+
     inspection = ad.read_h5ad(h5ad_path, backed="r")
     try:
         retained_mask = (
@@ -77,9 +113,18 @@ def run_mixscape_responder(
             else [True] * int(inspection.n_obs)
         )
         retained_count = int(retained_mask.sum())
+        gene_index = {str(gene): index for index, gene in enumerate(inspection.var_names)}
+        missing_hvg = [gene for gene in hvg_names if gene not in gene_index]
+        if missing_hvg:
+            return blocked(
+                spec,
+                request,
+                contract,
+                f"Mixscape input is missing {len(missing_hvg)} frozen reference HVGs",
+            )
         estimated = budget.dense_bytes(
             retained_count,
-            int(inspection.n_vars),
+            len(hvg_names),
             arrays=3,
             itemsize=8,
         )
@@ -100,7 +145,9 @@ def run_mixscape_responder(
             if retained is not None
             else [True] * int(inspection.n_obs)
         )
-        data = inspection[selected].to_memory()
+        gene_index = {str(gene): index for index, gene in enumerate(inspection.var_names)}
+        selected_genes = [gene_index[gene] for gene in hvg_names]
+        data = inspection[selected, selected_genes].to_memory()
     finally:
         if getattr(inspection, "file", None):
             inspection.file.close()
@@ -108,6 +155,20 @@ def run_mixscape_responder(
         return blocked(spec, request, contract, "retained-cell manifest has no overlap with Mixscape input")
     if pert_key not in data.obs.columns:
         return blocked(spec, request, contract, f"perturbation column is missing: {pert_key}")
+    mapping_index = mapping_table.set_index("cell_id")
+    missing_mapping = [
+        cell for cell in data.obs_names.astype(str) if cell not in mapping_index.index
+    ]
+    if missing_mapping:
+        return blocked(
+            spec,
+            request,
+            contract,
+            f"state mapping is missing {len(missing_mapping)} retained Mixscape cells",
+        )
+    data.obsm["X_pertura_reference"] = mapping_index.loc[
+        data.obs_names.astype(str), pca_columns
+    ].to_numpy(dtype=float)
     split_by = request.parameters.get("split_by")
     new_class_name = str(request.parameters.get("new_class_name") or "mixscape_class")
     mixscape = pt.tl.Mixscape()
@@ -118,7 +179,7 @@ def run_mixscape_responder(
         ref_selection_mode=str(request.parameters.get("ref_selection_mode") or "nn"),
         split_by=str(split_by) if split_by else None,
         n_neighbors=int(request.parameters.get("n_neighbors", 20)),
-        use_rep=str(request.parameters.get("use_rep") or "X_pca"),
+        use_rep=str(request.parameters.get("use_rep") or "X_pertura_reference"),
         n_dims=int(request.parameters.get("n_dims", 15)),
         copy=False,
     )
@@ -167,6 +228,30 @@ def run_mixscape_responder(
         table["perturbation_score"] = data.obs[score_columns[0]].to_numpy()
     cells_path = staging / "mixscape_cells.parquet"
     table.to_parquet(cells_path, index=False)
+    target_summaries = []
+    for target_uid in sorted(set(table.loc[~table["is_control"], "perturbation"])):
+        target_rows = table[
+            (table["perturbation"] == target_uid) & (~table["is_control"])
+        ]
+        target_labels = target_rows["mixscape_class"].astype(str).str.lower()
+        target_responder = target_labels.str.contains(
+            "ko|responder|perturbed", regex=True
+        )
+        target_escape = target_labels.str.contains(
+            "np|escape|non.perturbed", regex=True
+        )
+        target_summaries.append(
+            {
+                "target_uid": str(target_uid),
+                "n_candidate_cells": int(len(target_rows)),
+                "responder_fraction": float(target_responder.mean())
+                if len(target_rows)
+                else None,
+                "escape_fraction": float(target_escape.mean())
+                if len(target_rows)
+                else None,
+            }
+        )
     summary = {
         "schema_version": "pertura-mixscape-responder-v1",
         "class_column": class_column,
@@ -174,12 +259,17 @@ def run_mixscape_responder(
         "n_candidate_cells": int(candidate_cells.sum()),
         "responder_fraction": float(responder_mask.mean()) if len(responder_mask) else None,
         "escape_fraction": float(escape_mask.mean()) if len(escape_mask) else None,
+        "targets": target_summaries,
         "parameters": {
             "pert_key": pert_key,
             "control": control,
             "split_by": split_by,
             "seed": 1729,
             "signature_layer": "X_pert",
+            "use_rep": str(
+                request.parameters.get("use_rep") or "X_pertura_reference"
+            ),
+            "frozen_hvg_count": len(hvg_names),
         },
         "package_versions": {
             "pertpy": package_metadata.version("pertpy"),
@@ -592,6 +682,8 @@ def run_target_reliability_aggregate(
     trace = []
     for capability_id in sorted(required):
         result = by_capability[capability_id]
+        if capability_id != "diagnostic.design_balance.v1":
+            consume_dependency_result(result, usage="scientific_input")
         trace.append(
             {
                 "capability_id": capability_id,
@@ -638,6 +730,35 @@ def run_target_reliability_aggregate(
                     "cautions": list(efficacy_payload.get("cautions") or ()),
                 }
             ]
+    mixscape_result = by_capability["target.responder.mixscape.v1"]
+    mixscape_outputs = [
+        Path(str(item))
+        for item in mixscape_result.get("local_output_paths") or ()
+        if Path(str(item)).name == "mixscape_summary.json"
+    ]
+    mixscape_targets: dict[str, dict[str, Any]] = {}
+    if len(mixscape_outputs) == 1 and mixscape_outputs[0].is_file():
+        mixscape_payload = json.loads(
+            mixscape_outputs[0].read_text(encoding="utf-8")
+        )
+        mixscape_targets = {
+            str(item.get("target_uid") or ""): dict(item)
+            for item in mixscape_payload.get("targets") or ()
+            if str(item.get("target_uid") or "")
+        }
+    for item in target_verdicts:
+        responder = mixscape_targets.get(item["target_uid"])
+        if responder is None:
+            item["responder_status"] = "unresolved"
+            item["responder_fraction"] = None
+            item["escape_fraction"] = None
+            item["cautions"].append(
+                "target-specific Mixscape responder result is unavailable"
+            )
+        else:
+            item["responder_status"] = "available"
+            item["responder_fraction"] = responder.get("responder_fraction")
+            item["escape_fraction"] = responder.get("escape_fraction")
     cautions.append("aggregate uses dev_unvalidated_v0 thresholds and is not a production screen certification")
     status = DiagnosticStatus.blocked if blockers else DiagnosticStatus.caution
     payload = {

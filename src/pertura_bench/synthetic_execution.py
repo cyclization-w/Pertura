@@ -85,6 +85,13 @@ def scientific_result_digest(
     # run/result identifiers. Scientific dependency content is represented
     # separately below by benchmark_dependency_scientific_hashes.
     metadata_payload.pop("consumed_dependency_hashes", None)
+    consumption_records = metadata_payload.pop(
+        "dependency_consumption_records", ()
+    )
+    if consumption_records:
+        metadata_payload["dependency_consumption_records"] = (
+            _stable_consumption_records(consumption_records)
+        )
     semantic_hashes = metadata_payload.pop(
         "benchmark_scientific_output_hashes", None
     )
@@ -136,6 +143,30 @@ def scientific_result_digest(
 
 def _dependency_binding_key(index: int, item: dict[str, Any]) -> str:
     return f"{item.get('kind', '')}|{item.get('role', '')}|{index}"
+
+
+def _stable_consumption_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep scientific consumption evidence while dropping execution identity."""
+
+    stable_keys = (
+        "dependency_artifact_hash",
+        "usage",
+        "consumer_capability_id",
+        "rows_consumed",
+        "rows_available",
+        "columns_consumed",
+        "derived_output_hashes",
+    )
+    normalized = [
+        {
+            key: _stable_payload(record.get(key))
+            for key in stable_keys
+            if key in record
+        }
+        for record in records
+    ]
+    return sorted(normalized, key=canonical_hash)
+
 
 def _stable_payload(value: Any) -> Any:
     volatile = {
@@ -320,7 +351,10 @@ def make_verdict(
     scientific_metrics_status: str = "not_required",
     reference_hashes: dict[str, str] | None = None,
     continuous_metrics: dict[str, float | int | str | None] | None = None,
+    metric_bindings: tuple[dict[str, str], ...] = (),
     limitations: tuple[str, ...] = (),
+    runtime_seconds: float | None = None,
+    peak_memory_mb: float | None = None,
 ) -> CapabilityBenchmarkVerdict:
     return CapabilityBenchmarkVerdict(
         case_id=case.case_id,
@@ -334,6 +368,7 @@ def make_verdict(
         scientific_metrics_status=scientific_metrics_status,
         reference_hashes=reference_hashes or {},
         continuous_metrics=continuous_metrics or {},
+        metric_bindings=metric_bindings,
         limitations=limitations,
         observed_status=observed_status,
         observed_blockers=blockers,
@@ -344,6 +379,8 @@ def make_verdict(
         runner_hash=runner_hash,
         environment_lock_hash=environment_lock_hash,
         reasons=reasons,
+        runtime_seconds=runtime_seconds,
+        peak_memory_mb=peak_memory_mb,
     )
 
 

@@ -1,6 +1,6 @@
 # v0.2 capability-first implementation status
 
-This file records the `0.2.0a16` pre-benchmark checkpoint. It is not the final `0.2.0` scientific release.
+This file records the `0.2.0a17` pre-benchmark checkpoint. It is not the final `0.2.0` scientific release.
 
 ## Frozen product boundary
 
@@ -53,7 +53,7 @@ This file records the `0.2.0a16` pre-benchmark checkpoint. It is not the final `
 Expected release audit after all local freezes are regenerated:
 
 ```text
-build_version: 0.2.0a16
+build_version: 0.2.0a17
 repository_ready: true
 runtime_spine_ready: true
 project_lifecycle_ready: true

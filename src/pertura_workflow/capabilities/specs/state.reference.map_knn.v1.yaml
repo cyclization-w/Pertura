@@ -12,9 +12,11 @@ input_requirements:
 - retained_cells
 depends_on:
 - state.reference.fit.v1
+- screen.retained_cells.v1
 dependency_kinds:
 - contract
 - state_reference
+- retained_cell_manifest
 output_kind: state_mapping
 source_class: measured_result
 claim_permissions: []
@@ -61,3 +63,9 @@ metadata:
       accepted_statuses:
       - completed
       - completed_with_caution
+    screen.retained_cells.v1:
+      scope: exact
+      usage: row_filter
+      accepted_statuses:
+      - screen_passed
+      - caution

@@ -16,6 +16,7 @@ from pertura_core import AnalysisStatus, CapabilityRunRequest, CapabilitySpec, D
 
 from pertura_workflow.capabilities.candidate_common import (
     blocked,
+    consume_dependency_output,
     dependency_results,
     envelope,
     read_rows,
@@ -398,8 +399,10 @@ def run_module_global_effect(
             if not path.is_file():
                 continue
             if result.get("result_kind") == "effect_matrix" and path.name == "effect_matrix.npz":
+                consume_dependency_output(result, path, usage="scientific_input")
                 effect_path = path
             if result.get("result_kind") == "module_reference" and path.name == "gmt_modules.json":
+                consume_dependency_output(result, path, usage="scientific_input")
                 module_path = path
     if effect_path is None or module_path is None:
         return blocked(
@@ -612,6 +615,9 @@ def _parameter_or_dependency_table(
         for output in result.get("local_output_paths") or []:
             path = Path(output)
             if path.name in preferred_names and path.is_file():
+                consume_dependency_output(
+                    result, path, usage="scientific_input"
+                )
                 return path
     raise ValueError("explicit dependency does not expose a required analysis table")
 
@@ -625,6 +631,23 @@ def _effect_rows(path: Path) -> list[dict[str, Any]]:
                 {"guide": guide, "target": target, "effect": float(values["effect"])}
                 for guide, values in payload["guide_effects"].items()
             ]
+        if payload.get("schema_version") == "pertura-target-guide-efficacy-set-v1":
+            rows: list[dict[str, Any]] = []
+            for target_entry in payload.get("targets") or ():
+                evaluation = dict(target_entry.get("evaluation") or {})
+                target_uid = str(target_entry.get("target_uid") or "")
+                target_gene = str(target_entry.get("target_gene") or target_uid)
+                for guide, values in dict(evaluation.get("guide_effects") or {}).items():
+                    rows.append(
+                        {
+                            "guide": str(guide),
+                            "target": target_uid,
+                            "target_uid": target_uid,
+                            "target_gene": target_gene,
+                            "effect": float(values["effect"]),
+                        }
+                    )
+            return rows
         return list(payload.get("rows") or [])
     fields, rows = read_rows(path)
     return rows

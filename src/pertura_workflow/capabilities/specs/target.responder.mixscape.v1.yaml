@@ -62,7 +62,7 @@ parameters_schema:
       - KD
       - OE
     pval_cutoff:
-      type: string
+      type: number
     ref_selection_mode:
       type: string
     scale:

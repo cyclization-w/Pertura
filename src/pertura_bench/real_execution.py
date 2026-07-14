@@ -4,7 +4,8 @@ import hashlib
 import json
 import os
 import re
-import tempfile
+import time
+from uuid import uuid4
 from importlib import resources
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -33,6 +34,7 @@ _DESIGN_CONFIRMATION_RESOURCE = "design_confirmations.v1.json"
 _METRIC_REFERENCE_RESOURCE = "metric_references.v1.json"
 _REFERENCE_GENERATOR_RESOURCE = "reference_generators.v1.json"
 _CHECKPOINT_ENV = "PERTURA_BENCH_CHECKPOINT_BINDING"
+_WHEEL_ENV = "PERTURA_BENCH_WHEEL"
 _PARAMETER_CATALOG_ENV = "PERTURA_BENCH_PARAMETER_CATALOG"
 _DESIGN_CATALOG_ENV = "PERTURA_BENCH_DESIGN_CONFIRMATIONS"
 _METRIC_CATALOG_ENV = "PERTURA_BENCH_METRIC_REFERENCES"
@@ -67,6 +69,9 @@ def run_real_tier(
     parameter_catalog_path: str | Path | None = None,
     design_confirmations_path: str | Path | None = None,
     metric_reference_catalog_path: str | Path | None = None,
+    resource_evidence_path: str | Path | None = None,
+    enforced_memory_gb: float | None = None,
+    enforced_n_jobs: int | None = None,
 ) -> list[CapabilityBenchmarkVerdict]:
     if not dataset_id:
         raise ValueError("real-data benchmark execution requires --dataset")
@@ -89,6 +94,10 @@ def run_real_tier(
         raise ValueError("real-data execution requires frozen_subset or full_dataset tier")
     if tier == "full_dataset" and split != "evaluation":
         raise ValueError("full_dataset is an evaluation-only benchmark tier")
+    if output is None:
+        raise ValueError(
+            "real-data benchmark execution requires --output so the product workspace is preserved"
+        )
 
     root = _default_repo_root() if repo_root is None else Path(repo_root).resolve()
     registry = CapabilityRegistry.load_default(include_external=False)
@@ -176,6 +185,15 @@ def run_real_tier(
             )
         ]
     input_hashes.update(lock_hashes)
+    execution_root = (
+        Path(output).expanduser().resolve()
+        / dataset_id
+        / spec.capability_id
+        / str(tier)
+        / str(split)
+        / uuid4().hex
+    )
+    execution_root.mkdir(parents=True, exist_ok=False)
     verdict = _invoke_locked_product_case(
         case,
         artifact,
@@ -191,19 +209,17 @@ def run_real_tier(
         design_confirmations_path=design_confirmations_path,
         metric_reference_catalog_path=metric_reference_catalog_path,
         cache_root=Path(cache).expanduser().resolve(),
+        execution_root=execution_root,
+        resource_evidence_path=resource_evidence_path,
+        enforced_memory_gb=enforced_memory_gb,
+        enforced_n_jobs=enforced_n_jobs,
     )
-    if output:
-        destination = Path(output).expanduser().resolve()
-        destination.mkdir(parents=True, exist_ok=True)
-        path = destination / (
-            f"{dataset_id}__{spec.capability_id}__{tier}__{split}.json"
-        )
-        path.write_text(
-            json.dumps(verdict.model_dump(mode="json"), indent=2, sort_keys=True)
-            + "\n",
-            encoding="utf-8",
-            newline="\n",
-        )
+    (execution_root / "execution_verdict.json").write_text(
+        json.dumps(verdict.model_dump(mode="json"), indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     return [verdict]
 
 
@@ -264,49 +280,177 @@ def load_real_parameter_catalog(
         source = Path(path).expanduser().resolve()
         payload = json.loads(source.read_text(encoding="utf-8"))
         digest = file_sha256(source)
-    if payload.get("schema_version") != "pertura-real-parameter-catalog-v1":
+    if payload.get("schema_version") not in {
+        "pertura-real-parameter-catalog-v1",
+        "pertura-real-parameter-catalog-v2",
+    }:
         raise ValueError("unsupported real parameter catalog schema")
     if not payload.get("catalog_version") or not isinstance(payload.get("datasets"), dict):
         raise ValueError("real parameter catalog lacks versioned dataset mappings")
+    catalog_v2 = payload.get("schema_version") == "pertura-real-parameter-catalog-v2"
+    registry = None
+    if catalog_v2:
+        from jsonschema import Draft202012Validator
+        from pertura_workflow.capabilities import CapabilityRegistry
+
+        registry = CapabilityRegistry.load_default(include_external=False)
     for dataset_id, dataset in payload["datasets"].items():
-        if not isinstance(dataset, dict) or not isinstance(
-            dataset.get("capabilities"), dict
-        ):
+        if not isinstance(dataset, dict):
             raise ValueError(
                 f"real parameter catalog dataset mapping is invalid: {dataset_id}"
             )
-        assets = dataset.get("agent_assets") or []
-        if not isinstance(assets, list):
-            raise ValueError(
-                f"agent_assets must be a list: {dataset_id}"
-            )
-        roles: set[str] = set()
-        for asset in assets:
-            if not isinstance(asset, dict):
+        if catalog_v2:
+            tiers = dataset.get("tiers")
+            if not isinstance(tiers, dict) or not tiers:
                 raise ValueError(
-                    f"agent asset mapping is invalid: {dataset_id}"
+                    f"v2 real parameter catalog requires tiers: {dataset_id}"
                 )
-            role = str(asset.get("role") or "")
-            relative_text = str(asset.get("relative_path") or "")
-            relative = Path(relative_text)
-            digest_value = str(asset.get("content_sha256") or "")
-            if (
-                not role
-                or re.fullmatch(r"[a-z][a-z0-9_.-]*", role) is None
-                or role == "primary_dataset"
-                or role in roles
-                or not relative_text
-                or "\\" in relative_text
-                or ":" in relative_text
-                or relative.is_absolute()
-                or ".." in relative.parts
-                or re.fullmatch(r"sha256:[0-9a-f]{64}", digest_value) is None
+            mappings = []
+            for tier, tier_payload in tiers.items():
+                splits = (
+                    tier_payload.get("splits")
+                    if isinstance(tier_payload, dict)
+                    else None
+                )
+                if not isinstance(splits, dict) or not splits:
+                    raise ValueError(
+                        f"v2 real parameter tier requires splits: {dataset_id}/{tier}"
+                    )
+                mappings.extend(
+                    (f"{tier}:{split}", mapping)
+                    for split, mapping in splits.items()
+                )
+        else:
+            runs = dataset.get("runs")
+            if runs is not None:
+                if not isinstance(runs, dict) or not runs:
+                    raise ValueError(f"real parameter runs are invalid: {dataset_id}")
+                mappings = list(runs.items())
+            else:
+                mappings = [("legacy", dataset)]
+        for run_key, mapping in mappings:
+            if not isinstance(mapping, dict) or not isinstance(
+                mapping.get("capabilities"), dict
             ):
                 raise ValueError(
-                    f"agent asset identity is invalid: {dataset_id}/{role or 'unknown'}"
+                    f"real parameter run mapping is invalid: {dataset_id}/{run_key}"
                 )
-            roles.add(role)
+            _validate_agent_assets(
+                mapping.get("agent_assets") or [],
+                context=f"{dataset_id}/{run_key}",
+            )
+            if catalog_v2:
+                assert registry is not None
+                for identity, entry in mapping["capabilities"].items():
+                    try:
+                        capability_id, version = str(identity).rsplit("@", 1)
+                        spec = registry.get(capability_id, version)
+                    except (KeyError, ValueError) as exc:
+                        raise ValueError(
+                            f"unknown capability mapping: {dataset_id}/{run_key}/{identity}"
+                        ) from exc
+                    parameters = entry.get("parameters") if isinstance(entry, dict) else None
+                    if not isinstance(parameters, dict):
+                        raise ValueError(
+                            f"capability parameters are missing: {dataset_id}/{run_key}/{identity}"
+                        )
+                    materialized = _catalog_schema_projection(parameters, spec.parameters_schema)
+                    errors = sorted(
+                        Draft202012Validator(spec.parameters_schema).iter_errors(materialized),
+                        key=lambda item: list(item.path),
+                    )
+                    if errors:
+                        detail = "; ".join(error.message for error in errors)
+                        raise ValueError(
+                            f"invalid real parameters: {dataset_id}/{run_key}/{identity}: {detail}"
+                        )
     return payload, digest
+
+
+def _catalog_schema_projection(value: Any, schema: Mapping[str, Any] | None = None) -> Any:
+    """Replace lock-bound catalog references with schema-valid inert identities."""
+
+    if isinstance(value, Mapping):
+        if set(value) in ({"artifact_ref"}, {"asset_ref"}, {"upstream_output"}):
+            return "asset_catalog_validation"
+        properties = dict((schema or {}).get("properties") or {})
+        return {
+            key: _catalog_schema_projection(item, properties.get(key))
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        item_schema = dict((schema or {}).get("items") or {})
+        return [_catalog_schema_projection(item, item_schema) for item in value]
+    return value
+
+
+def _validate_agent_assets(assets: Any, *, context: str) -> None:
+    if not isinstance(assets, list):
+        raise ValueError(f"agent_assets must be a list: {context}")
+    roles: set[str] = set()
+    for asset in assets:
+        if not isinstance(asset, dict):
+            raise ValueError(f"agent asset mapping is invalid: {context}")
+        role = str(asset.get("role") or "")
+        relative_text = str(asset.get("relative_path") or "")
+        relative = Path(relative_text)
+        digest_value = str(asset.get("content_sha256") or "")
+        subset_lock_hash = str(asset.get("subset_lock_hash") or "")
+        if (
+            not role
+            or re.fullmatch(r"[a-z][a-z0-9_.-]*", role) is None
+            or role == "primary_dataset"
+            or role in roles
+            or not relative_text
+            or "\\" in relative_text
+            or ":" in relative_text
+            or relative.is_absolute()
+            or ".." in relative.parts
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", digest_value) is None
+            or (
+                subset_lock_hash
+                and re.fullmatch(r"sha256:[0-9a-f]{64}", subset_lock_hash) is None
+            )
+        ):
+            raise ValueError(
+                f"agent asset identity is invalid: {context}/{role or 'unknown'}"
+            )
+        roles.add(role)
+
+
+def select_real_parameter_run(
+    catalog: Mapping[str, Any],
+    *,
+    dataset_id: str,
+    tier: str,
+    split: str,
+) -> dict[str, Any]:
+    dataset = dict(catalog.get("datasets", {}).get(dataset_id) or {})
+    if catalog.get("schema_version") == "pertura-real-parameter-catalog-v2":
+        selected = (
+            dataset.get("tiers", {}).get(tier, {}).get("splits", {}).get(split)
+        )
+        if not isinstance(selected, Mapping):
+            raise RealParametersNotConfigured(
+                f"split-scoped real parameters are not configured: {dataset_id}/{tier}/{split}"
+            )
+        return dict(selected)
+    runs = dataset.get("runs")
+    if not isinstance(runs, Mapping):
+        return dataset
+    key = f"{tier}:{split}"
+    selected = runs.get(key)
+    if not isinstance(selected, Mapping):
+        raise RealParametersNotConfigured(
+            f"split-scoped real parameters are not configured: {dataset_id}/{key}"
+        )
+    merged = {
+        key: value
+        for key, value in dataset.items()
+        if key not in {"runs", "capabilities", "agent_assets"}
+    }
+    merged.update(dict(selected))
+    return merged
 
 
 def _resolve_catalog_assets(
@@ -314,14 +458,24 @@ def _resolve_catalog_assets(
     *,
     dataset_id: str,
     cache_root: Path,
+    tier: str = "frozen_subset",
+    split: str = "evaluation",
+    expected_subset_lock_hash: str | None = None,
 ) -> dict[str, tuple[Path, str]]:
-    dataset = dict(catalog.get("datasets", {}).get(dataset_id) or {})
+    dataset = select_real_parameter_run(
+        catalog, dataset_id=dataset_id, tier=tier, split=split
+    )
     resolved: dict[str, tuple[Path, str]] = {}
     cache_root = cache_root.resolve()
     for raw in dataset.get("agent_assets") or ():
         role = str(raw.get("role") or "")
         relative_path = str(raw.get("relative_path") or "")
         expected_hash = str(raw.get("content_sha256") or "")
+        bound_subset = str(raw.get("subset_lock_hash") or "")
+        if expected_subset_lock_hash and bound_subset != expected_subset_lock_hash:
+            raise RealParametersNotConfigured(
+                f"auxiliary asset is not bound to the active subset: {dataset_id}/{role}"
+            )
         candidate = (cache_root / relative_path).resolve()
         if candidate != cache_root and cache_root not in candidate.parents:
             raise RealParametersNotConfigured(
@@ -726,6 +880,10 @@ def resolve_real_artifact_chain(
     subset_lock = BenchmarkSubsetLock.model_validate_json(
         subset_lock_path.read_text(encoding="utf-8")
     )
+    if subset_lock.schema_version != "pertura-benchmark-subset-lock-v2":
+        raise ValueError(
+            "formal real benchmark execution requires a subset v2 lock"
+        )
     if subset_lock.dataset_id != dataset_id:
         raise ValueError("subset lock dataset mismatch")
     if subset_lock.source_lock_hash != artifact_lock.canonical_hash:
@@ -823,6 +981,27 @@ def _validate_subset_split_disjointness(
         raise ValueError(
             f"calibration/evaluation subsets overlap by {len(overlap)} cell identities"
         )
+    if lock.schema_version.endswith("v2") or other_lock.schema_version.endswith("v2"):
+        current_groups = set(lock.selection_summary.get("selected_groups") or ())
+        other_groups = set(other_lock.selection_summary.get("selected_groups") or ())
+        group_overlap = current_groups & other_groups
+        if group_overlap:
+            raise ValueError(
+                "calibration/evaluation subsets overlap by "
+                f"{len(group_overlap)} group identities"
+            )
+        current_controls = set(
+            lock.selection_summary.get("selected_control_units") or ()
+        )
+        other_controls = set(
+            other_lock.selection_summary.get("selected_control_units") or ()
+        )
+        control_overlap = current_controls & other_controls
+        if control_overlap:
+            raise ValueError(
+                "calibration/evaluation subsets overlap by "
+                f"{len(control_overlap)} control unit identities"
+            )
 
 def _sidecar_artifact(
     path: Path,
@@ -869,12 +1048,57 @@ def _invoke_locked_product_case(
     design_confirmations_path: str | Path | None,
     metric_reference_catalog_path: str | Path | None,
     cache_root: Path,
+    execution_root: Path,
+    resource_evidence_path: str | Path | None,
+    enforced_memory_gb: float | None,
+    enforced_n_jobs: int | None,
 ) -> CapabilityBenchmarkVerdict:
-    from pertura_runtime.claude.workspace import ClaudeRunWorkspace
     from pertura_runtime.product import PerturaProductRuntime
+    from pertura_runtime.project.assets import DataAssetRegistry
+    from pertura_runtime.project.models import AssetBinding
+    from pertura_runtime.project.workspace import ProjectWorkspace
 
     registry = CapabilityRegistry.load_default(include_external=False)
     spec = registry.get(case.capability_id, case.capability_version)
+    from pertura_bench.resource_evidence import (
+        load_resource_evidence,
+        validate_resource_request,
+    )
+
+    try:
+        target_parameters = _real_parameter_mapping(
+            parameter_catalog,
+            dataset_id=str(case.dataset_id),
+            spec=spec,
+            case=case,
+        )
+        requested_memory_gb = float(target_parameters.get("max_memory_gb", 4.0))
+        requested_n_jobs = int(target_parameters.get("n_jobs", 1))
+        if (
+            enforced_memory_gb is None
+            or enforced_n_jobs is None
+            or float(enforced_memory_gb) != requested_memory_gb
+            or int(enforced_n_jobs) != requested_n_jobs
+        ):
+            raise ValueError(
+                "scheduler resource request is absent or disagrees with capability parameters"
+            )
+        resource_evidence = load_resource_evidence(resource_evidence_path)
+        validate_resource_request(
+            resource_evidence,
+            memory_gb=requested_memory_gb,
+            n_jobs=requested_n_jobs,
+        )
+    except (FileNotFoundError, RealParametersNotConfigured, ValueError) as exc:
+        return make_verdict(
+            case,
+            outcome="failed",
+            observed_status="resource_evidence_invalid",
+            blockers=(str(exc),),
+            reasons=("formal capability execution requires bound scheduler/cgroup evidence",),
+            input_hashes=input_hashes,
+            runner_hash=runner_hash(spec.executor),
+        )
     try:
         checkpoint = _load_checkpoint_binding(
             repo_root,
@@ -896,6 +1120,9 @@ def _invoke_locked_product_case(
         parameter_catalog,
         dataset_id=str(case.dataset_id),
         cache_root=cache_root,
+        tier=str(case.tier),
+        split=split,
+        expected_subset_lock_hash=input_hashes.get("subset_lock"),
     )
     input_hashes = dict(input_hashes)
     input_hashes.update(
@@ -912,15 +1139,84 @@ def _invoke_locked_product_case(
         }
     )
 
-    with tempfile.TemporaryDirectory(prefix="pertura-real-bench-") as directory:
-        root = Path(directory)
-        workspace = ClaudeRunWorkspace.create(
-            root=root / "runs",
-            input_source=artifact,
-            run_id=f"real-{case.dataset_id}-{case.tier}-{split}",
+    root = Path(execution_root).resolve()
+    project = ProjectWorkspace.initialize(
+        root / "project", logical_name=str(case.case_id)
+    )
+    run = project.create_run(
+        logical_name=f"{case.capability_id}:{case.tier}:{split}"
+    )
+    asset_registry = DataAssetRegistry(
+        project_id=project.project.project_id,
+        store=project.store,
+        object_root=project.objects_dir,
+    )
+    primary_asset = asset_registry.register(
+        artifact, role="primary_dataset", kind="observed"
+    )
+    project.store.put_asset_binding(
+        AssetBinding(
+            run_id=run.run_id,
+            asset_id=primary_asset.asset_id,
+            role=primary_asset.role,
         )
-        with temporary_environment("PERTURA_AUTHORITY_ROOT", str(root / "authority")):
-            runtime = PerturaProductRuntime(workspace)
+    )
+    registered_asset_ids: dict[str, str] = {
+        "primary": primary_asset.asset_id,
+        "primary_dataset": primary_asset.asset_id,
+    }
+    for role, (asset_path, expected_hash) in sorted(auxiliary_assets.items()):
+        registered = asset_registry.register(
+            asset_path,
+            role=role,
+            kind="external_resource",
+        )
+        if registered.content_sha256 != expected_hash:
+            raise RealParametersNotConfigured(
+                f"registered auxiliary asset checksum mismatch: {role}"
+            )
+        project.store.put_asset_binding(
+            AssetBinding(
+                run_id=run.run_id,
+                asset_id=registered.asset_id,
+                role=role,
+            )
+        )
+        registered_asset_ids[role] = registered.asset_id
+
+    workspace = project.run_workspace(run.run_id, input_source=artifact)
+    (root / "input_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "pertura-capability-input-manifest-v1",
+                "case_id": case.case_id,
+                "dataset_id": case.dataset_id,
+                "tier": case.tier,
+                "split": split,
+                "input_hashes": input_hashes,
+                "registered_asset_ids": registered_asset_ids,
+                "resource_evidence": resource_evidence,
+                "resource_evidence_hash": canonical_hash(resource_evidence),
+                "requested_resources": {
+                    "max_memory_gb": requested_memory_gb,
+                    "n_jobs": requested_n_jobs,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    started = time.perf_counter()
+    peak_before = _peak_rss_mb()
+    with temporary_environment("PERTURA_AUTHORITY_ROOT", str(root / "authority")):
+            runtime = PerturaProductRuntime(
+                workspace,
+                project_workspace=project,
+                run_id=run.run_id,
+            )
             force_loopback_transport(runtime)
             try:
                 confirmations = _dataset_confirmations(
@@ -947,6 +1243,7 @@ def _invoke_locked_product_case(
                     parameter_catalog=parameter_catalog,
                     parameter_catalog_hash=parameter_catalog_hash,
                     auxiliary_assets=auxiliary_assets,
+                    registered_asset_ids=registered_asset_ids,
                     case=case,
                 )
                 report = runtime.finalize_report(workspace.root.name)
@@ -1008,6 +1305,18 @@ def _invoke_locked_product_case(
                 )
             finally:
                 runtime.close(graceful=True)
+    runtime_seconds = time.perf_counter() - started
+    peak_memory_mb = max(peak_before, _peak_rss_mb())
+    try:
+        validate_resource_request(
+            resource_evidence,
+            memory_gb=requested_memory_gb,
+            n_jobs=requested_n_jobs,
+            observed_peak_rss_mb=peak_memory_mb,
+        )
+        resource_evidence_valid = True
+    except ValueError:
+        resource_evidence_valid = False
     digest = scientific_result_digest(result)
     status = enum_value(result["status"])
     accepted = status in case.expected_statuses
@@ -1019,6 +1328,7 @@ def _invoke_locked_product_case(
         "result_schema_valid": True,
         "authority_projection_complete": True,
         "required_outputs_present": required_outputs.issubset(output_hashes),
+        "resource_evidence_valid": resource_evidence_valid,
     }
     execution_passed = all(hard_gates.values())
     return make_verdict(
@@ -1036,8 +1346,50 @@ def _invoke_locked_product_case(
         scientific_metrics_status=metric_evaluation["status"],
         reference_hashes=metric_evaluation["reference_hashes"],
         continuous_metrics=metric_evaluation["continuous_metrics"],
+        metric_bindings=metric_evaluation["metric_bindings"],
         limitations=metric_evaluation["limitations"],
+        runtime_seconds=runtime_seconds,
+        peak_memory_mb=peak_memory_mb,
     )
+
+
+def _peak_rss_mb() -> float:
+    """Best-effort process peak RSS without introducing a psutil dependency."""
+
+    if os.name != "nt":
+        import resource
+
+        value = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+        # Linux reports KiB; macOS reports bytes.
+        return value / (1024.0 * 1024.0) if value > 1024**3 else value / 1024.0
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class ProcessMemoryCounters(ctypes.Structure):
+            _fields_ = [
+                ("cb", wintypes.DWORD),
+                ("PageFaultCount", wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
+
+        counters = ProcessMemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        handle = ctypes.windll.kernel32.GetCurrentProcess()
+        if ctypes.windll.psapi.GetProcessMemoryInfo(
+            handle, ctypes.byref(counters), counters.cb
+        ):
+            return float(counters.PeakWorkingSetSize) / 1024**2
+    except (AttributeError, OSError):
+        pass
+    return 0.0
 
 
 def _evaluate_metric_references(
@@ -1133,6 +1485,7 @@ def _evaluate_metric_entry(
             "required_outputs": (),
             "reference_hashes": {"metric_reference_catalog": catalog_hash},
             "continuous_metrics": {},
+            "metric_bindings": (),
             "limitations": (
                 f"metric references are not configured for {context}",
             ),
@@ -1162,7 +1515,6 @@ def _evaluate_metric_entry(
         continuous[name] = observed
         continuous[f"{name}__reference"] = reference
         if observed is None:
-            comparisons.append(False)
             continue
         mode = str(raw.get("comparison") or "absolute_error")
         tolerance = float(raw.get("tolerance", 0.0))
@@ -1181,7 +1533,9 @@ def _evaluate_metric_entry(
             except (TypeError, ValueError):
                 passed, error = False, float("inf")
         continuous[f"{name}__error"] = error
-        comparisons.append(passed)
+        # Scalar values emitted by a runner are retained as an index for
+        # inspection only.  They never decide scientific correctness; only an
+        # evaluator that reloads a hash-bound artifact may do that.
     reference_hashes = {"metric_reference_catalog": catalog_hash}
     for name, digest in dict(entry.get("reference_hashes") or {}).items():
         value = str(digest)
@@ -1206,7 +1560,7 @@ def _evaluate_metric_entry(
         )
     )
     artifact_limitations = tuple(artifact_evaluation["limitations"])
-    if references or evaluators:
+    if evaluators:
         status = "passed" if comparisons and all(comparisons) else "failed"
         limitations: tuple[str, ...] = (
             artifact_limitations
@@ -1214,11 +1568,11 @@ def _evaluate_metric_entry(
             else artifact_limitations
             + ("one or more frozen scientific reference comparisons failed",)
         )
-    elif reported:
+    elif references or reported:
         status = "reported_only"
         limitations = (
-            "continuous metrics are reported without a frozen pass threshold "
-            "and do not establish validation",
+            "runner-emitted scalar metrics are reported for indexing only; "
+            "an artifact evaluator is required for scientific validation",
         )
     else:
         status = "not_available"
@@ -1228,6 +1582,7 @@ def _evaluate_metric_entry(
         "required_outputs": required_outputs,
         "reference_hashes": reference_hashes,
         "continuous_metrics": continuous,
+        "metric_bindings": artifact_evaluation["metric_bindings"],
         "limitations": limitations,
     }
 
@@ -1255,6 +1610,7 @@ def execute_capability_dag(
     parameter_catalog_hash: str,
     case: CapabilityBenchmarkCase,
     auxiliary_assets: Mapping[str, tuple[Path, str]] | None = None,
+    registered_asset_ids: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, Any], tuple[str, ...]]:
     """Execute the complete scientific DAG in one runtime and authority store.
 
@@ -1290,6 +1646,7 @@ def execute_capability_dag(
             workspace_root=Path(runtime.workspace.root),
             committed_by_capability=committed_by_capability,
             auxiliary_assets=auxiliary_assets or {},
+            registered_asset_ids=registered_asset_ids or {},
         )
         if spec.kind == "diagnostic":
             compact = runtime.run_diagnostic(
@@ -1360,7 +1717,11 @@ def _real_parameter_mapping(
     spec: Any,
     case: CapabilityBenchmarkCase | None,
 ) -> dict[str, Any]:
-    dataset = dict(catalog.get("datasets", {}).get(dataset_id) or {})
+    tier = str(case.tier) if case is not None else "frozen_subset"
+    split = str((case.parameters.get("split") if case is not None else None) or "evaluation")
+    dataset = select_real_parameter_run(
+        catalog, dataset_id=dataset_id, tier=tier, split=split
+    )
     key = f"{spec.capability_id}@{spec.version}"
     entry = dict(dataset.get("capabilities", {}).get(key) or {})
     parameters = entry.get("parameters")
@@ -1388,6 +1749,7 @@ def _materialize_parameters(
     workspace_root: Path,
     committed_by_capability: Mapping[str, Mapping[str, Any]],
     auxiliary_assets: Mapping[str, tuple[Path, str]],
+    registered_asset_ids: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     return {
         key: _materialize_parameter_value(
@@ -1396,6 +1758,7 @@ def _materialize_parameters(
             workspace_root=workspace_root,
             committed_by_capability=committed_by_capability,
             auxiliary_assets=auxiliary_assets,
+            registered_asset_ids=registered_asset_ids or {},
         )
         for key, item in value.items()
     }
@@ -1408,6 +1771,7 @@ def _materialize_parameter_value(
     workspace_root: Path,
     committed_by_capability: Mapping[str, Mapping[str, Any]],
     auxiliary_assets: Mapping[str, tuple[Path, str]],
+    registered_asset_ids: Mapping[str, str],
 ) -> Any:
     if isinstance(value, Mapping):
         if set(value) == {"artifact_ref"}:
@@ -1415,7 +1779,7 @@ def _materialize_parameter_value(
                 raise RealParametersNotConfigured(
                     f"unsupported benchmark artifact_ref: {value['artifact_ref']}"
                 )
-            return str(artifact)
+            return registered_asset_ids.get("primary", str(artifact))
         if set(value) == {"asset_ref"}:
             role = str(value["asset_ref"] or "")
             selected = auxiliary_assets.get(role)
@@ -1423,7 +1787,7 @@ def _materialize_parameter_value(
                 raise RealParametersNotConfigured(
                     f"hash-bound auxiliary asset is not configured: {role or 'unknown'}"
                 )
-            return str(selected[0])
+            return registered_asset_ids.get(role, str(selected[0]))
         if set(value) == {"upstream_output"}:
             reference = value["upstream_output"]
             if not isinstance(reference, Mapping):
@@ -1458,7 +1822,11 @@ def _materialize_parameter_value(
                     "upstream_output_escaped_workspace",
                     f"upstream output escaped the run workspace: {matches[0]}",
                 )
-            return str(matches[0])
+            return (
+                str(matches[0].relative_to(workspace_root.resolve()))
+                if registered_asset_ids
+                else str(matches[0])
+            )
         return {
             str(key): _materialize_parameter_value(
                 item,
@@ -1466,6 +1834,7 @@ def _materialize_parameter_value(
                 workspace_root=workspace_root,
                 committed_by_capability=committed_by_capability,
                 auxiliary_assets=auxiliary_assets,
+                registered_asset_ids=registered_asset_ids,
             )
             for key, item in value.items()
         }
@@ -1477,6 +1846,7 @@ def _materialize_parameter_value(
                 workspace_root=workspace_root,
                 committed_by_capability=committed_by_capability,
                 auxiliary_assets=auxiliary_assets,
+                registered_asset_ids=registered_asset_ids,
             )
             for item in value
         ]
@@ -1525,7 +1895,27 @@ def _load_checkpoint_binding(
         design_confirmations_path=design_confirmations_path,
         metric_reference_catalog_path=metric_reference_catalog_path,
     )
-    return validate_checkpoint_binding(template, binding)
+    validated = validate_checkpoint_binding(template, binding)
+    import subprocess
+
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0 or completed.stdout.strip().lower() != validated["git_commit"]:
+        raise ValueError("checkpoint checkout commit does not match the bound plan")
+    wheel_value = os.environ.get(_WHEEL_ENV)
+    if not wheel_value:
+        raise FileNotFoundError(
+            f"{_WHEEL_ENV} is not set to the loaded benchmark wheel"
+        )
+    wheel = Path(wheel_value).expanduser().resolve()
+    if not wheel.is_file() or file_sha256(wheel) != validated["wheel_sha256"]:
+        raise ValueError("checkpoint wheel identity does not match the bound plan")
+    return validated
 
 
 def _real_identity_hashes(

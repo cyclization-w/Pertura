@@ -27,9 +27,11 @@ BOOLEAN_FIELDS = {
 }
 INTEGER_PREFIXES = ("n_", "min_", "max_", "minimum_", "bootstrap_", "guide_bootstrap_")
 INTEGER_FIELDS = {
-    "calibration_group_size", "chunk_rows", "iter_num", "iterations", "max_iterations",
+    "bootstraps", "calibration_group_size", "chunk_rows", "iter_num", "iterations", "max_iterations",
     "permutation_num", "permutations", "seed", "timeout_seconds",
 }
+INTEGER_ARRAY_FIELDS = {"ranks", "seeds"}
+NUMBER_ARRAY_FIELDS = {"resolutions"}
 NUMBER_MARKERS = (
     "alpha", "threshold", "tolerance", "coverage", "ratio", "budget", "cost",
     "rate", "fraction", "weight", "penalty", "temperature",
@@ -134,11 +136,15 @@ def _schema_for(name: str, existing: dict[str, Any]) -> dict[str, Any]:
         inferred: dict[str, Any] = {"type": "object"}
     elif name in ARRAY_FIELDS or name.endswith("_ids") or name.endswith("_values"):
         inferred = {"type": "array", "items": {"type": "string"}}
+        if name in INTEGER_ARRAY_FIELDS:
+            inferred["items"] = {"type": "integer"}
+        elif name in NUMBER_ARRAY_FIELDS:
+            inferred["items"] = {"type": "number"}
         if name in {"contrast", "records", "candidates"}:
             inferred["items"] = {"type": ["string", "number", "integer", "object"]}
     elif name in BOOLEAN_FIELDS or name.endswith("_used"):
         inferred = {"type": "boolean"}
-    elif name == "max_memory_gb" or name in {"alpha", "budget", "cost", "tolerance", "maximum_type1_rate"} or name.endswith((
+    elif name == "max_memory_gb" or name in {"alpha", "budget", "cost", "pval_cutoff", "tolerance", "maximum_type1_rate"} or name.endswith((
         "_alpha", "_threshold", "_tolerance", "_coverage", "_ratio", "_rate",
         "_fraction", "_weight", "_penalty", "_temperature", "_budget", "_cost",
     )):

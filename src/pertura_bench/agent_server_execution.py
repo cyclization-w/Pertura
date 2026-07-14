@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 from uuid import uuid4
 
-from pertura_bench.agent_judge import grade_turn_final
+from pertura_bench.agent_judge import grade_turn_final, project_judge_answer
 from pertura_bench.agent_models import AgentBenchmarkResult
 from pertura_core.hashing import canonical_hash
 from pertura_runtime.claude.agent import ClaudePerturaAgent
@@ -58,6 +58,7 @@ def run_server_agent_case(
     resource_enforcement: str = "unverified",
     enforced_memory_gb: float | None = None,
     enforced_n_jobs: int | None = None,
+    resource_evidence_path: Path | None = None,
 ) -> dict[str, Any]:
     catalog = load_server_agent_catalog()
     case = next(
@@ -70,6 +71,16 @@ def run_server_agent_case(
         raise ValueError(f"unsupported agent benchmark condition: {condition}")
     if repeat_index not in {1, 2}:
         raise ValueError("formal agent benchmark repeat_index must be 1 or 2")
+    try:
+        resource_evidence = _load_resource_evidence(resource_evidence_path)
+    except (FileNotFoundError, ValueError) as exc:
+        return {
+            "case_id": case_id,
+            "condition": condition,
+            "repeat_index": repeat_index,
+            "status": "not_available",
+            "reason": str(exc),
+        }
 
     from pertura_bench.real_execution import (
         _dataset_confirmations,
@@ -80,6 +91,7 @@ def run_server_agent_case(
         load_metric_reference_catalog,
         load_real_parameter_catalog,
         resolve_real_artifact_chain,
+        select_real_parameter_run,
     )
 
     try:
@@ -172,6 +184,10 @@ def run_server_agent_case(
             cache=Path(cache).resolve(),
             parameter_catalog=parameter_catalog,
             dataset_id=str(case["dataset_id"]),
+            tier="frozen_subset",
+            split="evaluation",
+            expected_subset_lock_hash=lock_hashes.get("subset_lock"),
+            required_roles=set(case.get("required_artifact_roles") or ()),
         ):
             registered_assets.append(asset)
             asset_paths[asset.role] = str(path)
@@ -396,6 +412,7 @@ def run_server_agent_case(
         resource_enforcement=resource_enforcement,
         enforced_memory_gb=enforced_memory_gb,
         enforced_n_jobs=enforced_n_jobs,
+        resource_evidence=resource_evidence,
     )
     observed_status = (
         str(final.status.value)
@@ -453,6 +470,8 @@ def run_server_agent_case(
                 "mode": resource_enforcement,
                 "memory_gb": enforced_memory_gb,
                 "n_jobs": enforced_n_jobs,
+                "evidence": resource_evidence,
+                "evidence_hash": canonical_hash(resource_evidence),
             },
         },
     )
@@ -468,6 +487,12 @@ def run_server_agent_case(
         )
         (turn_dir / f"{final.turn_id}.md").write_text(
             final.markdown, encoding="utf-8"
+        )
+        _write(
+            execution_root / "judge" / "answer_projection.json",
+            project_judge_answer(final.model_dump(mode="json")).model_dump(
+                mode="json"
+            ),
         )
         grade = grade_turn_final(
             final.model_dump(mode="json"),
@@ -526,6 +551,7 @@ def evaluate_server_agent_hard_gates(
     resource_enforcement: str = "unverified",
     enforced_memory_gb: float | None = None,
     enforced_n_jobs: int | None = None,
+    resource_evidence: Mapping[str, Any] | None = None,
 ) -> dict[str, bool]:
     committed = [
         dict(item.get("result") or {})
@@ -682,12 +708,31 @@ def evaluate_server_agent_hard_gates(
         and int(case.get("timeout_seconds", 1800)) > 0,
         "resource_budget_enforced": (
             resource_enforcement in {"scheduler", "cgroup"}
+            and resource_evidence is not None
+            and resource_evidence.get("mode") == resource_enforcement
+            and bool(
+                resource_evidence.get("scheduler_job_id")
+                or resource_evidence.get("cgroup_identity")
+            )
+            and float(resource_evidence.get("requested_memory_gb", 0.0))
+            == float(enforced_memory_gb or 0.0)
+            and float(resource_evidence.get("peak_rss_mb", 0.0)) > 0
+            and int(resource_evidence.get("cpu_count", 0)) >= 1
+            and int(resource_evidence.get("n_jobs", 0)) == 1
+            and int(resource_evidence.get("timeout_seconds", 0))
+            == int(case.get("timeout_seconds", 1800))
             and enforced_memory_gb is not None
             and float(enforced_memory_gb)
             <= float(case.get("max_memory_gb", 4.0)) + 1e-9
             and int(enforced_n_jobs or 0) == 1
         ),
     }
+
+
+def _load_resource_evidence(path: Path | None) -> dict[str, Any]:
+    from pertura_bench.resource_evidence import load_resource_evidence
+
+    return load_resource_evidence(path)
 
 
 def _load_benchmark_result(
@@ -839,9 +884,15 @@ def _register_auxiliary_assets(
     cache: Path,
     parameter_catalog: Mapping[str, Any],
     dataset_id: str,
+    tier: str = "frozen_subset",
+    split: str = "evaluation",
+    expected_subset_lock_hash: str | None = None,
+    required_roles: set[str] | None = None,
 ) -> list[tuple[Any, Path]]:
-    dataset = dict(
-        parameter_catalog.get("datasets", {}).get(dataset_id) or {}
+    from pertura_bench.real_execution import select_real_parameter_run
+
+    dataset = select_real_parameter_run(
+        parameter_catalog, dataset_id=dataset_id, tier=tier, split=split
     )
     configured = dataset.get("agent_assets") or ()
     registered: list[tuple[Any, Path]] = []
@@ -851,8 +902,11 @@ def _register_auxiliary_assets(
                 f"agent asset mapping is invalid for {dataset_id}"
             )
         role = str(raw.get("role") or "")
+        if required_roles is not None and role not in required_roles:
+            continue
         relative_path = str(raw.get("relative_path") or "")
         expected_hash = str(raw.get("content_sha256") or "")
+        subset_lock_hash = str(raw.get("subset_lock_hash") or "")
         kind = str(raw.get("kind") or "external_resource")
         if not role or not relative_path or not expected_hash.startswith(
             "sha256:"
@@ -860,6 +914,14 @@ def _register_auxiliary_assets(
             raise ValueError(
                 f"agent asset lacks role, relative_path or content_sha256: "
                 f"{dataset_id}/{role or 'unknown'}"
+            )
+        if (
+            expected_subset_lock_hash is not None
+            and subset_lock_hash != expected_subset_lock_hash
+        ):
+            raise ValueError(
+                "agent asset is not bound to the active subset: "
+                f"{dataset_id}/{role}"
             )
         candidate = (cache / relative_path).resolve()
         if candidate != cache and cache not in candidate.parents:

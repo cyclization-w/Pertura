@@ -5,7 +5,12 @@ import os
 from pathlib import Path
 from typing import Any
 
-from pertura_bench.agent_models import AgentNarrativeScore, JudgeManifest, narrative_passes
+from pertura_bench.agent_models import (
+    AgentNarrativeScore,
+    JudgeAnswerProjection,
+    JudgeManifest,
+    narrative_passes,
+)
 from pertura_core.hashing import canonical_hash
 
 
@@ -75,6 +80,7 @@ def grade_turn_final(
         return payload
 
     del execution_verdict  # condition/provider/execution outcomes must not bias narrative grading
+    answer = project_judge_answer(turn_final)
     context = dict(task_context or {})
     prompt = (
         "Act as a condition-blind scientific writing judge. Grade only the supplied "
@@ -84,7 +90,11 @@ def grade_turn_final(
         "containing only the exact rubric keys that are present (or an empty list). "
         "Do not infer which benchmark condition or tool surface produced the answer.\n\n"
         + json.dumps(
-            {"task_context": context, "rubric": RUBRIC, "answer": turn_final},
+            {
+                "task_context": context,
+                "rubric": RUBRIC,
+                "answer": answer.model_dump(mode="json"),
+            },
             sort_keys=True,
         )
     )
@@ -120,6 +130,29 @@ def grade_turn_final(
     }
     _write_grade(output_path, payload)
     return payload
+
+
+def project_judge_answer(turn_final: dict[str, Any]) -> JudgeAnswerProjection:
+    """Remove provider, condition, tool and authority fingerprints before grading."""
+
+    findings = []
+    for raw in turn_final.get("findings") or ():
+        if isinstance(raw, dict):
+            text = str(raw.get("text") or "").strip()
+        else:
+            text = str(raw).strip()
+        if text:
+            findings.append(text)
+    return JudgeAnswerProjection(
+        headline=str(turn_final.get("headline") or "").strip(),
+        finding_texts=tuple(findings),
+        hypotheses=tuple(str(item) for item in turn_final.get("hypotheses") or ()),
+        limitations=tuple(str(item) for item in turn_final.get("limitations") or ()),
+        next_steps=tuple(str(item) for item in turn_final.get("next_steps") or ()),
+        artifact_citations=tuple(
+            str(item) for item in turn_final.get("artifact_refs") or ()
+        ),
+    )
 
 
 def _write_grade(path: Path, payload: dict[str, Any]) -> None:

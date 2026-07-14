@@ -9,11 +9,14 @@ executor: control_nmf
 validator: candidate_standard
 input_requirements:
 - confirmed_controls
+- retained_cells
 depends_on:
 - state.reference.fit.v1
+- screen.retained_cells.v1
 dependency_kinds:
 - contract
 - state_reference
+- retained_cell_manifest
 output_kind: reference_modules
 source_class: measured_result
 claim_permissions: []
@@ -24,6 +27,16 @@ parameters_schema:
     chunk_rows:
       type: integer
       minimum: 1
+    control_column:
+      type: string
+    control_values:
+      type: array
+      items:
+        type: string
+    h5ad_path:
+      type: string
+      description: Registered asset ID with role primary_dataset.
+      x-pertura-asset-role: primary_dataset
     max_memory_gb:
       type: number
       default: 4.0
@@ -34,12 +47,30 @@ parameters_schema:
       minimum: 1
     perturbation_labels_used:
       type: boolean
+    ranks:
+      type: array
+      items:
+        type: integer
+    reference_model_path:
+      type: string
+      description: Registered asset ID with role capability_artifact.
+      x-pertura-asset-role: capability_artifact
+    seeds:
+      type: array
+      items:
+        type: integer
     test_split_used:
       type: boolean
-  required: []
+  required:
+  - h5ad_path
+  - control_column
+  - control_values
   additionalProperties: false
   examples:
-  - max_memory_gb: 4.0
+  - h5ad_path: asset_example_primary_dataset
+    control_column: example
+    control_values:
+    - example
 implemented: true
 metadata:
   validation_status: synthetic_only
@@ -53,3 +84,9 @@ metadata:
       accepted_statuses:
       - completed
       - completed_with_caution
+    screen.retained_cells.v1:
+      scope: exact
+      usage: row_filter
+      accepted_statuses:
+      - screen_passed
+      - caution

@@ -15,7 +15,8 @@ from pertura_core import (
 )
 from pertura_core.hashing import canonical_hash
 from pertura_workflow.capabilities.candidate_common import (
-    blocked, dependency_results, envelope, resolve_input, resource_budget, write_json,
+    blocked, consume_dependency_output, consume_dependency_result, dependency_results,
+    envelope, resolve_input, resource_budget, write_json,
 )
 from pertura_workflow.capabilities.prediction_store import (
     FEATURE_TABLE_NAME, METADATA_NAME, ROW_TABLE_NAME, STANDARD_BUNDLE_NAME,
@@ -80,7 +81,9 @@ def run_virtual_split_contract(spec, request, contract, staging):
 
 
 def run_virtual_prediction_ingest(spec, request, contract, staging):
-    split_payload = _dependency_json(staging, "virtual_split_contract.json")
+    split_payload = _dependency_json(
+        staging, "virtual_split_contract.json", usage="parameter_source"
+    )
     if split_payload is None:
         return blocked(spec, request, contract, "committed virtual split contract is missing")
     try:
@@ -271,7 +274,9 @@ def run_virtual_baselines(spec, request, contract, staging):
     if isinstance(loaded, str):
         return blocked(spec, request, contract, loaded)
     prediction, observed, row_ids, features, metadata, _ = loaded
-    split_payload = _dependency_json(staging, "virtual_split_contract.json")
+    split_payload = _dependency_json(
+        staging, "virtual_split_contract.json", usage="parameter_source"
+    )
     audit = _dependency_json(staging, "virtual_leakage_audit.json")
     if split_payload is None or audit is None:
         return blocked(spec, request, contract, "split or leakage audit is missing")
@@ -361,11 +366,14 @@ def run_virtual_baselines(spec, request, contract, staging):
 
 def run_virtual_evaluate_comprehensive(spec, request, contract, staging):
     loaded = _load_standard_bundle(staging, request.parameters)
+    split_payload = _dependency_json(
+        staging, "virtual_split_contract.json", usage="parameter_source"
+    )
     baseline_path = _dependency_file(staging, "virtual_baselines.npz")
     audit = _dependency_json(staging, "virtual_leakage_audit.json")
     if isinstance(loaded, str):
         return blocked(spec, request, contract, loaded)
-    if baseline_path is None or audit is None:
+    if split_payload is None or baseline_path is None or audit is None:
         return blocked(spec, request, contract, "prediction, baselines or leakage audit is missing")
     if audit.get("status") == "blocked":
         return blocked(spec, request, contract, "leakage audit blocked evaluation")
@@ -539,14 +547,20 @@ def run_design_next_panel(spec, request, contract, staging):
         ("candidate_id", "selected", "cost", "utility", "utility_per_cost", *weights),
         ({**row, "selected": int(row in selected)} for row in records),
     )
+    evaluation_results = [
+        item
+        for item in dependency_results(staging)
+        if item.get("result_kind") == "virtual_evaluation"
+    ]
+    for dependency in evaluation_results:
+        consume_dependency_result(dependency, usage="scientific_input")
     manifest = write_json(staging, "next_panel.json", {
         "schema_version": "pertura-next-panel-v0", "source_class": "hypothesis",
         "selected_ids": [row["candidate_id"] for row in selected],
         "rejected_ids": [row["candidate_id"] for row in rejected],
         "budget": budget, "budget_used": used, "weights": weights,
         "selection": "deterministic_greedy_utility_per_cost",
-        "evaluation_result_ids": [item["result_id"] for item in dependency_results(staging)
-                                  if item.get("result_kind") == "virtual_evaluation"],
+        "evaluation_result_ids": [item["result_id"] for item in evaluation_results],
         "evaluation_limited_reasons": list(evaluation.get("limited_reasons") or ()),
     })
     cautions = []
@@ -749,17 +763,18 @@ def _load_standard_bundle(staging, parameters):
     return prediction, observed, rows, features, metadata, uncertainty or None
 
 
-def _dependency_file(staging, name):
+def _dependency_file(staging, name, *, usage="scientific_input"):
     for result in dependency_results(staging):
         for value in result.get("local_output_paths") or ():
             path = Path(value)
             if path.exists() and path.name == name:
+                consume_dependency_output(result, path, usage=usage)
                 return path
     return None
 
 
-def _dependency_json(staging, name):
-    path = _dependency_file(staging, name)
+def _dependency_json(staging, name, *, usage="scientific_input"):
+    path = _dependency_file(staging, name, usage=usage)
     return json.loads(path.read_text(encoding="utf-8")) if path else None
 
 

@@ -11,6 +11,7 @@ from pertura_core.hashing import path_sha256
 
 from pertura_workflow.capabilities.candidate_common import (
     blocked,
+    consume_dependency_output,
     dependency_results,
     envelope,
     read_rows,
@@ -690,7 +691,7 @@ def _parameter_or_dependency_output(
             and not execution_context().get("enforce_dependency_consumption")
         ):
             return resolved
-        bound = []
+        bound: list[tuple[dict[str, Any], Path]] = []
         for result in dependencies:
             if result.get("capability_id") != capability_id:
                 continue
@@ -702,11 +703,15 @@ def _parameter_or_dependency_output(
                     and expected_hash
                     and path_sha256(resolved) == expected_hash
                 ):
-                    bound.append(candidate)
+                    bound.append((result, candidate))
         if len(bound) != 1:
             raise ValueError(
                 f"explicit {label} must resolve to exactly one {capability_id} output"
             )
+        matched_result, matched_output = bound[0]
+        consume_dependency_output(
+            matched_result, matched_output, usage="scientific_input"
+        )
         return resolved
     matches = []
     for result in dependencies:
@@ -720,7 +725,14 @@ def _parameter_or_dependency_output(
         raise ValueError(
             f"{capability_id} must expose exactly one of {', '.join(names)}"
         )
-    return matches[0]
+    matched = matches[0]
+    matched_result = next(
+        result
+        for result in dependencies
+        if any(Path(output).resolve() == matched.resolve() for output in result.get("local_output_paths") or ())
+    )
+    consume_dependency_output(matched_result, matched, usage="scientific_input")
+    return matched
 
 
 def _confirmed_design_fact(

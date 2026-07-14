@@ -171,6 +171,17 @@
       "title": "Limitations",
       "type": "array"
     },
+    "metric_bindings": {
+      "default": [],
+      "items": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "title": "Metric Bindings",
+      "type": "array"
+    },
     "metrics": {
       "default": [],
       "items": {
