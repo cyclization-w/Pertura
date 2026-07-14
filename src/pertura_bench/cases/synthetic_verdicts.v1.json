@@ -1315,7 +1315,7 @@
       "verdict_id": "capbenchverdict_aff58438c774bc8f77bf"
     },
     {
-      "canonical_hash": "sha256:772e9fcbb6d317d88b6c28ca7e2e151bb244706eb6bc470b44df694e287f95ce",
+      "canonical_hash": "sha256:627e38269c8ae275cc59c2b421f4a9f81b176301a3a161ed541d354e6888f2dc",
       "capability_id": "diagnostic.dataset_integrity.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:23412d01ebad61c12b32ba5eb165af3c1e6b3f710b0eae3baae8abcab8a56e72",
@@ -1378,7 +1378,7 @@
       "observed_status": "screen_passed",
       "outcome": "passed",
       "output_hashes": {
-        "dataset_integrity.json": "sha256:3690153553eb9cf1663587661213bfebe35308db9e751b6072009c65c58893cc"
+        "dataset_integrity.json": "sha256:051e7642fae9875701d17397859219560c7f0d67591443959a983a3db58a0752"
       },
       "peak_memory_mb": null,
       "reasons": [],
@@ -1389,10 +1389,10 @@
       "scientific_metrics_status": "not_required",
       "scientific_result_hash": "sha256:56c408ea761b443c50cc2a654d77406c249791345ee3f0b004c3f1495a515c17",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_1062a2c500fb5d60048a"
+      "verdict_id": "capbenchverdict_396691aa3a34785cbd24"
     },
     {
-      "canonical_hash": "sha256:2e1b24ed91efd158610e2f3ba12e61da78c3433773bacc5a5f6ab713b12a7dac",
+      "canonical_hash": "sha256:8cdf81a1cc9a2ad1a924c4589afc17cb81a4b65df795901fd55793c20b21d6d5",
       "capability_id": "diagnostic.dataset_integrity.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:16a33483c9c4c2c46dc10f084832adcf1d4b28bc65f9f7eab689e139c94723da",
@@ -1435,7 +1435,7 @@
       "observed_status": "caution",
       "outcome": "passed",
       "output_hashes": {
-        "dataset_integrity.json": "sha256:a5c7e637408d7b9ef19e5c598c0a2885ef9e74d557bdaa4b85a259887a87af5b"
+        "dataset_integrity.json": "sha256:e1e20f9b3ee58859bedeef32c298b31fbd619307e633dbe7f1217ffc129eb97f"
       },
       "peak_memory_mb": null,
       "reasons": [],
@@ -1446,10 +1446,10 @@
       "scientific_metrics_status": "not_required",
       "scientific_result_hash": "sha256:c8ca4a47bd91e727126f4662e080740929f50a7a1fa13f877b88f99b2277330d",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_298eedbf7d2d140708e3"
+      "verdict_id": "capbenchverdict_470a2b076b462b745b16"
     },
     {
-      "canonical_hash": "sha256:16722925e671ae24c4ec69475b5d7d57ec3e926b8c993fa6df9f4c27dec41a29",
+      "canonical_hash": "sha256:1237f7f79358abd6da659e14b3ab6f8db0f2ba8351958214472f0c9d0e8cbd01",
       "capability_id": "diagnostic.dataset_integrity.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:6ee98cb7ffa49ad5320f3e47d717baec91d16a47fb53d20f5a07b801a6f076c6",
@@ -1484,7 +1484,7 @@
       "observed_status": "blocked",
       "outcome": "passed",
       "output_hashes": {
-        "dataset_integrity.json": "sha256:4ccc23d7475737ab5fb85b12fdf4cff16d418b1701c2e55ede9b55aaa86a305d"
+        "dataset_integrity.json": "sha256:e0ab566a2729276b0f7ff5433f0e65fc1ec4776b405842a1e8866c5690bf0d55"
       },
       "peak_memory_mb": null,
       "reasons": [],
@@ -1495,10 +1495,10 @@
       "scientific_metrics_status": "not_required",
       "scientific_result_hash": "sha256:59d45a7eca165760aaf7f2a9a4ccfab63db828a8023d3eed2f8e04097db18f31",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_800ca6ed40dd3af9dfcc"
+      "verdict_id": "capbenchverdict_a84f0c91a8d925a0d208"
     },
     {
-      "canonical_hash": "sha256:c62362dca769b05dd1b0cf67bf948903dbcf1d2489012d2d907c0a407f754e0e",
+      "canonical_hash": "sha256:8f060a9c31e7260d7179bd04ac857c2e94e7e7bd19cbd914ed5dc7fa8a011a65",
       "capability_id": "diagnostic.dataset_integrity.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:8c6ebe0f1fd792e735ac9930acb695d6d0e928ec32ede551109e12c158fd86b4",
@@ -1533,7 +1533,7 @@
       "observed_status": "blocked",
       "outcome": "passed",
       "output_hashes": {
-        "dataset_integrity.json": "sha256:55c57d73292be36e8ee30826e8aec06eb08418cf4cc5430688390d4d2eac0f5c"
+        "dataset_integrity.json": "sha256:106c24effc9d48047b4f0481f69e34b5007e1d285be102da45c1de5b316b88b6"
       },
       "peak_memory_mb": null,
       "reasons": [],
@@ -1544,10 +1544,10 @@
       "scientific_metrics_status": "not_required",
       "scientific_result_hash": "sha256:59d45a7eca165760aaf7f2a9a4ccfab63db828a8023d3eed2f8e04097db18f31",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_36a5c98da54d4b113247"
+      "verdict_id": "capbenchverdict_0ea394c3efc4daaa3249"
     },
     {
-      "canonical_hash": "sha256:4c352fcf2c9fed29b70cf807328d13b422308837a706477ae2bbe077edd3a224",
+      "canonical_hash": "sha256:89c05994311a9fcf0df7657243b895f3626a5f974c90561bbed6edbffb5ef4b6",
       "capability_id": "diagnostic.dataset_integrity.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:d99f562c21db22a4c938432e3c3aed72498ca07fbf72fb02590447c431871510",
@@ -1590,7 +1590,7 @@
       "observed_status": "screen_passed",
       "outcome": "passed",
       "output_hashes": {
-        "dataset_integrity.json": "sha256:0f5e0aafbee451953595d7ab838ec867fa9a9636c2c806d9968d0c9ca3451160"
+        "dataset_integrity.json": "sha256:cb9cd13b88090a944a1baf86bbeda8ab1db808c62c5d9959170f5e145b5dcd8a"
       },
       "peak_memory_mb": null,
       "reasons": [],
@@ -1601,7 +1601,7 @@
       "scientific_metrics_status": "not_required",
       "scientific_result_hash": "sha256:56c408ea761b443c50cc2a654d77406c249791345ee3f0b004c3f1495a515c17",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_ca440456f6ca2d0ec616"
+      "verdict_id": "capbenchverdict_e6b37182aaffa1b052b9"
     },
     {
       "canonical_hash": "sha256:20a1ac84b7b3b285bedaff45b07a7a2615f8d478edb76dfff6ecae858221857e",
@@ -4631,7 +4631,7 @@
       "verdict_id": "capbenchverdict_4cc374a74ae81ab621fb"
     },
     {
-      "canonical_hash": "sha256:6a638ee9b13e6e4db0b0ea46cfc8d2fb59e43ee7cf886dbfa92891010a2ab30f",
+      "canonical_hash": "sha256:b589282a6776db0539374c73e6c4684c5bcec5b7d50f6021e8c78dd52288eaf4",
       "capability_id": "intake.materialize.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:651da1338060dd3d797a1246e69427586073b12d88a848ee69b4274fbd050009",
@@ -4685,7 +4685,7 @@
       "outcome": "passed",
       "output_hashes": {
         "counts.npz": "sha256:e3b704c0ef047b5eadc325277c63d7ad7244ddda570303a7a93298e4ef3a1728",
-        "materialization_manifest.json": "sha256:56b73992181ca168fc58107d07c346cc2ccedaa46873566c07afcd7b82c72f5e",
+        "materialization_manifest.json": "sha256:56a184ba22bd28698d0ba1558a67ad0680bed05ef3e7000ab155306d76ebc5a8",
         "obs.parquet": "sha256:b3b1f6aad929a7ebba9b94ee6adf3dfacc503e1bb1edb22e5c3f34ffc284775c",
         "var.parquet": "sha256:54edbfa962d8b64c62ac07173e430246a0c0647c2c23c31ccc6cd4f54fdd4e5f"
       },
@@ -4698,10 +4698,10 @@
       "scientific_metrics_status": "not_required",
       "scientific_result_hash": "sha256:c36b8703cb2a69f95375cf6d4377e8e11b149f90bd1e058868fa4fea03879f67",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_55052a8f60646cebe9e8"
+      "verdict_id": "capbenchverdict_1fa22444a89d1ae91375"
     },
     {
-      "canonical_hash": "sha256:d2509f0c8cf8425ecb2169a47a98da497cd92ffddae1d936e251c217895edbee",
+      "canonical_hash": "sha256:193b252cc19d2f53bcccbe64cefdf3c470fedd3dd5d9bd72a0290d5511ec104b",
       "capability_id": "intake.materialize.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:45682822d9b6e40e3eb00162e95e0b0fd6aeb8ed68c3db1a961216ca49baf172",
@@ -4735,7 +4735,7 @@
       "outcome": "passed",
       "output_hashes": {
         "counts.npz": "sha256:e3b704c0ef047b5eadc325277c63d7ad7244ddda570303a7a93298e4ef3a1728",
-        "materialization_manifest.json": "sha256:4f88476b5c747e4116f7ae490ef26c679d8c7ccf5ac37785a54d9db83fb697f8",
+        "materialization_manifest.json": "sha256:f004ec1f48193849289373f1a810f09b392cf6039f138b612b89ba553a0583d9",
         "obs.parquet": "sha256:b3b1f6aad929a7ebba9b94ee6adf3dfacc503e1bb1edb22e5c3f34ffc284775c",
         "var.parquet": "sha256:54edbfa962d8b64c62ac07173e430246a0c0647c2c23c31ccc6cd4f54fdd4e5f"
       },
@@ -4748,7 +4748,7 @@
       "scientific_metrics_status": "not_required",
       "scientific_result_hash": "sha256:1a665e7495b0bd52f8c2e2440e01e8648f65d2b671449524bb9e0eda8d71e8d6",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_463485e865c896a4cbcc"
+      "verdict_id": "capbenchverdict_486cf45c25e43aea4d01"
     },
     {
       "canonical_hash": "sha256:5ca9bbff9627b9ce0b65ff7de26dafd27e255f39f5850fa6f8d07c5ca55ab6a9",
@@ -4845,7 +4845,7 @@
       "verdict_id": "capbenchverdict_9ff5bc4719b6ca1779fb"
     },
     {
-      "canonical_hash": "sha256:07887a7737108be1816f54c1fce98c336248b556a8e5130e63a2faf6a306d17c",
+      "canonical_hash": "sha256:36ea5fa041dd9e20906c918c51d91b926c3346fea184f4aa9d4c8fee8dee4e9e",
       "capability_id": "intake.materialize.v1",
       "capability_version": "0.1.0",
       "case_hash": "sha256:d1b9da7aa0ddc1501993efdfc541cab8d3b31f8806d9df86f6d175c781b0f615",
@@ -4889,7 +4889,7 @@
       "outcome": "passed",
       "output_hashes": {
         "counts.npz": "sha256:e3b704c0ef047b5eadc325277c63d7ad7244ddda570303a7a93298e4ef3a1728",
-        "materialization_manifest.json": "sha256:fe13444931fbb16e8f918328ff744496612b90fb8d941d533a3e1d116d344576",
+        "materialization_manifest.json": "sha256:5ff0eff3e728039fe378868198ac57221af0b1f300489abf02e88cbda48c9f8b",
         "obs.parquet": "sha256:b3b1f6aad929a7ebba9b94ee6adf3dfacc503e1bb1edb22e5c3f34ffc284775c",
         "var.parquet": "sha256:54edbfa962d8b64c62ac07173e430246a0c0647c2c23c31ccc6cd4f54fdd4e5f"
       },
@@ -4902,7 +4902,7 @@
       "scientific_metrics_status": "not_required",
       "scientific_result_hash": "sha256:c36b8703cb2a69f95375cf6d4377e8e11b149f90bd1e058868fa4fea03879f67",
       "tier": "synthetic_ci",
-      "verdict_id": "capbenchverdict_c02b9a472e50805a05c5"
+      "verdict_id": "capbenchverdict_40b55e4821bdf55f716e"
     },
     {
       "canonical_hash": "sha256:754e74f55ebcbc94c663ee8a75e81b05da6ab52d14f574affe37bc2da9597b7b",

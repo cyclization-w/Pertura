@@ -1,6 +1,6 @@
 # Pertura AAAI Evaluation Protocol v1
 
-Status: frozen pre-benchmark protocol for `0.2.0a13`.
+Status: frozen pre-benchmark protocol for `0.2.0a14`.
 
 This protocol evaluates two distinct questions:
 

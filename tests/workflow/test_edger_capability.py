@@ -424,3 +424,18 @@ def test_edger_without_retained_dependency_preserves_direct_runner_behavior(
     assert result.metrics["retained_manifest_applied"] is False
     assert result.metrics["selected_retained_cell_count"] == 4
     assert result.metadata["execution_grounding"]["retained_manifest_applied"] is False
+
+def test_edger_runner_aligns_dispersion_to_filtered_gene_order() -> None:
+    runner = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "pertura_workflow"
+        / "capabilities"
+        / "runners"
+        / "edger_ql.R"
+    ).read_text(encoding="utf-8")
+
+    assert "rownames(fit$coefficients)" not in runner
+    assert "names(dispersion) <- rownames(y)" in runner
+    assert "dispersion <- rep(dispersion, nrow(y))" in runner
+    assert "any(!is.finite(table$dispersion))" in runner

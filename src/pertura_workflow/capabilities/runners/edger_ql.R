@@ -36,7 +36,21 @@ fit <- glmQLFit(y, design)
 test <- glmQLFTest(fit, coef = coefficient)
 table <- topTags(test, n = Inf, sort.by = "none")$table
 table$gene <- rownames(table)
-table$dispersion <- fit$dispersion[match(rownames(table), rownames(fit$coefficients))]
+dispersion <- fit$dispersion
+if (is.null(dispersion) || !length(dispersion)) {
+  stop("glmQLFit did not expose the fitted NB dispersion")
+}
+if (length(dispersion) == 1L) {
+  dispersion <- rep(dispersion, nrow(y))
+}
+if (length(dispersion) != nrow(y)) {
+  stop("glmQLFit dispersion does not align with the filtered expression matrix")
+}
+names(dispersion) <- rownames(y)
+table$dispersion <- unname(dispersion[rownames(table)])
+if (any(!is.finite(table$dispersion)) || any(table$dispersion < 0)) {
+  stop("glmQLFit produced invalid NB dispersion values")
+}
 table <- table[, c("gene", "logFC", "F", "PValue", "FDR", "dispersion")]
 write.csv(table, config$result_path, row.names = FALSE, quote = FALSE)
 

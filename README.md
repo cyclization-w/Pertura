@@ -5,7 +5,7 @@
 Pertura lets an LLM inspect files, write Python/R, use Bash and notebooks, while keeping scientific statements tied to committed analysis results. The agent remains flexible; dataset contracts, dependency resolution, execution provenance, claim ceilings, and report rendering live outside the model.
 
 > [!IMPORTANT]
-> **Current status: `0.2.0a13` research alpha.** Local product and synthetic protocols are implemented. Expanded capabilities remain exploratory and `synthetic_only` until real-data server benchmarks are complete. Pertura is not a production-validated scientific or clinical decision system.
+> **Current status: `0.2.0a14` research alpha.** Local product and synthetic protocols are implemented. Expanded capabilities remain exploratory and `synthetic_only` until real-data server benchmarks are complete. Pertura is not a production-validated scientific or clinical decision system.
 
 ## Why Pertura?
 
@@ -196,7 +196,7 @@ See [benchmark design](docs/benchmark_design.md) and the [server operations guid
 The checked-in protocol targets:
 
 ```text
-build_version:              0.2.0a13
+build_version:              0.2.0a14
 repository_ready:           true
 runtime_spine_ready:        true
 dependency_policy_ready:    true
