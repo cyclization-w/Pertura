@@ -1,0 +1,576 @@
+{
+  "schema_version": "pertura-paper-reference-catalog-v1",
+  "benchmark_name": "Pertura independent scientific references",
+  "principles": [
+    "A runner completion status is never a scientific reference.",
+    "A Pertura-produced scalar is never used as its own reference.",
+    "Each capability has exactly one primary reference pack, although a pack may contain real, planted, protocol, and refusal evidence.",
+    "Reference generators may read frozen datasets, split identities, and external method implementations, but not the Pertura result being scored.",
+    "Missing references are reported as not_available rather than passed."
+  ],
+  "pack_count": 10,
+  "capability_count": 44,
+  "reference_packs": [
+    {
+      "reference_pack_id": "REF-01",
+      "title": "Dataset intake and design references",
+      "capability_scenario": "CAP-01",
+      "datasets": [
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019",
+        "kang18_8vs8_pbmc"
+      ],
+      "capabilities": [
+        "intake.materialize.v1",
+        "diagnostic.contract_integrity.v1",
+        "diagnostic.dataset_integrity.v1",
+        "diagnostic.design_balance.v1"
+      ],
+      "reference_types": ["real_data_invariant", "planted_failure"],
+      "generator_jobs": [
+        {
+          "job_id": "REF-01-A",
+          "method": "Direct backed H5AD metadata and matrix-structure inspection",
+          "inputs": ["datasets.json", "splits.json"],
+          "outputs": ["dataset_profiles.json", "design_tabulations.json"]
+        },
+        {
+          "job_id": "REF-01-B",
+          "method": "Planted wrong-layer, duplicate-identity, missing-replicate, and confounding fixtures",
+          "inputs": ["frozen_small_fixtures"],
+          "outputs": ["intake_failure_truth.json", "design_failure_truth.json"]
+        }
+      ],
+      "independence_rule": "Profiles and design tabulations are computed directly from input metadata without importing Pertura result artifacts.",
+      "output_roles": [
+        "dataset_profiles",
+        "design_tabulations",
+        "intake_failure_truth",
+        "design_failure_truth"
+      ],
+      "metric_ids": [
+        "cell_count_error",
+        "gene_count_error",
+        "identity_hash_match",
+        "matrix_scale_classification",
+        "confirmed_field_precision",
+        "unresolved_field_recall",
+        "integrity_issue_recall",
+        "unit_count_error",
+        "confounding_detection",
+        "cell_as_replicate_error"
+      ],
+      "readiness": "planned",
+      "required_for": ["capability", "primary_agent", "supplemental_agent"]
+    },
+    {
+      "reference_pack_id": "REF-02",
+      "title": "Guide assignment, ambient contamination, MOI, and retained-cell references",
+      "capability_scenario": "CAP-02+CAP-03",
+      "datasets": [
+        "papalexi_thp1_eccite",
+        "replogle_k562_essential_2022",
+        "norman_k562_crispra_2019"
+      ],
+      "capabilities": [
+        "diagnostic.guide_assignment.v1",
+        "guide.integrity.v1",
+        "guide.ambient.v1",
+        "guide.assignment.nb_mixture.v1",
+        "screen.moi_doublet.v1",
+        "screen.retained_cells.v1"
+      ],
+      "reference_types": ["real_data_proxy", "planted_reference", "design_invariant"],
+      "generator_jobs": [
+        {
+          "job_id": "REF-02-A",
+          "method": "Direct Papalexi barcode, guide-map, count-matrix, and metadata-label reconciliation",
+          "inputs": ["papalexi_guide_assets", "splits.json"],
+          "outputs": ["papalexi_guide_reconciliation.json", "papalexi_assignment_proxy.tsv"]
+        },
+        {
+          "job_id": "REF-02-B",
+          "method": "Planted sparse guide-count mixture with ambient, uncertain, and true-positive assignments",
+          "inputs": ["papalexi_depth_and_sparsity_profile"],
+          "outputs": ["guide_count_fixture", "guide_assignment_truth.tsv"]
+        },
+        {
+          "job_id": "REF-02-C",
+          "method": "Direct design-rule evaluation for multi-guide, intended combinations, doublets, and retained cells",
+          "inputs": ["replogle_labels", "papalexi_metadata", "norman_constructs"],
+          "outputs": ["screen_qc_truth.tsv", "retained_cell_truth.tsv"]
+        }
+      ],
+      "independence_rule": "Assignment truth is planted or derived from frozen external labels; raw-count validation is never inferred from Pertura assignments.",
+      "output_roles": [
+        "guide_reconciliation",
+        "assignment_proxy",
+        "guide_assignment_truth",
+        "screen_qc_truth",
+        "retained_cell_truth"
+      ],
+      "metric_ids": [
+        "barcode_alignment_rate",
+        "mapping_conflict_count",
+        "precision",
+        "recall",
+        "macro_f1",
+        "brier_score",
+        "expected_calibration_error",
+        "ambient_rate_mae",
+        "intended_combination_retention",
+        "doublet_recall",
+        "retained_identity_match"
+      ],
+      "readiness": "planned",
+      "required_for": ["capability", "primary_agent"]
+    },
+    {
+      "reference_pack_id": "REF-03",
+      "title": "Control-state reference, mapping, and candidate-annotation references",
+      "capability_scenario": "CAP-04",
+      "datasets": ["papalexi_thp1_eccite", "norman_k562_crispra_2019"],
+      "capabilities": [
+        "reference.state.control_pca_leiden.v1",
+        "state.reference.fit.v1",
+        "state.reference.map_knn.v1",
+        "state.annotation_candidates.v1"
+      ],
+      "reference_types": ["real_method_reference", "planted_reference", "protocol_boundary"],
+      "generator_jobs": [
+        {
+          "job_id": "REF-03-A",
+          "method": "Independent control-only Scanpy or Seurat PCA, neighbors, and clustering with frozen seeds",
+          "inputs": ["papalexi_calibration_controls", "frozen_state_parameters"],
+          "outputs": ["control_state_reference", "state_stability.tsv"]
+        },
+        {
+          "job_id": "REF-03-B",
+          "method": "Held-out mapping with planted out-of-reference states",
+          "inputs": ["control_state_reference", "papalexi_evaluation_cells", "planted_outliers"],
+          "outputs": ["state_mapping_reference.tsv", "mapping_rejection_truth.tsv"]
+        },
+        {
+          "job_id": "REF-03-C",
+          "method": "Frozen marker evidence with ambiguous and unsupported candidate labels",
+          "inputs": ["state_mapping_reference", "frozen_marker_sets"],
+          "outputs": ["candidate_annotation_truth.tsv"]
+        }
+      ],
+      "independence_rule": "The external state fit uses only calibration controls and never reads Pertura state labels or representations.",
+      "output_roles": [
+        "control_state_reference",
+        "state_stability",
+        "state_mapping_reference",
+        "mapping_rejection_truth",
+        "candidate_annotation_truth"
+      ],
+      "metric_ids": [
+        "control_only_input_match",
+        "ari",
+        "cross_seed_stability",
+        "feature_set_concordance",
+        "neighbor_concordance",
+        "mapping_accuracy",
+        "outlier_recall",
+        "rejection_rate",
+        "candidate_label_accuracy",
+        "strong_claim_count"
+      ],
+      "readiness": "planned",
+      "required_for": ["capability", "primary_agent"]
+    },
+    {
+      "reference_pack_id": "REF-04",
+      "title": "Perturbation efficacy, responder, and target-reliability references",
+      "capability_scenario": "CAP-05",
+      "datasets": [
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019"
+      ],
+      "capabilities": [
+        "target.guide_efficacy.v1",
+        "target.responder.mixscape.v1",
+        "target.reliability.v2",
+        "target.reliability.aggregate.v1",
+        "effect.guide_target_sensitivity.v1"
+      ],
+      "reference_types": ["real_method_reference", "direct_recomputation", "compatibility_snapshot"],
+      "generator_jobs": [
+        {
+          "job_id": "REF-04-A",
+          "method": "Independent direct target-expression and signature contrasts by guide and replicate",
+          "inputs": ["evaluation_expression", "target_guide_map", "design_confirmations"],
+          "outputs": ["target_efficacy_reference.tsv", "guide_effect_reference.tsv"]
+        },
+        {
+          "job_id": "REF-04-B",
+          "method": "Frozen Seurat or independent Pertpy Mixscape execution on Papalexi",
+          "inputs": ["papalexi_evaluation", "control_state_reference"],
+          "outputs": ["mixscape_cell_reference.tsv", "mixscape_target_summary.tsv"]
+        },
+        {
+          "job_id": "REF-04-C",
+          "method": "Independent target_uid joins and guide leave-one-out recomputation",
+          "inputs": ["target_efficacy_reference", "mixscape_target_summary", "guide_effect_reference"],
+          "outputs": ["target_reliability_reference.tsv", "guide_sensitivity_reference.tsv"]
+        },
+        {
+          "job_id": "REF-04-D",
+          "method": "Frozen v0.2 compatibility snapshot for target.reliability.v2",
+          "inputs": ["compatibility_snapshot"],
+          "outputs": ["target_reliability_v2_compatibility.json"]
+        }
+      ],
+      "independence_rule": "Target references are recomputed from frozen expression and labels or an external Mixscape implementation, never from Pertura reliability outputs.",
+      "output_roles": [
+        "target_efficacy_reference",
+        "guide_effect_reference",
+        "mixscape_cell_reference",
+        "mixscape_target_summary",
+        "target_reliability_reference",
+        "guide_sensitivity_reference",
+        "compatibility_snapshot"
+      ],
+      "metric_ids": [
+        "direction_accuracy",
+        "effect_mae",
+        "responder_precision",
+        "responder_recall",
+        "escape_concordance",
+        "target_join_accuracy",
+        "resolved_target_precision",
+        "loo_effect_error",
+        "direction_consistency_error"
+      ],
+      "readiness": "planned",
+      "required_for": ["capability", "primary_agent"]
+    },
+    {
+      "reference_pack_id": "REF-05",
+      "title": "Replicated differential-expression, composition, and null references",
+      "capability_scenario": "CAP-06-REPLICATED",
+      "datasets": ["kang18_8vs8_pbmc"],
+      "capabilities": [
+        "de.pseudobulk.edger.v1",
+        "composition.propeller.v1",
+        "calibration.method_null.v1",
+        "calibration.replicate_null.v1"
+      ],
+      "reference_types": ["direct_r_reference", "planted_null"],
+      "generator_jobs": [
+        {
+          "job_id": "REF-05-A",
+          "method": "Independent direct-R edgeR execution with donor-aware paired design",
+          "inputs": ["kang_evaluation", "frozen_edger_parameters"],
+          "outputs": ["edger_reference.tsv", "edger_design_matrix.tsv", "edger_session_info.txt"]
+        },
+        {
+          "job_id": "REF-05-B",
+          "method": "Independent direct-R Propeller execution with donor-aware composition design",
+          "inputs": ["kang_evaluation", "frozen_propeller_parameters"],
+          "outputs": ["propeller_reference.tsv", "propeller_design_matrix.tsv", "propeller_session_info.txt"]
+        },
+        {
+          "job_id": "REF-05-C",
+          "method": "Design-preserving method and replicate null permutations",
+          "inputs": ["kang_calibration", "frozen_null_seeds"],
+          "outputs": ["method_null_reference.tsv", "replicate_null_reference.tsv"]
+        }
+      ],
+      "independence_rule": "Reference R scripts and outputs are distinct from the Pertura runner and are generated before scoring Pertura artifacts.",
+      "output_roles": [
+        "edger_reference",
+        "propeller_reference",
+        "method_null_reference",
+        "replicate_null_reference",
+        "r_session_info"
+      ],
+      "metric_ids": [
+        "logfc_mae",
+        "effect_mae",
+        "pvalue_mae",
+        "fdr_mae",
+        "proportion_mae",
+        "status_match",
+        "type_i_error",
+        "null_effect_bias",
+        "exchangeability_violation_count"
+      ],
+      "readiness": "planned",
+      "required_for": ["capability", "supplemental_agent"]
+    },
+    {
+      "reference_pack_id": "REF-06",
+      "title": "High-MOI association calibration and suitability references",
+      "capability_scenario": "CAP-06-SCEPTRE",
+      "datasets": ["norman_k562_crispra_2019"],
+      "capabilities": ["association.sceptre.v1"],
+      "reference_types": ["planted_reference", "correct_refusal"],
+      "generator_jobs": [
+        {
+          "job_id": "REF-06-A",
+          "method": "Independent synthetic high-MOI guide-gene association truth with null and positive effects",
+          "inputs": ["frozen_sceptre_fixture", "frozen_seeds"],
+          "outputs": ["sceptre_synthetic_truth.tsv", "sceptre_reference_results.tsv"]
+        },
+        {
+          "job_id": "REF-06-B",
+          "method": "Direct Norman input-availability audit",
+          "inputs": ["norman_dataset_profile", "norman_auxiliary_assets"],
+          "outputs": ["norman_sceptre_suitability.json"]
+        }
+      ],
+      "independence_rule": "Synthetic truth is generated independently, and Norman refusal depends only on observable input availability.",
+      "output_roles": [
+        "sceptre_synthetic_truth",
+        "sceptre_reference_results",
+        "norman_sceptre_suitability"
+      ],
+      "metric_ids": [
+        "type_i_error",
+        "power",
+        "fdr",
+        "effect_rank_concordance",
+        "correct_refusal",
+        "silent_fallback_count"
+      ],
+      "readiness": "planned",
+      "required_for": ["capability", "primary_agent"]
+    },
+    {
+      "reference_pack_id": "REF-07",
+      "title": "Effect-matrix and module-discovery references",
+      "capability_scenario": "CAP-07",
+      "datasets": [
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019"
+      ],
+      "capabilities": [
+        "effect.matrix.assemble.v1",
+        "effect.module_global.v1",
+        "module.import.gmt.v1",
+        "module.learn.nmf.v1",
+        "module.learn.control_nmf.v1"
+      ],
+      "reference_types": ["direct_recomputation", "planted_reference", "protocol_invariant"],
+      "generator_jobs": [
+        {
+          "job_id": "REF-07-A",
+          "method": "Independent effect-table joins and weighted module aggregation",
+          "inputs": ["frozen_target_effects", "frozen_gmt"],
+          "outputs": ["effect_matrix_reference", "module_effect_reference.tsv"]
+        },
+        {
+          "job_id": "REF-07-B",
+          "method": "Independent GMT parsing and gene-universe audit",
+          "inputs": ["frozen_gmt", "tested_gene_universe"],
+          "outputs": ["gmt_reference.json"]
+        },
+        {
+          "job_id": "REF-07-C",
+          "method": "Planted sparse NMF and control-only NMF programs across frozen ranks and seeds",
+          "inputs": ["planted_module_fixture", "frozen_nmf_parameters"],
+          "outputs": ["nmf_truth.tsv", "nmf_stability_reference.tsv", "control_nmf_truth.tsv"]
+        }
+      ],
+      "independence_rule": "Effect joins and planted factor models are generated without importing Pertura module artifacts.",
+      "output_roles": [
+        "effect_matrix_reference",
+        "module_effect_reference",
+        "gmt_reference",
+        "nmf_truth",
+        "nmf_stability_reference",
+        "control_nmf_truth"
+      ],
+      "metric_ids": [
+        "matrix_value_mae",
+        "missingness_match",
+        "module_effect_mae",
+        "gene_set_membership_match",
+        "module_recovery",
+        "component_matching",
+        "cross_seed_stability",
+        "control_identity_match"
+      ],
+      "readiness": "planned",
+      "required_for": ["capability", "primary_agent"]
+    },
+    {
+      "reference_pack_id": "REF-08",
+      "title": "Response-program, regulator, network, and pathway references",
+      "capability_scenario": "CAP-08",
+      "datasets": [
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019"
+      ],
+      "capabilities": [
+        "program.response.signed_nmf.v1",
+        "program.perturbation.cluster.v1",
+        "regulator.activity.ulm.v1",
+        "network.perturbation_regulator.v1",
+        "enrichment.ora.v1",
+        "enrichment.gsea_prerank.v1"
+      ],
+      "reference_types": ["planted_reference", "direct_numeric_reference", "protocol_boundary"],
+      "generator_jobs": [
+        {
+          "job_id": "REF-08-A",
+          "method": "Planted signed response programs, perturbation groups, and regulator activities",
+          "inputs": ["planted_program_fixture", "frozen_regulator_network"],
+          "outputs": ["signed_program_truth.tsv", "perturbation_cluster_truth.tsv", "regulator_activity_truth.tsv"]
+        },
+        {
+          "job_id": "REF-08-B",
+          "method": "Independent hypergeometric ORA and preranked GSEA calculations",
+          "inputs": ["frozen_gene_rankings", "frozen_gmt", "tested_gene_universe"],
+          "outputs": ["ora_reference.tsv", "gsea_reference.tsv"]
+        },
+        {
+          "job_id": "REF-08-C",
+          "method": "Planted perturbation-regulator edge provenance and claim roles",
+          "inputs": ["regulator_activity_truth", "frozen_regulator_network"],
+          "outputs": ["perturbation_regulator_reference.tsv"]
+        }
+      ],
+      "independence_rule": "Numeric references use direct mathematics or planted truth, and network references score provenance rather than causal correctness.",
+      "output_roles": [
+        "signed_program_truth",
+        "perturbation_cluster_truth",
+        "regulator_activity_truth",
+        "ora_reference",
+        "gsea_reference",
+        "perturbation_regulator_reference"
+      ],
+      "metric_ids": [
+        "signed_program_recovery",
+        "direction_accuracy",
+        "ari",
+        "cluster_stability",
+        "activity_mae",
+        "rank_concordance",
+        "pvalue_mae",
+        "fdr_mae",
+        "nes_mae",
+        "provenance_completeness",
+        "causal_overclaim_count"
+      ],
+      "readiness": "planned",
+      "required_for": ["capability", "primary_agent"]
+    },
+    {
+      "reference_pack_id": "REF-09",
+      "title": "Literature, evidence-map, and next-panel references",
+      "capability_scenario": "CAP-09",
+      "datasets": [
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019"
+      ],
+      "capabilities": [
+        "literature.europepmc.v1",
+        "interpretation.evidence_map.v1",
+        "design.next_panel.v1"
+      ],
+      "reference_types": ["frozen_external_snapshot", "planted_reference", "constraint_oracle"],
+      "generator_jobs": [
+        {
+          "job_id": "REF-09-A",
+          "method": "Frozen Europe PMC query and response snapshots with stable record identities",
+          "inputs": ["frozen_queries"],
+          "outputs": ["europepmc_snapshot.json", "literature_record_reference.tsv"]
+        },
+        {
+          "job_id": "REF-09-B",
+          "method": "Planted mixed-source evidence graph with contradictions, stale results, predictions, priors, and hypotheses",
+          "inputs": ["planted_evidence_fixture"],
+          "outputs": ["evidence_map_truth.json"]
+        },
+        {
+          "job_id": "REF-09-C",
+          "method": "Constrained panel-selection oracle with feasible optima or Pareto sets",
+          "inputs": ["planted_panel_candidates", "frozen_panel_constraints"],
+          "outputs": ["next_panel_reference.json"]
+        }
+      ],
+      "independence_rule": "Literature is a frozen prior, evidence truth is planted, and panel scoring uses an external constraint evaluator.",
+      "output_roles": [
+        "europepmc_snapshot",
+        "literature_record_reference",
+        "evidence_map_truth",
+        "next_panel_reference"
+      ],
+      "metric_ids": [
+        "record_identity_match",
+        "citation_completeness",
+        "source_class_accuracy",
+        "contradiction_recall",
+        "strong_overclaim_count",
+        "constraint_satisfaction",
+        "coverage",
+        "uncertainty_capture"
+      ],
+      "readiness": "planned",
+      "required_for": ["capability", "primary_agent"]
+    },
+    {
+      "reference_pack_id": "REF-10",
+      "title": "Virtual-prediction split, leakage, baseline, and evaluation references",
+      "capability_scenario": "CAP-10",
+      "datasets": ["norman_k562_crispra_2019"],
+      "capabilities": [
+        "virtual.split.contract.v1",
+        "virtual.prediction.ingest.v1",
+        "virtual.leakage.audit.v1",
+        "virtual.baselines.v1",
+        "virtual.evaluate.v1",
+        "virtual.evaluate.comprehensive.v1"
+      ],
+      "reference_types": ["controlled_prediction_fixture", "direct_numeric_reference"],
+      "generator_jobs": [
+        {
+          "job_id": "REF-10-A",
+          "method": "Controlled clean, leaky, transposed, direction-flipped, no-change, training-mean, and uncertainty-bearing prediction bundles",
+          "inputs": ["norman_calibration", "norman_evaluation", "frozen_virtual_seeds"],
+          "outputs": ["controlled_prediction_bundles", "prediction_bundle_truth.json"]
+        },
+        {
+          "job_id": "REF-10-B",
+          "method": "Independent blockwise baseline and virtual-model evaluator",
+          "inputs": ["controlled_prediction_bundles", "held_out_observed_effects"],
+          "outputs": ["virtual_baseline_reference.tsv", "virtual_metric_reference.tsv"]
+        }
+      ],
+      "independence_rule": "Prediction fixtures and expected metrics are generated independently of Pertura virtual-evaluation outputs.",
+      "output_roles": [
+        "controlled_prediction_bundles",
+        "prediction_bundle_truth",
+        "virtual_baseline_reference",
+        "virtual_metric_reference"
+      ],
+      "metric_ids": [
+        "target_overlap_count",
+        "cell_overlap_count",
+        "identity_match",
+        "leakage_recall",
+        "leakage_precision",
+        "baseline_value_mae",
+        "effect_mae",
+        "effect_rmse",
+        "direction_accuracy",
+        "spearman",
+        "coverage",
+        "expected_calibration_error",
+        "discriminability",
+        "baseline_improvement",
+        "source_class_accuracy"
+      ],
+      "readiness": "planned",
+      "required_for": ["capability", "primary_agent"]
+    }
+  ]
+}
