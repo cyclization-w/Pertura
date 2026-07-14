@@ -96,6 +96,18 @@ def test_kang_conversion_uses_native_r_h5ad_writer() -> None:
     assert "zellkonverter" not in script
 
 
+def test_papalexi_conversion_writes_mapping_sidecar() -> None:
+    root = Path(__file__).resolve().parents[2]
+    script = (root / "scripts" / "convert_papalexi_to_h5ad.R").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'schema_version = "pertura-benchmark-conversion-sidecar-v1"' in script
+    assert 'writer = "SeuratDisk::Convert"' in script
+    assert "packages = as.list(c(" in script
+    assert "if (!file.exists(output))" in script
+
+
 def test_expert_split_minimums_and_proxy_validation_fail_closed() -> None:
     with pytest.raises(ValueError, match="at least 50"):
         BenchmarkSplitManifest(

@@ -30,17 +30,21 @@ object <- LoadData(ds = "thp1.eccite")
 temporary <- sub("\\.h5ad$", ".h5Seurat", output)
 SaveH5Seurat(object, filename = temporary, overwrite = TRUE)
 Convert(temporary, dest = "h5ad", overwrite = TRUE)
+if (!file.exists(output)) {
+  stop(paste("SeuratDisk conversion did not create the expected output:", output))
+}
 
 manifest <- list(
-  schema_version = "pertura-benchmark-conversion-lock-v1",
+  schema_version = "pertura-benchmark-conversion-sidecar-v1",
   dataset_id = "papalexi_thp1_eccite",
   output = output,
-  sha256 = digest(file = output, algo = "sha256"),
-  packages = c(
+  sha256 = paste0("sha256:", digest(file = output, algo = "sha256")),
+  writer = "SeuratDisk::Convert",
+  packages = as.list(c(
     observed,
     thp1.eccite.SeuratData = as.character(packageVersion("thp1.eccite.SeuratData")),
     SeuratDisk = as.character(packageVersion("SeuratDisk"))
-  ),
+  )),
   session_info = capture.output(sessionInfo())
 )
 write(toJSON(manifest, auto_unbox = TRUE, pretty = TRUE), paste0(output, ".manifest.json"))
