@@ -89,6 +89,32 @@ def test_ref04_guide_sensitivity_exposes_direction_reversal() -> None:
     assert rows[0]["direction_concordance"] == 0.5
 
 
+def test_ref04_mixscape_uses_global_evaluation_controls_when_a_stratum_is_empty() -> None:
+    module = _module()
+    replicates = ["r1"] * 30 + ["r2"] * 30
+    controls = [True] * 25 + [False] * 5 + [False] * 30
+    policy = module._mixscape_split_policy(
+        replicates,
+        controls,
+        n_neighbors=20,
+    )
+    assert policy["split_by"] is None
+    assert policy["mode"] == "evaluation_control_global"
+    assert policy["control_counts_by_replicate"] == {"r1": 25, "r2": 0}
+    assert "r2" in policy["reason"]
+
+
+def test_ref04_mixscape_stratifies_only_when_each_replicate_has_controls() -> None:
+    module = _module()
+    policy = module._mixscape_split_policy(
+        ["r1"] * 25 + ["r2"] * 25,
+        [True] * 20 + [False] * 5 + [True] * 20 + [False] * 5,
+        n_neighbors=20,
+    )
+    assert policy["split_by"] == "_ref04_replicate"
+    assert policy["mode"] == "replicate_stratified"
+
+
 def test_ref04_is_independent_split_scoped_and_streaming() -> None:
     root = Path(__file__).resolve().parents[2]
     script = (root / "scripts" / "generate_paper_ref04.py").read_text(
@@ -100,5 +126,6 @@ def test_ref04_is_independent_split_scoped_and_streaming() -> None:
     assert "source.X[start:stop, :]" in script
     assert '"cross_target_leakage_count": 0' in script
     assert '"unexpected_strong_claim_count": 0' in script
+    assert '"evaluation_control_global"' in script
     assert '"norman_k562_crispra_2019"' in script
     assert "constructs are combinatorial" in script

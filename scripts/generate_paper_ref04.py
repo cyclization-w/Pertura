@@ -273,6 +273,49 @@ def _class_flags(label: str) -> tuple[bool, bool]:
     return responder, escape
 
 
+def _mixscape_split_policy(
+    replicates: list[str],
+    controls: list[bool],
+    *,
+    n_neighbors: int,
+) -> dict[str, Any]:
+    all_replicates = sorted(set(replicates))
+    control_counts = {
+        replicate: sum(
+            candidate == replicate and is_control
+            for candidate, is_control in zip(replicates, controls)
+        )
+        for replicate in all_replicates
+    }
+    total_controls = sum(controls)
+    if total_controls < n_neighbors:
+        raise ValueError(
+            f"REF-04 Mixscape requires at least {n_neighbors} evaluation controls; "
+            f"found {total_controls}"
+        )
+    insufficient = {
+        replicate: count
+        for replicate, count in control_counts.items()
+        if count < n_neighbors
+    }
+    if len(all_replicates) > 1 and not insufficient:
+        return {
+            "split_by": "_ref04_replicate",
+            "mode": "replicate_stratified",
+            "control_counts_by_replicate": control_counts,
+            "reason": "each replicate has enough evaluation controls",
+        }
+    return {
+        "split_by": None,
+        "mode": "evaluation_control_global",
+        "control_counts_by_replicate": control_counts,
+        "reason": (
+            "replicate stratification was not estimable from the frozen evaluation "
+            f"controls: {insufficient}"
+        ),
+    }
+
+
 def _generate_direct_references(
     data: Any,
     selection: list[dict[str, str]],
@@ -409,7 +452,7 @@ def _run_mixscape(
     data: Any,
     selection: list[dict[str, str]],
     evaluation_pcs: Any,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     import pandas as pd
     import pertpy as pt
 
@@ -426,6 +469,16 @@ def _run_mixscape(
     ]
     data.obs["_ref04_replicate"] = data.obs["replicate"].astype(str).to_numpy()
     data.obsm["X_ref03_pca"] = evaluation_pcs
+    split_policy = _mixscape_split_policy(
+        [str(value) for value in data.obs["_ref04_replicate"]],
+        controls,
+        n_neighbors=20,
+    )
+    print(
+        "REF-04-B: Mixscape control mode="
+        f"{split_policy['mode']}; {split_policy['reason']}",
+        flush=True,
+    )
     mixscape = pt.tl.Mixscape()
     print("REF-04-B: computing independent Pertpy perturbation signatures", flush=True)
     mixscape.perturbation_signature(
@@ -433,7 +486,7 @@ def _run_mixscape(
         pert_key="_ref04_target",
         control="NT",
         ref_selection_mode="nn",
-        split_by="_ref04_replicate",
+        split_by=split_policy["split_by"],
         n_neighbors=20,
         use_rep="X_ref03_pca",
         n_dims=min(15, evaluation_pcs.shape[1]),
@@ -450,7 +503,7 @@ def _run_mixscape(
         logfc_threshold=0.25,
         iter_num=10,
         scale=True,
-        split_by="_ref04_replicate",
+        split_by=split_policy["split_by"],
         pval_cutoff=0.05,
         perturbation_type="KO",
         random_state=SEED,
@@ -522,7 +575,7 @@ def _run_mixscape(
                 ),
             }
         )
-    return cell_rows, target_rows
+    return cell_rows, target_rows, split_policy
 
 
 def _compatibility_snapshot(repo: Path) -> dict[str, Any]:
@@ -652,7 +705,9 @@ def generate(
         flush=True,
     )
 
-    cell_rows, mixscape_rows = _run_mixscape(data, evaluation, evaluation_pcs)
+    cell_rows, mixscape_rows, mixscape_split_policy = _run_mixscape(
+        data, evaluation, evaluation_pcs
+    )
     mixscape_cells_path = output_dir / "mixscape_cell_reference.tsv"
     mixscape_summary_path = output_dir / "mixscape_target_summary.tsv"
     _write_tsv(
@@ -743,6 +798,12 @@ def generate(
                 "logfc_threshold": 0.25,
                 "iter_num": 10,
                 "pval_cutoff": 0.05,
+                "control_mode": mixscape_split_policy["mode"],
+                "split_by": mixscape_split_policy["split_by"],
+                "control_counts_by_replicate": mixscape_split_policy[
+                    "control_counts_by_replicate"
+                ],
+                "split_policy_reason": mixscape_split_policy["reason"],
             },
             "max_memory_gb": max_memory_gb,
         },
