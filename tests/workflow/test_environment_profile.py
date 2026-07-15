@@ -323,12 +323,18 @@ def test_sceptre_installer_avoids_github_api_and_has_source_fallbacks() -> None:
     ).read_text(encoding="utf-8")
 
     assert 'target_version <- "0.99.0"' in installer
+    assert (
+        'target_commit <- "4c26938061380fc782786fafaceb4345bf8fc9b2"'
+        in installer
+    )
     assert "codeload.github.com/Katsevich-Lab/sceptre" in installer
     assert 'Sys.getenv("CONDA_PREFIX"' in installer
     assert "SSL_CERT_FILE" in installer
     assert "CURL_CA_BUNDLE" in installer
     assert 'Sys.which("git")' in installer
-    assert '"clone", "--depth", "1", "--branch", target_version' in installer
+    assert '"clone", "--no-checkout"' in installer
+    assert '"checkout", "--detach", target_commit' in installer
+    assert '"rev-parse", "HEAD"' in installer
     assert "remotes::install_local" in installer
     assert "already_installed" in installer
     assert "install_github" not in installer

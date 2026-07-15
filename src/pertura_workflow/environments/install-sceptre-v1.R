@@ -3,6 +3,7 @@ options(timeout = 1200)
 options(download.file.method = "libcurl")
 
 target_version <- "0.99.0"
+target_commit <- "4c26938061380fc782786fafaceb4345bf8fc9b2"
 
 if (!requireNamespace("remotes", quietly = TRUE)) {
   install.packages("remotes")
@@ -42,12 +43,12 @@ if (already_installed) {
   archive <- tempfile(pattern = "sceptre-", fileext = ".tar.gz")
   archive_urls <- c(
     paste0(
-      "https://codeload.github.com/Katsevich-Lab/sceptre/tar.gz/refs/tags/",
-      target_version
+      "https://codeload.github.com/Katsevich-Lab/sceptre/tar.gz/",
+      target_commit
     ),
     paste0(
-      "https://github.com/Katsevich-Lab/sceptre/archive/refs/tags/",
-      target_version,
+      "https://github.com/Katsevich-Lab/sceptre/archive/",
+      target_commit,
       ".tar.gz"
     )
   )
@@ -79,7 +80,7 @@ if (already_installed) {
   }
 
   # GitHub's API and codeload endpoints can fail independently on older
-  # clusters. A shallow fixed-tag clone uses the same source identity without
+  # clusters. An exact-commit checkout uses the same source identity without
   # requiring an API call.
   if (is.null(source)) {
     git <- unname(Sys.which("git"))
@@ -94,19 +95,46 @@ if (already_installed) {
     clone_status <- system2(
       git,
       c(
-        "clone", "--depth", "1", "--branch", target_version,
+        "clone", "--no-checkout",
         "https://github.com/Katsevich-Lab/sceptre.git", source_dir
       )
     )
-    if (!identical(clone_status, 0L) || !file.exists(file.path(source_dir, "DESCRIPTION"))) {
+    checkout_status <- if (identical(clone_status, 0L)) {
+      system2(
+        git,
+        c(
+          paste0("--git-dir=", file.path(source_dir, ".git")),
+          paste0("--work-tree=", source_dir),
+          "checkout", "--detach", target_commit
+        )
+      )
+    } else {
+      clone_status
+    }
+    observed_commit <- if (identical(checkout_status, 0L)) {
+      system2(
+        git,
+        c(
+          paste0("--git-dir=", file.path(source_dir, ".git")),
+          "rev-parse", "HEAD"
+        ),
+        stdout = TRUE
+      )
+    } else {
+      character()
+    }
+    if (!identical(checkout_status, 0L) ||
+        !identical(unname(observed_commit), target_commit) ||
+        !file.exists(file.path(source_dir, "DESCRIPTION"))) {
       stop(
         "unable to acquire sceptre ", target_version,
-        " by codeload or fixed-tag git clone: ",
+        " at commit ", target_commit,
+        " by codeload or fixed-commit git clone: ",
         paste(acquisition_errors, collapse = "; ")
       )
     }
     source <- source_dir
-    message("cloned sceptre source at fixed tag ", target_version)
+    message("cloned sceptre source at fixed commit ", target_commit)
   }
 
   remotes::install_local(
