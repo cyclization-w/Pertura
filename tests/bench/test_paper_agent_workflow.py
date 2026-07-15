@@ -244,6 +244,25 @@ def test_workflow_resource_gate_accepts_maximum_turn_allocation() -> None:
         is False
     )
 
+    rlimit_evidence = {
+        "mode": "rlimit",
+        "enforcement_active": True,
+        "rlimit_identity": "pid:123:RLIMIT_AS",
+        "rlimit_as_bytes": 8 * 1024**3,
+        "requested_memory_gb": 8,
+        "actual_memory_gb": 8,
+        "n_jobs": 1,
+        "timeout_seconds": 7200,
+        "peak_rss_mb": 1024,
+    }
+    assert execution._task_resource_gate(task, rlimit_evidence) is True
+    assert (
+        execution._task_resource_gate(
+            task, rlimit_evidence | {"enforcement_active": False}
+        )
+        is False
+    )
+
 
 def test_artifact_contract_checks_table_headers_and_json_fields(
     tmp_path: Path,

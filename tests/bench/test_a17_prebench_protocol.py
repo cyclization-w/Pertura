@@ -12,7 +12,9 @@ from pertura_bench.metric_evaluators import evaluate_artifact_metrics
 from pertura_bench.models import BenchmarkSubsetSpec
 from pertura_bench.operations import _select_v2_cells
 from pertura_bench.resource_evidence import (
+    enforce_runtime_resource_budget,
     load_resource_evidence,
+    observe_runtime_resources,
     validate_resource_request,
 )
 from pertura_bench.references import (
@@ -175,6 +177,46 @@ def test_resource_evidence_must_match_capability_request(tmp_path: Path) -> None
     validate_resource_request(evidence, memory_gb=4.0, n_jobs=1)
     with pytest.raises(ValueError, match="memory requests disagree"):
         validate_resource_request(evidence, memory_gb=8.0, n_jobs=1)
+
+
+def test_rlimit_resource_template_is_enforced_then_observed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    path = tmp_path / "resource.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "pertura-resource-evidence-v1",
+                "mode": "rlimit",
+                "requested_memory_gb": 8.0,
+                "actual_memory_gb": 8.0,
+                "cpu_count": 1,
+                "n_jobs": 1,
+                "timeout_seconds": 7200,
+                "thread_environment": {"OMP_NUM_THREADS": "1"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    evidence = load_resource_evidence(path)
+    assert evidence["peak_rss_mb"] == 0
+    assert evidence["wall_clock_seconds"] == 0
+    assert evidence["enforcement_active"] is False
+
+    monkeypatch.setattr(
+        "pertura_bench.resource_evidence._apply_rlimit_as", lambda limit: limit
+    )
+    monkeypatch.setattr(
+        "pertura_bench.resource_evidence._peak_rss_mb",
+        lambda: (256.0, "fixture"),
+    )
+    enforced = enforce_runtime_resource_budget(evidence)
+    observed = observe_runtime_resources(enforced, started_monotonic=0.0)
+    assert observed["enforcement_active"] is True
+    assert observed["rlimit_identity"].endswith(":RLIMIT_AS")
+    assert observed["rlimit_as_bytes"] == 8 * 1024**3
+    assert observed["peak_rss_mb"] == 256.0
+    assert observed["wall_clock_seconds"] > 0
 
 
 def test_reference_pipeline_binds_subset_generator_environment_and_outputs(

@@ -83,7 +83,15 @@ def run_paper_agent_workflow(
         raise ValueError(
             "invalid bound paper catalogs: " + "; ".join(catalog_problems)
         )
-    resource_evidence = _resource_evidence(resource_evidence_path)
+    from pertura_bench.resource_evidence import (
+        enforce_runtime_resource_budget,
+        observe_runtime_resources,
+    )
+
+    resource_started = time.monotonic()
+    resource_evidence = enforce_runtime_resource_budget(
+        _resource_evidence(resource_evidence_path)
+    )
     checkpoint = (
         _verify_paper_checkpoint(
             repo_root=repo_root,
@@ -259,6 +267,9 @@ def run_paper_agent_workflow(
                     except Exception:
                         agent.product_runtime.close(graceful=False)
             wall_seconds = time.monotonic() - started
+            resource_evidence = observe_runtime_resources(
+                resource_evidence, started_monotonic=resource_started
+            )
             turns = project.store.list_turns(conversation.conversation_id)
             final = project.store.get_turn_final(turns[-1].turn_id) if turns else None
             result_path = task_output / "benchmark_result.json"
@@ -411,6 +422,10 @@ def run_paper_agent_workflow(
         and all(item["status"] == "passed" for item in required_records)
         else "failed"
     )
+    resource_evidence = observe_runtime_resources(
+        resource_evidence, started_monotonic=resource_started
+    )
+    _write(execution_root / "resource_evidence.observed.json", resource_evidence)
     input_manifest = {
         "schema_version": "pertura-paper-workflow-input-manifest-v1",
         "workflow": workflow,
@@ -434,6 +449,7 @@ def run_paper_agent_workflow(
             and Path(resource_evidence_path).is_file()
             else None
         ),
+        "resource_observation_hash": canonical_hash(resource_evidence),
         "asset_hashes": {
             asset.role: asset.content_sha256 for asset in registered
         },
@@ -730,11 +746,11 @@ def _task_resource_gate(
     # scheduler request is therefore the maximum requirement across the
     # workflow, not the exact budget of every individual turn.  It must cover
     # the current turn, while the observed peak must still fit inside the
-    # allocation proved by the scheduler/cgroup evidence.
+    # allocation proved by the selected resource-enforcement evidence.
     return bool(
         evidence
-        and evidence.get("mode") in {"scheduler", "cgroup"}
-        and (evidence.get("scheduler_job_id") or evidence.get("cgroup_identity"))
+        and evidence.get("mode") in {"scheduler", "cgroup", "rlimit"}
+        and _resource_identity_is_valid(evidence)
         and requested_memory_gb >= task_memory_gb > 0
         and actual_memory_gb >= requested_memory_gb
         and int(evidence.get("n_jobs", 0)) == int(resources.get("n_jobs", 1))
@@ -743,6 +759,21 @@ def _task_resource_gate(
         and float(evidence.get("peak_rss_mb", 0)) > 0
         and float(evidence.get("peak_rss_mb", 0)) <= actual_memory_gb * 1024.0
     )
+
+
+def _resource_identity_is_valid(evidence: Mapping[str, Any]) -> bool:
+    mode = evidence.get("mode")
+    if mode == "scheduler":
+        return bool(evidence.get("scheduler_job_id"))
+    if mode == "cgroup":
+        return bool(evidence.get("cgroup_identity"))
+    if mode == "rlimit":
+        return bool(
+            evidence.get("enforcement_active") is True
+            and evidence.get("rlimit_identity")
+            and int(evidence.get("rlimit_as_bytes", 0)) > 0
+        )
+    return False
 
 
 def _artifact_paths_present(
