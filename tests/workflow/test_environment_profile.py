@@ -315,6 +315,25 @@ def test_composition_profile_uses_only_pinned_conda_bioconda_packages() -> None:
     assert "library(edgeR)" in validator
 
 
+def test_sceptre_installer_avoids_github_api_and_has_source_fallbacks() -> None:
+    installer = (
+        Path(environment_module.__file__).parent
+        / "environments"
+        / "install-sceptre-v1.R"
+    ).read_text(encoding="utf-8")
+
+    assert 'target_version <- "0.99.0"' in installer
+    assert "codeload.github.com/Katsevich-Lab/sceptre" in installer
+    assert 'Sys.getenv("CONDA_PREFIX"' in installer
+    assert "SSL_CERT_FILE" in installer
+    assert "CURL_CA_BUNDLE" in installer
+    assert 'Sys.which("git")' in installer
+    assert '"clone", "--depth", "1", "--branch", target_version' in installer
+    assert "remotes::install_local" in installer
+    assert "already_installed" in installer
+    assert "install_github" not in installer
+
+
 def test_composition_doctor_loads_packages_before_reporting_versions(
     monkeypatch, tmp_path: Path
 ) -> None:
