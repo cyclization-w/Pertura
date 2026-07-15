@@ -53,6 +53,14 @@ def test_ref05_condition_matching_is_fail_closed() -> None:
     assert not module._condition_matches("mystery", "stim")
 
 
+def test_ref05_missing_state_is_explicitly_unavailable() -> None:
+    module = _module()
+    assert module._cell_state("CD14 Mono") == "CD14 Mono"
+    assert module._cell_state("  CD4 T  ") == "CD4 T"
+    assert module._cell_state(None) is None
+    assert module._cell_state(float("nan")) is None
+
+
 def test_ref05_is_independent_split_scoped_and_streaming() -> None:
     root = Path(__file__).resolve().parents[2]
     python = (root / "scripts" / "generate_paper_ref05.py").read_text(encoding="utf-8")
@@ -64,6 +72,8 @@ def test_ref05_is_independent_split_scoped_and_streaming() -> None:
     assert "source.X[start:stop, :]" in python
     assert "calibration_donors & evaluation_donors" in python
     assert '"cell_label_permutation": False' in python
+    assert '"missing_cell_state"' in python
+    assert '"propeller_included"' in python
 
     assert 'reformulate(c("donor", condition_column))' in runner
     assert "propeller.ttest(" in runner

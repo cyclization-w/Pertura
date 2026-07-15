@@ -100,6 +100,15 @@ def _condition_matches(value: str, condition: str) -> bool:
     return normalized in {"stim", "stimulated"}
 
 
+def _cell_state(value: Any) -> str | None:
+    if value is None:
+        return None
+    state = str(value).strip()
+    if not state or state.lower() in {"na", "nan", "none", "<na>"}:
+        return None
+    return state
+
+
 def _materialize_split_inputs(
     source: Any,
     selection: list[dict[str, str]],
@@ -127,7 +136,10 @@ def _materialize_split_inputs(
     sample_index = {key: index for index, key in enumerate(sample_keys)}
     counts = np.zeros((len(sample_keys), int(source.n_vars)), dtype=np.int64)
     sample_cell_counts: Counter[str] = Counter()
+    composition_sample_counts: Counter[str] = Counter()
     cell_rows: list[dict[str, str]] = []
+    analysis_rows: list[dict[str, str]] = []
+    processed_cells = 0
 
     print(
         f"REF-05: sequentially scanning {source.n_obs} Kang rows for "
@@ -159,9 +171,7 @@ def _materialize_split_inputs(
                 raise ValueError(f"Kang split donor mismatch for {cell}")
             if not _condition_matches(str(row["stim"]), condition):
                 raise ValueError(f"Kang split condition mismatch for {cell}")
-            state = str(row["cell"]).strip()
-            if not state or state.lower() in {"na", "nan", "none"}:
-                raise ValueError(f"Kang cell-state identity is missing for {cell}")
+            state = _cell_state(row["cell"])
             key = donor + "\x1f" + condition
             vector = block[local_index, :]
             summed = (
@@ -171,17 +181,39 @@ def _materialize_split_inputs(
             )
             counts[sample_index[key], :] += np.rint(summed).astype(np.int64)
             sample_cell_counts[key] += 1
-            cell_rows.append(
+            processed_cells += 1
+            multiplets = (
+                str(row["multiplets"]).strip()
+                if "multiplets" in source.obs.columns
+                else ""
+            )
+            propeller_included = state is not None
+            analysis_rows.append(
                 {
                     "cell_id": cell,
                     "sample_id": f"{donor}::{condition}",
                     "donor": donor,
                     "condition": condition,
-                    "state": state,
+                    "source_state": state or "",
+                    "source_multiplets": multiplets,
+                    "edger_included": "true",
+                    "propeller_included": str(propeller_included).lower(),
+                    "exclusion_reason": "" if propeller_included else "missing_cell_state",
                 }
             )
+            if propeller_included:
+                composition_sample_counts[key] += 1
+                cell_rows.append(
+                    {
+                        "cell_id": cell,
+                        "sample_id": f"{donor}::{condition}",
+                        "donor": donor,
+                        "condition": condition,
+                        "state": state,
+                    }
+                )
 
-    if len(cell_rows) != len(selection):
+    if processed_cells != len(selection):
         raise ValueError(f"Kang {split} materialization lost cells")
     sample_rows = []
     for key in sample_keys:
@@ -189,6 +221,11 @@ def _materialize_split_inputs(
         n_cells = sample_cell_counts[key]
         if n_cells < 20:
             raise ValueError(f"Kang {split} sample {donor}/{condition} has fewer than 20 cells")
+        if composition_sample_counts[key] < 20:
+            raise ValueError(
+                f"Kang {split} sample {donor}/{condition} has fewer than 20 "
+                "state-annotated cells for composition"
+            )
         sample_rows.append(
             {
                 "sample_id": f"{donor}::{condition}",
@@ -202,6 +239,7 @@ def _materialize_split_inputs(
     counts_path = output_dir / f"{split}_pseudobulk_counts.tsv"
     samples_path = output_dir / f"{split}_sample_metadata.tsv"
     cells_path = output_dir / f"{split}_cell_metadata.tsv"
+    analysis_manifest_path = output_dir / f"{split}_analysis_cells.tsv"
     genes = [str(value) for value in source.var_names]
     with counts_path.open("w", encoding="utf-8", newline="") as handle:
         handle.write("gene\t" + "\t".join(row["sample_id"] for row in sample_rows) + "\n")
@@ -214,11 +252,23 @@ def _materialize_split_inputs(
             )
     _write_tsv(samples_path, ["sample_id", "donor", "condition", "n_cells"], sample_rows)
     _write_tsv(cells_path, ["cell_id", "sample_id", "donor", "condition", "state"], cell_rows)
+    _write_tsv(
+        analysis_manifest_path,
+        [
+            "cell_id", "sample_id", "donor", "condition", "source_state",
+            "source_multiplets", "edger_included", "propeller_included",
+            "exclusion_reason",
+        ],
+        analysis_rows,
+    )
     return {
         "counts_path": counts_path,
         "samples_path": samples_path,
         "cells_path": cells_path,
-        "n_cells": len(cell_rows),
+        "analysis_manifest_path": analysis_manifest_path,
+        "n_cells": processed_cells,
+        "n_composition_cells": len(cell_rows),
+        "n_missing_state_cells": processed_cells - len(cell_rows),
         "n_genes": len(genes),
         "n_samples": len(sample_rows),
         "n_donors": len({row["donor"] for row in sample_rows}),
@@ -359,6 +409,7 @@ def generate(
                     ("counts", evaluation_inputs["counts_path"]),
                     ("samples", evaluation_inputs["samples_path"]),
                     ("cells", evaluation_inputs["cells_path"]),
+                    ("analysis_cells", evaluation_inputs["analysis_manifest_path"]),
                 )
             },
             **{
@@ -366,12 +417,18 @@ def generate(
                 for name, path in (
                     ("counts", calibration_inputs["counts_path"]),
                     ("samples", calibration_inputs["samples_path"]),
+                    ("analysis_cells", calibration_inputs["analysis_manifest_path"]),
                 )
             },
         },
         "output_files": {name: _sha256(output_dir / name) for name in output_names},
         "counts": {
             "evaluation_cells": evaluation_inputs["n_cells"],
+            "evaluation_edger_cells": evaluation_inputs["n_cells"],
+            "evaluation_propeller_cells": evaluation_inputs["n_composition_cells"],
+            "evaluation_propeller_excluded_missing_state": evaluation_inputs[
+                "n_missing_state_cells"
+            ],
             "evaluation_donors": evaluation_inputs["n_donors"],
             "calibration_cells": calibration_inputs["n_cells"],
             "calibration_donors": calibration_inputs["n_donors"],
@@ -397,6 +454,7 @@ def generate(
             "Kang is replicated stimulation scRNA-seq and is not presented as Perturb-seq.",
             "edgeR and Propeller references use four held-out evaluation donors.",
             "Null references use mixed within-donor condition swaps on calibration donors; cells are never permuted.",
+            "Cells lacking a source cell-state annotation remain eligible for state-independent edgeR but are explicitly excluded from Propeller.",
             "REF-05 distinguishes composition changes from within-state expression effects.",
         ],
     }
