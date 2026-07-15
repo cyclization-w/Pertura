@@ -316,12 +316,30 @@ def test_composition_profile_uses_only_pinned_conda_bioconda_packages() -> None:
 
 
 def test_sceptre_installer_avoids_github_api_and_has_source_fallbacks() -> None:
-    installer = (
-        Path(environment_module.__file__).parent
-        / "environments"
-        / "install-sceptre-v1.R"
-    ).read_text(encoding="utf-8")
+    environment_root = Path(environment_module.__file__).parent / "environments"
+    profile = yaml.safe_load(
+        (environment_root / "sceptre-v1.yml").read_text(encoding="utf-8")
+    )
+    dependencies = set(profile["dependencies"])
+    installer = (environment_root / "install-sceptre-v1.R").read_text(
+        encoding="utf-8"
+    )
 
+    assert profile["channels"] == ["conda-forge"]
+    assert profile["channel_priority"] == "strict"
+    assert {
+        "r-bh",
+        "r-cowplot",
+        "r-crayon",
+        "r-data.table",
+        "r-dplyr",
+        "r-ggplot2",
+        "r-parallelly",
+        "r-purrr",
+        "r-rcpp",
+        "r-scales",
+        "r-withr",
+    }.issubset(dependencies)
     assert 'target_version <- "0.99.0"' in installer
     assert (
         'target_commit <- "4c26938061380fc782786fafaceb4345bf8fc9b2"'
@@ -336,7 +354,11 @@ def test_sceptre_installer_avoids_github_api_and_has_source_fallbacks() -> None:
     assert '"checkout", "--detach", target_commit' in installer
     assert '"rev-parse", "HEAD"' in installer
     assert "remotes::install_local" in installer
+    assert "dependencies = FALSE" in installer
+    assert "build = FALSE" in installer
+    assert "required_packages" in installer
     assert "already_installed" in installer
+    assert "install.packages" not in installer
     assert "install_github" not in installer
 
 

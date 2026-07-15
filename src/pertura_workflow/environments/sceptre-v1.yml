@@ -4,6 +4,17 @@ channels:
 channel_priority: strict
 dependencies:
   - r-base=4.5.3
+  - r-bh
+  - r-cowplot
+  - r-crayon
+  - r-data.table
+  - r-dplyr
+  - r-ggplot2
   - r-jsonlite=2.0.0
   - r-matrix=1.7
+  - r-parallelly
+  - r-purrr
+  - r-rcpp
   - r-remotes=2.5
+  - r-scales
+  - r-withr

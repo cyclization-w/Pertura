@@ -5,8 +5,24 @@ options(download.file.method = "libcurl")
 target_version <- "0.99.0"
 target_commit <- "4c26938061380fc782786fafaceb4345bf8fc9b2"
 
-if (!requireNamespace("remotes", quietly = TRUE)) {
-  install.packages("remotes")
+required_packages <- c(
+  "BH", "cowplot", "crayon", "data.table", "dplyr", "ggplot2", "Matrix",
+  "parallelly", "purrr", "Rcpp", "remotes", "scales", "withr"
+)
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+if (length(missing_packages) > 0L) {
+  stop(
+    "pinned SCEPTRE runtime dependencies are missing from the Micromamba ",
+    "environment: ", paste(missing_packages, collapse = ", ")
+  )
+}
+if (packageVersion("Rcpp") < "1.0.9") {
+  stop("SCEPTRE requires Rcpp >= 1.0.9")
+}
+if (packageVersion("parallelly") < "1.23.0") {
+  stop("SCEPTRE requires parallelly >= 1.23.0")
 }
 
 already_installed <- requireNamespace("sceptre", quietly = TRUE) &&
@@ -140,7 +156,8 @@ if (already_installed) {
   remotes::install_local(
     source,
     upgrade = "never",
-    dependencies = TRUE
+    dependencies = FALSE,
+    build = FALSE
   )
 }
 
