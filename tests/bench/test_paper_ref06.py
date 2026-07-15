@@ -93,7 +93,9 @@ def test_ref06_is_deterministic_calibrated_and_correctly_refuses_norman(
     assert manifest["counts"] == {
         "synthetic_cells": 1200,
         "synthetic_targets": 10,
-        "synthetic_guides": 20,
+        "synthetic_guides": 30,
+        "synthetic_targeting_guides": 20,
+        "synthetic_non_targeting_guides": 10,
         "synthetic_response_genes": 60,
         "tested_pairs": 100,
         "positive_pairs": 20,
@@ -133,6 +135,39 @@ def test_ref06_is_deterministic_calibrated_and_correctly_refuses_norman(
     )
     assert 2.0 <= fixture["high_moi"]["mean_targets_per_cell"] <= 4.0
     assert fixture["dimensions"]["discovery_pairs"] == 100
+    assert fixture["dimensions"]["guides"] == 30
+    assert fixture["dimensions"]["targeting_guides"] == 20
+    assert fixture["dimensions"]["non_targeting_guides"] == 10
+    assert fixture["non_targeting_controls"] == {
+        "target_label": "non-targeting",
+        "guide_count": 10,
+        "assignment_probability": 0.15,
+    }
+
+    with (output / "sceptre_fixture" / "guide_target_map.csv").open(
+        "r", encoding="utf-8", newline=""
+    ) as handle:
+        guide_map = list(csv.DictReader(handle))
+    non_targeting = [
+        row for row in guide_map if row["grna_target"] == "non-targeting"
+    ]
+    assert len(non_targeting) == 10
+    assert all(
+        row["grna_id"].startswith("non_targeting_g") for row in non_targeting
+    )
+
+    with (output / "sceptre_fixture" / "guide_matrix.csv").open(
+        "r", encoding="utf-8", newline=""
+    ) as handle:
+        guide_counts = list(csv.reader(handle))
+    assert len(guide_counts) == 31
+    assert [row[0] for row in guide_counts[1:]] == [
+        row["grna_id"] for row in guide_map
+    ]
+    non_targeting_ids = {row["grna_id"] for row in non_targeting}
+    for row in guide_counts[1:]:
+        if row[0] in non_targeting_ids:
+            assert max(int(value) for value in row[1:]) >= 3
 
 
 def test_ref06_does_not_import_pertura_results() -> None:

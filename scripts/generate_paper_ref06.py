@@ -15,6 +15,7 @@ SEED = 1729
 N_CELLS = 1200
 N_TARGETS = 10
 N_GUIDES_PER_TARGET = 2
+N_NON_TARGETING_GUIDES = 10
 N_GENES = 60
 ALPHA = 0.10
 
@@ -86,24 +87,37 @@ def _generate_fixture(output_dir: Path) -> tuple[list[dict[str, Any]], list[dict
     fixture_dir.mkdir(parents=True, exist_ok=True)
     cell_ids = [f"cell_{index:04d}" for index in range(N_CELLS)]
     targets = [f"target_{index:02d}" for index in range(N_TARGETS)]
-    guides = [
+    targeting_guides = [
         f"{target}_g{guide_index + 1}"
         for target in targets
         for guide_index in range(N_GUIDES_PER_TARGET)
     ]
+    non_targeting_guides = [
+        f"non_targeting_g{guide_index + 1}"
+        for guide_index in range(N_NON_TARGETING_GUIDES)
+    ]
+    guides = [*targeting_guides, *non_targeting_guides]
     genes = [f"gene_{index:03d}" for index in range(N_GENES)]
 
     target_presence = np.zeros((N_TARGETS, N_CELLS), dtype=bool)
-    guide_counts = np.zeros((len(guides), N_CELLS), dtype=np.int64)
+    targeting_guide_counts = np.zeros(
+        (len(targeting_guides), N_CELLS), dtype=np.int64
+    )
     for cell_index in range(N_CELLS):
         n_targets = int(rng.integers(2, 5))
         selected = rng.choice(N_TARGETS, size=n_targets, replace=False)
         target_presence[selected, cell_index] = True
         for target_index in selected:
             guide_index = target_index * N_GUIDES_PER_TARGET + int(rng.integers(0, 2))
-            guide_counts[guide_index, cell_index] = int(rng.poisson(12) + 3)
-    ambient = (guide_counts == 0) & (rng.random(guide_counts.shape) < 0.02)
-    guide_counts[ambient] = rng.poisson(1.0, size=int(ambient.sum())) + 1
+            targeting_guide_counts[guide_index, cell_index] = int(
+                rng.poisson(12) + 3
+            )
+    ambient = (targeting_guide_counts == 0) & (
+        rng.random(targeting_guide_counts.shape) < 0.02
+    )
+    targeting_guide_counts[ambient] = (
+        rng.poisson(1.0, size=int(ambient.sum())) + 1
+    )
 
     true_effects = np.zeros((N_TARGETS, N_GENES), dtype=float)
     for target_index in range(N_TARGETS):
@@ -117,6 +131,28 @@ def _generate_fixture(output_dir: Path) -> tuple[list[dict[str, Any]], list[dict
         log_effect = target_presence.T @ true_effects[:, gene_index]
         mean = base_rates[gene_index] * size_factors * np.exp(log_effect)
         response_counts[gene_index] = rng.poisson(mean)
+
+    # SCEPTRE's calibration check constructs null pairs from guides whose
+    # target label is exactly "non-targeting". Keep these controls independent
+    # of the planted target effects and generate enough distinct guides for
+    # 500 calibration pairs with calibration_group_size=2.
+    non_targeting_guide_counts = np.zeros(
+        (N_NON_TARGETING_GUIDES, N_CELLS), dtype=np.int64
+    )
+    for guide_index in range(N_NON_TARGETING_GUIDES):
+        assigned = rng.random(N_CELLS) < 0.15
+        non_targeting_guide_counts[guide_index, assigned] = (
+            rng.poisson(12, size=int(assigned.sum())) + 3
+        )
+    ambient = (non_targeting_guide_counts == 0) & (
+        rng.random(non_targeting_guide_counts.shape) < 0.02
+    )
+    non_targeting_guide_counts[ambient] = (
+        rng.poisson(1.0, size=int(ambient.sum())) + 1
+    )
+    guide_counts = np.vstack(
+        (targeting_guide_counts, non_targeting_guide_counts)
+    )
 
     truth_rows: list[dict[str, Any]] = []
     pair_rows: list[dict[str, str]] = []
@@ -199,9 +235,13 @@ def _generate_fixture(output_dir: Path) -> tuple[list[dict[str, Any]], list[dict
     with guide_map_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=["grna_id", "grna_target"])
         writer.writeheader()
-        for guide_index, guide in enumerate(guides):
+        for guide_index, guide in enumerate(targeting_guides):
             writer.writerow(
                 {"grna_id": guide, "grna_target": targets[guide_index // 2]}
+            )
+        for guide in non_targeting_guides:
+            writer.writerow(
+                {"grna_id": guide, "grna_target": "non-targeting"}
             )
     with pairs_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=["grna_target", "response_id"])
@@ -231,6 +271,8 @@ def _generate_fixture(output_dir: Path) -> tuple[list[dict[str, Any]], list[dict
             "cells": N_CELLS,
             "targets": N_TARGETS,
             "guides": len(guides),
+            "targeting_guides": len(targeting_guides),
+            "non_targeting_guides": len(non_targeting_guides),
             "response_genes": N_GENES,
             "discovery_pairs": len(truth_rows),
         },
@@ -238,6 +280,11 @@ def _generate_fixture(output_dir: Path) -> tuple[list[dict[str, Any]], list[dict
             "minimum_targets_per_cell": 2,
             "maximum_targets_per_cell": 4,
             "mean_targets_per_cell": float(target_presence.sum(axis=0).mean()),
+        },
+        "non_targeting_controls": {
+            "target_label": "non-targeting",
+            "guide_count": len(non_targeting_guides),
+            "assignment_probability": 0.15,
         },
         "files": file_hashes,
     }
@@ -401,7 +448,11 @@ def generate(datasets_path: Path, ref01_root: Path, output_dir: Path) -> dict[st
         "counts": {
             "synthetic_cells": N_CELLS,
             "synthetic_targets": N_TARGETS,
-            "synthetic_guides": N_TARGETS * N_GUIDES_PER_TARGET,
+            "synthetic_guides": (
+                N_TARGETS * N_GUIDES_PER_TARGET + N_NON_TARGETING_GUIDES
+            ),
+            "synthetic_targeting_guides": N_TARGETS * N_GUIDES_PER_TARGET,
+            "synthetic_non_targeting_guides": N_NON_TARGETING_GUIDES,
             "synthetic_response_genes": N_GENES,
             "tested_pairs": len(truth_rows),
             "positive_pairs": metrics["positive_pair_count"],
@@ -414,6 +465,8 @@ def generate(datasets_path: Path, ref01_root: Path, output_dir: Path) -> dict[st
             "multiple_testing_alpha": ALPHA,
             "minimum_targets_per_cell": 2,
             "maximum_targets_per_cell": 4,
+            "non_targeting_guide_count": N_NON_TARGETING_GUIDES,
+            "non_targeting_target_label": "non-targeting",
         },
         "environment": {
             "numpy": numpy.__version__,
