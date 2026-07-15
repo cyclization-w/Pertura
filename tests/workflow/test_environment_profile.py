@@ -107,6 +107,30 @@ def test_perturbseq_profile_uses_only_pinned_conda_binary_packages() -> None:
     )
 
 
+def test_interpretation_profile_uses_only_pinned_conda_binary_packages() -> None:
+    profile_path = (
+        Path(environment_module.__file__).parent
+        / "environments"
+        / "interpretation-v1.yml"
+    )
+    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+    dependencies = profile["dependencies"]
+
+    assert profile["channels"] == ["conda-forge", "bioconda"]
+    assert profile["channel_priority"] == "strict"
+    assert not any(isinstance(item, dict) and "pip" in item for item in dependencies)
+    assert "pip" not in dependencies
+    assert {
+        "gseapy=1.3.0",
+        "decoupler-py=2.1.6",
+    }.issubset(set(dependencies))
+    assert environment_module.CONDA_PACKAGE_NAMES["decoupler"] == "decoupler-py"
+    assert environment_module.PYTHON_EXPECTED_VERSIONS["interpretation-v1"] == {
+        "gseapy": "1.3.0",
+        "decoupler": "2.1.6",
+    }
+
+
 def test_perturbseq_doctor_rejects_version_drift(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("PERTURA_CACHE_DIR", str(tmp_path / "cache"))
     binary = micromamba_path()
