@@ -24,11 +24,25 @@ if (any(duplicated(sample_table$sample_id))) {
 }
 sample_table <- sample_table[order(sample_table$sample_id), , drop = FALSE]
 prop_list <- getTransformedProps(clusters = cluster, sample = sample_id)
+sample_order <- colnames(prop_list$Proportions)
+sample_table <- sample_table[match(sample_order, sample_table$sample_id), , drop = FALSE]
+if (any(is.na(sample_table$sample_id))) stop("Propeller sample alignment failed")
+contrast_levels <- as.character(cfg$contrast)
+if (length(contrast_levels) != 2L || anyDuplicated(contrast_levels)) {
+  stop("Propeller contrast must contain two distinct condition levels")
+}
+sample_table$condition <- factor(sample_table$condition, levels = contrast_levels)
+if (any(is.na(sample_table$condition))) stop("unknown Propeller condition label")
 design <- model.matrix(~0 + condition, data = sample_table)
 rownames(design) <- sample_table$sample_id
 colnames(design) <- sub("^condition", "", colnames(design))
-contrast_text <- paste0(make.names(cfg$contrast[[2]]), "-", make.names(cfg$contrast[[1]]))
-contrast <- makeContrasts(contrasts = contrast_text, levels = design)
+if (qr(design)$rank < ncol(design)) stop("Propeller design is rank deficient")
+group_columns <- match(contrast_levels, colnames(design))
+if (any(is.na(group_columns))) stop("Propeller contrast columns are not estimable")
+contrast <- numeric(ncol(design))
+names(contrast) <- colnames(design)
+contrast[group_columns[[1]]] <- -1
+contrast[group_columns[[2]]] <- 1
 result <- propeller.ttest(
   prop_list,
   design = design,

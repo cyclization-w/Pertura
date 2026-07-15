@@ -76,9 +76,15 @@ def test_ref05_is_independent_split_scoped_and_streaming() -> None:
     assert '"propeller_included"' in python
 
     assert 'reformulate(c("donor", condition_column))' in runner
+    assert 'reformulate(c(condition_column, "donor"), intercept = FALSE)' in runner
     assert "propeller.ttest(" in runner
     assert "prop_list$Proportions" in runner
     assert "prop_list$proportions" not in runner
+    assert "contrast <- numeric(ncol(design))" in runner
+    assert "contrast[group_columns[[1]]] <- -1" in runner
+    assert "contrast[group_columns[[2]]] <- 1" in runner
+    assert "contrasts = designed$contrast" in runner
+    assert "contrast <- matrix(" not in runner
     assert "for (donor in swapped)" in runner
     assert "cell_label_permutation = FALSE" in runner
     assert "from pertura_" not in runner
@@ -112,6 +118,8 @@ def test_product_propeller_uses_speckle_110_field_names() -> None:
     ).read_text(encoding="utf-8")
     assert "prop_list$Proportions" in runner
     assert "prop_list$proportions" not in runner
+    assert "contrast <- numeric(ncol(design))" in runner
+    assert "makeContrasts(" not in runner
 
     reference_runner = (
         root
@@ -122,3 +130,5 @@ def test_product_propeller_uses_speckle_110_field_names() -> None:
     ).read_text(encoding="utf-8")
     assert "transformed$Proportions" in reference_runner
     assert "transformed$proportions" not in reference_runner
+    assert "contrast <- numeric(ncol(design))" in reference_runner
+    assert "makeContrasts(" not in reference_runner

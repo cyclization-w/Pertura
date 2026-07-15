@@ -49,6 +49,37 @@ paired_design <- function(samples, condition_column = "condition") {
   list(samples = samples, design = design, coefficient = coefficient)
 }
 
+paired_propeller_design <- function(samples, condition_column = "condition") {
+  samples$donor <- factor(samples$donor)
+  samples[[condition_column]] <- factor(
+    samples[[condition_column]], levels = c(cfg$baseline, cfg$target)
+  )
+  if (any(is.na(samples[[condition_column]]))) stop("unknown condition label")
+  tab <- table(samples$donor, samples[[condition_column]])
+  if (any(tab != 1L)) stop("each donor must have exactly one sample per condition")
+
+  # propeller.ttest requires a no-intercept design with the two group-specific
+  # columns first. Additional donor columns are accepted as confounders.
+  design <- model.matrix(
+    reformulate(c(condition_column, "donor"), intercept = FALSE),
+    data = samples
+  )
+  if (qr(design)$rank < ncol(design)) stop("paired Propeller design is rank deficient")
+  group_columns <- match(
+    paste0(condition_column, c(cfg$baseline, cfg$target)),
+    colnames(design)
+  )
+  if (any(is.na(group_columns))) stop("Propeller group columns are not uniquely estimable")
+
+  # Speckle expects a vector whose length equals ncol(design), not a one-column
+  # limma contrast matrix. The remaining zeroes retain donor adjustment.
+  contrast <- numeric(ncol(design))
+  names(contrast) <- colnames(design)
+  contrast[group_columns[[1]]] <- -1
+  contrast[group_columns[[2]]] <- 1
+  list(samples = samples, design = design, contrast = contrast)
+}
+
 run_edger <- function(counts, samples, condition_column = "condition") {
   designed <- paired_design(samples, condition_column)
   y <- DGEList(counts = counts, samples = designed$samples)
@@ -97,19 +128,12 @@ prop_list <- getTransformedProps(
 sample_order <- colnames(prop_list$Proportions)
 sample_table <- sample_table[match(sample_order, sample_table$sample_id), , drop = FALSE]
 if (any(is.na(sample_table$sample_id))) stop("Propeller sample alignment failed")
-designed <- paired_design(sample_table)
+designed <- paired_propeller_design(sample_table)
 rownames(designed$design) <- sample_table$sample_id
-contrast <- matrix(
-  0,
-  nrow = ncol(designed$design),
-  ncol = 1,
-  dimnames = list(colnames(designed$design), "stim_vs_ctrl")
-)
-contrast[designed$coefficient, 1] <- 1
 propeller <- propeller.ttest(
   prop_list,
   design = designed$design,
-  contrasts = contrast,
+  contrasts = designed$contrast,
   robust = TRUE,
   trend = FALSE,
   sort = FALSE
