@@ -225,6 +225,24 @@ def _environment(_: str) -> dict[str, Any]:
     }
 
 
+def test_sceptre_runners_use_valid_serial_processor_arguments() -> None:
+    repo = Path(__file__).resolve().parents[2]
+    runners = [
+        repo
+        / "src"
+        / "pertura_workflow"
+        / "capabilities"
+        / "runners"
+        / "sceptre_association.R",
+        repo / "src" / "pertura_bench" / "runners" / "sceptre_reference.R",
+    ]
+
+    for runner in runners:
+        script = runner.read_text(encoding="utf-8")
+        assert "parallel = FALSE" in script
+        assert "n_processors = 1" not in script
+
+
 def test_obs06_runs_production_contract_and_independent_artifact_evaluation(
     tmp_path: Path,
     monkeypatch: Any,

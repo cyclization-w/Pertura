@@ -87,7 +87,6 @@ object <- run_calibration_check(
   calibration_group_size = as.integer(cfg$calibration_group_size),
   print_progress = FALSE,
   parallel = FALSE,
-  n_processors = 1,
   output_amount = 1
 )
 calibration <- get_result(object, "run_calibration_check")
@@ -111,8 +110,7 @@ if (calibration_passed) {
     object,
     output_amount = 1,
     print_progress = FALSE,
-    parallel = FALSE,
-    n_processors = 1
+    parallel = FALSE
   )
   result <- get_result(object, "run_discovery_analysis")
   result$FDR <- p.adjust(result$p_value, method = "BH")
