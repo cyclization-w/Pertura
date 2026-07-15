@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import pytest
 from pathlib import Path
 
 
@@ -113,6 +114,21 @@ def test_ref04_mixscape_stratifies_only_when_each_replicate_has_controls() -> No
     )
     assert policy["split_by"] == "_ref04_replicate"
     assert policy["mode"] == "replicate_stratified"
+
+
+def test_ref04_rejects_incompatible_mixscape_abi_before_execution() -> None:
+    module = _module()
+
+    def old_m_step(self, values, responsibilities):
+        return None
+
+    with pytest.raises(RuntimeError, match="requires a scikit-learn"):
+        module._validate_mixscape_abi(old_m_step)
+
+    def current_m_step(self, values, responsibilities, xp=None):
+        return None
+
+    module._validate_mixscape_abi(current_m_step)
 
 
 def test_ref04_is_independent_split_scoped_and_streaming() -> None:

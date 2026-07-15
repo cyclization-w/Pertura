@@ -56,6 +56,7 @@ EXPECTED_PERTURBSEQ_PYTHON_VERSIONS = {
     "scikit-misc": "0.5.2",
     "pertpy": "1.1.1",
     "scrublet": "0.2.3",
+    "scikit-learn": "1.8.0",
 }
 R_EXPECTED_VERSIONS = {
     PROFILE: EXPECTED_EDGER_VERSIONS,
@@ -98,8 +99,11 @@ CONDA_PACKAGE_NAMES = {
 }
 PYTHON_IMPORT_SMOKES = {
     PERTURBSEQ_PYTHON_PROFILE: (
-        "import pertpy,scanpy,skmisc,scrublet;"
+        "import inspect,pertpy,scanpy,skmisc,scrublet;"
         "from pertpy.tools import Mixscape;"
+        "from sklearn.mixture import GaussianMixture;"
+        "assert 'xp' in inspect.signature(GaussianMixture._m_step).parameters,"
+        "'scikit-learn GaussianMixture ABI lacks xp';"
         "Mixscape();"
         "print('perturbseq-import-smoke-ok')"
     ),

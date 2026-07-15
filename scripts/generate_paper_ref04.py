@@ -6,6 +6,7 @@ import gzip
 import hashlib
 import json
 import math
+import inspect
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -271,6 +272,16 @@ def _class_flags(label: str) -> tuple[bool, bool]:
     responder = any(token in lower for token in ("ko", "responder", "perturbed"))
     escape = any(token in lower for token in ("np", "escape", "non.perturbed"))
     return responder, escape
+
+
+def _validate_mixscape_abi(method: Any) -> None:
+    parameters = inspect.signature(method).parameters
+    if "xp" not in parameters:
+        raise RuntimeError(
+            "Pertpy 1.1.1 Mixscape requires a scikit-learn GaussianMixture "
+            "_m_step implementation with the xp parameter; rebuild the frozen "
+            "perturbseq-python-v1 environment"
+        )
 
 
 def _mixscape_split_policy(
@@ -626,6 +637,9 @@ def generate(
     import sklearn
     import scipy
     from scipy import sparse
+    from sklearn.mixture import GaussianMixture
+
+    _validate_mixscape_abi(GaussianMixture._m_step)
 
     datasets = json.loads(datasets_path.read_text(encoding="utf-8"))
     record = datasets["datasets"][DATASET_ID]

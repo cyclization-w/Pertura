@@ -97,10 +97,14 @@ def test_perturbseq_profile_uses_only_pinned_conda_binary_packages() -> None:
         "scanpy=1.12.1",
         "pandas=2.3",
         "mudata=0.3.2",
+        "scikit-learn=1.8",
         "scikit-misc=0.5.2",
         "pertpy=1.1.1",
         "scrublet=0.2.3",
     }.issubset(set(dependencies))
+    assert "'xp' in inspect.signature(GaussianMixture._m_step).parameters" in (
+        environment_module.PYTHON_IMPORT_SMOKES["perturbseq-python-v1"]
+    )
 
 
 def test_perturbseq_doctor_rejects_version_drift(monkeypatch, tmp_path: Path) -> None:

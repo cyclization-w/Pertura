@@ -42,6 +42,7 @@ omics = [
 ]
 perturbseq = [
   "pertpy==1.1.1",
+  "scikit-learn>=1.8",
   "decoupler>=2",
   "gseapy>=1.1",
   "gprofiler-official>=1.0",
@@ -81,5 +82,4 @@ testpaths = ["tests"]
 markers = [
   "legacy: read-only compatibility, stage, registrar, and classic workflow regression",
 ]
-
 
