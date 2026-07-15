@@ -1,0 +1,306 @@
+{
+  "schema_version": "pertura-paper-agent-tasks-v2",
+  "benchmark_name": "Pertura Perturb-seq paper benchmark",
+  "execution_protocol": {
+    "conditions": ["free_codeact", "prompt_only", "pertura_full"],
+    "repeats": 2,
+    "required_primary_task_turns": 18,
+    "required_supplemental_task_turns": 2,
+    "optional_task_turns": 1,
+    "required_scored_turns": 120,
+    "required_workflows": 4,
+    "required_agent_sessions": 24,
+    "session_rule": "A workflow, condition, and repeat share one Project, AnalysisRun, conversation, and provider session. Conditions and repeats are isolated.",
+    "task_output_template": "outputs/tasks/{task_id}/benchmark_result.json",
+    "fairness_controls": [
+      "same_dataset_and_split", "same_objective", "same_model", "same_context_and_token_budget",
+      "same_max_turns", "same_timeout", "same_cpu_memory_and_thread_limits",
+      "same_scientific_environments", "same_independent_evaluator"
+    ],
+    "global_hard_gates": [
+      "required_artifacts_present", "valid_analysis_unit", "split_respected",
+      "no_silent_fallback", "no_prediction_as_measurement", "no_prior_as_measurement",
+      "no_candidate_as_validated", "no_cell_as_replicate", "limitations_visible"
+    ]
+  },
+  "conditions": {
+    "free_codeact": {"description": "Task, registered data, generic CodeAct, and frozen scientific environments; no Pertura skills, domain tools, or authority."},
+    "prompt_only": {"description": "The free-CodeAct surface plus static Perturb-seq guidance; no Pertura domain tools or authority."},
+    "pertura_full": {"description": "Pertura skills, five domain tools, dependency-aware execution, authority, and runtime-rendered conclusions."}
+  },
+  "workflows": [
+    {
+      "workflow_id": "WF-REPL", "role": "primary", "dataset_id": "replogle_k562_essential_2022",
+      "turns": [
+        {
+          "task_id": "REPL-01", "turn_index": 1, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "title": "Design, expression layer, and evidence sufficiency",
+          "objective": "Audit the Replogle screen, distinguish the raw count representation from transformed expression, identify perturbation and control identities, and state which analyses are supported without inventing replicates or raw guide-count evidence.",
+          "paper_anchor_ids": ["ANCHOR-REPL-DESIGN"], "split_usage": ["calibration", "evaluation"], "depends_on_tasks": [],
+          "capability_scenarios": ["CAP-01"], "expected_capability_dag": ["intake.materialize.v1", "diagnostic.contract_integrity.v1", "diagnostic.dataset_integrity.v1", "diagnostic.design_balance.v1"],
+          "required_input_roles": ["primary_h5ad", "split_catalog"], "required_artifact_roles": ["dataset_profile", "design_audit", "supported_analysis_plan"],
+          "output_contract": {"benchmark_result": "outputs/tasks/REPL-01/benchmark_result.json", "artifact_roles": ["dataset_profile", "design_audit", "supported_analysis_plan"], "artifact_paths": {"dataset_profile": "dataset_profile.json", "design_audit": "design_audit.json", "supported_analysis_plan": "supported_analysis_plan.json"}},
+          "task_hard_gates": ["counts_not_conflated_with_transformed_expression", "independent_units_not_invented", "unsupported_guide_count_methods_not_claimed_ready"],
+          "metric_ids": ["design_field_accuracy", "analysis_unit_accuracy", "supported_method_precision"], "task_reference_ids": ["TREF-REPL-01"],
+          "claim_ceiling": "observed dataset and design facts; unresolved provenance remains unresolved", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 1800}
+        },
+        {
+          "task_id": "REPL-02", "turn_index": 2, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "title": "Retained-cell and split accounting",
+          "objective": "Audit label evidence and retained-cell accounting on the frozen split. Reconcile included and excluded cells and controls while keeping metadata labels distinct from raw guide-count validation.",
+          "paper_anchor_ids": ["ANCHOR-REPL-DESIGN"], "split_usage": ["evaluation"], "depends_on_tasks": ["REPL-01"],
+          "capability_scenarios": ["CAP-02", "CAP-03"], "expected_capability_dag": ["diagnostic.guide_assignment.v1", "guide.integrity.v1", "screen.moi_doublet.v1", "screen.retained_cells.v1"],
+          "expected_nonexecutions": ["guide.ambient.v1", "guide.assignment.nb_mixture.v1"],
+          "required_input_roles": ["evaluation_split", "cell_metadata"], "required_artifact_roles": ["guide_assignment_audit", "retained_cell_manifest", "split_accounting"],
+          "output_contract": {"benchmark_result": "outputs/tasks/REPL-02/benchmark_result.json", "artifact_roles": ["guide_assignment_audit", "retained_cell_manifest", "split_accounting"], "artifact_paths": {"guide_assignment_audit": "guide_assignment_audit.json", "retained_cell_manifest": "retained_cell_manifest.tsv", "split_accounting": "split_accounting.json"}, "artifact_schemas": {"retained_cell_manifest.tsv": ["dataset_id", "split", "cell_id", "expected_state", "reason"]}},
+          "task_hard_gates": ["metadata_not_presented_as_raw_guide_counts", "retained_counts_reconcile", "evaluation_cells_only"],
+          "metric_ids": ["assignment_evidence_class_accuracy", "retained_identity_match", "split_accounting_error"], "task_reference_ids": ["TREF-REPL-02"],
+          "claim_ceiling": "observed label and retention accounting only", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 1800}
+        },
+        {
+          "task_id": "REPL-03", "turn_index": 3, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "title": "Target estimand and guide-identifiability boundary",
+          "objective": "Define the target-level estimand supported by this artifact and explain why guide-level efficacy, guide leave-one-out sensitivity, and raw guide assignment are not identifiable without cell-by-guide counts. Return supported target summaries and explicit unresolved guide-level quantities.",
+          "paper_anchor_ids": ["ANCHOR-REPL-ATLAS"], "split_usage": ["evaluation"], "depends_on_tasks": ["REPL-02"],
+          "capability_scenarios": ["CAP-05"], "expected_capability_dag": ["target.guide_efficacy.v1", "effect.guide_target_sensitivity.v1", "target.reliability.aggregate.v1"],
+          "required_input_roles": ["evaluation_split", "retained_cell_manifest"], "required_artifact_roles": ["estimand_audit", "target_summary", "unresolved_evidence"],
+          "output_contract": {"benchmark_result": "outputs/tasks/REPL-03/benchmark_result.json", "artifact_roles": ["estimand_audit", "target_summary", "unresolved_evidence"], "artifact_paths": {"estimand_audit": "estimand_audit.json", "target_summary": "target_summary.tsv", "unresolved_evidence": "unresolved_evidence.json"}},
+          "task_hard_gates": ["target_not_guide_as_estimand", "guide_level_metrics_not_fabricated", "missing_guide_counts_visible"],
+          "metric_ids": ["estimand_accuracy", "unsupported_guide_claim_count", "unresolved_boundary_accuracy"], "task_reference_ids": ["TREF-REPL-03"],
+          "claim_ceiling": "target-level derived response; guide-level reliability unresolved", "resources": {"max_memory_gb": 8, "n_jobs": 1, "timeout_seconds": 3600}
+        },
+        {
+          "task_id": "REPL-04", "turn_index": 4, "tier": "advanced", "execution_mode": "capability_or_codeact",
+          "title": "Response structure, claim boundary, and follow-up prioritization",
+          "objective": "Characterize supported response structure, compare it with frozen pathway or complex priors, distinguish recovered known structure from candidate novel structure, and propose a constrained follow-up panel without converting derived clusters into validated mechanisms.",
+          "paper_anchor_ids": ["ANCHOR-REPL-ATLAS"], "split_usage": ["evaluation"], "depends_on_tasks": ["REPL-03"],
+          "capability_scenarios": ["CAP-07", "CAP-08", "CAP-09"], "expected_capability_dag": ["effect.matrix.assemble.v1", "module.import.gmt.v1", "module.learn.nmf.v1", "effect.module_global.v1", "program.response.signed_nmf.v1", "program.perturbation.cluster.v1", "enrichment.ora.v1", "enrichment.gsea_prerank.v1", "interpretation.evidence_map.v1", "design.next_panel.v1"],
+          "required_input_roles": ["evaluation_split", "retained_cell_manifest", "frozen_gene_sets"], "required_artifact_roles": ["response_structure", "evidence_map", "next_panel"],
+          "output_contract": {"benchmark_result": "outputs/tasks/REPL-04/benchmark_result.json", "artifact_roles": ["response_structure", "evidence_map", "next_panel"], "artifact_paths": {"response_structure": "response_structure.tsv", "evidence_map": "evidence_map.json", "next_panel": "next_panel.json"}},
+          "task_hard_gates": ["known_structure_is_partial_reference", "novel_clusters_remain_candidates", "panel_constraints_satisfied"],
+          "metric_ids": ["rank_concordance", "cluster_agreement", "claim_boundary_accuracy", "constraint_satisfaction"], "task_reference_ids": ["TREF-REPL-04"],
+          "claim_ceiling": "derived response structure and candidate follow-up hypotheses", "resources": {"max_memory_gb": 8, "n_jobs": 1, "timeout_seconds": 7200}
+        }
+      ]
+    },
+    {
+      "workflow_id": "WF-PAPA", "role": "primary", "dataset_id": "papalexi_thp1_eccite",
+      "turns": [
+        {
+          "task_id": "PAPA-01", "turn_index": 1, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "title": "RNA-guide alignment, assignment, ambient signal, and retention",
+          "objective": "Verify RNA-guide barcode alignment, evaluate guide assignment and ambient guide signal using the registered guide-count assets, distinguish multi-guide cells from transcriptomic doublets, and produce reconciled retained-cell accounting.",
+          "paper_anchor_ids": ["ANCHOR-PAPA-ECCITE"], "split_usage": ["calibration", "evaluation"], "depends_on_tasks": [],
+          "capability_scenarios": ["CAP-01", "CAP-02", "CAP-03"], "expected_capability_dag": ["intake.materialize.v1", "diagnostic.guide_assignment.v1", "guide.ambient.v1", "guide.assignment.nb_mixture.v1", "guide.integrity.v1", "screen.moi_doublet.v1", "screen.retained_cells.v1"],
+          "required_input_roles": ["primary_h5ad", "guide_matrix", "guide_map", "cell_metadata", "split_catalog"], "required_artifact_roles": ["alignment_audit", "guide_assignment", "ambient_qc", "retained_cell_manifest"],
+          "output_contract": {"benchmark_result": "outputs/tasks/PAPA-01/benchmark_result.json", "artifact_roles": ["alignment_audit", "guide_assignment", "ambient_qc", "retained_cell_manifest"], "artifact_paths": {"alignment_audit": "alignment_audit.json", "guide_assignment": "guide_assignment.tsv", "ambient_qc": "ambient_qc.json", "retained_cell_manifest": "retained_cell_manifest.tsv"}, "artifact_schemas": {"guide_assignment.tsv": ["cell_id", "proxy_class"], "retained_cell_manifest.tsv": ["dataset_id", "split", "cell_id", "expected_state", "reason"]}},
+          "task_hard_gates": ["barcode_alignment_exact", "multi_guide_not_doublet", "retained_counts_reconcile", "split_respected"],
+          "metric_ids": ["alignment_accuracy", "assignment_accuracy", "ambient_classification_accuracy", "retained_identity_match"], "task_reference_ids": ["TREF-PAPA-01"],
+          "claim_ceiling": "measured guide-count QC and derived retained-cell decisions", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 3600}
+        },
+        {
+          "task_id": "PAPA-02", "turn_index": 2, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "title": "Control-only state reference",
+          "objective": "Fit a frozen state reference using retained calibration controls only. Record the cells, features, representation, parameters, and provenance needed for held-out mapping without using evaluation labels.",
+          "paper_anchor_ids": ["ANCHOR-PAPA-ECCITE"], "split_usage": ["calibration"], "depends_on_tasks": ["PAPA-01"],
+          "capability_scenarios": ["CAP-04"], "expected_capability_dag": ["reference.state.control_pca_leiden.v1", "state.annotation_candidates.v1", "state.reference.fit.v1"],
+          "required_input_roles": ["calibration_split", "retained_cell_manifest"], "required_artifact_roles": ["state_reference_model", "reference_cell_manifest", "reference_provenance"],
+          "output_contract": {"benchmark_result": "outputs/tasks/PAPA-02/benchmark_result.json", "artifact_roles": ["state_reference_model", "reference_cell_manifest", "reference_provenance"], "artifact_paths": {"state_reference_model": "state_reference_model", "reference_cell_manifest": "reference_cell_manifest.tsv", "reference_provenance": "reference_provenance.json"}, "artifact_schemas": {"reference_cell_manifest.tsv": ["cell_id", "technical_state_id"]}},
+          "task_hard_gates": ["controls_only", "calibration_only", "feature_and_parameter_provenance_complete"],
+          "metric_ids": ["control_identity_match", "split_leakage_count", "reference_hash_match"], "task_reference_ids": ["TREF-PAPA-02"],
+          "claim_ceiling": "derived calibration reference; no evaluation findings", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 3600}
+        },
+        {
+          "task_id": "PAPA-03", "turn_index": 3, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "title": "Held-out state mapping and rejection",
+          "objective": "Map retained evaluation cells to the frozen control reference, quantify rejected or unmapped cells, and report mapping uncertainty without refitting the reference or consuming excluded cells.",
+          "paper_anchor_ids": ["ANCHOR-PAPA-ECCITE"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-02"],
+          "capability_scenarios": ["CAP-04"], "expected_capability_dag": ["state.reference.map_knn.v1"],
+          "required_input_roles": ["evaluation_split", "retained_cell_manifest", "state_reference_model"], "required_artifact_roles": ["state_mapping", "mapping_rejections", "dependency_consumption"],
+          "output_contract": {"benchmark_result": "outputs/tasks/PAPA-03/benchmark_result.json", "artifact_roles": ["state_mapping", "mapping_rejections", "dependency_consumption"], "artifact_paths": {"state_mapping": "state_mapping.tsv", "mapping_rejections": "mapping_rejections.json", "dependency_consumption": "dependency_consumption.json"}, "artifact_schemas": {"state_mapping.tsv": ["cell_id", "technical_state_id", "rejected"]}},
+          "task_hard_gates": ["reference_not_refit", "retained_filter_consumed", "excluded_cells_not_mapped"],
+          "metric_ids": ["mapping_agreement", "rejection_accuracy", "excluded_cell_leakage_count"], "task_reference_ids": ["TREF-PAPA-03"],
+          "claim_ceiling": "derived nearest-reference assignments with explicit rejection", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 3600}
+        },
+        {
+          "task_id": "PAPA-04", "turn_index": 4, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "title": "Cis efficacy and guide sensitivity",
+          "objective": "Estimate target-expression efficacy and guide sensitivity for eligible evaluation targets, preserve paired replicate structure, report leave-one-guide-out stability, and keep unresolved targets unresolved.",
+          "paper_anchor_ids": ["ANCHOR-PAPA-CHECKPOINT"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-03"],
+          "capability_scenarios": ["CAP-05"], "expected_capability_dag": ["target.guide_efficacy.v1", "effect.guide_target_sensitivity.v1"],
+          "required_input_roles": ["evaluation_split", "retained_cell_manifest", "target_expression", "guide_map"], "required_artifact_roles": ["target_efficacy", "guide_effects", "guide_sensitivity"],
+          "output_contract": {"benchmark_result": "outputs/tasks/PAPA-04/benchmark_result.json", "artifact_roles": ["target_efficacy", "guide_effects", "guide_sensitivity"], "artifact_paths": {"target_efficacy": "target_efficacy.tsv", "guide_effects": "guide_effects.tsv", "guide_sensitivity": "guide_sensitivity.tsv"}, "artifact_schemas": {"target_efficacy.tsv": ["target_uid", "direct_effect", "direction_supported"], "guide_effects.tsv": ["target_uid", "guide", "effect", "direction_supported"], "guide_sensitivity.tsv": ["target_uid", "excluded_guide", "leave_one_guide_out_effect"]}},
+          "task_hard_gates": ["paired_replicates_used", "guide_not_biological_replicate", "direction_correct", "unresolved_targets_visible"],
+          "metric_ids": ["effect_error", "rank_concordance", "direction_accuracy", "loo_sensitivity_error"], "task_reference_ids": ["TREF-PAPA-04"],
+          "claim_ceiling": "measured cis expression association and derived guide sensitivity", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 3600}
+        },
+        {
+          "task_id": "PAPA-05", "turn_index": 5, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "title": "Mixscape responder classification and target reliability",
+          "objective": "Classify responder and escape states using the frozen representation, report target-specific responder summaries, and aggregate cis efficacy with responder evidence without applying one target's evidence to another.",
+          "paper_anchor_ids": ["ANCHOR-PAPA-CHECKPOINT"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-03", "PAPA-04"],
+          "capability_scenarios": ["CAP-05", "CAP-06"], "expected_capability_dag": ["target.responder.mixscape.v1", "target.reliability.aggregate.v1", "target.reliability.v2"],
+          "required_input_roles": ["evaluation_split", "retained_cell_manifest", "state_reference_model", "target_efficacy", "guide_sensitivity"], "required_artifact_roles": ["mixscape_cells", "mixscape_targets", "target_reliability"],
+          "output_contract": {"benchmark_result": "outputs/tasks/PAPA-05/benchmark_result.json", "artifact_roles": ["mixscape_cells", "mixscape_targets", "target_reliability"], "artifact_paths": {"mixscape_cells": "mixscape_cells.tsv", "mixscape_targets": "mixscape_targets.tsv", "target_reliability": "target_reliability.tsv"}, "artifact_schemas": {"mixscape_cells.tsv": ["cell_id", "mixscape_class", "responder_probability"], "mixscape_targets.tsv": ["target_uid", "responder_fraction", "escape_fraction"], "target_reliability.tsv": ["target_uid", "status", "responder_fraction"]}},
+          "task_hard_gates": ["target_specific_join", "retained_filter_consumed", "missing_target_responder_unresolved", "pertpy_result_not_ground_truth"],
+          "metric_ids": ["classification_macro_f1", "brier_score", "target_join_accuracy", "reliability_precision"], "task_reference_ids": ["TREF-PAPA-05"],
+          "claim_ceiling": "derived responder classes and target-specific reliability", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 7200}
+        },
+        {
+          "task_id": "PAPA-06", "turn_index": 6, "tier": "intermediate", "execution_mode": "codeact_scientific",
+          "title": "Per-perturbation trans differential expression",
+          "objective": "Using the registered neutral pseudobulk counts and sample manifest, fit edgeR separately for each eligible target with design ~ replicate + condition and NTC as baseline. Return full-gene logFC, PValue, FDR, top up and down genes, design matrices, and cautions. Guides and cells are not biological replicates.",
+          "paper_anchor_ids": ["ANCHOR-PAPA-CHECKPOINT"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-01", "PAPA-04"],
+          "capability_scenarios": [], "expected_capability_dag": [],
+          "required_input_roles": ["trans_de_pseudobulk_counts", "trans_de_genes", "trans_de_sample_manifest", "trans_de_eligibility", "edgeR_environment_lock", "edgeR_rscript"], "required_artifact_roles": ["trans_de_results", "trans_de_design_matrices", "trans_de_design_manifest", "trans_de_summary"],
+          "output_contract": {"benchmark_result": "outputs/tasks/PAPA-06/benchmark_result.json", "artifact_roles": ["trans_de_results", "trans_de_design_matrices", "trans_de_design_manifest", "trans_de_summary"], "artifact_paths": {"trans_de_results": "trans_de_results.tsv", "trans_de_design_matrices": "trans_de_design_matrices.tsv", "trans_de_design_manifest": "trans_de_design_manifest.json", "trans_de_summary": "trans_de_summary.json"}, "artifact_schemas": {"trans_de_results.tsv": ["target_uid", "gene", "logFC", "PValue", "FDR"], "trans_de_design_matrices.tsv": ["target_uid", "sample_id", "replicate_label", "condition_label", "(Intercept)", "conditiontarget"], "trans_de_design_manifest.json": ["formula", "baseline", "cell_is_replicate", "guide_is_replicate", "minimum_paired_replicates", "targets"], "trans_de_summary.json": ["eligible_targets", "target_count", "top_up", "top_down", "cautions"]}},
+          "task_hard_gates": ["target_by_target_fit", "paired_replicate_design", "ntc_baseline", "no_cell_or_guide_as_replicate", "full_results_present"],
+          "metric_ids": ["target_macro_rank_concordance", "logfc_mae", "top_k_overlap", "fdr_agreement", "analysis_unit_correctness"], "task_reference_ids": ["TREF-PAPA-06"],
+          "claim_ceiling": "measured target-associated trans expression differences; no mechanism or causality", "resources": {"max_memory_gb": 8, "n_jobs": 1, "timeout_seconds": 7200}
+        },
+        {
+          "task_id": "PAPA-07", "turn_index": 7, "tier": "intermediate", "execution_mode": "evidence_interpretation",
+          "title": "Global-effect claim calibration",
+          "objective": "Interpret the registered target-level E-distance, permutation PValue, FDR, coverage, and sampling protocol. Assign detectable, borderline, or not-detected claims with calibrated language. Do not interpret E-distance as a DEG, mechanism, causal effect, or proof that a nonsignificant effect is absent.",
+          "paper_anchor_ids": ["ANCHOR-PAPA-CHECKPOINT"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-03"],
+          "capability_scenarios": [], "expected_capability_dag": [],
+          "required_input_roles": ["global_effect_evidence", "global_effect_protocol", "global_effect_reference_lock"], "required_artifact_roles": ["global_effect_claims", "global_effect_limitations"],
+          "output_contract": {"benchmark_result": "outputs/tasks/PAPA-07/benchmark_result.json", "artifact_roles": ["global_effect_claims", "global_effect_limitations"], "artifact_paths": {"global_effect_claims": "global_effect_claims.tsv", "global_effect_limitations": "global_effect_limitations.json"}, "artifact_schemas": {"global_effect_claims.tsv": ["target_uid", "claim_class", "interpretation"], "global_effect_limitations.json": ["limitations"]}},
+          "task_hard_gates": ["fdr_thresholds_applied", "not_detected_not_absent", "no_deg_or_mechanism_claim", "no_underclaim_for_detectable_targets"],
+          "metric_ids": ["claim_class_macro_f1", "overclaim_count", "underclaim_count", "limitation_accuracy"], "task_reference_ids": ["TREF-PAPA-07"],
+          "claim_ceiling": "derived detectable global association, borderline candidate, or effect not detected under this test", "resources": {"max_memory_gb": 2, "n_jobs": 1, "timeout_seconds": 1800}
+        },
+        {
+          "task_id": "PAPA-08", "turn_index": 8, "tier": "advanced", "execution_mode": "capability_or_codeact",
+          "title": "Checkpoint-regulation synthesis and next panel",
+          "objective": "Synthesize guide QC, cis efficacy, responder evidence, trans-DE, global-effect calibration, pathway context, contradictions, and uncertainty to prioritize a constrained checkpoint-regulation follow-up panel. Cite artifacts and preserve each evidence class and claim ceiling.",
+          "paper_anchor_ids": ["ANCHOR-PAPA-CHECKPOINT"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-04", "PAPA-05", "PAPA-06", "PAPA-07"],
+          "capability_scenarios": ["CAP-08", "CAP-09"], "expected_capability_dag": ["regulator.activity.ulm.v1", "network.perturbation_regulator.v1", "enrichment.ora.v1", "enrichment.gsea_prerank.v1", "interpretation.evidence_map.v1", "literature.europepmc.v1", "design.next_panel.v1"],
+          "required_input_roles": ["target_reliability", "trans_de_results", "global_effect_evidence", "frozen_gene_sets", "literature_snapshot"], "required_artifact_roles": ["checkpoint_synthesis", "evidence_map", "next_panel"],
+          "output_contract": {"benchmark_result": "outputs/tasks/PAPA-08/benchmark_result.json", "artifact_roles": ["checkpoint_synthesis", "evidence_map", "next_panel"], "artifact_paths": {"checkpoint_synthesis": "checkpoint_synthesis.json", "evidence_map": "evidence_map.json", "next_panel": "next_panel.json"}},
+          "task_hard_gates": ["all_evidence_classes_preserved", "contradictions_visible", "no_causal_overclaim", "panel_constraints_satisfied"],
+          "metric_ids": ["evidence_traceability", "claim_calibration", "contradiction_recall", "constraint_satisfaction"], "task_reference_ids": ["TREF-PAPA-08"],
+          "claim_ceiling": "artifact-grounded synthesis and candidate follow-up panel", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 3600}
+        }
+      ]
+    },
+    {
+      "workflow_id": "WF-NORM", "role": "primary", "dataset_id": "norman_k562_crispra_2019",
+      "turns": [
+        {
+          "task_id": "NORM-01", "turn_index": 1, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "title": "Combinatorial construct design audit",
+          "objective": "Audit the Norman CRISPRa combinatorial construct design, expression representation, controls, construct and target identities, and the analyses supported by the available artifact.",
+          "paper_anchor_ids": ["ANCHOR-NORM-DESIGN"], "split_usage": ["calibration", "evaluation"], "depends_on_tasks": [],
+          "capability_scenarios": ["CAP-01"], "expected_capability_dag": ["intake.materialize.v1", "diagnostic.contract_integrity.v1", "diagnostic.dataset_integrity.v1", "diagnostic.design_balance.v1"],
+          "required_input_roles": ["primary_h5ad", "split_catalog"], "required_artifact_roles": ["dataset_profile", "construct_design_audit", "supported_analysis_plan"],
+          "output_contract": {"benchmark_result": "outputs/tasks/NORM-01/benchmark_result.json", "artifact_roles": ["dataset_profile", "construct_design_audit", "supported_analysis_plan"], "artifact_paths": {"dataset_profile": "dataset_profile.json", "construct_design_audit": "construct_design_audit.json", "supported_analysis_plan": "supported_analysis_plan.json"}},
+          "task_hard_gates": ["crispra_direction_correct", "combinatorial_construct_preserved", "transformed_x_not_called_counts"],
+          "metric_ids": ["design_field_accuracy", "construct_identity_accuracy", "supported_method_precision"], "task_reference_ids": ["TREF-NORM-01"],
+          "claim_ceiling": "observed design and representation facts", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 1800}
+        },
+        {
+          "task_id": "NORM-02", "turn_index": 2, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "title": "Intended combinations versus doublets",
+          "objective": "Distinguish intended multi-guide constructs from transcriptomic doublets, audit construct preservation and retention, and avoid filtering valid combinations solely because more than one guide is present.",
+          "paper_anchor_ids": ["ANCHOR-NORM-DESIGN"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-01"],
+          "capability_scenarios": ["CAP-02", "CAP-03"], "expected_capability_dag": ["diagnostic.guide_assignment.v1", "guide.integrity.v1", "screen.moi_doublet.v1", "screen.retained_cells.v1"],
+          "required_input_roles": ["evaluation_split", "construct_metadata"], "required_artifact_roles": ["construct_integrity", "doublet_audit", "retained_cell_manifest"],
+          "output_contract": {"benchmark_result": "outputs/tasks/NORM-02/benchmark_result.json", "artifact_roles": ["construct_integrity", "doublet_audit", "retained_cell_manifest"], "artifact_paths": {"construct_integrity": "construct_integrity.json", "doublet_audit": "doublet_audit.json", "retained_cell_manifest": "retained_cell_manifest.tsv"}, "artifact_schemas": {"retained_cell_manifest.tsv": ["dataset_id", "split", "cell_id", "expected_state", "reason"]}},
+          "task_hard_gates": ["intended_pairs_not_filtered_as_high_moi", "doublet_distinct_from_construct", "constructs_not_collapsed"],
+          "metric_ids": ["construct_preservation", "doublet_boundary_accuracy", "retained_identity_match"], "task_reference_ids": ["TREF-NORM-02"],
+          "claim_ceiling": "observed construct labels and derived retention decisions", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 1800}
+        },
+        {
+          "task_id": "NORM-03", "turn_index": 3, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "title": "SCEPTRE suitability and correct refusal",
+          "objective": "Determine whether the registered Norman inputs support SCEPTRE. If cell-by-guide counts are absent, block before the scientific runner, state the missing asset precisely, and propose the minimum evidence needed to resume without fabricating performance results.",
+          "paper_anchor_ids": ["ANCHOR-NORM-DESIGN"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-02"],
+          "capability_scenarios": ["CAP-06"], "expected_capability_dag": ["association.sceptre.v1"],
+          "required_input_roles": ["evaluation_split", "construct_metadata"], "required_artifact_roles": ["suitability_verdict", "refusal_envelope", "resume_requirements"],
+          "output_contract": {"benchmark_result": "outputs/tasks/NORM-03/benchmark_result.json", "artifact_roles": ["suitability_verdict", "refusal_envelope", "resume_requirements"], "artifact_paths": {"suitability_verdict": "suitability_verdict.json", "refusal_envelope": "refusal_envelope.json", "resume_requirements": "resume_requirements.json"}},
+          "task_hard_gates": ["blocked_before_runner", "guide_matrix_requirement_named", "no_silent_fallback", "no_real_performance_claim"],
+          "metric_ids": ["correct_refusal", "blocker_specificity", "silent_fallback_count"], "task_reference_ids": ["TREF-NORM-03"],
+          "claim_ceiling": "protocol-level suitability finding; no real SCEPTRE performance claim", "resources": {"max_memory_gb": 2, "n_jobs": 1, "timeout_seconds": 1200}
+        },
+        {
+          "task_id": "NORM-04", "turn_index": 4, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "title": "Candidate response programs",
+          "objective": "Assemble construct-level effects and identify stable candidate response programs while preserving combinatorial construct identities and reporting stability, missingness, and applicability limits.",
+          "paper_anchor_ids": ["ANCHOR-NORM-GI"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-02"],
+          "capability_scenarios": ["CAP-07", "CAP-08"], "expected_capability_dag": ["effect.matrix.assemble.v1", "module.learn.control_nmf.v1", "effect.module_global.v1", "program.response.signed_nmf.v1", "program.perturbation.cluster.v1"],
+          "required_input_roles": ["evaluation_split", "retained_cell_manifest", "construct_metadata"], "required_artifact_roles": ["effect_matrix", "response_programs", "stability_summary"],
+          "output_contract": {"benchmark_result": "outputs/tasks/NORM-04/benchmark_result.json", "artifact_roles": ["effect_matrix", "response_programs", "stability_summary"], "artifact_paths": {"effect_matrix": "effect_matrix.tsv", "response_programs": "response_programs.tsv", "stability_summary": "stability_summary.json"}},
+          "task_hard_gates": ["construct_identity_preserved", "retained_filter_consumed", "programs_called_candidates", "stability_reported"],
+          "metric_ids": ["effect_rank_concordance", "program_recovery", "cluster_stability", "claim_boundary_accuracy"], "task_reference_ids": ["TREF-NORM-04"],
+          "claim_ceiling": "derived candidate response programs", "resources": {"max_memory_gb": 8, "n_jobs": 1, "timeout_seconds": 7200}
+        },
+        {
+          "task_id": "NORM-05", "turn_index": 5, "tier": "advanced", "execution_mode": "capability_or_codeact",
+          "title": "Genetic-interaction claim boundary",
+          "objective": "Evaluate which combination effects support candidate genetic-interaction hypotheses and which remain additive, ambiguous, or unresolved. Keep response structure, prior biology, and causal mechanism distinct.",
+          "paper_anchor_ids": ["ANCHOR-NORM-GI"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-04"],
+          "capability_scenarios": ["CAP-08", "CAP-09"], "expected_capability_dag": ["enrichment.ora.v1", "enrichment.gsea_prerank.v1", "regulator.activity.ulm.v1", "network.perturbation_regulator.v1", "interpretation.evidence_map.v1"],
+          "required_input_roles": ["response_programs", "construct_metadata", "frozen_gene_sets"], "required_artifact_roles": ["gi_candidate_table", "evidence_map", "claim_audit"],
+          "output_contract": {"benchmark_result": "outputs/tasks/NORM-05/benchmark_result.json", "artifact_roles": ["gi_candidate_table", "evidence_map", "claim_audit"], "artifact_paths": {"gi_candidate_table": "gi_candidate_table.tsv", "evidence_map": "evidence_map.json", "claim_audit": "claim_audit.json"}},
+          "task_hard_gates": ["interaction_not_inferred_from_multi_guide_alone", "candidate_not_validated", "causal_mechanism_not_claimed"],
+          "metric_ids": ["candidate_rank_concordance", "claim_calibration", "causal_overclaim_count"], "task_reference_ids": ["TREF-NORM-05"],
+          "claim_ceiling": "candidate genetic-interaction hypotheses", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 3600}
+        },
+        {
+          "task_id": "NORM-06", "turn_index": 6, "tier": "advanced", "execution_mode": "capability_or_codeact",
+          "title": "Missing evidence and next experiment",
+          "objective": "Integrate the construct audit, SCEPTRE refusal, candidate programs, and GI boundary into a next-experiment design that directly resolves the highest-value missing evidence under fixed panel constraints.",
+          "paper_anchor_ids": ["ANCHOR-NORM-GI"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-03", "NORM-05"],
+          "capability_scenarios": ["CAP-09"], "expected_capability_dag": ["interpretation.evidence_map.v1", "design.next_panel.v1"],
+          "required_input_roles": ["suitability_verdict", "gi_candidate_table", "evidence_map"], "required_artifact_roles": ["missing_evidence_map", "next_experiment", "panel_constraints"],
+          "output_contract": {"benchmark_result": "outputs/tasks/NORM-06/benchmark_result.json", "artifact_roles": ["missing_evidence_map", "next_experiment", "panel_constraints"], "artifact_paths": {"missing_evidence_map": "missing_evidence_map.json", "next_experiment": "next_experiment.json", "panel_constraints": "panel_constraints.json"}},
+          "task_hard_gates": ["missing_guide_counts_addressed", "panel_constraints_satisfied", "no_prediction_as_measurement", "uncertainty_preserved"],
+          "metric_ids": ["evidence_gap_recall", "constraint_satisfaction", "uncertainty_capture"], "task_reference_ids": ["TREF-NORM-06"],
+          "claim_ceiling": "candidate next-experiment design", "resources": {"max_memory_gb": 2, "n_jobs": 1, "timeout_seconds": 1800}
+        },
+        {
+          "task_id": "VIRT-01", "turn_index": 7, "tier": "optional", "role": "optional", "execution_mode": "capability_or_codeact",
+          "title": "Frozen prediction-bundle evaluation",
+          "objective": "If and only if a frozen prediction manifest is registered, audit leakage and evaluate the prediction bundle on the held-out split. Otherwise return not_configured without affecting required workflow gates.",
+          "paper_anchor_ids": ["ANCHOR-VIRTUAL-PREDICTION"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-01"],
+          "capability_scenarios": ["CAP-10"], "expected_capability_dag": ["virtual.split.contract.v1", "virtual.prediction.ingest.v1", "virtual.leakage.audit.v1", "virtual.baselines.v1", "virtual.evaluate.v1", "virtual.evaluate.comprehensive.v1"],
+          "required_input_roles": ["prediction_manifest_optional", "evaluation_split"], "required_artifact_roles": ["prediction_status", "leakage_audit", "prediction_metrics"],
+          "output_contract": {"benchmark_result": "outputs/tasks/VIRT-01/benchmark_result.json", "artifact_roles": ["prediction_status", "leakage_audit", "prediction_metrics"], "artifact_paths": {"prediction_status": "prediction_status.json", "leakage_audit": "leakage_audit.json", "prediction_metrics": "prediction_metrics.tsv"}},
+          "task_hard_gates": ["missing_manifest_is_not_configured", "leakage_blocks_evaluation", "prediction_not_measurement"],
+          "metric_ids": ["leakage_detection", "prediction_metric_accuracy", "not_configured_accuracy"], "task_reference_ids": ["TREF-VIRT-01"],
+          "configuration_gate": "prediction_manifest_present", "claim_ceiling": "supplemental prediction performance only", "resources": {"max_memory_gb": 8, "n_jobs": 1, "timeout_seconds": 7200}
+        }
+      ]
+    },
+    {
+      "workflow_id": "WF-KANG", "role": "supplemental", "dataset_id": "kang18_8vs8_pbmc",
+      "turns": [
+        {
+          "task_id": "KANG-01", "turn_index": 1, "tier": "supplemental", "execution_mode": "capability_or_codeact",
+          "title": "Reject cell-level DE and execute donor-aware pseudobulk",
+          "objective": "Reject cells-as-replicates differential expression, execute donor-aware edgeR pseudobulk with design ~ donor + condition on the frozen evaluation donors, and report effect estimates, FDR, null calibration, and four-donor limitations.",
+          "paper_anchor_ids": ["ANCHOR-KANG-DONOR"], "split_usage": ["evaluation"], "depends_on_tasks": [],
+          "capability_scenarios": ["CAP-11"], "expected_capability_dag": ["de.pseudobulk.edger.v1", "calibration.replicate_null.v1", "calibration.method_null.v1"],
+          "required_input_roles": ["evaluation_split", "donor_metadata", "raw_counts"], "required_artifact_roles": ["pseudobulk_counts", "design_matrix", "de_results", "null_calibration"],
+          "output_contract": {"benchmark_result": "outputs/tasks/KANG-01/benchmark_result.json", "artifact_roles": ["pseudobulk_counts", "design_matrix", "de_results", "null_calibration"], "artifact_paths": {"pseudobulk_counts": "pseudobulk_counts.tsv", "design_matrix": "design_matrix.tsv", "de_results": "de_results.tsv", "null_calibration": "null_calibration.tsv"}, "artifact_schemas": {"de_results.tsv": ["gene", "logFC", "F", "PValue", "FDR"], "null_calibration.tsv": ["permutation_id", "type1_rate", "null_effect_bias", "exchangeability_violation_count"]}},
+          "task_hard_gates": ["cell_level_de_rejected", "donor_is_analysis_unit", "paired_design_used", "four_donor_caution_visible"],
+          "metric_ids": ["analysis_unit_correctness", "effect_error", "fdr_agreement", "null_calibration_error"], "task_reference_ids": ["TREF-KANG-01"],
+          "claim_ceiling": "supplemental donor-aware expression association; Kang is not Perturb-seq", "resources": {"max_memory_gb": 8, "n_jobs": 1, "timeout_seconds": 7200}
+        },
+        {
+          "task_id": "KANG-02", "turn_index": 2, "tier": "supplemental", "execution_mode": "capability_or_codeact",
+          "title": "Composition applicability and missing-state exclusion",
+          "objective": "Run donor-aware Propeller composition analysis where state labels are available, explicitly exclude the six evaluation cells with missing state labels, reconcile denominators, and report the four-donor power limitation.",
+          "paper_anchor_ids": ["ANCHOR-KANG-DONOR"], "split_usage": ["evaluation"], "depends_on_tasks": ["KANG-01"],
+          "capability_scenarios": ["CAP-11"], "expected_capability_dag": ["composition.propeller.v1", "calibration.replicate_null.v1", "calibration.method_null.v1"],
+          "required_input_roles": ["evaluation_split", "donor_metadata", "cell_state_metadata"], "required_artifact_roles": ["composition_input_accounting", "propeller_results", "missing_state_exclusions"],
+          "output_contract": {"benchmark_result": "outputs/tasks/KANG-02/benchmark_result.json", "artifact_roles": ["composition_input_accounting", "propeller_results", "missing_state_exclusions"], "artifact_paths": {"composition_input_accounting": "composition_input_accounting.json", "propeller_results": "propeller_results.tsv", "missing_state_exclusions": "missing_state_exclusions.tsv"}, "artifact_schemas": {"composition_input_accounting.json": ["evaluation_cells", "analyzed_cells", "excluded_missing_state_cells", "donor_count"], "propeller_results.tsv": ["cluster", "baseline_proportion", "target_proportion", "effect", "PValue", "FDR"], "missing_state_exclusions.tsv": ["cell_id", "reason"]}},
+          "task_hard_gates": ["six_missing_states_excluded", "donor_condition_samples_used", "denominators_reconcile", "four_donor_caution_visible"],
+          "metric_ids": ["missing_state_exclusion_accuracy", "composition_effect_error", "fdr_agreement", "denominator_error"], "task_reference_ids": ["TREF-KANG-02"],
+          "claim_ceiling": "supplemental donor-aware composition association; Kang is not Perturb-seq", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 3600}
+        }
+      ]
+    }
+  ]
+}

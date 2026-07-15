@@ -254,6 +254,10 @@ class ServerBenchmarkPlan(CanonicalModel):
             "parameter_catalog_hash": None,
             "design_confirmation_catalog_hash": None,
             "metric_reference_catalog_hash": None,
+            "paper_task_catalog_hash": None,
+            "paper_task_reference_catalog_hash": None,
+            "paper_anchor_catalog_hash": None,
+            "paper_asset_catalog_hash": None,
         }
     )
     executable: bool = False
@@ -281,6 +285,10 @@ class ServerBenchmarkPlan(CanonicalModel):
             "parameter_catalog_hash",
             "design_confirmation_catalog_hash",
             "metric_reference_catalog_hash",
+            "paper_task_catalog_hash",
+            "paper_task_reference_catalog_hash",
+            "paper_anchor_catalog_hash",
+            "paper_asset_catalog_hash",
         }
         if set(self.checkpoint_binding) != required:
             raise ValueError(

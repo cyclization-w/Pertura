@@ -1884,18 +1884,50 @@ def _load_checkpoint_binding(
     if not isinstance(binding, Mapping):
         raise ValueError("checkpoint binding payload is invalid")
 
-    # Local imports avoid a module cycle while capability_bench imports this file.
-    from pertura_bench.capability_bench import benchmark_specs
-    from pertura_bench.server_plan import build_server_plan, validate_checkpoint_binding
+    # A full bound plan validates its own immutable job graph and every bound
+    # catalog identity. The legacy binding-only form is retained for older
+    # checkpoint fixtures.
+    if "jobs" in payload and "artifacts" in payload:
+        from pertura_bench.capability_models import ServerBenchmarkPlan
+        from pertura_bench.server_plan import assert_server_plan_executable
 
-    template = build_server_plan(
-        benchmark_specs(),
-        repo_root,
-        parameter_catalog_path=parameter_catalog_path,
-        design_confirmations_path=design_confirmations_path,
-        metric_reference_catalog_path=metric_reference_catalog_path,
-    )
-    validated = validate_checkpoint_binding(template, binding)
+        plan = ServerBenchmarkPlan.model_validate(payload)
+        assert_server_plan_executable(plan)
+        validated = {
+            str(key): str(value)
+            for key, value in plan.checkpoint_binding.items()
+        }
+        _, parameter_hash = load_real_parameter_catalog(parameter_catalog_path)
+        _, design_hash = load_design_confirmation_catalog(
+            design_confirmations_path
+        )
+        _, metric_hash = load_metric_reference_catalog(
+            metric_reference_catalog_path
+        )
+        current_catalogs = {
+            "parameter_catalog_hash": parameter_hash,
+            "design_confirmation_catalog_hash": design_hash,
+            "metric_reference_catalog_hash": metric_hash,
+        }
+        for field, observed in current_catalogs.items():
+            if validated.get(field) != observed:
+                raise ValueError(f"checkpoint catalog drift: {field}")
+    else:
+        # Local imports avoid a module cycle while capability_bench imports this file.
+        from pertura_bench.capability_bench import benchmark_specs
+        from pertura_bench.server_plan import (
+            build_server_plan,
+            validate_checkpoint_binding,
+        )
+
+        template = build_server_plan(
+            benchmark_specs(),
+            repo_root,
+            parameter_catalog_path=parameter_catalog_path,
+            design_confirmations_path=design_confirmations_path,
+            metric_reference_catalog_path=metric_reference_catalog_path,
+        )
+        validated = validate_checkpoint_binding(template, binding)
     import subprocess
 
     completed = subprocess.run(

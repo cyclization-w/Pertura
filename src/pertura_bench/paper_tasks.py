@@ -1,0 +1,500 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Iterable, Mapping
+
+from pertura_workflow.capabilities import CapabilityRegistry
+
+
+PAPER_CONDITIONS = ("free_codeact", "prompt_only", "pertura_full")
+PAPER_REPEATS = (1, 2)
+
+
+@dataclass(frozen=True)
+class PaperTaskCatalog:
+    path: Path
+    payload: Mapping[str, Any]
+    sha256: str
+
+    @property
+    def workflows(self) -> tuple[Mapping[str, Any], ...]:
+        return tuple(self.payload.get("workflows") or ())
+
+    def workflow(self, workflow_id: str) -> Mapping[str, Any]:
+        for workflow in self.workflows:
+            if workflow.get("workflow_id") == workflow_id:
+                return workflow
+        raise KeyError(f"unknown paper workflow: {workflow_id}")
+
+    def tasks(self, *, include_optional: bool = True) -> tuple[Mapping[str, Any], ...]:
+        tasks = tuple(
+            task
+            for workflow in self.workflows
+            for task in workflow.get("turns") or ()
+        )
+        if include_optional:
+            return tasks
+        return tuple(task for task in tasks if task.get("role") != "optional")
+
+
+def default_paper_task_catalog(repo_root: str | Path) -> Path:
+    return (
+        Path(repo_root).resolve()
+        / "benchmarks"
+        / "paper_v1"
+        / "agent_tasks.v2.json"
+    )
+
+
+def load_paper_task_catalog(
+    path: str | Path | None = None,
+    *,
+    repo_root: str | Path | None = None,
+    validate: bool = True,
+) -> PaperTaskCatalog:
+    if path is None:
+        if repo_root is None:
+            repo_root = Path(__file__).resolve().parents[2]
+        resolved = default_paper_task_catalog(repo_root)
+    else:
+        resolved = Path(path).resolve()
+    payload = json.loads(resolved.read_text(encoding="utf-8"))
+    if validate:
+        problems = validate_paper_task_catalog(payload)
+        if problems:
+            raise ValueError("invalid paper task catalog: " + "; ".join(problems))
+    return PaperTaskCatalog(
+        path=resolved,
+        payload=payload,
+        sha256="sha256:" + hashlib.sha256(resolved.read_bytes()).hexdigest(),
+    )
+
+
+def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
+    problems: list[str] = []
+    if payload.get("schema_version") != "pertura-paper-agent-tasks-v2":
+        problems.append("schema_version must be pertura-paper-agent-tasks-v2")
+    protocol = payload.get("execution_protocol") or {}
+    conditions = tuple(protocol.get("conditions") or ())
+    if set(conditions) != set(PAPER_CONDITIONS) or len(conditions) != 3:
+        problems.append("conditions must be the frozen three-condition set")
+    if protocol.get("repeats") != 2:
+        problems.append("repeats must equal 2")
+
+    known_capabilities = {
+        item.capability_id
+        for item in CapabilityRegistry.load_default(
+            include_external=False
+        ).specs()
+    }
+    workflows = tuple(payload.get("workflows") or ())
+    if len(workflows) != 4:
+        problems.append("exactly four workflows are required")
+    task_ids: list[str] = []
+    output_paths: list[str] = []
+    primary: list[Mapping[str, Any]] = []
+    supplemental: list[Mapping[str, Any]] = []
+    optional: list[Mapping[str, Any]] = []
+    tier_counts = {"basic": 0, "intermediate": 0, "advanced": 0}
+
+    for workflow in workflows:
+        workflow_id = str(workflow.get("workflow_id") or "")
+        role = workflow.get("role")
+        if role not in {"primary", "supplemental"}:
+            problems.append(f"{workflow_id}: invalid workflow role")
+        prior: set[str] = set()
+        for expected_index, task in enumerate(workflow.get("turns") or (), start=1):
+            task_id = str(task.get("task_id") or "")
+            task_ids.append(task_id)
+            if task.get("turn_index") != expected_index:
+                problems.append(f"{task_id}: nonsequential turn_index")
+            dependencies = set(task.get("depends_on_tasks") or ())
+            unknown_dependencies = dependencies - prior
+            if unknown_dependencies:
+                problems.append(
+                    f"{task_id}: dependencies are not prior workflow turns: "
+                    f"{sorted(unknown_dependencies)}"
+                )
+            prior.add(task_id)
+            unknown_capabilities = (
+                set(task.get("expected_capability_dag") or ())
+                - known_capabilities
+            )
+            if unknown_capabilities:
+                problems.append(
+                    f"{task_id}: unknown capabilities: {sorted(unknown_capabilities)}"
+                )
+            if task.get("execution_mode") in {
+                "codeact_scientific",
+                "evidence_interpretation",
+            } and task.get("expected_capability_dag"):
+                problems.append(
+                    f"{task_id}: non-capability task declares a capability DAG"
+                )
+            for field in (
+                "objective",
+                "paper_anchor_ids",
+                "split_usage",
+                "required_input_roles",
+                "required_artifact_roles",
+                "output_contract",
+                "task_hard_gates",
+                "metric_ids",
+                "task_reference_ids",
+                "claim_ceiling",
+                "resources",
+            ):
+                if not task.get(field):
+                    problems.append(f"{task_id}: missing {field}")
+            output_path = str(
+                (task.get("output_contract") or {}).get("benchmark_result") or ""
+            )
+            if output_path:
+                output_paths.append(output_path)
+                expected_path = f"outputs/tasks/{task_id}/benchmark_result.json"
+                if output_path != expected_path:
+                    problems.append(
+                        f"{task_id}: benchmark_result must be {expected_path}"
+                    )
+            artifact_paths = dict(
+                (task.get("output_contract") or {}).get("artifact_paths") or {}
+            )
+            artifact_schemas = dict(
+                (task.get("output_contract") or {}).get("artifact_schemas") or {}
+            )
+            if set(artifact_paths) != set(
+                task.get("required_artifact_roles") or ()
+            ):
+                problems.append(
+                    f"{task_id}: every required artifact role needs one path"
+                )
+            for role_name, relative_name in artifact_paths.items():
+                relative = Path(str(relative_name))
+                if (
+                    not str(role_name)
+                    or not str(relative_name)
+                    or relative.is_absolute()
+                    or ".." in relative.parts
+                    or ":" in str(relative_name)
+                    or "\\" in str(relative_name)
+                ):
+                    problems.append(
+                        f"{task_id}: unsafe artifact path for {role_name}"
+                    )
+            if not set(artifact_schemas).issubset(set(artifact_paths.values())):
+                problems.append(
+                    f"{task_id}: artifact_schemas contains an undeclared path"
+                )
+            if any(
+                not isinstance(columns, list) or not columns
+                for columns in artifact_schemas.values()
+            ):
+                problems.append(f"{task_id}: artifact schema columns are invalid")
+            if task.get("role") == "optional":
+                optional.append(task)
+            elif role == "supplemental":
+                supplemental.append(task)
+            else:
+                primary.append(task)
+                tier = str(task.get("tier") or "")
+                if tier in tier_counts:
+                    tier_counts[tier] += 1
+                else:
+                    problems.append(f"{task_id}: invalid primary tier {tier}")
+
+    if len(task_ids) != len(set(task_ids)):
+        problems.append("task ids must be unique")
+    if len(output_paths) != len(set(output_paths)):
+        problems.append("task benchmark_result paths must be unique")
+    if len(primary) != 18:
+        problems.append(f"expected 18 primary tasks, observed {len(primary)}")
+    if len(supplemental) != 2:
+        problems.append(
+            f"expected 2 supplemental tasks, observed {len(supplemental)}"
+        )
+    if len(optional) != 1 or optional[0].get("task_id") != "VIRT-01":
+        problems.append("VIRT-01 must be the only optional task")
+    if tier_counts != {"basic": 6, "intermediate": 8, "advanced": 4}:
+        problems.append(f"primary tier counts are incorrect: {tier_counts}")
+
+    required_turns = len(primary) + len(supplemental)
+    scored_turns = required_turns * len(PAPER_CONDITIONS) * len(PAPER_REPEATS)
+    sessions = len(workflows) * len(PAPER_CONDITIONS) * len(PAPER_REPEATS)
+    expected_protocol = {
+        "required_primary_task_turns": len(primary),
+        "required_supplemental_task_turns": len(supplemental),
+        "optional_task_turns": len(optional),
+        "required_scored_turns": scored_turns,
+        "required_workflows": len(workflows),
+        "required_agent_sessions": sessions,
+    }
+    for field, expected in expected_protocol.items():
+        if protocol.get(field) != expected:
+            problems.append(
+                f"execution_protocol.{field} must equal {expected}"
+            )
+    return problems
+
+
+def validate_task_reference_catalog(
+    payload: Mapping[str, Any], tasks: Iterable[Mapping[str, Any]]
+) -> list[str]:
+    problems: list[str] = []
+    schema_version = payload.get("schema_version")
+    if schema_version not in {
+        "pertura-paper-task-reference-catalog-v1",
+        "pertura-paper-task-reference-catalog-bound-v1",
+    }:
+        problems.append("unsupported task-reference catalog schema")
+    bound = schema_version == "pertura-paper-task-reference-catalog-bound-v1"
+    if bound and (
+        payload.get("status") != "bound"
+        or payload.get("passed") is not True
+        or payload.get("problems")
+    ):
+        problems.append("bound task-reference catalog is not valid and complete")
+    task_by_id = {str(item["task_id"]): item for item in tasks}
+    bindings = tuple(payload.get("bindings") or ())
+    by_task: dict[str, list[Mapping[str, Any]]] = {}
+    reference_ids: list[str] = []
+    for binding in bindings:
+        task_id = str(binding.get("task_id") or "")
+        reference_id = str(binding.get("task_reference_id") or "")
+        reference_ids.append(reference_id)
+        by_task.setdefault(task_id, []).append(binding)
+        if task_id not in task_by_id:
+            problems.append(f"{reference_id}: unknown task {task_id}")
+            continue
+        task_metrics = set(task_by_id[task_id].get("metric_ids") or ())
+        binding_metrics = set(binding.get("metric_ids") or ())
+        if task_metrics != binding_metrics:
+            problems.append(f"{reference_id}: metric ids do not match {task_id}")
+        if not binding.get("evaluator_id"):
+            problems.append(f"{reference_id}: missing evaluator_id")
+        if not binding.get("reference_sources"):
+            problems.append(f"{reference_id}: missing reference_sources")
+        if not binding.get("observed_artifact_roles"):
+            problems.append(f"{reference_id}: missing observed_artifact_roles")
+        route = str(binding.get("scoring_route") or "")
+        if route not in {
+            "artifact_evaluator",
+            "protocol_hard_gate",
+            "hybrid",
+            "custom_artifact_evaluator",
+        }:
+            problems.append(f"{reference_id}: invalid scoring_route")
+        covered_metrics = {
+            str(metric)
+            for evaluator in binding.get("evaluator_templates") or ()
+            for metric in evaluator.get("metric_ids") or ()
+        }
+        protocol = binding.get("protocol_evaluator") or {}
+        covered_metrics.update(str(item) for item in protocol.get("metric_ids") or ())
+        if route == "custom_artifact_evaluator":
+            covered_metrics.update(str(item) for item in binding.get("metric_ids") or ())
+        if covered_metrics != binding_metrics:
+            problems.append(f"{reference_id}: scoring routes do not cover metric ids")
+        artifact_paths = set(
+            ((task_by_id[task_id].get("output_contract") or {}).get("artifact_paths") or {}).values()
+        )
+        for evaluator in binding.get("evaluator_templates") or ():
+            if evaluator.get("observed_output") not in artifact_paths:
+                problems.append(
+                    f"{reference_id}: evaluator output is absent from task contract"
+                )
+        for required in protocol.get("required_outputs") or ():
+            if required not in artifact_paths:
+                problems.append(
+                    f"{reference_id}: protocol output is absent from task contract"
+                )
+        row_counts = protocol.get("required_table_row_counts") or {}
+        if not isinstance(row_counts, Mapping):
+            problems.append(f"{reference_id}: protocol row counts are invalid")
+        else:
+            for required, count in row_counts.items():
+                if required not in artifact_paths:
+                    problems.append(
+                        f"{reference_id}: row-count output is absent from task contract"
+                    )
+                if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                    problems.append(
+                        f"{reference_id}: protocol row count must be a non-negative integer"
+                    )
+        json_values = protocol.get("required_json_values") or {}
+        if not isinstance(json_values, Mapping):
+            problems.append(f"{reference_id}: protocol JSON values are invalid")
+        else:
+            for required, values in json_values.items():
+                if required not in artifact_paths or not isinstance(values, Mapping):
+                    problems.append(
+                        f"{reference_id}: protocol JSON value output is invalid"
+                    )
+        balances = protocol.get("required_json_balances") or []
+        if not isinstance(balances, list):
+            problems.append(f"{reference_id}: protocol JSON balances are invalid")
+        else:
+            for balance in balances:
+                if (
+                    not isinstance(balance, Mapping)
+                    or balance.get("output") not in artifact_paths
+                    or not str(balance.get("total") or "")
+                    or not isinstance(balance.get("parts"), list)
+                    or not balance.get("parts")
+                ):
+                    problems.append(
+                        f"{reference_id}: protocol JSON balance is invalid"
+                    )
+        if bound:
+            sources = tuple(binding.get("reference_sources") or ())
+            bound_sources = tuple(binding.get("bound_reference_sources") or ())
+            if len(bound_sources) != len(sources):
+                problems.append(f"{reference_id}: reference sources are not bound")
+            if route in {"artifact_evaluator", "hybrid"} and not binding.get(
+                "evaluators"
+            ):
+                problems.append(f"{reference_id}: artifact evaluators are not bound")
+            if route == "custom_artifact_evaluator" and not binding.get(
+                "bound_evaluator"
+            ):
+                problems.append(f"{reference_id}: custom evaluator is not bound")
+    if len(reference_ids) != len(set(reference_ids)):
+        problems.append("task reference ids must be unique")
+    for task_id, task in task_by_id.items():
+        expected = set(task.get("task_reference_ids") or ())
+        observed = {
+            str(item.get("task_reference_id"))
+            for item in by_task.get(task_id, ())
+        }
+        if expected != observed:
+            problems.append(
+                f"{task_id}: task-reference binding mismatch "
+                f"expected={sorted(expected)} observed={sorted(observed)}"
+            )
+    return problems
+
+
+def validate_paper_anchor_catalog(
+    payload: Mapping[str, Any], tasks: Iterable[Mapping[str, Any]]
+) -> list[str]:
+    problems: list[str] = []
+    if payload.get("schema_version") != "pertura-paper-anchor-catalog-v1":
+        problems.append("unsupported paper-anchor catalog schema")
+    anchors = tuple(payload.get("anchors") or ())
+    anchor_ids = [str(item.get("anchor_id") or "") for item in anchors]
+    if len(anchor_ids) != len(set(anchor_ids)):
+        problems.append("paper anchor ids must be unique")
+    known = set(anchor_ids)
+    for anchor in anchors:
+        anchor_id = str(anchor.get("anchor_id") or "")
+        for field in (
+            "dataset_id",
+            "study",
+            "study_fact",
+            "required_modalities",
+            "evaluation_entities",
+            "allowed_claim_level",
+            "forbidden_promotions",
+        ):
+            if not anchor.get(field):
+                problems.append(f"{anchor_id}: missing {field}")
+    for task in tasks:
+        unknown = set(task.get("paper_anchor_ids") or ()) - known
+        if unknown:
+            problems.append(
+                f"{task.get('task_id')}: unknown paper anchors {sorted(unknown)}"
+            )
+    return problems
+
+
+def validate_paper_asset_catalog(
+    payload: Mapping[str, Any], catalog: PaperTaskCatalog
+) -> list[str]:
+    problems: list[str] = []
+    if payload.get("schema_version") != "pertura-paper-agent-assets-v1":
+        problems.append("unsupported paper asset catalog schema")
+    if (
+        payload.get("status") != "bound"
+        or payload.get("passed") is not True
+        or payload.get("problems")
+    ):
+        problems.append("paper asset catalog is not bound and complete")
+    workflows = payload.get("workflows") or {}
+    if not isinstance(workflows, Mapping):
+        return [*problems, "paper asset workflows must be an object"]
+    expected_workflows = {
+        str(workflow["workflow_id"]) for workflow in catalog.workflows
+    }
+    if set(workflows) != expected_workflows:
+        problems.append("paper asset workflow identities do not match the task catalog")
+    for workflow in catalog.workflows:
+        workflow_id = str(workflow["workflow_id"])
+        entry = workflows.get(workflow_id) or {}
+        assets = tuple(entry.get("assets") or ())
+        roles = [str(item.get("role") or "") for item in assets]
+        if not roles or len(roles) != len(set(roles)) or any(not role for role in roles):
+            problems.append(f"{workflow_id}: asset roles are empty or duplicated")
+        for asset in assets:
+            if not str(asset.get("root") or "") or not str(
+                asset.get("relative_path") or ""
+            ):
+                problems.append(f"{workflow_id}: asset lacks root or relative path")
+            content_hash = str(asset.get("content_sha256") or "")
+            if not content_hash.startswith("sha256:") or len(content_hash) != 71:
+                problems.append(f"{workflow_id}: asset hash is invalid")
+        turns = tuple(workflow.get("turns") or ())
+        by_task = {str(task["task_id"]): task for task in turns}
+
+        def ancestor_tasks(task_id: str) -> set[str]:
+            ancestors: set[str] = set()
+            pending = list(by_task[task_id].get("depends_on_tasks") or ())
+            while pending:
+                dependency = str(pending.pop())
+                if dependency in ancestors:
+                    continue
+                ancestors.add(dependency)
+                pending.extend(
+                    by_task.get(dependency, {}).get("depends_on_tasks") or ()
+                )
+            return ancestors
+
+        external_inputs: set[str] = set()
+        for task in turns:
+            internal_roles = {
+                str(role)
+                for dependency in ancestor_tasks(str(task["task_id"]))
+                for role in by_task[dependency].get("required_artifact_roles") or ()
+            }
+            for role in task.get("required_input_roles") or ():
+                if role not in internal_roles and not (
+                    task.get("role") == "optional"
+                    and role == "prediction_manifest_optional"
+                ):
+                    external_inputs.add(str(role))
+        missing = external_inputs - set(roles)
+        if missing:
+            problems.append(
+                f"{workflow_id}: external input assets are missing: {sorted(missing)}"
+            )
+        optional_external = {
+            str(role)
+            for task in turns
+            if task.get("role") == "optional"
+            for role in task.get("required_input_roles") or ()
+        }
+        produced_roles = {
+            str(role)
+            for task in turns
+            for role in task.get("required_artifact_roles") or ()
+        }
+        masking = (
+            set(roles) & produced_roles
+        ) - external_inputs - optional_external
+        if masking:
+            problems.append(
+                f"{workflow_id}: unexpected external assets could mask dependencies: "
+                f"{sorted(masking)}"
+            )
+    return problems

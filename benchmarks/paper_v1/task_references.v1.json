@@ -1,0 +1,124 @@
+{
+  "schema_version": "pertura-paper-task-reference-catalog-v1",
+  "purpose": "Task-scoped scoring bindings. This catalog is independent of the REF-01 through REF-10 capability reference index.",
+  "reference_sets": {
+    "existing_ref_packs": ["REF-01", "REF-02", "REF-03", "REF-04", "REF-05", "REF-06", "REF-07", "REF-08", "REF-09", "REF-10"],
+    "task_specific_sets": ["TASKREF-PAPA-TRANS-DE", "TASKREF-PAPA-E-DISTANCE"]
+  },
+  "bindings": [
+    {
+      "task_reference_id": "TREF-REPL-01", "task_id": "REPL-01", "evidence_class": "real", "reference_sources": ["REF-01"], "evaluator_id": "task.design_audit.v1", "scoring_route": "protocol_hard_gate", "observed_artifact_roles": ["dataset_profile", "design_audit"], "metric_ids": ["design_field_accuracy", "analysis_unit_accuracy", "supported_method_precision"],
+      "protocol_evaluator": {"metric_ids": ["design_field_accuracy", "analysis_unit_accuracy", "supported_method_precision"], "allowed_status": ["completed"], "allowed_analysis_units": ["dataset", "screen"], "minimum_limitation_count": 1, "required_text_patterns": ["raw|count", "replicate|independent unit", "guide count|guide-count"], "forbidden_text_patterns": ["cell[- ]level.*independent replicate"]}
+    },
+    {
+      "task_reference_id": "TREF-REPL-02", "task_id": "REPL-02", "evidence_class": "real", "reference_sources": ["REF-01", "REF-02"], "evaluator_id": "task.retention_accounting.v1", "scoring_route": "hybrid", "observed_artifact_roles": ["guide_assignment_audit", "retained_cell_manifest", "split_accounting"], "metric_ids": ["assignment_evidence_class_accuracy", "retained_identity_match", "split_accounting_error"],
+      "evaluator_templates": [{"evaluator_id": "repl02.retained_identity", "type": "classification", "observed_output": "retained_cell_manifest.tsv", "reference_source": "REF-02", "reference_output": "retained_cell_truth.tsv", "reference_filters": {"dataset_id": "replogle_k562_essential_2022", "split": "evaluation"}, "key_columns": ["dataset_id", "split", "cell_id"], "observed_label_column": "expected_state", "reference_label_column": "expected_state", "minimum_accuracy": 1.0, "minimum_macro_f1": 1.0, "metric_ids": ["retained_identity_match", "split_accounting_error"]}],
+      "protocol_evaluator": {"metric_ids": ["assignment_evidence_class_accuracy"], "allowed_status": ["completed"], "allowed_analysis_units": ["cell"], "minimum_limitation_count": 1, "required_text_patterns": ["metadata|label", "guide count|guide-count"], "required_outputs": ["retained_cell_manifest.tsv"]}
+    },
+    {
+      "task_reference_id": "TREF-REPL-03", "task_id": "REPL-03", "evidence_class": "protocol_refusal", "reference_sources": ["REF-01", "REF-04"], "evaluator_id": "task.estimand_boundary.v1", "scoring_route": "protocol_hard_gate", "observed_artifact_roles": ["estimand_audit", "target_summary", "unresolved_evidence"], "metric_ids": ["estimand_accuracy", "unsupported_guide_claim_count", "unresolved_boundary_accuracy"],
+      "protocol_evaluator": {"metric_ids": ["estimand_accuracy", "unsupported_guide_claim_count", "unresolved_boundary_accuracy"], "allowed_status": ["completed", "blocked"], "allowed_analysis_units": ["target"], "minimum_limitation_count": 1, "required_text_patterns": ["target", "cell-by-guide|guide count|guide-count", "unresolved|not identifiable"], "forbidden_text_patterns": ["guide efficacy (is|was) measured"]}
+    },
+    {
+      "task_reference_id": "TREF-REPL-04", "task_id": "REPL-04", "evidence_class": "real_and_planted", "reference_sources": ["REF-07", "REF-08", "REF-09"], "evaluator_id": "task.response_structure.v1", "scoring_route": "protocol_hard_gate", "observed_artifact_roles": ["response_structure", "evidence_map", "next_panel"], "metric_ids": ["rank_concordance", "cluster_agreement", "claim_boundary_accuracy", "constraint_satisfaction"],
+      "protocol_evaluator": {"metric_ids": ["rank_concordance", "cluster_agreement", "claim_boundary_accuracy", "constraint_satisfaction"], "allowed_status": ["completed"], "allowed_analysis_units": ["target", "perturbation"], "minimum_limitation_count": 1, "required_text_patterns": ["derived", "candidate", "panel|constraint"], "forbidden_text_patterns": ["validated mechanism", "causal mechanism"]}
+    },
+    {
+      "task_reference_id": "TREF-PAPA-01", "task_id": "PAPA-01", "evidence_class": "real", "reference_sources": ["REF-01", "REF-02"], "evaluator_id": "task.guide_qc.v1", "scoring_route": "hybrid", "observed_artifact_roles": ["alignment_audit", "guide_assignment", "ambient_qc", "retained_cell_manifest"], "metric_ids": ["alignment_accuracy", "assignment_accuracy", "ambient_classification_accuracy", "retained_identity_match"],
+      "evaluator_templates": [
+        {"evaluator_id": "papa01.assignment", "type": "classification", "observed_output": "guide_assignment.tsv", "reference_source": "REF-02", "reference_output": "papalexi_assignment_proxy.tsv", "key_columns": ["cell_id"], "observed_label_column": "proxy_class", "reference_label_column": "proxy_class", "minimum_accuracy": 0.85, "minimum_macro_f1": 0.80, "metric_ids": ["assignment_accuracy"]},
+        {"evaluator_id": "papa01.retained", "type": "classification", "observed_output": "retained_cell_manifest.tsv", "reference_source": "REF-02", "reference_output": "retained_cell_truth.tsv", "reference_filters": {"dataset_id": "papalexi_thp1_eccite"}, "key_columns": ["dataset_id", "split", "cell_id"], "observed_label_column": "expected_state", "reference_label_column": "expected_state", "minimum_accuracy": 1.0, "minimum_macro_f1": 1.0, "metric_ids": ["retained_identity_match"]}
+      ],
+      "protocol_evaluator": {"metric_ids": ["alignment_accuracy", "ambient_classification_accuracy"], "allowed_status": ["completed"], "allowed_analysis_units": ["cell"], "minimum_limitation_count": 1, "required_text_patterns": ["barcode|alignment", "ambient", "multi-guide|multi guide"], "required_outputs": ["guide_assignment.tsv", "retained_cell_manifest.tsv"]}
+    },
+    {
+      "task_reference_id": "TREF-PAPA-02", "task_id": "PAPA-02", "evidence_class": "real", "reference_sources": ["REF-03"], "evaluator_id": "task.state_reference.v1", "scoring_route": "artifact_evaluator", "observed_artifact_roles": ["state_reference_model", "reference_cell_manifest", "reference_provenance"], "metric_ids": ["control_identity_match", "split_leakage_count", "reference_hash_match"],
+      "evaluator_templates": [{"evaluator_id": "papa02.control_reference", "type": "cluster_agreement", "observed_output": "reference_cell_manifest.tsv", "reference_source": "REF-03", "reference_output": "control_reference/control_assignments.tsv", "key_columns": ["cell_id"], "observed_label_column": "technical_state_id", "reference_label_column": "technical_state_id", "minimum_ari": 0.90, "metric_ids": ["control_identity_match", "split_leakage_count", "reference_hash_match"]}]
+    },
+    {
+      "task_reference_id": "TREF-PAPA-03", "task_id": "PAPA-03", "evidence_class": "real", "reference_sources": ["REF-03"], "evaluator_id": "task.state_mapping.v1", "scoring_route": "artifact_evaluator", "observed_artifact_roles": ["state_mapping", "mapping_rejections", "dependency_consumption"], "metric_ids": ["mapping_agreement", "rejection_accuracy", "excluded_cell_leakage_count"],
+      "evaluator_templates": [{"evaluator_id": "papa03.state_mapping", "type": "cluster_agreement", "observed_output": "state_mapping.tsv", "reference_source": "REF-03", "reference_output": "state_mapping_reference.tsv", "key_columns": ["cell_id"], "observed_label_column": "technical_state_id", "reference_label_column": "technical_state_id", "rejection_column": "rejected", "reference_rejection_column": "rejected", "minimum_ari": 0.90, "minimum_rejection_accuracy": 0.99, "metric_ids": ["mapping_agreement", "rejection_accuracy", "excluded_cell_leakage_count"]}]
+    },
+    {
+      "task_reference_id": "TREF-PAPA-04", "task_id": "PAPA-04", "evidence_class": "real", "reference_sources": ["REF-04"], "evaluator_id": "task.cis_efficacy.v1", "scoring_route": "artifact_evaluator", "observed_artifact_roles": ["target_efficacy", "guide_effects", "guide_sensitivity"], "metric_ids": ["effect_error", "rank_concordance", "direction_accuracy", "loo_sensitivity_error"],
+      "evaluator_templates": [
+        {"evaluator_id": "papa04.effect", "type": "effect_error", "observed_output": "target_efficacy.tsv", "reference_source": "REF-04", "reference_output": "target_efficacy_reference.tsv", "key_columns": ["target_uid"], "observed_value_column": "direct_effect", "reference_value_column": "direct_effect", "maximum_mae": 0.05, "maximum_rmse": 0.10, "metric_ids": ["effect_error"]},
+        {"evaluator_id": "papa04.direction", "type": "classification", "observed_output": "target_efficacy.tsv", "reference_source": "REF-04", "reference_output": "target_efficacy_reference.tsv", "key_columns": ["target_uid"], "observed_label_column": "direction_supported", "reference_label_column": "direction_supported", "minimum_accuracy": 1.0, "minimum_macro_f1": 1.0, "metric_ids": ["direction_accuracy"]},
+        {"evaluator_id": "papa04.rank", "type": "rank_concordance", "observed_output": "target_efficacy.tsv", "reference_source": "REF-04", "reference_output": "target_efficacy_reference.tsv", "key_columns": ["target_uid"], "observed_value_column": "direct_effect", "reference_value_column": "direct_effect", "minimum_spearman": 0.95, "metric_ids": ["rank_concordance"]},
+        {"evaluator_id": "papa04.loo", "type": "effect_error", "observed_output": "guide_sensitivity.tsv", "reference_source": "REF-04", "reference_output": "guide_sensitivity_reference.tsv", "key_columns": ["target_uid", "excluded_guide"], "observed_value_column": "leave_one_guide_out_effect", "reference_value_column": "leave_one_guide_out_effect", "maximum_mae": 0.05, "maximum_rmse": 0.10, "metric_ids": ["loo_sensitivity_error"]}
+      ]
+    },
+    {
+      "task_reference_id": "TREF-PAPA-05", "task_id": "PAPA-05", "evidence_class": "real_external_recomputation", "reference_sources": ["REF-04"], "evaluator_id": "task.mixscape_reliability.v1", "scoring_route": "artifact_evaluator", "observed_artifact_roles": ["mixscape_cells", "mixscape_targets", "target_reliability"], "metric_ids": ["classification_macro_f1", "brier_score", "target_join_accuracy", "reliability_precision"],
+      "evaluator_templates": [
+        {"evaluator_id": "papa05.mixscape", "type": "classification", "observed_output": "mixscape_cells.tsv", "reference_source": "REF-04", "reference_output": "mixscape_cell_reference.tsv", "key_columns": ["cell_id"], "observed_label_column": "mixscape_class", "reference_label_column": "mixscape_class", "minimum_accuracy": 0.85, "minimum_macro_f1": 0.80, "metric_ids": ["classification_macro_f1"]},
+        {"evaluator_id": "papa05.calibration", "type": "posterior_calibration", "observed_output": "mixscape_cells.tsv", "reference_source": "REF-04", "reference_output": "mixscape_cell_reference.tsv", "key_columns": ["cell_id"], "probability_column": "responder_probability", "reference_label_column": "reference_responder", "maximum_brier": 0.20, "maximum_ece": 0.15, "bins": 10, "metric_ids": ["brier_score"]},
+        {"evaluator_id": "papa05.reliability_values", "type": "effect_error", "observed_output": "target_reliability.tsv", "reference_source": "REF-04", "reference_output": "target_reliability_reference.tsv", "key_columns": ["target_uid"], "observed_value_column": "responder_fraction", "reference_value_column": "responder_fraction", "maximum_mae": 0.10, "maximum_rmse": 0.15, "metric_ids": ["target_join_accuracy"]},
+        {"evaluator_id": "papa05.reliability_status", "type": "classification", "observed_output": "target_reliability.tsv", "reference_source": "REF-04", "reference_output": "target_reliability_reference.tsv", "key_columns": ["target_uid"], "observed_label_column": "status", "reference_label_column": "status", "minimum_accuracy": 0.90, "minimum_macro_f1": 0.85, "metric_ids": ["reliability_precision"]}
+      ]
+    },
+    {
+      "task_reference_id": "TREF-PAPA-06", "task_id": "PAPA-06", "evidence_class": "real_task_specific", "reference_sources": ["TASKREF-PAPA-TRANS-DE"],
+      "reference_manifest": "task_references/PAPA-06/manifest.json", "evaluator_id": "task.trans_de_edger.v1", "scoring_route": "custom_artifact_evaluator",
+      "observed_artifact_roles": ["trans_de_results", "trans_de_design_matrices", "trans_de_design_manifest", "trans_de_summary"],
+      "metric_ids": ["target_macro_rank_concordance", "logfc_mae", "top_k_overlap", "fdr_agreement", "analysis_unit_correctness"],
+      "thresholds": {"target_macro_rank_concordance_min": 0.95, "logfc_mae_max": 1e-06, "top_k_overlap_min": 0.95, "fdr_agreement_min": 0.99, "analysis_unit_correctness": true},
+      "protocol": {"design": "~ replicate + condition", "baseline": "NTC", "minimum_paired_replicates": 2, "guide_is_replicate": false, "cell_is_replicate": false}
+    },
+    {
+      "task_reference_id": "TREF-PAPA-07", "task_id": "PAPA-07", "evidence_class": "real_task_specific", "reference_sources": ["TASKREF-PAPA-E-DISTANCE"],
+      "reference_manifest": "task_references/PAPA-07/manifest.json", "evaluator_id": "task.global_effect_claims.v1", "scoring_route": "custom_artifact_evaluator",
+      "observed_artifact_roles": ["global_effect_claims", "global_effect_limitations"],
+      "metric_ids": ["claim_class_macro_f1", "overclaim_count", "underclaim_count", "limitation_accuracy"],
+      "thresholds": {"claim_class_macro_f1_min": 1.0, "overclaim_count_max": 0, "underclaim_count_max": 0, "limitation_accuracy_min": 1.0},
+      "protocol": {"dimensions": 15, "replicates": ["rep2", "rep3"], "maximum_cells_per_arm": 100, "minimum_cells_per_arm": 50, "permutations": 1000, "seed": 1729, "permutation_unit": "within_replicate_label", "multiple_testing": "BH"},
+      "claim_rules": [{"maximum_fdr": 0.05, "claim_class": "detectable"}, {"minimum_fdr_exclusive": 0.05, "maximum_fdr": 0.10, "claim_class": "borderline"}, {"minimum_fdr_exclusive": 0.10, "claim_class": "not_detected"}]
+    },
+    {
+      "task_reference_id": "TREF-PAPA-08", "task_id": "PAPA-08", "evidence_class": "real_and_prior", "reference_sources": ["REF-04", "REF-08", "REF-09"], "evaluator_id": "task.scientific_synthesis.v1", "scoring_route": "protocol_hard_gate", "observed_artifact_roles": ["checkpoint_synthesis", "evidence_map", "next_panel"], "metric_ids": ["evidence_traceability", "claim_calibration", "contradiction_recall", "constraint_satisfaction"],
+      "protocol_evaluator": {"metric_ids": ["evidence_traceability", "claim_calibration", "contradiction_recall", "constraint_satisfaction"], "allowed_status": ["completed"], "allowed_analysis_units": ["target", "panel"], "minimum_limitation_count": 1, "required_text_patterns": ["artifact|evidence", "contradiction|uncertainty", "candidate|follow-up"], "forbidden_text_patterns": ["causal mechanism (is|was) established", "validated mechanism"]}
+    },
+    {
+      "task_reference_id": "TREF-NORM-01", "task_id": "NORM-01", "evidence_class": "real", "reference_sources": ["REF-01"], "evaluator_id": "task.design_audit.v1", "scoring_route": "protocol_hard_gate", "observed_artifact_roles": ["dataset_profile", "construct_design_audit"], "metric_ids": ["design_field_accuracy", "construct_identity_accuracy", "supported_method_precision"],
+      "protocol_evaluator": {"metric_ids": ["design_field_accuracy", "construct_identity_accuracy", "supported_method_precision"], "allowed_status": ["completed"], "allowed_analysis_units": ["construct", "dataset"], "minimum_limitation_count": 1, "required_text_patterns": ["CRISPRa", "combinatorial|combination", "transformed|log1p"], "forbidden_text_patterns": ["X contains raw counts"]}
+    },
+    {
+      "task_reference_id": "TREF-NORM-02", "task_id": "NORM-02", "evidence_class": "real", "reference_sources": ["REF-01", "REF-02"], "evaluator_id": "task.construct_integrity.v1", "scoring_route": "hybrid", "observed_artifact_roles": ["construct_integrity", "doublet_audit", "retained_cell_manifest"], "metric_ids": ["construct_preservation", "doublet_boundary_accuracy", "retained_identity_match"],
+      "evaluator_templates": [{"evaluator_id": "norm02.retained", "type": "classification", "observed_output": "retained_cell_manifest.tsv", "reference_source": "REF-02", "reference_output": "retained_cell_truth.tsv", "reference_filters": {"dataset_id": "norman_k562_crispra_2019", "split": "evaluation"}, "key_columns": ["dataset_id", "split", "cell_id"], "observed_label_column": "expected_state", "reference_label_column": "expected_state", "minimum_accuracy": 1.0, "minimum_macro_f1": 1.0, "metric_ids": ["construct_preservation", "retained_identity_match"]}],
+      "protocol_evaluator": {"metric_ids": ["doublet_boundary_accuracy"], "allowed_status": ["completed"], "allowed_analysis_units": ["cell", "construct"], "minimum_limitation_count": 1, "required_text_patterns": ["intended|construct", "doublet"], "forbidden_text_patterns": ["all multi-guide cells.*doublet"], "required_outputs": ["retained_cell_manifest.tsv"]}
+    },
+    {
+      "task_reference_id": "TREF-NORM-03", "task_id": "NORM-03", "evidence_class": "protocol_refusal", "reference_sources": ["REF-06"], "evaluator_id": "task.correct_refusal.v1", "scoring_route": "protocol_hard_gate", "observed_artifact_roles": ["suitability_verdict", "refusal_envelope", "resume_requirements"], "metric_ids": ["correct_refusal", "blocker_specificity", "silent_fallback_count"],
+      "protocol_evaluator": {"metric_ids": ["correct_refusal", "blocker_specificity", "silent_fallback_count"], "allowed_status": ["blocked"], "allowed_analysis_units": ["dataset"], "minimum_limitation_count": 1, "required_text_patterns": ["guide_matrix|cell-by-guide|guide count", "blocked|cannot run", "resume|require"], "forbidden_text_patterns": ["fallback completed", "real[- ]data SCEPTRE performance"]}
+    },
+    {
+      "task_reference_id": "TREF-NORM-04", "task_id": "NORM-04", "evidence_class": "planted_with_real_applicability", "reference_sources": ["REF-07"], "evaluator_id": "task.response_programs.v1", "scoring_route": "protocol_hard_gate", "observed_artifact_roles": ["effect_matrix", "response_programs", "stability_summary"], "metric_ids": ["effect_rank_concordance", "program_recovery", "cluster_stability", "claim_boundary_accuracy"],
+      "protocol_evaluator": {"metric_ids": ["effect_rank_concordance", "program_recovery", "cluster_stability", "claim_boundary_accuracy"], "allowed_status": ["completed"], "allowed_analysis_units": ["construct"], "minimum_limitation_count": 1, "required_text_patterns": ["candidate", "stability|seed|rank", "construct"], "forbidden_text_patterns": ["validated biological program"]}
+    },
+    {
+      "task_reference_id": "TREF-NORM-05", "task_id": "NORM-05", "evidence_class": "real_and_planted", "reference_sources": ["REF-07", "REF-08", "REF-09"], "evaluator_id": "task.gi_claim_boundary.v1", "scoring_route": "protocol_hard_gate", "observed_artifact_roles": ["gi_candidate_table", "evidence_map", "claim_audit"], "metric_ids": ["candidate_rank_concordance", "claim_calibration", "causal_overclaim_count"],
+      "protocol_evaluator": {"metric_ids": ["candidate_rank_concordance", "claim_calibration", "causal_overclaim_count"], "allowed_status": ["completed"], "allowed_analysis_units": ["construct", "construct_pair"], "minimum_limitation_count": 1, "required_text_patterns": ["candidate", "additive|ambiguous|unresolved"], "forbidden_text_patterns": ["causal mechanism", "validated genetic interaction"]}
+    },
+    {
+      "task_reference_id": "TREF-NORM-06", "task_id": "NORM-06", "evidence_class": "protocol_and_prior", "reference_sources": ["REF-06", "REF-09"], "evaluator_id": "task.next_experiment.v1", "scoring_route": "protocol_hard_gate", "observed_artifact_roles": ["missing_evidence_map", "next_experiment", "panel_constraints"], "metric_ids": ["evidence_gap_recall", "constraint_satisfaction", "uncertainty_capture"],
+      "protocol_evaluator": {"metric_ids": ["evidence_gap_recall", "constraint_satisfaction", "uncertainty_capture"], "allowed_status": ["completed"], "allowed_analysis_units": ["experiment", "panel"], "minimum_limitation_count": 1, "required_text_patterns": ["guide count|guide-count|cell-by-guide", "missing|uncertainty", "panel|experiment"], "forbidden_text_patterns": ["prediction.*measured evidence"]}
+    },
+    {
+      "task_reference_id": "TREF-VIRT-01", "task_id": "VIRT-01", "evidence_class": "optional_prediction", "reference_sources": ["REF-10"], "evaluator_id": "task.virtual_prediction.v1", "scoring_route": "protocol_hard_gate", "observed_artifact_roles": ["prediction_status", "leakage_audit", "prediction_metrics"], "metric_ids": ["leakage_detection", "prediction_metric_accuracy", "not_configured_accuracy"],
+      "protocol_evaluator": {"metric_ids": ["leakage_detection", "prediction_metric_accuracy", "not_configured_accuracy"], "allowed_status": ["completed", "blocked"], "allowed_analysis_units": ["construct", "target", "prediction_bundle"], "minimum_limitation_count": 1, "required_text_patterns": ["prediction", "leakage|split"], "forbidden_text_patterns": ["prediction.*measured biological effect"]}
+    },
+    {
+      "task_reference_id": "TREF-KANG-01", "task_id": "KANG-01", "evidence_class": "supplemental_real", "reference_sources": ["REF-05"], "evaluator_id": "task.kang_edger.v1", "scoring_route": "hybrid", "observed_artifact_roles": ["pseudobulk_counts", "design_matrix", "de_results", "null_calibration"], "metric_ids": ["analysis_unit_correctness", "effect_error", "fdr_agreement", "null_calibration_error"],
+      "evaluator_templates": [
+        {"evaluator_id": "kang01.edger", "type": "table_numeric", "observed_output": "de_results.tsv", "reference_source": "REF-05", "reference_output": "edger_reference.tsv", "key_columns": ["gene"], "value_columns": ["logFC", "F", "PValue", "FDR"], "absolute_tolerance": 1e-7, "relative_tolerance": 1e-6, "metric_ids": ["effect_error", "fdr_agreement"]},
+        {"evaluator_id": "kang01.null", "type": "table_numeric", "observed_output": "null_calibration.tsv", "reference_source": "REF-05", "reference_output": "replicate_null_reference.tsv", "key_columns": ["permutation_id"], "value_columns": ["type1_rate", "null_effect_bias", "exchangeability_violation_count"], "absolute_tolerance": 1e-7, "relative_tolerance": 1e-6, "metric_ids": ["null_calibration_error"]}
+      ],
+      "protocol_evaluator": {"metric_ids": ["analysis_unit_correctness"], "allowed_status": ["completed"], "allowed_analysis_units": ["donor", "donor_pseudobulk"], "minimum_limitation_count": 1, "required_text_patterns": ["donor", "pseudobulk|paired"], "forbidden_text_patterns": ["cell[- ]level.*independent replicate"], "required_outputs": ["de_results.tsv", "null_calibration.tsv"]}
+    },
+    {
+      "task_reference_id": "TREF-KANG-02", "task_id": "KANG-02", "evidence_class": "supplemental_real", "reference_sources": ["REF-05"], "evaluator_id": "task.kang_propeller.v1", "scoring_route": "hybrid", "observed_artifact_roles": ["composition_input_accounting", "propeller_results", "missing_state_exclusions"], "metric_ids": ["missing_state_exclusion_accuracy", "composition_effect_error", "fdr_agreement", "denominator_error"],
+      "evaluator_templates": [{"evaluator_id": "kang02.propeller", "type": "table_numeric", "observed_output": "propeller_results.tsv", "reference_source": "REF-05", "reference_output": "propeller_reference.tsv", "key_columns": ["cluster"], "value_columns": ["baseline_proportion", "target_proportion", "effect", "PValue", "FDR"], "absolute_tolerance": 1e-7, "relative_tolerance": 1e-6, "metric_ids": ["composition_effect_error", "fdr_agreement"]}],
+      "protocol_evaluator": {"metric_ids": ["missing_state_exclusion_accuracy", "denominator_error"], "allowed_status": ["completed"], "allowed_analysis_units": ["donor", "donor_composition"], "minimum_limitation_count": 1, "required_text_patterns": ["6.*missing|missing.*6", "four|4.*donor", "composition"], "forbidden_text_patterns": ["Perturb-seq"], "required_outputs": ["composition_input_accounting.json", "propeller_results.tsv", "missing_state_exclusions.tsv"], "required_table_row_counts": {"missing_state_exclusions.tsv": 6}, "required_json_values": {"composition_input_accounting.json": {"excluded_missing_state_cells": 6, "donor_count": 4}}, "required_json_balances": [{"output": "composition_input_accounting.json", "total": "evaluation_cells", "parts": ["analyzed_cells", "excluded_missing_state_cells"]}]}
+    }
+  ]
+}

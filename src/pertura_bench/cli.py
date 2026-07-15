@@ -50,6 +50,10 @@ def _exit_code(command: str, payload: object) -> int:
         return 0 if payload.get("ready") is True else 1
     if command == "agent" and isinstance(payload, dict) and "ready" in payload:
         return 0 if payload.get("ready") is True else 1
+    if command == "agent" and isinstance(payload, dict) and payload.get(
+        "status"
+    ) in {"failed", "not_available", "judge_unavailable"}:
+        return 1
     if command in {"run", "run-matrix"}:
         if not payload or _contains_failed_verdict(payload):
             return 1
@@ -138,8 +142,35 @@ def main(argv: list[str] | None = None) -> int:
     agent_server.add_argument("--enforced-memory-gb", type=float)
     agent_server.add_argument("--enforced-n-jobs", type=int)
     agent_server.add_argument("--resource-evidence", type=Path)
+    paper_workflow = agent_sub.add_parser("run-paper-workflow")
+    paper_workflow.add_argument("workflow_id")
+    paper_workflow.add_argument("--cache", type=Path, required=True)
+    paper_workflow.add_argument("--paper-root", type=Path, required=True)
+    paper_workflow.add_argument("--output", type=Path, required=True)
+    paper_workflow.add_argument("--repo", type=Path, default=Path.cwd())
+    paper_workflow.add_argument(
+        "--condition",
+        choices=("pertura_full", "prompt_only", "free_codeact"),
+        required=True,
+    )
+    paper_workflow.add_argument(
+        "--repeat-index", type=int, choices=(1, 2), required=True
+    )
+    paper_workflow.add_argument("--task-catalog", type=Path, required=True)
+    paper_workflow.add_argument(
+        "--task-reference-catalog", type=Path, required=True
+    )
+    paper_workflow.add_argument(
+        "--paper-anchor-catalog", type=Path, required=True
+    )
+    paper_workflow.add_argument("--asset-catalog", type=Path, required=True)
+    paper_workflow.add_argument("--resource-evidence", type=Path, required=True)
     agent_regrade = agent_sub.add_parser("regrade")
     agent_regrade.add_argument("execution_root", type=Path)
+    paper_regrade = agent_sub.add_parser("regrade-paper-workflow")
+    paper_regrade.add_argument("execution_root", type=Path)
+    paper_list = agent_sub.add_parser("paper-workflows")
+    paper_list.add_argument("--task-catalog", type=Path, required=True)
     agent_sub.add_parser("server-cases")
     agent_run.add_argument("--write-frozen-verdicts", action="store_true")
 
@@ -185,6 +216,10 @@ def main(argv: list[str] | None = None) -> int:
     server.add_argument("--parameter-catalog", type=Path)
     server.add_argument("--design-confirmations", type=Path)
     server.add_argument("--metric-reference-catalog", type=Path)
+    server.add_argument("--paper-task-catalog", type=Path)
+    server.add_argument("--paper-task-reference-catalog", type=Path)
+    server.add_argument("--paper-anchor-catalog", type=Path)
+    server.add_argument("--paper-asset-catalog", type=Path)
 
     bind_plan = sub.add_parser("bind-server-plan")
     bind_plan.add_argument("--template", type=Path, required=True)
@@ -193,6 +228,10 @@ def main(argv: list[str] | None = None) -> int:
     bind_plan.add_argument("--resource-lock-manifest", type=Path, required=True)
     bind_plan.add_argument("--prediction-lock-manifest", type=Path)
     bind_plan.add_argument("--subset-catalog", type=Path, required=True)
+    bind_plan.add_argument("--paper-task-catalog", type=Path)
+    bind_plan.add_argument("--paper-task-reference-catalog", type=Path)
+    bind_plan.add_argument("--paper-anchor-catalog", type=Path)
+    bind_plan.add_argument("--paper-asset-catalog", type=Path)
     bind_plan.add_argument("--output", type=Path, required=True)
 
     references = sub.add_parser("references")
@@ -437,9 +476,57 @@ def main(argv: list[str] | None = None) -> int:
                 enforced_n_jobs=args.enforced_n_jobs,
                 resource_evidence_path=args.resource_evidence,
             )
+        elif args.agent_command == "run-paper-workflow":
+            from pertura_bench.paper_agent_execution import (
+                run_paper_agent_workflow,
+            )
+
+            try:
+                agent_repo = require_repo_root(args.repo)
+            except ValueError as exc:
+                parser.error(str(exc))
+            payload = run_paper_agent_workflow(
+                args.workflow_id,
+                repo_root=agent_repo,
+                cache=args.cache,
+                paper_root=args.paper_root,
+                output=args.output,
+                condition=args.condition,
+                repeat_index=args.repeat_index,
+                task_catalog_path=args.task_catalog,
+                task_reference_catalog_path=args.task_reference_catalog,
+                paper_anchor_catalog_path=args.paper_anchor_catalog,
+                asset_catalog_path=args.asset_catalog,
+                resource_evidence_path=args.resource_evidence,
+            )
         elif args.agent_command == "regrade":
             from pertura_bench.agent_server_execution import regrade_server_agent_case
             payload = regrade_server_agent_case(args.execution_root)
+        elif args.agent_command == "regrade-paper-workflow":
+            from pertura_bench.paper_agent_execution import (
+                regrade_paper_agent_workflow,
+            )
+
+            payload = regrade_paper_agent_workflow(args.execution_root)
+        elif args.agent_command == "paper-workflows":
+            from pertura_bench.paper_tasks import load_paper_task_catalog
+
+            catalog = load_paper_task_catalog(args.task_catalog)
+            payload = {
+                "schema_version": catalog.payload["schema_version"],
+                "catalog_sha256": catalog.sha256,
+                "workflows": [
+                    {
+                        "workflow_id": item["workflow_id"],
+                        "dataset_id": item["dataset_id"],
+                        "role": item["role"],
+                        "task_ids": [
+                            task["task_id"] for task in item.get("turns") or ()
+                        ],
+                    }
+                    for item in catalog.workflows
+                ],
+            }
         else:
             path = resources.files("pertura_bench").joinpath("cases/server_agent_cases.v1.json")
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -520,6 +607,10 @@ def main(argv: list[str] | None = None) -> int:
             parameter_catalog_path=args.parameter_catalog,
             design_confirmations_path=args.design_confirmations,
             metric_reference_catalog_path=args.metric_reference_catalog,
+            paper_task_catalog_path=args.paper_task_catalog,
+            paper_task_reference_catalog_path=args.paper_task_reference_catalog,
+            paper_anchor_catalog_path=args.paper_anchor_catalog,
+            paper_asset_catalog_path=args.paper_asset_catalog,
         )
     elif args.command == "bind-server-plan":
         from pertura_bench.capability_models import ServerBenchmarkPlan
@@ -540,6 +631,29 @@ def main(argv: list[str] | None = None) -> int:
         template = ServerBenchmarkPlan.model_validate_json(
             args.template.read_text(encoding="utf-8")
         )
+        paper_catalog_arguments = {
+            "paper_task_catalog_hash": args.paper_task_catalog,
+            "paper_task_reference_catalog_hash": args.paper_task_reference_catalog,
+            "paper_anchor_catalog_hash": args.paper_anchor_catalog,
+            "paper_asset_catalog_hash": args.paper_asset_catalog,
+        }
+        configured_paper_catalogs = [
+            path is not None for path in paper_catalog_arguments.values()
+        ]
+        if any(configured_paper_catalogs) and not all(configured_paper_catalogs):
+            parser.error("all four paper benchmark catalogs must be supplied together")
+        for field, path in paper_catalog_arguments.items():
+            if path is None:
+                continue
+            if not path.is_file():
+                parser.error(f"paper benchmark catalog is missing: {path}")
+            observed_hash = file_sha256(path)
+            expected_hash = template.checkpoint_binding.get(field)
+            if observed_hash != expected_hash:
+                parser.error(
+                    f"paper benchmark catalog drift for {field}: "
+                    f"expected {expected_hash}, observed {observed_hash}"
+                )
         resource_manifest = json.loads(
             args.resource_lock_manifest.read_text(encoding="utf-8")
         )

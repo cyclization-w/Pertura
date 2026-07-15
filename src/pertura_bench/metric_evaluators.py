@@ -49,6 +49,16 @@ def evaluate_artifact_metrics(
             observed_hash = file_sha256(observed_path)
             observed = _read_table(observed_path)
             reference = _read_table(reference_path)
+            observed = _filter_table(
+                observed,
+                raw.get("observed_filters") or {},
+                label="observed",
+            )
+            reference = _filter_table(
+                reference,
+                raw.get("reference_filters") or {},
+                label="reference",
+            )
             if evaluator_type == "table_numeric":
                 passed, metrics = _compare_numeric_tables(observed, reference, raw)
             elif evaluator_type == "classification":
@@ -129,6 +139,15 @@ def validate_artifact_evaluator(raw: Mapping[str, Any], *, context: str) -> None
     key_columns = raw.get("key_columns")
     if not isinstance(key_columns, list) or not key_columns:
         raise ValueError(f"artifact evaluator requires key_columns: {context}")
+    for filter_name in ("observed_filters", "reference_filters"):
+        filters = raw.get(filter_name) or {}
+        if not isinstance(filters, Mapping) or any(
+            not str(column) or isinstance(value, (dict, list))
+            for column, value in filters.items()
+        ):
+            raise ValueError(
+                f"artifact evaluator {filter_name} is invalid: {context}"
+            )
     if evaluator_type == "table_numeric":
         value_columns = raw.get("value_columns")
         if not isinstance(value_columns, list) or not value_columns:
@@ -228,6 +247,24 @@ def _read_table(path: Path):
     if suffix == ".json":
         return pd.read_json(path)
     raise ValueError(f"unsupported metric table format: {suffix}")
+
+
+def _filter_table(table, filters: Mapping[str, Any], *, label: str):
+    filtered = table
+    for column, expected in filters.items():
+        if str(column) not in filtered.columns:
+            raise ValueError(f"{label} table lacks filter column: {column}")
+        series = filtered[str(column)]
+        if isinstance(expected, bool):
+            normalized = series.astype(str).str.strip().str.lower().map(
+                {"true": True, "false": False, "1": True, "0": False}
+            )
+            filtered = filtered.loc[normalized == expected]
+        else:
+            filtered = filtered.loc[series.astype(str) == str(expected)]
+    if filters and filtered.empty:
+        raise ValueError(f"{label} table filters selected zero rows")
+    return filtered.copy()
 
 
 def _aligned_tables(observed, reference, key_columns: Sequence[str]):

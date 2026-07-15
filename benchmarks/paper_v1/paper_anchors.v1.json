@@ -1,0 +1,86 @@
+{
+  "schema_version": "pertura-paper-anchor-catalog-v1",
+  "purpose": "Frozen study facts constrain task framing but never replace measured benchmark artifacts.",
+  "anchors": [
+    {
+      "anchor_id": "ANCHOR-REPL-DESIGN",
+      "dataset_id": "replogle_k562_essential_2022",
+      "study": "Replogle et al. 2022 K562 essential-gene CRISPRi screen",
+      "study_fact": "The registered artifact is a large single-cell CRISPRi expression atlas with perturbation labels; the benchmark artifact does not include a split-scoped raw cell-by-guide count matrix.",
+      "required_modalities": ["rna_expression", "perturbation_metadata"],
+      "evaluation_entities": ["target", "control", "cell"],
+      "allowed_claim_level": "observed design facts and target-level derived responses",
+      "forbidden_promotions": ["metadata_label_to_raw_guide_measurement", "target_effect_to_guide_efficacy"]
+    },
+    {
+      "anchor_id": "ANCHOR-REPL-ATLAS",
+      "dataset_id": "replogle_k562_essential_2022",
+      "study": "Replogle et al. 2022 genotype-phenotype atlas",
+      "study_fact": "Perturbation response structure can recover known functional organization, while new clusters remain hypotheses rather than validated complexes or mechanisms.",
+      "required_modalities": ["rna_expression", "perturbation_metadata", "frozen_gene_sets"],
+      "evaluation_entities": ["target", "response_program", "cluster"],
+      "allowed_claim_level": "derived response structure and candidate follow-up",
+      "forbidden_promotions": ["cluster_to_validated_complex", "association_to_causal_mechanism"]
+    },
+    {
+      "anchor_id": "ANCHOR-PAPA-ECCITE",
+      "dataset_id": "papalexi_thp1_eccite",
+      "study": "Papalexi et al. THP-1 ECCITE-seq screen",
+      "study_fact": "RNA, guide, protein, and hashing modalities require exact cell alignment; guide-count evidence supports assignment and ambient-signal analysis.",
+      "required_modalities": ["rna_counts", "guide_counts", "guide_metadata", "replicate_metadata"],
+      "evaluation_entities": ["cell", "guide", "target", "replicate"],
+      "allowed_claim_level": "measured modality QC and derived retained-cell decisions",
+      "forbidden_promotions": ["multi_guide_to_doublet", "evaluation_label_to_reference_training"]
+    },
+    {
+      "anchor_id": "ANCHOR-PAPA-CHECKPOINT",
+      "dataset_id": "papalexi_thp1_eccite",
+      "study": "Papalexi et al. checkpoint-regulation screen",
+      "study_fact": "The study asks which perturbations alter checkpoint-related responses; cis target efficacy, responder state, trans differential expression, and global response are distinct estimands.",
+      "required_modalities": ["rna_counts", "guide_counts", "target_labels", "replicates"],
+      "evaluation_entities": ["target", "guide", "replicate", "gene"],
+      "allowed_claim_level": "measured or derived associations with artifact-specific uncertainty",
+      "forbidden_promotions": ["cis_efficacy_to_trans_mechanism", "e_distance_to_deg", "nonsignificance_to_absence", "association_to_causality"]
+    },
+    {
+      "anchor_id": "ANCHOR-NORM-DESIGN",
+      "dataset_id": "norman_k562_crispra_2019",
+      "study": "Norman et al. 2019 combinatorial CRISPRa screen",
+      "study_fact": "Perturbations are intended combinatorial constructs; multiple guides are not by themselves evidence of a transcriptomic doublet.",
+      "required_modalities": ["rna_expression", "construct_metadata"],
+      "evaluation_entities": ["construct", "target_pair", "cell"],
+      "allowed_claim_level": "observed construct design and derived retention decisions",
+      "forbidden_promotions": ["intended_combination_to_doublet", "transformed_expression_to_raw_counts"]
+    },
+    {
+      "anchor_id": "ANCHOR-NORM-GI",
+      "dataset_id": "norman_k562_crispra_2019",
+      "study": "Norman et al. 2019 genetic-interaction landscape",
+      "study_fact": "Combination response structure supports candidate interaction hypotheses, but a multi-guide label or response cluster alone does not establish a causal genetic mechanism.",
+      "required_modalities": ["rna_expression", "construct_metadata", "response_programs"],
+      "evaluation_entities": ["construct", "target_pair", "response_program"],
+      "allowed_claim_level": "derived programs and candidate genetic-interaction hypotheses",
+      "forbidden_promotions": ["combination_to_interaction", "candidate_to_validated", "prediction_to_measurement"]
+    },
+    {
+      "anchor_id": "ANCHOR-KANG-DONOR",
+      "dataset_id": "kang18_8vs8_pbmc",
+      "study": "Kang et al. donor-replicated stimulation scRNA-seq",
+      "study_fact": "Donors are independent units for condition contrasts; cells are subsamples. Composition analysis requires observed state labels and excludes missing labels.",
+      "required_modalities": ["rna_counts", "donor", "condition", "cell_state"],
+      "evaluation_entities": ["donor", "condition", "cell_state"],
+      "allowed_claim_level": "supplemental donor-aware expression and composition associations",
+      "forbidden_promotions": ["cell_to_replicate", "missing_state_to_observed_state", "kang_to_perturbseq"]
+    },
+    {
+      "anchor_id": "ANCHOR-VIRTUAL-PREDICTION",
+      "dataset_id": "norman_k562_crispra_2019",
+      "study": "Optional frozen prediction-bundle protocol",
+      "study_fact": "Prediction evaluation is configured only when a frozen manifest is present and leakage checks pass.",
+      "required_modalities": ["prediction_manifest", "heldout_truth"],
+      "evaluation_entities": ["prediction", "heldout_target"],
+      "allowed_claim_level": "supplemental predictive performance",
+      "forbidden_promotions": ["prediction_to_measurement", "leaked_score_to_valid_performance"]
+    }
+  ]
+}

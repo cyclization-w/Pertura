@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import json
+import math
 from importlib import resources
 from pathlib import Path
 from typing import Any, Mapping
@@ -30,6 +31,10 @@ _BINDING_FIELDS = (
     "parameter_catalog_hash",
     "design_confirmation_catalog_hash",
     "metric_reference_catalog_hash",
+    "paper_task_catalog_hash",
+    "paper_task_reference_catalog_hash",
+    "paper_anchor_catalog_hash",
+    "paper_asset_catalog_hash",
 )
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
@@ -42,6 +47,10 @@ def build_server_plan(
     parameter_catalog_path: str | Path | None = None,
     design_confirmations_path: str | Path | None = None,
     metric_reference_catalog_path: str | Path | None = None,
+    paper_task_catalog_path: str | Path | None = None,
+    paper_task_reference_catalog_path: str | Path | None = None,
+    paper_anchor_catalog_path: str | Path | None = None,
+    paper_asset_catalog_path: str | Path | None = None,
 ) -> ServerBenchmarkPlan:
     root = (
         Path(__file__).resolve().parents[2]
@@ -662,6 +671,195 @@ def build_server_plan(
                     },
                 })
 
+    paper_catalog_hashes = {
+        "paper_task_catalog_hash": canonical_hash({"paper_tasks": "not_configured"}),
+        "paper_task_reference_catalog_hash": canonical_hash({"paper_task_references": "not_configured"}),
+        "paper_anchor_catalog_hash": canonical_hash({"paper_anchors": "not_configured"}),
+        "paper_asset_catalog_hash": canonical_hash({"paper_assets": "not_configured"}),
+    }
+    if paper_task_catalog_path is not None:
+        required_paper_catalogs = {
+            "paper_task_catalog_hash": paper_task_catalog_path,
+            "paper_task_reference_catalog_hash": paper_task_reference_catalog_path,
+            "paper_anchor_catalog_hash": paper_anchor_catalog_path,
+            "paper_asset_catalog_hash": paper_asset_catalog_path,
+        }
+        missing_catalogs = [
+            name for name, path in required_paper_catalogs.items() if path is None
+        ]
+        if missing_catalogs:
+            raise ValueError(
+                "paper server plan is missing catalogs: "
+                + ", ".join(missing_catalogs)
+            )
+        resolved_catalogs = {
+            name: Path(path).resolve()
+            for name, path in required_paper_catalogs.items()
+            if path is not None
+        }
+        for name, path in resolved_catalogs.items():
+            if not path.is_file():
+                raise FileNotFoundError(f"{name}: {path}")
+            paper_catalog_hashes[name] = file_sha256(path)
+        from pertura_bench.paper_tasks import load_paper_task_catalog
+        from pertura_bench.paper_tasks import (
+            validate_paper_asset_catalog,
+            validate_paper_anchor_catalog,
+            validate_task_reference_catalog,
+        )
+
+        paper_catalog = load_paper_task_catalog(
+            resolved_catalogs["paper_task_catalog_hash"]
+        )
+        task_references = json.loads(
+            resolved_catalogs[
+                "paper_task_reference_catalog_hash"
+            ].read_text(encoding="utf-8")
+        )
+        if (
+            task_references.get("schema_version")
+            != "pertura-paper-task-reference-catalog-bound-v1"
+            or task_references.get("status") != "bound"
+            or task_references.get("passed") is not True
+        ):
+            raise ValueError(
+                "paper task-reference catalog is not bound and validated"
+            )
+        reference_problems = validate_task_reference_catalog(
+            task_references, paper_catalog.tasks()
+        )
+        if reference_problems:
+            raise ValueError(
+                "invalid bound paper task-reference catalog: "
+                + "; ".join(reference_problems)
+            )
+        paper_anchors = json.loads(
+            resolved_catalogs["paper_anchor_catalog_hash"].read_text(
+                encoding="utf-8"
+            )
+        )
+        anchor_problems = validate_paper_anchor_catalog(
+            paper_anchors, paper_catalog.tasks()
+        )
+        if anchor_problems:
+            raise ValueError(
+                "invalid paper-anchor catalog: "
+                + "; ".join(anchor_problems)
+            )
+        paper_assets = json.loads(
+            resolved_catalogs["paper_asset_catalog_hash"].read_text(
+                encoding="utf-8"
+            )
+        )
+        if (
+            paper_assets.get("schema_version")
+            != "pertura-paper-agent-assets-v1"
+            or paper_assets.get("status") != "bound"
+            or paper_assets.get("passed") is not True
+        ):
+            raise ValueError("paper asset catalog is not bound and validated")
+        asset_problems = validate_paper_asset_catalog(
+            paper_assets, paper_catalog
+        )
+        if asset_problems:
+            raise ValueError(
+                "invalid bound paper asset catalog: "
+                + "; ".join(asset_problems)
+            )
+        jobs = [item for item in jobs if item.get("kind") != "agent_workflow"]
+        for workflow in paper_catalog.workflows:
+            dataset_id = str(workflow["dataset_id"])
+            if dataset_id not in artifact_ids_by_dataset:
+                raise ValueError(
+                    f"paper workflow lacks prepared dataset: {dataset_id}"
+                )
+            required_tasks = [
+                task
+                for task in workflow.get("turns") or ()
+                if task.get("role") != "optional"
+            ]
+            maximum_memory = max(
+                float(task["resources"]["max_memory_gb"])
+                for task in required_tasks
+            )
+            total_timeout = sum(
+                int(task["resources"]["timeout_seconds"])
+                for task in required_tasks
+            )
+            for condition in paper_catalog.payload["execution_protocol"]["conditions"]:
+                for repeat_index in (1, 2):
+                    workflow_id = str(workflow["workflow_id"])
+                    jobs.append(
+                        {
+                            "job_id": f"paper-agent:{workflow_id}:{condition}:repeat-{repeat_index}",
+                            "kind": "paper_agent_workflow",
+                            "workflow_id": workflow_id,
+                            "dataset_id": dataset_id,
+                            "benchmark_condition": condition,
+                            "repeat_index": repeat_index,
+                            "benchmark_track": workflow["role"],
+                            "provider": "claude-agent-sdk",
+                            "model_source": "PERTURA_CLAUDE_MODEL",
+                            "task_ids": [
+                                task["task_id"]
+                                for task in workflow.get("turns") or ()
+                            ],
+                            "required_task_count": len(required_tasks),
+                            "session_scope": {
+                                "shared_project": True,
+                                "shared_analysis_run": True,
+                                "shared_conversation": True,
+                                "shared_provider_session": True,
+                                "condition_repeat_isolated": True,
+                            },
+                            "depends_on": [
+                                subset_jobs[(dataset_id, "calibration")],
+                                subset_jobs[(dataset_id, "evaluation")],
+                            ],
+                            "command": {
+                                "argv": [
+                                    "python", "-m", "pertura_bench", "agent",
+                                    "run-paper-workflow", workflow_id,
+                                    "--cache", "$PERTURA_BENCH_CACHE",
+                                    "--paper-root", "$PERTURA_PAPER_ROOT",
+                                    "--output", "$PERTURA_BENCH_OUTPUT",
+                                    "--repo", "$PERTURA_REPO",
+                                    "--condition", condition,
+                                    "--repeat-index", str(repeat_index),
+                                    "--task-catalog", "$PERTURA_PAPER_TASK_CATALOG",
+                                    "--task-reference-catalog", "$PERTURA_PAPER_TASK_REFERENCES",
+                                    "--paper-anchor-catalog", "$PERTURA_PAPER_ANCHORS",
+                                    "--asset-catalog", "$PERTURA_PAPER_ASSETS",
+                                    "--resource-evidence", "$PERTURA_BENCH_RESOURCE_EVIDENCE",
+                                ]
+                            },
+                            "consumes": [
+                                artifact_ids_by_dataset[dataset_id]["calibration"],
+                                artifact_ids_by_dataset[dataset_id]["evaluation"],
+                            ],
+                            "produces": [
+                                f"paper-workflow-verdict:{workflow_id}:{condition}:repeat-{repeat_index}"
+                            ],
+                            "checkpoint_requirement": {
+                                "required": True,
+                                "binding_fields": list(_BINDING_FIELDS),
+                                "binding_source": "server_plan.checkpoint_binding",
+                            },
+                            "environment": _bound_job_environment(),
+                            "resources": {
+                                "cpus": 1,
+                                "memory_gb": maximum_memory,
+                                "walltime_minutes": max(1, math.ceil(total_timeout / 60)),
+                            },
+                            "failure_policy": {
+                                "missing_catalog": "failed_not_configured",
+                                "missing_reference": "failed_not_available",
+                                "judge_unavailable": "failed_no_fallback",
+                                "timeout": "failed_no_fallback",
+                            },
+                        }
+                    )
+
     case_catalog_hash = _case_catalog_hash(root)
     template_digest = _template_digest(
         artifacts=artifacts,
@@ -671,7 +869,11 @@ def build_server_plan(
     )
     from pertura_runtime.agent_bundle.bundle import bundled_skill_manifest
     from pertura_runtime.project.models import ReportRevision, TurnDraft, TurnFinal
-    agent_case_catalog_hash = file_sha256(agent_catalog_path)
+    agent_case_catalog_hash = (
+        paper_catalog_hashes["paper_task_catalog_hash"]
+        if paper_task_catalog_path is not None
+        else file_sha256(agent_catalog_path)
+    )
     skill_bundle_hash = bundled_skill_manifest()["bundle_hash"]
     capability_spec_hash = canonical_hash([
         item.model_dump(mode="json") for item in registry.specs()
@@ -710,6 +912,7 @@ def build_server_plan(
             "parameter_catalog_hash": real_parameter_catalog_hash,
             "design_confirmation_catalog_hash": design_catalog_hash,
             "metric_reference_catalog_hash": metric_catalog_hash,
+            **paper_catalog_hashes,
         },
         executable=False,
     )
@@ -778,6 +981,8 @@ def assert_server_plan_executable(plan: ServerBenchmarkPlan) -> None:
         "prediction_bundle_set_hash", "server_plan_hash",
         "parameter_catalog_hash", "design_confirmation_catalog_hash",
         "metric_reference_catalog_hash",
+        "paper_task_catalog_hash", "paper_task_reference_catalog_hash",
+        "paper_anchor_catalog_hash", "paper_asset_catalog_hash",
     ):
         value = str(binding.get(name) or "")
         if not _SHA256.fullmatch(value):
@@ -1075,5 +1280,9 @@ def _bound_plan_digest(binding: Mapping[str, Any]) -> str:
             "parameter_catalog_hash": binding.get("parameter_catalog_hash"),
             "design_confirmation_catalog_hash": binding.get("design_confirmation_catalog_hash"),
             "metric_reference_catalog_hash": binding.get("metric_reference_catalog_hash"),
+            "paper_task_catalog_hash": binding.get("paper_task_catalog_hash"),
+            "paper_task_reference_catalog_hash": binding.get("paper_task_reference_catalog_hash"),
+            "paper_anchor_catalog_hash": binding.get("paper_anchor_catalog_hash"),
+            "paper_asset_catalog_hash": binding.get("paper_asset_catalog_hash"),
         }
     )
