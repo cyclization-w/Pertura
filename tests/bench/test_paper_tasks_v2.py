@@ -58,6 +58,16 @@ def test_every_task_has_one_reference_binding_and_known_paper_anchor() -> None:
     assert validate_paper_anchor_catalog(anchors, catalog.tasks()) == []
 
 
+def test_papa02_binds_the_frozen_ref03_control_reference() -> None:
+    payload = json.loads(REFERENCES.read_text(encoding="utf-8"))
+    binding = next(
+        item for item in payload["bindings"] if item["task_id"] == "PAPA-02"
+    )
+    assert binding["evaluator_templates"][0]["reference_output"] == (
+        "control_state_reference/control_assignments.tsv"
+    )
+
+
 def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
     tmp_path: Path,
 ) -> None:
