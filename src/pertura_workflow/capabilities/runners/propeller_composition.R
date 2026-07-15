@@ -41,7 +41,7 @@ if (!"cluster" %in% colnames(result)) {
   result$cluster <- rownames(result)
 }
 write.csv(result, file.path(cfg$output_dir, "propeller_results.csv"), row.names = FALSE)
-proportions <- as.data.frame(t(prop_list$proportions), check.names = FALSE)
+proportions <- as.data.frame(t(prop_list$Proportions), check.names = FALSE)
 proportions$sample_id <- rownames(proportions)
 proportions <- merge(proportions, sample_table, by = "sample_id", all.x = TRUE, sort = FALSE)
 write.csv(

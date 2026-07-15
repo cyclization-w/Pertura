@@ -94,7 +94,7 @@ prop_list <- getTransformedProps(
   clusters = as.character(cells$state),
   sample = as.character(cells$sample_id)
 )
-sample_order <- colnames(prop_list$proportions)
+sample_order <- colnames(prop_list$Proportions)
 sample_table <- sample_table[match(sample_order, sample_table$sample_id), , drop = FALSE]
 if (any(is.na(sample_table$sample_id))) stop("Propeller sample alignment failed")
 designed <- paired_design(sample_table)
@@ -115,11 +115,11 @@ propeller <- propeller.ttest(
   sort = FALSE
 )
 if (!"cluster" %in% colnames(propeller)) propeller$cluster <- rownames(propeller)
-propeller <- propeller[match(rownames(prop_list$proportions), propeller$cluster), , drop = FALSE]
+propeller <- propeller[match(rownames(prop_list$Proportions), propeller$cluster), , drop = FALSE]
 baseline_samples <- sample_table$condition == cfg$baseline
 target_samples <- sample_table$condition == cfg$target
-baseline_mean <- rowMeans(prop_list$proportions[, baseline_samples, drop = FALSE])
-target_mean <- rowMeans(prop_list$proportions[, target_samples, drop = FALSE])
+baseline_mean <- rowMeans(prop_list$Proportions[, baseline_samples, drop = FALSE])
+target_mean <- rowMeans(prop_list$Proportions[, target_samples, drop = FALSE])
 p_column <- intersect(c("P.Value", "PValue", "p.value", "pvalue"), colnames(propeller))
 if (length(p_column) == 0) stop("Propeller result lacks a p-value column")
 if (!"FDR" %in% colnames(propeller)) stop("Propeller result lacks FDR")

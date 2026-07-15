@@ -39,7 +39,7 @@ if (!"cluster" %in% colnames(result)) result$cluster <- rownames(result)
 result <- result[order(result$cluster), , drop = FALSE]
 write.csv(result, cfg$result_path, row.names = FALSE, quote = FALSE)
 
-proportions <- as.data.frame(t(transformed$proportions), check.names = FALSE)
+proportions <- as.data.frame(t(transformed$Proportions), check.names = FALSE)
 proportions$sample_id <- rownames(proportions)
 proportions <- merge(
   proportions, sample_design, by = "sample_id", all.x = TRUE, sort = TRUE

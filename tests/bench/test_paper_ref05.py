@@ -77,6 +77,8 @@ def test_ref05_is_independent_split_scoped_and_streaming() -> None:
 
     assert 'reformulate(c("donor", condition_column))' in runner
     assert "propeller.ttest(" in runner
+    assert "prop_list$Proportions" in runner
+    assert "prop_list$proportions" not in runner
     assert "for (donor in swapped)" in runner
     assert "cell_label_permutation = FALSE" in runner
     assert "from pertura_" not in runner
@@ -96,3 +98,27 @@ def test_ref05_catalog_outputs_are_implemented() -> None:
         "replicate_null_reference.tsv",
     ):
         assert name in python
+
+
+def test_product_propeller_uses_speckle_110_field_names() -> None:
+    root = Path(__file__).resolve().parents[2]
+    runner = (
+        root
+        / "src"
+        / "pertura_workflow"
+        / "capabilities"
+        / "runners"
+        / "propeller_composition.R"
+    ).read_text(encoding="utf-8")
+    assert "prop_list$Proportions" in runner
+    assert "prop_list$proportions" not in runner
+
+    reference_runner = (
+        root
+        / "src"
+        / "pertura_bench"
+        / "runners"
+        / "propeller_reference.R"
+    ).read_text(encoding="utf-8")
+    assert "transformed$Proportions" in reference_runner
+    assert "transformed$proportions" not in reference_runner
