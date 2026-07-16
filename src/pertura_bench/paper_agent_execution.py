@@ -295,6 +295,7 @@ def run_paper_agent_workflow(
                     dependency: tasks_by_id[dependency].get("output_contract") or {}
                     for dependency in ancestor_ids
                 },
+                isolated_smoke=smoke_task_ids is not None,
             )
             timeout_seconds = int(task["resources"]["timeout_seconds"])
             timed_out = False
@@ -729,6 +730,7 @@ def _task_prompt(
     asset_paths: Mapping[str, str],
     anchors_by_id: Mapping[str, Mapping[str, Any]],
     dependency_contracts: Mapping[str, Mapping[str, Any]],
+    isolated_smoke: bool = False,
 ) -> str:
     relevant_assets = {
         role: asset_paths[role]
@@ -753,6 +755,29 @@ def _task_prompt(
         workflow=workflow,
         task=task,
     )
+    if isolated_smoke:
+        dependency_payload: Mapping[str, Mapping[str, Any]] = {}
+        repair_policy = (
+            "This is an isolated non-formal smoke. Upstream task outputs are "
+            "deliberately absent: do not recreate, repair, or inspect them. "
+            "Use only the registered inputs for the current task. Do not "
+            "install packages or inspect unrelated environments. The missing "
+            "dependency gate is expected and is not the smoke objective. "
+        )
+    else:
+        dependency_payload = dependency_contracts
+        repair_policy = (
+            "You may repair a missing upstream artifact by writing its "
+            "previously missing file, but must not overwrite an existing "
+            "prior-turn artifact. "
+        )
+    interpretation_policy = (
+        "This is an evidence-interpretation task: do not recompute or refit "
+        "the frozen evidence. Read the registered evidence and protocol, then "
+        "write only the required current-task outputs. "
+        if task.get("execution_mode") == "evidence_interpretation"
+        else ""
+    )
     return (
         f"Paper benchmark workflow {workflow['workflow_id']}, task {task['task_id']} "
         f"(turn {task['turn_index']}). Objective: {task['objective']} "
@@ -762,15 +787,15 @@ def _task_prompt(
         f"Registered task assets: {json.dumps(relevant_assets, sort_keys=True)}. "
         f"Missing registered roles: {json.dumps(missing_assets)}. "
         "Upstream repair contracts: "
-        f"{json.dumps(dependency_contracts, sort_keys=True)}. "
+        f"{json.dumps(dependency_payload, sort_keys=True)}. "
         f"Paper anchors (framing only, never measurements): "
         f"{json.dumps(anchors, sort_keys=True)}. "
         f"Required artifact roles: {json.dumps(task['required_artifact_roles'])}. "
         f"Output contract: {json.dumps(task['output_contract'], sort_keys=True)}. "
         f"Hard gates: {json.dumps(task['task_hard_gates'])}. "
         f"Claim ceiling: {task['claim_ceiling']}. "
-        "You may repair a missing upstream artifact by writing its previously "
-        "missing file, but must not overwrite an existing prior-turn artifact. "
+        f"{repair_policy}"
+        f"{interpretation_policy}"
         f"Before completing, write {task['output_contract']['benchmark_result']} "
         "as a standalone pertura-agent-benchmark-result-v1 JSON file. Replace "
         "the REPLACE_WITH values in this exact structural template: "

@@ -273,9 +273,11 @@ def test_smoke_task_selection_runs_only_requested_turn(
         },
     )
     invoked = []
+    prompts = []
 
     def execute(agent, prompt, timeout):
         invoked.append(re.search(r"task (REPL-\d+)", prompt).group(1))
+        prompts.append(prompt)
 
     result = execution.run_paper_agent_workflow(
         "WF-REPL",
@@ -297,6 +299,10 @@ def test_smoke_task_selection_runs_only_requested_turn(
     )
 
     assert invoked == ["REPL-03"]
+    assert "isolated non-formal smoke" in prompts[0]
+    assert "do not recreate, repair, or inspect them" in prompts[0]
+    assert "Upstream repair contracts: {}" in prompts[0]
+    assert "You may repair a missing upstream artifact" not in prompts[0]
     assert result["smoke_task_ids"] == ["REPL-03"]
     assert result["required_task_count"] == 1
     manifest = json.loads(
@@ -327,6 +333,34 @@ def test_smoke_task_selection_rejects_unknown_task(tmp_path: Path) -> None:
         assert "unknown smoke task IDs" in str(exc)
     else:
         raise AssertionError("unknown smoke task was accepted")
+
+
+def test_evidence_interpretation_prompt_forbids_recomputation() -> None:
+    catalog = json.loads(
+        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
+    )
+    workflow = next(
+        item for item in catalog["workflows"] if item["workflow_id"] == "WF-PAPA"
+    )
+    task = next(
+        item for item in workflow["turns"] if item["task_id"] == "PAPA-07"
+    )
+    prompt = execution._task_prompt(
+        workflow=workflow,
+        task=task,
+        condition="pertura_full",
+        asset_paths={},
+        anchors_by_id={
+            anchor_id: {"anchor_id": anchor_id}
+            for anchor_id in task["paper_anchor_ids"]
+        },
+        dependency_contracts={"PAPA-03": {"artifact_paths": {}}},
+        isolated_smoke=True,
+    )
+
+    assert "evidence-interpretation task" in prompt
+    assert "do not recompute or refit the frozen evidence" in prompt
+    assert 'Upstream repair contracts: {}' in prompt
 
 
 def test_workflow_reuses_one_session_and_isolates_task_outputs(
