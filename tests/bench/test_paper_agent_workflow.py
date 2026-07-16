@@ -202,6 +202,80 @@ def test_scientific_failure_does_not_fail_completed_scheduler_job() -> None:
     assert _exit_code("agent", {"status": "failed"}) == 1
 
 
+def test_smoke_task_selection_runs_only_requested_turn(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(execution, "ClaudePerturaAgent", _Agent)
+    monkeypatch.setattr(
+        execution,
+        "_resource_evidence",
+        lambda path: {
+            "mode": "scheduler",
+            "scheduler_job_id": "fixture-job",
+            "requested_memory_gb": 8,
+            "actual_memory_gb": 8,
+            "n_jobs": 1,
+            "timeout_seconds": 7200,
+            "peak_rss_mb": 100,
+        },
+    )
+    invoked = []
+
+    def execute(agent, prompt, timeout):
+        invoked.append(re.search(r"task (REPL-\d+)", prompt).group(1))
+
+    result = execution.run_paper_agent_workflow(
+        "WF-REPL",
+        repo_root=ROOT,
+        cache=tmp_path / "cache",
+        paper_root=tmp_path / "paper",
+        output=tmp_path / "runs",
+        condition="prompt_only",
+        repeat_index=1,
+        task_catalog_path=ROOT / "benchmarks/paper_v1/agent_tasks.v2.json",
+        task_reference_catalog_path=_bound_task_references(tmp_path),
+        paper_anchor_catalog_path=ROOT
+        / "benchmarks/paper_v1/paper_anchors.v1.json",
+        asset_catalog_path=_asset_catalog(tmp_path),
+        resource_evidence_path=tmp_path / "resource.json",
+        smoke_task_ids=("REPL-03",),
+        turn_executor=execute,
+        verify_checkpoint=False,
+    )
+
+    assert invoked == ["REPL-03"]
+    assert result["smoke_task_ids"] == ["REPL-03"]
+    assert result["required_task_count"] == 1
+    manifest = json.loads(
+        (Path(result["execution_root"]) / "input_manifest.json").read_text()
+    )
+    assert manifest["smoke_task_ids"] == ["REPL-03"]
+
+
+def test_smoke_task_selection_rejects_unknown_task(tmp_path: Path) -> None:
+    try:
+        execution.run_paper_agent_workflow(
+            "WF-REPL",
+            repo_root=ROOT,
+            cache=tmp_path / "cache",
+            paper_root=tmp_path / "paper",
+            output=tmp_path / "runs",
+            condition="prompt_only",
+            repeat_index=1,
+            task_catalog_path=ROOT / "benchmarks/paper_v1/agent_tasks.v2.json",
+            task_reference_catalog_path=tmp_path / "unused.json",
+            paper_anchor_catalog_path=tmp_path / "unused.json",
+            asset_catalog_path=tmp_path / "unused.json",
+            smoke_task_ids=("REPL-99",),
+            turn_executor=lambda *args: None,
+            verify_checkpoint=False,
+        )
+    except ValueError as exc:
+        assert "unknown smoke task IDs" in str(exc)
+    else:
+        raise AssertionError("unknown smoke task was accepted")
+
+
 def test_workflow_reuses_one_session_and_isolates_task_outputs(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -278,6 +352,7 @@ def test_workflow_reuses_one_session_and_isolates_task_outputs(
     manifest = json.loads((root / "input_manifest.json").read_text())
     assert result["execution_status"] == "completed"
     assert result["score_status"] == result["status"]
+    assert result["smoke_task_ids"] is None
     assert manifest["max_turns_per_task"] == 32
     assert len(result["task_records"]) == 4
     assert len({manifest["project_id"]}) == 1

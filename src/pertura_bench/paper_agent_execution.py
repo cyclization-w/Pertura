@@ -69,6 +69,7 @@ def run_paper_agent_workflow(
     paper_anchor_catalog_path: Path,
     asset_catalog_path: Path,
     resource_evidence_path: Path | None = None,
+    smoke_task_ids: tuple[str, ...] | None = None,
     turn_executor: TurnExecutor | None = None,
     verify_checkpoint: bool = True,
 ) -> dict[str, Any]:
@@ -81,6 +82,24 @@ def run_paper_agent_workflow(
     paper_root = Path(paper_root).resolve()
     task_catalog = load_paper_task_catalog(task_catalog_path)
     workflow = dict(task_catalog.workflow(workflow_id))
+    workflow_turns = tuple(workflow.get("turns") or ())
+    if smoke_task_ids is not None:
+        requested = tuple(dict.fromkeys(smoke_task_ids))
+        available = {str(item["task_id"]) for item in workflow_turns}
+        unknown = sorted(set(requested) - available)
+        if not requested:
+            raise ValueError("smoke_task_ids cannot be empty")
+        if unknown:
+            raise ValueError(
+                "unknown smoke task IDs for "
+                f"{workflow_id}: {', '.join(unknown)}"
+            )
+        selected = set(requested)
+        workflow_turns = tuple(
+            item
+            for item in workflow_turns
+            if str(item["task_id"]) in selected
+        )
     task_references = _load_json(task_reference_catalog_path)
     paper_anchors = _load_json(paper_anchor_catalog_path)
     asset_catalog = load_paper_asset_catalog(asset_catalog_path)
@@ -221,7 +240,7 @@ def run_paper_agent_workflow(
     }
     task_records: list[dict[str, Any]] = []
     try:
-        for task in workflow.get("turns") or ():
+        for task in workflow_turns:
             task = dict(task)
             task_id = str(task["task_id"])
             if task.get("role") == "optional" and not _optional_configured(
@@ -391,7 +410,7 @@ def run_paper_agent_workflow(
     task_records = _refresh_workflow_task_verdicts(
         execution_root=execution_root,
         workspace_root=workspace.root,
-        workflow=workflow,
+        workflow=dict(workflow, turns=list(workflow_turns)),
         condition=condition,
         repeat_index=repeat_index,
         paper_root=paper_root,
@@ -406,7 +425,7 @@ def run_paper_agent_workflow(
         for item in task_records
         if next(
             task
-            for task in workflow.get("turns") or ()
+            for task in workflow_turns
             if task["task_id"] == item["task_id"]
         ).get("role")
         != "optional"
@@ -424,6 +443,9 @@ def run_paper_agent_workflow(
     input_manifest = {
         "schema_version": "pertura-paper-workflow-input-manifest-v1",
         "workflow": workflow,
+        "smoke_task_ids": (
+            list(smoke_task_ids) if smoke_task_ids is not None else None
+        ),
         "condition": condition,
         "repeat_index": repeat_index,
         "model": model,
@@ -460,6 +482,9 @@ def run_paper_agent_workflow(
         "dataset_id": workflow["dataset_id"],
         "condition": condition,
         "repeat_index": repeat_index,
+        "smoke_task_ids": (
+            list(smoke_task_ids) if smoke_task_ids is not None else None
+        ),
         "execution_status": "completed",
         "score_status": workflow_status,
         "status": workflow_status,

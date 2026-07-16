@@ -172,6 +172,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     paper_workflow.add_argument("--asset-catalog", type=Path, required=True)
     paper_workflow.add_argument("--resource-evidence", type=Path, required=True)
+    paper_workflow.add_argument(
+        "--smoke-task",
+        action="append",
+        dest="smoke_tasks",
+        help="run only this task for a non-formal smoke; repeat as needed",
+    )
     agent_regrade = agent_sub.add_parser("regrade")
     agent_regrade.add_argument("execution_root", type=Path)
     paper_regrade = agent_sub.add_parser("regrade-paper-workflow")
@@ -505,6 +511,9 @@ def main(argv: list[str] | None = None) -> int:
                 paper_anchor_catalog_path=args.paper_anchor_catalog,
                 asset_catalog_path=args.asset_catalog,
                 resource_evidence_path=args.resource_evidence,
+                smoke_task_ids=(
+                    tuple(args.smoke_tasks) if args.smoke_tasks else None
+                ),
             )
         elif args.agent_command == "regrade":
             from pertura_bench.agent_server_execution import regrade_server_agent_case
