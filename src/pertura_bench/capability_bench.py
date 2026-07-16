@@ -667,6 +667,7 @@ def server_benchmark_plan(
     paper_task_reference_catalog_path: str | Path | None = None,
     paper_anchor_catalog_path: str | Path | None = None,
     paper_asset_catalog_path: str | Path | None = None,
+    capability_contract_catalog_path: str | Path | None = None,
 ) -> ServerBenchmarkPlan:
     return build_server_plan(
         benchmark_specs(),
@@ -678,6 +679,7 @@ def server_benchmark_plan(
         paper_task_reference_catalog_path=paper_task_reference_catalog_path,
         paper_anchor_catalog_path=paper_anchor_catalog_path,
         paper_asset_catalog_path=paper_asset_catalog_path,
+        capability_contract_catalog_path=capability_contract_catalog_path,
     )
 
 
@@ -692,6 +694,7 @@ def write_server_plan(
     paper_task_reference_catalog_path: str | Path | None = None,
     paper_anchor_catalog_path: str | Path | None = None,
     paper_asset_catalog_path: str | Path | None = None,
+    capability_contract_catalog_path: str | Path | None = None,
 ) -> dict[str, Any]:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -704,6 +707,7 @@ def write_server_plan(
         paper_task_reference_catalog_path=paper_task_reference_catalog_path,
         paper_anchor_catalog_path=paper_anchor_catalog_path,
         paper_asset_catalog_path=paper_asset_catalog_path,
+        capability_contract_catalog_path=capability_contract_catalog_path,
     )
     _write_text_lf(
         destination,

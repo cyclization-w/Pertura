@@ -28,6 +28,11 @@ from pertura_runtime.claude.options import ClaudeRuntimeOptions, describe_option
 from pertura_runtime.project.assets import DataAssetRegistry
 from pertura_runtime.project.models import AssetBinding
 from pertura_runtime.project.workspace import ProjectWorkspace
+from pertura_workflow.environment import environment_lock
+from pertura_workflow.planner import (
+    build_capability_contract_catalog,
+    compile_capability_execution_brief,
+)
 
 
 TurnExecutor = Callable[[ClaudePerturaAgent, str, int], Any]
@@ -80,6 +85,7 @@ def run_paper_agent_workflow(
     task_reference_catalog_path: Path,
     paper_anchor_catalog_path: Path,
     asset_catalog_path: Path,
+    capability_contract_catalog_path: Path | None = None,
     resource_evidence_path: Path | None = None,
     smoke_task_ids: tuple[str, ...] | None = None,
     turn_executor: TurnExecutor | None = None,
@@ -115,6 +121,14 @@ def run_paper_agent_workflow(
     task_references = _load_json(task_reference_catalog_path)
     paper_anchors = _load_json(paper_anchor_catalog_path)
     asset_catalog = load_paper_asset_catalog(asset_catalog_path)
+    contract_catalog = build_capability_contract_catalog()
+    if capability_contract_catalog_path is not None:
+        if _load_json(capability_contract_catalog_path) != contract_catalog:
+            raise ValueError("a19 capability contract catalog drift")
+    elif verify_checkpoint:
+        raise FileNotFoundError(
+            "formal paper execution requires a capability contract catalog"
+        )
     tasks = task_catalog.tasks()
     catalog_problems = [
         *validate_task_reference_catalog(task_references, tasks),
@@ -144,6 +158,9 @@ def run_paper_agent_workflow(
             task_reference_catalog_path=task_reference_catalog_path,
             paper_anchor_catalog_path=paper_anchor_catalog_path,
             asset_catalog_path=asset_catalog_path,
+            capability_contract_catalog_path=Path(
+                capability_contract_catalog_path
+            ),
         )
         if verify_checkpoint
         else {"test_only": "checkpoint_verification_disabled"}
@@ -221,6 +238,9 @@ def run_paper_agent_workflow(
             else None
         ),
         python_preflight_packages=list(PAPER_CODEACT_PACKAGES),
+        completion_guard_enabled=True,
+        completion_guard_exploration_limit=24,
+        completion_guard_read_limit=2,
     )
     provider_config_hash = canonical_hash(describe_options(runtime_options))
     agent = ClaudePerturaAgent(
@@ -231,9 +251,10 @@ def run_paper_agent_workflow(
         conversation_id=conversation.conversation_id,
         verbose=False,
     )
+    inspected_contract: dict[str, Any] | None = None
     if condition == "pertura_full":
         confirmations = dict(workflow_assets.get("design_confirmations") or {})
-        agent.product_runtime.inspect_dataset(
+        inspected_contract = agent.product_runtime.inspect_dataset(
             primary_path,
             dataset_id=str(workflow["dataset_id"]),
             confirmations=confirmations or None,
@@ -251,6 +272,22 @@ def run_paper_agent_workflow(
         str(item["task_id"]): item for item in workflow.get("turns") or ()
     }
     task_records: list[dict[str, Any]] = []
+    execution_briefs: list[dict[str, str]] = []
+    registered_assets = {
+        asset.role: {
+            "asset_id": asset.asset_id,
+            "path": asset_paths[asset.role],
+            "content_sha256": asset.content_sha256,
+            "kind": str(asset.kind),
+            "source_class": str(asset.source_class),
+        }
+        for asset in registered
+    }
+    environment_ready = (
+        _paper_environment_readiness(agent.product_runtime.registry)
+        if condition == "pertura_full"
+        else None
+    )
     try:
         for task in workflow_turns:
             task = dict(task)
@@ -285,6 +322,60 @@ def run_paper_agent_workflow(
                     tasks_by_id=tasks_by_id,
                 )
             )
+            execution_brief = None
+            if condition == "pertura_full":
+                if inspected_contract is None:
+                    raise RuntimeError("pertura_full lacks a pre-inspected contract")
+                contract, committed = agent.product_runtime.planning_material(
+                    str(inspected_contract["contract_id"])
+                )
+                artifact_paths = dict(
+                    (task.get("output_contract") or {}).get("artifact_paths") or {}
+                )
+                task_asset_bindings = {
+                    role: registered_assets[role]
+                    for role in task.get("required_input_roles") or ()
+                    if role in registered_assets
+                }
+                execution_brief = compile_capability_execution_brief(
+                    task_id=task_id,
+                    objective=str(task["objective"]),
+                    execution_mode=str(task["execution_mode"]),
+                    candidate_capability_ids=tuple(
+                        task.get("expected_capability_dag") or ()
+                    ),
+                    contract=contract,
+                    committed_results=committed,
+                    asset_bindings=task_asset_bindings,
+                    environment_ready=environment_ready,
+                    registry=agent.product_runtime.registry,
+                    completion_checklist=(
+                        *(
+                            f"Write {task_output.relative_to(workspace.root).as_posix()}/{relative} for role {role}."
+                            for role, relative in artifact_paths.items()
+                        ),
+                        f"Write {task_output.relative_to(workspace.root).as_posix()}/benchmark_result.json.",
+                        "Return one pertura-turn-draft-v1 JSON object.",
+                    ),
+                )
+                brief_path = (
+                    workspace.task_dir
+                    / "capability_plans"
+                    / f"{task_id}.json"
+                )
+                workspace.write_json(brief_path, execution_brief)
+                workspace.write_json(
+                    workspace.task_dir / "PERTURA_CAPABILITY_PLAN.json",
+                    execution_brief,
+                )
+                execution_briefs.append(
+                    {
+                        "task_id": task_id,
+                        "plan_id": str(execution_brief["plan_id"]),
+                        "plan_hash": str(execution_brief["plan_hash"]),
+                        "path": str(brief_path.relative_to(workspace.root)),
+                    }
+                )
             prompt = _task_prompt(
                 workflow=workflow,
                 task=task,
@@ -296,10 +387,13 @@ def run_paper_agent_workflow(
                     for dependency in ancestor_ids
                 },
                 isolated_smoke=smoke_task_ids is not None,
+                execution_brief=execution_brief,
             )
             timeout_seconds = int(task["resources"]["timeout_seconds"])
             timed_out = False
             started = time.monotonic()
+            if hasattr(agent, "configure_completion_guard"):
+                agent.configure_completion_guard(task_output)
             try:
                 (turn_executor or _run_with_timeout)(
                     agent, prompt, timeout_seconds
@@ -317,6 +411,19 @@ def run_paper_agent_workflow(
                     except Exception:
                         agent.product_runtime.close(graceful=False)
             wall_seconds = time.monotonic() - started
+            completion_guard = (
+                agent.completion_guard_snapshot()
+                if hasattr(agent, "completion_guard_snapshot")
+                else {
+                    "schema_version": "pertura-benchmark-completion-guard-v1",
+                    "enabled": True,
+                    "triggered": False,
+                    "expensive_calls": 0,
+                    "closure_calls": 0,
+                    "completion_reads": 0,
+                    "denied_calls": 0,
+                }
+            )
             resource_evidence = observe_runtime_resources(
                 resource_evidence, started_monotonic=resource_started
             )
@@ -379,6 +486,16 @@ def run_paper_agent_workflow(
                 "turn_id": final.turn_id if final else None,
                 "wall_seconds": wall_seconds,
                 "resource_evidence": resource_evidence,
+                "completion_guard": completion_guard,
+                "capability_execution_brief": (
+                    {
+                        "plan_id": execution_brief["plan_id"],
+                        "plan_hash": execution_brief["plan_hash"],
+                        "route": execution_brief["route"],
+                    }
+                    if execution_brief is not None
+                    else None
+                ),
                 "post_turn_output_hashes": _tree_hashes(task_output),
                 "post_turn_ancestor_hashes": {
                     dependency: _tree_hashes(
@@ -463,6 +580,14 @@ def run_paper_agent_workflow(
         "repeat_index": repeat_index,
         "model": model,
         "max_turns_per_task": runtime_options.max_turns,
+        "completion_guard": {
+            "enabled": runtime_options.completion_guard_enabled,
+            "exploration_limit": (
+                runtime_options.completion_guard_exploration_limit
+            ),
+            "completion_read_limit": runtime_options.completion_guard_read_limit,
+        },
+        "capability_execution_briefs": execution_briefs,
         "provider_config_hash": provider_config_hash,
         "task_catalog_sha256": task_catalog.sha256,
         "task_reference_catalog_sha256": file_sha256(
@@ -472,6 +597,12 @@ def run_paper_agent_workflow(
             Path(paper_anchor_catalog_path)
         ),
         "asset_catalog_sha256": asset_catalog["_catalog_sha256"],
+        "capability_contract_catalog_hash": contract_catalog["catalog_hash"],
+        "capability_contract_catalog_sha256": (
+            file_sha256(Path(capability_contract_catalog_path))
+            if capability_contract_catalog_path is not None
+            else None
+        ),
         "checkpoint_binding": checkpoint,
         "resource_evidence": resource_evidence,
         "resource_evidence_sha256": (
@@ -731,6 +862,7 @@ def _task_prompt(
     anchors_by_id: Mapping[str, Mapping[str, Any]],
     dependency_contracts: Mapping[str, Mapping[str, Any]],
     isolated_smoke: bool = False,
+    execution_brief: Mapping[str, Any] | None = None,
 ) -> str:
     relevant_assets = {
         role: asset_paths[role]
@@ -785,6 +917,27 @@ def _task_prompt(
         if task.get("execution_mode") == "evidence_interpretation"
         else ""
     )
+    brief_policy = ""
+    if condition == "pertura_full" and execution_brief is not None:
+        compact_window = {
+            "plan_id": execution_brief["plan_id"],
+            "plan_hash": execution_brief["plan_hash"],
+            "route": execution_brief["route"],
+            "dataset_contract": execution_brief["dataset_contract"],
+            "active_window": execution_brief["active_window"],
+            "completion_checklist": execution_brief["completion_checklist"],
+            "stop_conditions": execution_brief["stop_conditions"],
+        }
+        brief_policy = (
+            "Pertura already inspected and registered this dataset. Do not call "
+            "inspect_dataset again. The frozen task-scoped execution brief is at "
+            f"task/capability_plans/{task['task_id']}.json; its compact active "
+            f"window is {json.dumps(compact_window, sort_keys=True)}. Follow its "
+            "route and minimal legal calls. Asset-valued capability parameters "
+            "must use the registered asset IDs in the full brief, not filesystem "
+            "paths. Do not read repository source, capability YAML, tests, or "
+            "scientific-environment directories to rediscover contracts. "
+        )
     return (
         f"Paper benchmark workflow {workflow['workflow_id']}, task {task['task_id']} "
         f"(turn {task['turn_index']}). Objective: {task['objective']} "
@@ -808,6 +961,11 @@ def _task_prompt(
         f"Claim ceiling: {task['claim_ceiling']}. "
         f"{repair_policy}"
         f"{interpretation_policy}"
+        f"{brief_policy}"
+        "A task-scoped completion guard reserves finalization after 24 "
+        "high-cost exploration calls. If it activates, stop new scientific "
+        "execution and use the remaining reads/writes to finish the required "
+        "artifacts and benchmark_result.json. "
         f"Before completing, write {task['output_contract']['benchmark_result']} "
         "as a standalone pertura-agent-benchmark-result-v1 JSON file. Replace "
         "the REPLACE_WITH values in this exact structural template: "
@@ -826,6 +984,27 @@ def _task_prompt(
         "object into benchmark_result.json. Independent evaluators, not "
         "self-reported metrics, determine scientific correctness."
     )
+
+
+def _paper_environment_readiness(registry: Any) -> dict[str, bool]:
+    """Resolve each registry-declared environment once for a task workflow."""
+
+    profiles = sorted(
+        {
+            str(spec.metadata.get("environment_profile"))
+            for spec in registry.specs()
+            if spec.metadata.get("environment_profile")
+        }
+    )
+    readiness: dict[str, bool] = {}
+    for profile in profiles:
+        try:
+            environment_lock(profile)
+        except (FileNotFoundError, OSError, RuntimeError, ValueError):
+            readiness[profile] = False
+        else:
+            readiness[profile] = True
+    return readiness
 
 
 def _judge_task_context(
@@ -1230,6 +1409,7 @@ def _verify_paper_checkpoint(
     task_reference_catalog_path: Path,
     paper_anchor_catalog_path: Path,
     asset_catalog_path: Path,
+    capability_contract_catalog_path: Path,
 ) -> dict[str, str]:
     import subprocess
 
@@ -1254,6 +1434,9 @@ def _verify_paper_checkpoint(
         "paper_task_reference_catalog_hash": Path(task_reference_catalog_path),
         "paper_anchor_catalog_hash": Path(paper_anchor_catalog_path),
         "paper_asset_catalog_hash": Path(asset_catalog_path),
+        "capability_contract_catalog_hash": Path(
+            capability_contract_catalog_path
+        ),
     }
     for field, path in catalogs.items():
         if not path.is_file() or file_sha256(path) != binding[field]:

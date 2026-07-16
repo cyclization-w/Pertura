@@ -36,6 +36,7 @@ _BINDING_FIELDS = (
     "paper_task_reference_catalog_hash",
     "paper_anchor_catalog_hash",
     "paper_asset_catalog_hash",
+    "capability_contract_catalog_hash",
 )
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
@@ -52,6 +53,7 @@ def build_server_plan(
     paper_task_reference_catalog_path: str | Path | None = None,
     paper_anchor_catalog_path: str | Path | None = None,
     paper_asset_catalog_path: str | Path | None = None,
+    capability_contract_catalog_path: str | Path | None = None,
 ) -> ServerBenchmarkPlan:
     root = (
         Path(__file__).resolve().parents[2]
@@ -678,6 +680,30 @@ def build_server_plan(
         "paper_anchor_catalog_hash": canonical_hash({"paper_anchors": "not_configured"}),
         "paper_asset_catalog_hash": canonical_hash({"paper_assets": "not_configured"}),
     }
+    capability_contract_catalog_hash = canonical_hash(
+        {"capability_contract_catalog": "not_configured"}
+    )
+    if capability_contract_catalog_path is not None:
+        contract_catalog_path = Path(
+            capability_contract_catalog_path
+        ).resolve()
+        if not contract_catalog_path.is_file():
+            raise FileNotFoundError(contract_catalog_path)
+        contract_catalog = json.loads(
+            contract_catalog_path.read_text(encoding="utf-8")
+        )
+        if (
+            contract_catalog.get("schema_version")
+            != "pertura-capability-contract-catalog-v1"
+            or contract_catalog.get("capability_count") != 44
+            or contract_catalog.get("active_capability_count") != 40
+        ):
+            raise ValueError("invalid a19 capability contract catalog")
+        from pertura_workflow.planner import build_capability_contract_catalog
+
+        if contract_catalog != build_capability_contract_catalog(registry):
+            raise ValueError("a19 capability contract catalog drift")
+        capability_contract_catalog_hash = file_sha256(contract_catalog_path)
     if paper_task_catalog_path is not None:
         required_paper_catalogs = {
             "paper_task_catalog_hash": paper_task_catalog_path,
@@ -832,6 +858,7 @@ def build_server_plan(
                                     "--task-reference-catalog", "$PERTURA_PAPER_TASK_REFERENCES",
                                     "--paper-anchor-catalog", "$PERTURA_PAPER_ANCHORS",
                                     "--asset-catalog", "$PERTURA_PAPER_ASSETS",
+                                    "--capability-contract-catalog", "$PERTURA_CAPABILITY_CONTRACT_CATALOG",
                                     "--resource-evidence", "$PERTURA_BENCH_RESOURCE_EVIDENCE",
                                 ]
                             },
@@ -915,6 +942,7 @@ def build_server_plan(
             "design_confirmation_catalog_hash": design_catalog_hash,
             "metric_reference_catalog_hash": metric_catalog_hash,
             **paper_catalog_hashes,
+            "capability_contract_catalog_hash": capability_contract_catalog_hash,
         },
         executable=False,
     )
@@ -985,6 +1013,7 @@ def assert_server_plan_executable(plan: ServerBenchmarkPlan) -> None:
         "metric_reference_catalog_hash",
         "paper_task_catalog_hash", "paper_task_reference_catalog_hash",
         "paper_anchor_catalog_hash", "paper_asset_catalog_hash",
+        "capability_contract_catalog_hash",
     ):
         value = str(binding.get(name) or "")
         if not _SHA256.fullmatch(value):
@@ -1286,5 +1315,8 @@ def _bound_plan_digest(binding: Mapping[str, Any]) -> str:
             "paper_task_reference_catalog_hash": binding.get("paper_task_reference_catalog_hash"),
             "paper_anchor_catalog_hash": binding.get("paper_anchor_catalog_hash"),
             "paper_asset_catalog_hash": binding.get("paper_asset_catalog_hash"),
+            "capability_contract_catalog_hash": binding.get(
+                "capability_contract_catalog_hash"
+            ),
         }
     )

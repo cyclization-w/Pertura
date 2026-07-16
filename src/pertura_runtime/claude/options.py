@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from pertura_core import PromotionPolicy
 from pertura_runtime.agent_bundle import resolve_skill_configuration
-from pertura_runtime.claude.hooks import build_audit_hooks
+from pertura_runtime.claude.hooks import CompletionGuard, build_audit_hooks
 from pertura_runtime.claude.tools.product_tools import (
     PRODUCT_TOOL_NAMES,
     create_product_mcp_server,
@@ -58,6 +58,9 @@ class ClaudeRuntimeOptions:
     tool_surface: str = "capability"
     domain_tools_enabled: bool = True
     benchmark_condition: str = "pertura_full"
+    completion_guard_enabled: bool = False
+    completion_guard_exploration_limit: int = 24
+    completion_guard_read_limit: int = 2
     # The claim policy is a run-level trust decision. It is deliberately not
     # exposed as an MCP tool argument, so CodeAct cannot weaken it mid-run.
     policy_profile: str = "strict"
@@ -69,6 +72,7 @@ def build_agent_options(
     system_prompt: str,
     config: ClaudeRuntimeOptions,
     product_runtime: PerturaProductRuntime | None = None,
+    completion_guard: CompletionGuard | None = None,
 ):
     """Build ClaudeAgentOptions with Pertura's bundled provider adapter."""
 
@@ -78,6 +82,7 @@ def build_agent_options(
         workspace,
         log_events=config.enable_audit_hooks,
         allow_background_bash=config.interaction_mode != "benchmark",
+        completion_guard=completion_guard,
     )
     policy = runtime_policy(config)
     env = {
@@ -220,6 +225,11 @@ def describe_options(config: ClaudeRuntimeOptions) -> dict[str, Any]:
         "tool_surface": config.tool_surface,
         "domain_tools_enabled": config.domain_tools_enabled,
         "benchmark_condition": config.benchmark_condition,
+        "completion_guard_enabled": config.completion_guard_enabled,
+        "completion_guard_exploration_limit": (
+            config.completion_guard_exploration_limit
+        ),
+        "completion_guard_read_limit": config.completion_guard_read_limit,
         "policy_profile": policy.profile,
         "policy_hash": policy.policy_hash,
         "env_keys": sorted(config.env),

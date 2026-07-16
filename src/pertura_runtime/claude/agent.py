@@ -7,6 +7,7 @@ from typing import Any, Callable
 from pertura_core.hashing import canonical_hash
 from pertura_runtime.agent_bundle import resolve_skill_configuration
 from pertura_runtime.claude.manifest import ClaudeRunManifest
+from pertura_runtime.claude.hooks import CompletionGuard
 from pertura_runtime.claude.options import (
     ClaudeRuntimeOptions,
     build_agent_options,
@@ -83,6 +84,28 @@ class ClaudePerturaAgent:
             run_id=self.run_id,
         )
         self.turn_manager: TurnCheckpointManager | None = None
+        self._completion_output_root: Path | None = None
+        self._last_completion_guard: CompletionGuard | None = None
+
+    def configure_completion_guard(self, output_root: Path | None) -> None:
+        """Bind the optional benchmark closeout guard to one task output root."""
+
+        self._completion_output_root = (
+            Path(output_root).expanduser().resolve() if output_root else None
+        )
+
+    def completion_guard_snapshot(self) -> dict[str, Any]:
+        if self._last_completion_guard is None:
+            return {
+                "schema_version": "pertura-benchmark-completion-guard-v1",
+                "enabled": False,
+                "triggered": False,
+                "expensive_calls": 0,
+                "closure_calls": 0,
+                "completion_reads": 0,
+                "denied_calls": 0,
+            }
+        return self._last_completion_guard.to_dict()
 
     async def run(self, task: str | None = None) -> ClaudeRunResult:
         task_text = task or build_default_task(self.workspace.input_source)
@@ -158,6 +181,7 @@ class ClaudePerturaAgent:
             system_prompt=system_prompt,
             config=runtime_config,
             product_runtime=self.product_runtime,
+            completion_guard=self._new_completion_guard(runtime_config),
         )
         try:
             skills_validated = False
@@ -249,6 +273,25 @@ class ClaudePerturaAgent:
         }
         self.turn_manager.record_event(event_id, payload)
 
+    def _new_completion_guard(
+        self, runtime_config: ClaudeRuntimeOptions
+    ) -> CompletionGuard | None:
+        self._last_completion_guard = None
+        if not runtime_config.completion_guard_enabled:
+            return None
+        if self._completion_output_root is None:
+            raise RuntimeError(
+                "completion guard requires a task-scoped output directory"
+            )
+        guard = CompletionGuard(
+            workspace=self.workspace,
+            output_root=self._completion_output_root,
+            exploration_limit=runtime_config.completion_guard_exploration_limit,
+            completion_read_limit=runtime_config.completion_guard_read_limit,
+        )
+        self._last_completion_guard = guard
+        return guard
+
     async def _checkpoint(self, *, status: str, error: str | None = None) -> str:
         raw_output = self.manifest.result_text or error or ""
         try:
@@ -323,6 +366,7 @@ class ClaudePerturaAgent:
             enable_bundled_skills=False,
             additional_skill_plugins=(),
             enable_audit_hooks=False,
+            completion_guard_enabled=False,
             max_turns=2,
         )
         prompt = (

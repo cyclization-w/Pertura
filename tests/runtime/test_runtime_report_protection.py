@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from pertura_runtime.claude.hooks import _pre_tool_permission_output
+from pertura_runtime.claude.hooks import (
+    CompletionGuard,
+    _pre_tool_permission_output,
+)
 from pertura_runtime.claude.permissions import decide_tool_permission
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
 
@@ -104,3 +107,65 @@ def test_benchmark_pre_tool_hook_requires_synchronous_bash(
         allow_background_bash=False,
     )
     assert synchronous == {}
+
+
+def test_completion_guard_reserves_task_scoped_closeout(tmp_path: Path) -> None:
+    workspace = ClaudeRunWorkspace.create(
+        root=tmp_path / "runs", run_id="completion-guard"
+    )
+    task_root = workspace.root / "outputs" / "tasks" / "PAPA-01"
+    task_root.mkdir(parents=True)
+    guard = CompletionGuard(
+        workspace=workspace,
+        output_root=task_root,
+        exploration_limit=2,
+        completion_read_limit=2,
+    )
+
+    def invoke(tool_name: str, tool_input: dict) -> dict:
+        return _pre_tool_permission_output(
+            workspace,
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": tool_name,
+                "tool_input": tool_input,
+            },
+            allow_background_bash=False,
+            completion_guard=guard,
+        )
+
+    assert invoke("Bash", {"command": "echo first"}) == {}
+    assert invoke("mcp__pertura__run_diagnostic", {}) == {}
+    trigger = invoke("Read", {"file_path": "existing.tsv"})
+    assert trigger["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert guard.triggered is True
+
+    assert invoke("Read", {"file_path": "existing.tsv"}) == {}
+    assert invoke("Grep", {"pattern": "x", "path": "."}) == {}
+    extra_read = invoke("Glob", {"pattern": "*.tsv"})
+    assert extra_read["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    inside = invoke(
+        "Write",
+        {
+            "file_path": str(task_root / "benchmark_result.json"),
+            "content": "{}",
+        },
+    )
+    outside = invoke(
+        "Write",
+        {
+            "file_path": str(workspace.root / "outputs" / "wrong.json"),
+            "content": "{}",
+        },
+    )
+    scientific = invoke("mcp__pertura__run_analysis", {})
+
+    assert inside == {}
+    assert outside["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert scientific["hookSpecificOutput"]["permissionDecision"] == "deny"
+    snapshot = guard.to_dict()
+    assert snapshot["expensive_calls"] == 2
+    assert snapshot["completion_reads"] == 2
+    assert snapshot["closure_calls"] == 3
+    assert snapshot["trigger_tool"] == "Read"

@@ -12,6 +12,8 @@ from pertura_bench.paper_tasks import (
     validate_task_reference_catalog,
 )
 from pertura_workflow.capabilities import CapabilityRegistry
+from pertura_core.hashing import file_sha256
+from pertura_workflow.planner import build_capability_contract_catalog
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -162,12 +164,18 @@ def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
         ),
         encoding="utf-8",
     )
+    contract_catalog_path = tmp_path / "capability-contracts.json"
+    contract_catalog_path.write_text(
+        json.dumps(build_capability_contract_catalog(), sort_keys=True),
+        encoding="utf-8",
+    )
     plan = server_benchmark_plan(
         ROOT,
         paper_task_catalog_path=CATALOG,
         paper_task_reference_catalog_path=bound_reference_path,
         paper_anchor_catalog_path=ANCHORS,
         paper_asset_catalog_path=asset_path,
+        capability_contract_catalog_path=contract_catalog_path,
     )
     jobs = [job for job in plan.jobs if job.get("kind") == "paper_agent_workflow"]
     assert len(jobs) == 24
@@ -176,6 +184,13 @@ def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
     assert all(job["max_turns_per_task"] == 32 for job in jobs)
     assert all(job["session_scope"]["shared_provider_session"] for job in jobs)
     assert all(job["session_scope"]["condition_repeat_isolated"] for job in jobs)
+    assert plan.checkpoint_binding[
+        "capability_contract_catalog_hash"
+    ] == file_sha256(contract_catalog_path)
+    assert all(
+        "--capability-contract-catalog" in job["command"]["argv"]
+        for job in jobs
+    )
 
 
 def test_trans_de_and_global_effect_are_not_new_capabilities() -> None:

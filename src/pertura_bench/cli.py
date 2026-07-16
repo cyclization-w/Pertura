@@ -171,6 +171,9 @@ def main(argv: list[str] | None = None) -> int:
         "--paper-anchor-catalog", type=Path, required=True
     )
     paper_workflow.add_argument("--asset-catalog", type=Path, required=True)
+    paper_workflow.add_argument(
+        "--capability-contract-catalog", type=Path, required=True
+    )
     paper_workflow.add_argument("--resource-evidence", type=Path, required=True)
     paper_workflow.add_argument(
         "--smoke-task",
@@ -233,6 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     server.add_argument("--paper-task-reference-catalog", type=Path)
     server.add_argument("--paper-anchor-catalog", type=Path)
     server.add_argument("--paper-asset-catalog", type=Path)
+    server.add_argument("--capability-contract-catalog", type=Path)
 
     bind_plan = sub.add_parser("bind-server-plan")
     bind_plan.add_argument("--template", type=Path, required=True)
@@ -245,6 +249,7 @@ def main(argv: list[str] | None = None) -> int:
     bind_plan.add_argument("--paper-task-reference-catalog", type=Path)
     bind_plan.add_argument("--paper-anchor-catalog", type=Path)
     bind_plan.add_argument("--paper-asset-catalog", type=Path)
+    bind_plan.add_argument("--capability-contract-catalog", type=Path)
     bind_plan.add_argument("--output", type=Path, required=True)
 
     references = sub.add_parser("references")
@@ -510,6 +515,9 @@ def main(argv: list[str] | None = None) -> int:
                 task_reference_catalog_path=args.task_reference_catalog,
                 paper_anchor_catalog_path=args.paper_anchor_catalog,
                 asset_catalog_path=args.asset_catalog,
+                capability_contract_catalog_path=(
+                    args.capability_contract_catalog
+                ),
                 resource_evidence_path=args.resource_evidence,
                 smoke_task_ids=(
                     tuple(args.smoke_tasks) if args.smoke_tasks else None
@@ -627,6 +635,9 @@ def main(argv: list[str] | None = None) -> int:
             paper_task_reference_catalog_path=args.paper_task_reference_catalog,
             paper_anchor_catalog_path=args.paper_anchor_catalog,
             paper_asset_catalog_path=args.paper_asset_catalog,
+            capability_contract_catalog_path=(
+                args.capability_contract_catalog
+            ),
         )
     elif args.command == "bind-server-plan":
         from pertura_bench.capability_models import ServerBenchmarkPlan
@@ -669,6 +680,33 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error(
                     f"paper benchmark catalog drift for {field}: "
                     f"expected {expected_hash}, observed {observed_hash}"
+                )
+        contract_catalog_path = args.capability_contract_catalog
+        contract_catalog_unconfigured = canonical_hash(
+            {"capability_contract_catalog": "not_configured"}
+        )
+        if (
+            contract_catalog_path is None
+            and template.checkpoint_binding.get(
+                "capability_contract_catalog_hash"
+            )
+            != contract_catalog_unconfigured
+        ):
+            parser.error("configured capability contract catalog is required")
+        if contract_catalog_path is not None:
+            if not contract_catalog_path.is_file():
+                parser.error(
+                    "capability contract catalog is missing: "
+                    f"{contract_catalog_path}"
+                )
+            observed_hash = file_sha256(contract_catalog_path)
+            expected_hash = template.checkpoint_binding.get(
+                "capability_contract_catalog_hash"
+            )
+            if observed_hash != expected_hash:
+                parser.error(
+                    "capability contract catalog drift: expected "
+                    f"{expected_hash}, observed {observed_hash}"
                 )
         resource_manifest = json.loads(
             args.resource_lock_manifest.read_text(encoding="utf-8")
