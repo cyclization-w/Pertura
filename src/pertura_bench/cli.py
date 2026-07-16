@@ -50,6 +50,13 @@ def _exit_code(command: str, payload: object) -> int:
         return 0 if payload.get("ready") is True else 1
     if command == "agent" and isinstance(payload, dict) and "ready" in payload:
         return 0 if payload.get("ready") is True else 1
+    if (
+        command == "agent"
+        and isinstance(payload, dict)
+        and payload.get("schema_version")
+        == "pertura-paper-workflow-execution-v1"
+    ):
+        return 0 if payload.get("execution_status") == "completed" else 1
     if command == "agent" and isinstance(payload, dict) and payload.get(
         "status"
     ) in {"failed", "not_available", "judge_unavailable"}:

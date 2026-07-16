@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pertura_bench import paper_agent_execution as execution
 from pertura_bench.agent_models import AgentBenchmarkResult
+from pertura_bench.cli import _exit_code
 from pertura_core.hashing import file_sha256
 
 
@@ -183,6 +184,24 @@ def test_task_prompt_separates_result_file_from_turn_draft() -> None:
         assert "hypotheses, questions_for_user, next_steps" in prompt
 
 
+def test_scientific_failure_does_not_fail_completed_scheduler_job() -> None:
+    payload = {
+        "schema_version": "pertura-paper-workflow-execution-v1",
+        "execution_status": "completed",
+        "score_status": "failed",
+        "status": "failed",
+    }
+    assert _exit_code("agent", payload) == 0
+    assert (
+        _exit_code(
+            "agent",
+            payload | {"execution_status": "incomplete"},
+        )
+        == 1
+    )
+    assert _exit_code("agent", {"status": "failed"}) == 1
+
+
 def test_workflow_reuses_one_session_and_isolates_task_outputs(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -257,6 +276,8 @@ def test_workflow_reuses_one_session_and_isolates_task_outputs(
     )
     root = Path(result["execution_root"])
     manifest = json.loads((root / "input_manifest.json").read_text())
+    assert result["execution_status"] == "completed"
+    assert result["score_status"] == result["status"]
     assert manifest["max_turns_per_task"] == 32
     assert len(result["task_records"]) == 4
     assert len({manifest["project_id"]}) == 1

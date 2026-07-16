@@ -460,6 +460,8 @@ def run_paper_agent_workflow(
         "dataset_id": workflow["dataset_id"],
         "condition": condition,
         "repeat_index": repeat_index,
+        "execution_status": "completed",
+        "score_status": workflow_status,
         "status": workflow_status,
         "task_records": task_records,
         "required_task_count": len(required_records),
