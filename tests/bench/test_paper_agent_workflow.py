@@ -264,6 +264,37 @@ def test_workflow_resource_gate_accepts_maximum_turn_allocation() -> None:
     )
 
 
+def test_judge_task_context_resolves_declared_paper_anchors() -> None:
+    task_catalog = json.loads(
+        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
+    )
+    anchor_catalog = json.loads(
+        (ROOT / "benchmarks/paper_v1/paper_anchors.v1.json").read_text()
+    )
+    workflow = next(
+        item for item in task_catalog["workflows"]
+        if item["workflow_id"] == "WF-KANG"
+    )
+    task = next(
+        item for item in workflow["turns"] if item["task_id"] == "KANG-01"
+    )
+    anchors_by_id = {
+        item["anchor_id"]: item for item in anchor_catalog["anchors"]
+    }
+
+    context = execution._judge_task_context(
+        workflow=workflow,
+        task=task,
+        anchors_by_id=anchors_by_id,
+    )
+
+    assert context["case_id"] == "KANG-01"
+    assert context["dataset_id"] == "kang18_8vs8_pbmc"
+    assert [item["anchor_id"] for item in context["paper_anchors"]] == [
+        "ANCHOR-KANG-DONOR"
+    ]
+
+
 def test_artifact_contract_checks_table_headers_and_json_fields(
     tmp_path: Path,
 ) -> None:

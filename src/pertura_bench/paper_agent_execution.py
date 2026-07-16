@@ -387,13 +387,11 @@ def run_paper_agent_workflow(
                 grade_turn_final(
                     final_payload,
                     execution_verdict=verdict,
-                    task_context={
-                        "case_id": task_id,
-                        "dataset_id": workflow["dataset_id"],
-                        "objective": task["objective"],
-                        "claim_ceiling": task["claim_ceiling"],
-                        "paper_anchors": anchors,
-                    },
+                    task_context=_judge_task_context(
+                        workflow=workflow,
+                        task=task,
+                        anchors_by_id=anchors_by_id,
+                    ),
                     output_path=task_root / "judge" / "grade.json",
                 )
             task_records.append(
@@ -568,6 +566,24 @@ def _task_prompt(
         "only, and all required artifact_roles. Independent evaluators, not "
         "self-reported metrics, determine scientific correctness."
     )
+
+
+def _judge_task_context(
+    *,
+    workflow: Mapping[str, Any],
+    task: Mapping[str, Any],
+    anchors_by_id: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "case_id": str(task["task_id"]),
+        "dataset_id": str(workflow["dataset_id"]),
+        "objective": str(task["objective"]),
+        "claim_ceiling": str(task["claim_ceiling"]),
+        "paper_anchors": [
+            dict(anchors_by_id[anchor_id])
+            for anchor_id in task.get("paper_anchor_ids") or ()
+        ],
+    }
 
 
 def _register_workflow_assets(
