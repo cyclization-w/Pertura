@@ -189,7 +189,7 @@ The initial datasets are Replogle, Papalexi, Norman, and Kang. Kang is used only
 
 The agent comparison runs the same Claude model, data, task, context, time, scheduler/cgroup-enforced resources, and scientific reference catalog under `pertura_full`, `prompt_only`, and `free_codeact`. Every condition writes the same provider-neutral `benchmark_result.json`; formatting alone cannot pass without case-specific frozen scientific metrics. Six Perturb-seq cases, three conditions, and two repeats produce 36 primary runs. The two Kang agent cases are supplemental statistical demonstrations and do not enter the primary system comparison. Narrative judging uses fixed `deepseek-v4-pro` with no fallback.
 
-See [benchmark design](docs/benchmark_design.md) and the [server operations guide](docs/16_server_benchmark_operations_and_extension_guide.md).
+See [benchmark design](docs/benchmark_design.md), the [server operations guide](docs/16_server_benchmark_operations_and_extension_guide.md), and the [paper benchmark incident log](benchmarks/paper_v1/INCIDENT_LOG.md).
 
 ## Current checkpoint
 

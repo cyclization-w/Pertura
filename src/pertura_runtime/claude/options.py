@@ -8,7 +8,6 @@ from typing import Any, Iterable
 from pertura_core import PromotionPolicy
 from pertura_runtime.agent_bundle import resolve_skill_configuration
 from pertura_runtime.claude.hooks import build_audit_hooks
-from pertura_runtime.claude.permissions import build_input_readonly_guard
 from pertura_runtime.claude.tools.product_tools import (
     PRODUCT_TOOL_NAMES,
     create_product_mcp_server,
@@ -75,7 +74,10 @@ def build_agent_options(
 
     from claude_agent_sdk import ClaudeAgentOptions
 
-    hooks = build_audit_hooks(workspace) if config.enable_audit_hooks else None
+    hooks = build_audit_hooks(
+        workspace,
+        log_events=config.enable_audit_hooks,
+    )
     policy = runtime_policy(config)
     env = {
         "CLAUDE_CODE_MAX_RETRIES": "2",
@@ -130,7 +132,6 @@ def build_agent_options(
         "permission_mode": config.permission_mode,
         "max_turns": config.max_turns,
         "max_budget_usd": config.max_budget_usd,
-        "can_use_tool": build_input_readonly_guard(workspace),
         "hooks": hooks,
         "include_hook_events": config.include_hook_events,
         "setting_sources": list(config.setting_sources),
@@ -138,7 +139,9 @@ def build_agent_options(
         "skills": list(skill_config.skill_names) if skill_config.skill_names else [],
         "env": env,
     }
-    required = {"plugins", "skills"} if skill_config.skill_names else set()
+    required = {"hooks"}
+    if skill_config.skill_names:
+        required.update({"plugins", "skills"})
     return ClaudeAgentOptions(
         **_supported_options(
             ClaudeAgentOptions,

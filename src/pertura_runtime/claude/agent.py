@@ -371,8 +371,23 @@ def _sdk_result_error(manifest: ClaudeRunManifest) -> str:
 
 
 def _validate_sdk_skill_surface(expected: tuple[str, ...], observed: tuple[str, ...]) -> None:
-    if observed != expected:
+    managed_prefixes = {"pertura:"}
+    managed_prefixes.update(
+        f"{name.split(':', 1)[0]}:"
+        for name in expected
+        if ":" in name
+    )
+    observed_managed = tuple(
+        sorted(
+            name
+            for name in observed
+            if any(name.startswith(prefix) for prefix in managed_prefixes)
+        )
+    )
+    if observed_managed != expected:
         raise RuntimeError(
             "Claude Agent SDK initialized an unexpected skill surface; "
-            f"expected={list(expected)!r}, observed={list(observed)!r}"
+            f"expected_managed={list(expected)!r}, "
+            f"observed_managed={list(observed_managed)!r}, "
+            f"provider_native={list(sorted(set(observed) - set(observed_managed)))!r}"
         )

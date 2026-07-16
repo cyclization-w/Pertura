@@ -122,9 +122,15 @@ def test_required_skill_options_fail_fast_on_old_sdk() -> None:
 def test_sdk_initialized_skill_surface_must_match_allowlist() -> None:
     expected = tuple(sorted(f"pertura:{name}" for name in BUNDLED_SKILL_NAMES))
     _validate_sdk_skill_surface(expected, expected)
+    provider_native = ("batch", "code-review", "dataviz")
+    _validate_sdk_skill_surface(expected, tuple(sorted((*expected, *provider_native))))
+    _validate_sdk_skill_surface((), provider_native)
 
     with pytest.raises(RuntimeError, match="unexpected skill surface"):
         _validate_sdk_skill_surface(expected, expected[:-1])
+
+    with pytest.raises(RuntimeError, match="unexpected skill surface"):
+        _validate_sdk_skill_surface((), (expected[0], *provider_native))
 
 def test_sdk_init_event_records_available_skills(tmp_path: Path) -> None:
     from pertura_runtime.claude.manifest import ClaudeRunManifest
