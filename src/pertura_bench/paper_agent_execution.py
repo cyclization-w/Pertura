@@ -31,6 +31,16 @@ from pertura_runtime.project.workspace import ProjectWorkspace
 
 TurnExecutor = Callable[[ClaudePerturaAgent, str, int], Any]
 
+PAPER_CODEACT_PACKAGES = (
+    "anndata",
+    "scanpy",
+    "numpy",
+    "pandas",
+    "scipy",
+    "sklearn",
+    "pyarrow",
+)
+
 
 def load_paper_asset_catalog(path: str | Path) -> dict[str, Any]:
     resolved = Path(path).resolve()
@@ -172,6 +182,12 @@ def run_paper_agent_workflow(
         enable_bundled_skills=condition == "pertura_full",
         domain_tools_enabled=condition == "pertura_full",
         benchmark_condition=condition,
+        python_exe=(
+            _paper_science_python()
+            if turn_executor is None
+            else None
+        ),
+        python_preflight_packages=list(PAPER_CODEACT_PACKAGES),
     )
     provider_config_hash = canonical_hash(describe_options(runtime_options))
     agent = ClaudePerturaAgent(
@@ -513,6 +529,25 @@ def regrade_paper_agent_workflow(execution_root: str | Path) -> dict[str, Any]:
     }
     _write(root / "regrade.json", payload)
     return payload
+
+
+def _paper_science_python() -> str:
+    """Resolve the frozen general-purpose CodeAct Python environment."""
+
+    raw_prefix = os.environ.get("PERTURA_PYTHON_SCIENCE_ENV", "").strip()
+    if not raw_prefix:
+        raise RuntimeError(
+            "PERTURA_PYTHON_SCIENCE_ENV must identify the frozen "
+            "python-science-v1 environment"
+        )
+    prefix = Path(raw_prefix).expanduser().resolve()
+    candidates = (prefix / "bin" / "python", prefix / "python.exe")
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    raise FileNotFoundError(
+        f"python-science-v1 interpreter is missing under {prefix}"
+    )
 
 
 def _task_prompt(

@@ -264,6 +264,20 @@ def test_workflow_resource_gate_accepts_maximum_turn_allocation() -> None:
     )
 
 
+def test_paper_science_python_uses_frozen_environment(
+    tmp_path: Path, monkeypatch
+) -> None:
+    prefix = tmp_path / "python-science-v1"
+    python = prefix / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_bytes(b"")
+    monkeypatch.setenv("PERTURA_PYTHON_SCIENCE_ENV", str(prefix))
+
+    assert execution._paper_science_python() == str(python.resolve())
+    assert "pertpy" not in execution.PAPER_CODEACT_PACKAGES
+    assert "decoupler" not in execution.PAPER_CODEACT_PACKAGES
+
+
 def test_judge_task_context_resolves_declared_paper_anchors() -> None:
     task_catalog = json.loads(
         (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
