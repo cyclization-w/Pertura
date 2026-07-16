@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from pertura_core import (
     AnalysisStatus,
     CapabilityTrust,
@@ -14,10 +17,16 @@ from pertura_core.hashing import canonical_hash
 from pertura_workflow.capabilities import CapabilityRegistry
 from pertura_workflow.capabilities.registry import capability_scientific_hash
 from pertura_workflow.planner import (
+    build_capability_contract_catalog,
+    build_capability_contract_view,
+    compile_capability_execution_brief,
     plan_analysis,
     plan_requested_capability,
     resolve_dependencies,
 )
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _contract(
@@ -385,6 +394,104 @@ def test_wrong_kind_and_scope_mismatch_fail_closed() -> None:
         committed_results=(wrong,),
     )
     assert resolution.status == "blocked"
+
+
+def test_a19_contract_view_is_hash_bound_and_uses_asset_ids() -> None:
+    registry = CapabilityRegistry.load_default(include_external=False)
+    spec = registry.get("diagnostic.guide_assignment.v1")
+    contract = _contract()
+    view = build_capability_contract_view(
+        spec,
+        contract=contract,
+        asset_bindings={
+            "guide_matrix": {
+                "asset_id": "asset_guide_matrix",
+                "path": "/must/not/be/a/call/argument",
+            }
+        },
+    )
+
+    assert view["scientific_hash"] == capability_scientific_hash(spec)
+    assert view["parameter_schema"] == spec.parameters_schema
+    assert view["parameter_examples"] == spec.parameters_schema["examples"]
+    assert view["minimal_call"]["arguments"]["parameters"][
+        "guide_counts_path"
+    ] == "asset_guide_matrix"
+    assert "/must/not/be/a/call/argument" not in json.dumps(view)
+
+
+def test_a19_brief_marks_external_dependency_without_expanding_plan() -> None:
+    brief = compile_capability_execution_brief(
+        task_id="KANG-01",
+        objective="Donor-aware pseudobulk",
+        execution_mode="capability_or_codeact",
+        candidate_capability_ids=("de.pseudobulk.edger.v1",),
+        contract=_contract(),
+        environment_ready={"edger-v1": True},
+    )
+
+    assert brief["route"] == "codeact"
+    assert brief["candidate_capability_ids"] == ["de.pseudobulk.edger.v1"]
+    assert len(brief["nodes"]) == 1
+    assert brief["nodes"][0]["status"] == "blocked"
+    assert set(brief["nodes"][0]["missing_plan_dependencies"]) == {
+        "target.reliability.v2",
+        "calibration.replicate_null.v1",
+    }
+
+
+def test_a19_direct_task_routes_are_deterministic() -> None:
+    contract = _contract()
+    codeact = compile_capability_execution_brief(
+        task_id="PAPA-06",
+        objective="trans-DE",
+        execution_mode="codeact_scientific",
+        candidate_capability_ids=(),
+        contract=contract,
+    )
+    evidence = compile_capability_execution_brief(
+        task_id="PAPA-07",
+        objective="global effect calibration",
+        execution_mode="evidence_interpretation",
+        candidate_capability_ids=(),
+        contract=contract,
+    )
+
+    assert codeact["route"] == "codeact"
+    assert evidence["route"] == "evidence_interpretation"
+    assert codeact["active_window"] == []
+    assert evidence["active_window"] == []
+
+
+def test_a19_contract_catalog_and_frozen_task_gaps_are_stable() -> None:
+    registry = CapabilityRegistry.load_default(include_external=False)
+    catalog = build_capability_contract_catalog(registry)
+
+    assert catalog["capability_count"] == 44
+    assert catalog["active_capability_count"] == 40
+    assert len(catalog["capabilities"]) == 44
+
+    tasks = json.loads(
+        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
+    )
+    gaps = set()
+    for workflow in tasks["workflows"]:
+        earlier_candidates: set[str] = set()
+        for task in workflow["turns"]:
+            current = set(task.get("expected_capability_dag") or ())
+            for capability_id in current:
+                for dependency in registry.get(capability_id).depends_on:
+                    if dependency not in current | earlier_candidates:
+                        gaps.add(
+                            (
+                                workflow["workflow_id"],
+                                capability_id,
+                                dependency,
+                            )
+                        )
+            earlier_candidates.update(current)
+
+    assert len(gaps) == 23
 
 def test_trusted_effect_resolution_flattens_scientific_dependencies() -> None:
     registry = CapabilityRegistry.load_default(include_external=False)

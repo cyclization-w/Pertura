@@ -85,6 +85,15 @@ class PerturaProductRuntime:
     def started(self) -> bool:
         return self._started
 
+    def planning_material(
+        self, contract_id: str | None = None
+    ) -> tuple[DatasetContract, tuple[ResultEnvelope, ...]]:
+        """Expose read-only registry inputs for the deterministic plan compiler."""
+
+        contract = self._get_contract(contract_id)
+        _, committed, _ = self._resolution_material()
+        return contract, committed
+
     def close(self, *, graceful: bool = True) -> None:
         if self._started:
             self._broker.stop(graceful=graceful)

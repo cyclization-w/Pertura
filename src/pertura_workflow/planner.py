@@ -69,6 +69,300 @@ class DependencyResolution:
         return self.status == "resolved"
 
 
+_PLAN_NODE_STATUS_ORDER = {
+    "ready": 0,
+    "planned": 1,
+    "blocked": 2,
+    "completed": 3,
+}
+
+
+def build_capability_contract_view(
+    spec: CapabilitySpec,
+    *,
+    contract: DatasetContract,
+    asset_bindings: Mapping[str, Mapping[str, Any]] | None = None,
+    objective: str = "",
+) -> dict[str, Any]:
+    """Render one registry-owned spec for progressive agent disclosure.
+
+    The view contains only information already enforced by the capability
+    registry and runtime.  It deliberately excludes benchmark references,
+    evaluators, score thresholds, and task answers.
+    """
+
+    asset_bindings = asset_bindings or {}
+    schema = dict(spec.parameters_schema or {})
+    properties = dict(schema.get("properties") or {})
+    required = tuple(str(item) for item in schema.get("required") or ())
+    defaults = {
+        str(name): field["default"]
+        for name, field in properties.items()
+        if isinstance(field, Mapping) and "default" in field
+    }
+    role_parameters = {
+        str(name): str(field["x-pertura-asset-role"])
+        for name, field in properties.items()
+        if isinstance(field, Mapping) and field.get("x-pertura-asset-role")
+    }
+    parameters = dict(defaults)
+    for name, role in role_parameters.items():
+        binding = asset_bindings.get(role) or {}
+        asset_id = str(binding.get("asset_id") or "")
+        if asset_id:
+            parameters[name] = asset_id
+
+    tool_name = {
+        "diagnostic": "run_diagnostic",
+        "analysis": "run_analysis",
+        "virtual": "evaluate_virtual_model",
+    }.get(spec.kind)
+    call: dict[str, Any] | None = None
+    if tool_name:
+        arguments: dict[str, Any] = {
+            "capability_id": spec.capability_id,
+            "contract_id": contract.contract_id,
+            "scope": {"dataset_id": contract.dataset_id},
+            "parameters": parameters,
+        }
+        if spec.kind == "analysis":
+            arguments["objective"] = objective or spec.capability_id
+            arguments["dependencies"] = []
+        elif spec.kind == "diagnostic":
+            arguments["dependencies"] = []
+        call = {"tool": tool_name, "arguments": arguments}
+
+    return {
+        "schema_version": "pertura-capability-contract-view-v1",
+        "capability_id": spec.capability_id,
+        "version": spec.version,
+        "kind": spec.kind,
+        "summary": spec.summary,
+        "scientific_hash": capability_scientific_hash(spec),
+        "input_requirements": list(spec.input_requirements),
+        "parameter_schema": schema,
+        "parameter_defaults": defaults,
+        "parameter_examples": list(schema.get("examples") or ()),
+        "required_parameters": list(required),
+        "asset_role_parameters": role_parameters,
+        "depends_on": list(spec.depends_on),
+        "dependency_kinds": list(spec.dependency_kinds),
+        "dependency_policy": dict(spec.metadata.get("dependency_policy") or {}),
+        "environment_profile": spec.metadata.get("environment_profile"),
+        "timeout_seconds": spec.timeout_seconds,
+        "output_kind": spec.output_kind,
+        "source_class": spec.source_class.value,
+        "claim_permissions": list(spec.claim_permissions),
+        "minimal_call": call,
+    }
+
+
+def compile_capability_execution_brief(
+    *,
+    task_id: str,
+    objective: str,
+    execution_mode: str,
+    candidate_capability_ids: Iterable[str],
+    contract: DatasetContract,
+    committed_results: Iterable[ResultEnvelope] = (),
+    asset_bindings: Mapping[str, Mapping[str, Any]] | None = None,
+    environment_ready: Mapping[str, bool] | None = None,
+    registry: CapabilityRegistry | None = None,
+    completion_checklist: Iterable[str] = (),
+    active_window_size: int = 5,
+) -> dict[str, Any]:
+    """Compile a deterministic P0 brief from an explicit candidate allowlist.
+
+    This is intentionally not a natural-language resolver.  Missing scientific
+    dependencies outside the allowlist are reported and never auto-inserted.
+    """
+
+    if active_window_size < 1 or active_window_size > 5:
+        raise ValueError("active_window_size must be between 1 and 5")
+    asset_bindings = asset_bindings or {}
+    registry = registry or CapabilityRegistry.load_default(include_external=False)
+    candidates = tuple(dict.fromkeys(str(item) for item in candidate_capability_ids))
+    results = tuple(committed_results)
+    current_ids = {
+        item.capability_id
+        for item in results
+        if item.contract_id == contract.contract_id
+        and item.contract_hash == contract.canonical_hash
+        and not item.stale
+        and _status(item) in _SUCCESS_STATUSES
+    }
+    candidate_set = set(candidates)
+    nodes: list[dict[str, Any]] = []
+
+    for index, capability_id in enumerate(candidates):
+        spec = registry.get(capability_id)
+        blockers: list[str] = []
+        applicability = plan_requested_capability(
+            capability_id,
+            expected_kind=spec.kind,
+            contract=contract,
+            committed_results=results,
+            registry=registry,
+            objective=objective,
+            environment_ready=environment_ready,
+        )
+        blockers.extend(applicability.blockers)
+        missing_external = [
+            dependency
+            for dependency in spec.depends_on
+            if dependency not in candidate_set and dependency not in current_ids
+        ]
+        pending_internal = [
+            dependency
+            for dependency in spec.depends_on
+            if dependency in candidate_set and dependency not in current_ids
+        ]
+        if spec.metadata.get("deprecated", False):
+            blockers.append("capability is deprecated or compatibility-only")
+        if missing_external:
+            blockers.append(
+                "required dependencies are outside the frozen candidate plan: "
+                + ", ".join(missing_external)
+            )
+        blockers = list(dict.fromkeys(blockers))
+
+        if capability_id in current_ids:
+            status = "completed"
+        elif blockers:
+            status = "blocked"
+        elif pending_internal:
+            status = "planned"
+        else:
+            status = "ready"
+        nodes.append(
+            {
+                "node_id": f"node_{index + 1:02d}",
+                "capability_id": capability_id,
+                "status": status,
+                "blockers": blockers,
+                "pending_plan_dependencies": pending_internal,
+                "missing_plan_dependencies": missing_external,
+                "contract": build_capability_contract_view(
+                    spec,
+                    contract=contract,
+                    asset_bindings=asset_bindings,
+                    objective=objective,
+                ),
+            }
+        )
+
+    if not nodes:
+        route = (
+            "evidence_interpretation"
+            if execution_mode == "evidence_interpretation"
+            else "codeact"
+        )
+    elif any(node["status"] in {"ready", "planned", "completed"} for node in nodes):
+        route = "capability_or_codeact"
+    else:
+        route = "codeact"
+
+    incomplete = [node for node in nodes if node["status"] != "completed"]
+    active = sorted(
+        incomplete,
+        key=lambda item: (
+            _PLAN_NODE_STATUS_ORDER[str(item["status"])],
+            candidates.index(str(item["capability_id"])),
+        ),
+    )[:active_window_size]
+    facts = design_facts(contract, results)
+    assets = {
+        str(role): {
+            key: value
+            for key, value in dict(binding).items()
+            if key in {"asset_id", "path", "content_sha256", "kind", "source_class"}
+        }
+        for role, binding in sorted(asset_bindings.items())
+    }
+    payload = {
+        "schema_version": "pertura-capability-execution-brief-v1",
+        "task_id": task_id,
+        "objective": objective,
+        "execution_mode": execution_mode,
+        "route": route,
+        "candidate_source": "frozen_explicit_allowlist",
+        "candidate_capability_ids": list(candidates),
+        "dataset_contract": {
+            "contract_id": contract.contract_id,
+            "contract_hash": contract.canonical_hash,
+            "dataset_id": contract.dataset_id,
+            "unresolved_fields": list(contract.unresolved_fields),
+            "design_facts": facts,
+        },
+        "assets": assets,
+        "nodes": nodes,
+        "active_window": [
+            {
+                "node_id": node["node_id"],
+                "capability_id": node["capability_id"],
+                "status": node["status"],
+                "blockers": node["blockers"],
+                "tool": (node["contract"].get("minimal_call") or {}).get("tool"),
+                "required_upstream": node["contract"]["depends_on"],
+            }
+            for node in active
+        ],
+        "completion_checklist": list(completion_checklist),
+        "stop_conditions": [
+            "Do not inspect repository source, capability YAML, tests, or environment directories to rediscover contracts.",
+            "Do not repeat a blocked capability call without new dependency evidence.",
+            "CodeAct outputs remain exploratory and cannot be represented as verifier-signed capability results.",
+            "Write the task benchmark_result.json before returning the provider TurnDraft.",
+        ],
+    }
+    plan_hash = canonical_hash(payload)
+    return {
+        **payload,
+        "plan_id": f"plan_{plan_hash.removeprefix('sha256:')[:20]}",
+        "plan_hash": plan_hash,
+    }
+
+
+def build_capability_contract_catalog(
+    registry: CapabilityRegistry | None = None,
+) -> dict[str, Any]:
+    """Return the hash-bound, answer-free a19 capability contract catalog."""
+
+    registry = registry or CapabilityRegistry.load_default(include_external=False)
+    capabilities = []
+    for spec in registry.specs():
+        capabilities.append(
+            {
+                "capability_id": spec.capability_id,
+                "version": spec.version,
+                "kind": spec.kind,
+                "summary": spec.summary,
+                "scientific_hash": capability_scientific_hash(spec),
+                "deprecated": bool(spec.metadata.get("deprecated", False)),
+                "parameters_schema": dict(spec.parameters_schema or {}),
+                "input_requirements": list(spec.input_requirements),
+                "depends_on": list(spec.depends_on),
+                "dependency_kinds": list(spec.dependency_kinds),
+                "dependency_policy": dict(
+                    spec.metadata.get("dependency_policy") or {}
+                ),
+                "environment_profile": spec.metadata.get(
+                    "environment_profile"
+                ),
+                "output_kind": spec.output_kind,
+                "source_class": spec.source_class.value,
+                "claim_permissions": list(spec.claim_permissions),
+            }
+        )
+    payload = {
+        "schema_version": "pertura-capability-contract-catalog-v1",
+        "capability_count": len(capabilities),
+        "active_capability_count": sum(not item["deprecated"] for item in capabilities),
+        "capabilities": capabilities,
+    }
+    return {**payload, "catalog_hash": canonical_hash(payload)}
+
+
 def plan_analysis(
     objective: str,
     *,
