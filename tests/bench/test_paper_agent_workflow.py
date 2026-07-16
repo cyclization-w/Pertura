@@ -8,7 +8,7 @@ from pertura_bench import paper_agent_execution as execution
 from pertura_bench.agent_models import AgentBenchmarkResult
 from pertura_bench.cli import _exit_code
 from pertura_core import DatasetContract
-from pertura_core.hashing import file_sha256
+from pertura_core.hashing import canonical_hash, file_sha256
 from pertura_workflow.capabilities import CapabilityRegistry
 
 
@@ -466,7 +466,7 @@ def test_pertura_full_runner_writes_answer_free_task_brief(
     monkeypatch.setattr(
         execution,
         "_paper_environment_readiness",
-        lambda registry: {
+        lambda registry, capability_ids: {
             "python-science-v1": True,
             "perturbseq-python-v1": True,
         },
@@ -563,6 +563,40 @@ def test_pertura_full_runner_writes_answer_free_task_brief(
     assert brief["assets"]
     assert all(item.get("asset_id") for item in brief["assets"].values())
     assert brief["plan_id"] in prompts[0]
+
+
+def test_environment_readiness_is_candidate_scoped_and_manifest_only(
+    tmp_path: Path, monkeypatch
+) -> None:
+    registry = CapabilityRegistry.load_default(include_external=False)
+    prefix = tmp_path / "edger-v1"
+    prefix.mkdir()
+    manifest = {
+        "schema_version": "pertura-environment-manifest-v2",
+        "profile": "edger-v1",
+        "platform": "fixture",
+        "resource_hashes": {},
+        "expected_versions": {},
+    }
+    manifest["lock_hash"] = canonical_hash(manifest)
+    prefix.joinpath("pertura-environment-manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+    requested_profiles = []
+
+    def resolve_prefix(profile: str) -> Path:
+        requested_profiles.append(profile)
+        assert profile == "edger-v1"
+        return prefix
+
+    monkeypatch.setattr(execution, "environment_prefix", resolve_prefix)
+    readiness = execution._paper_environment_readiness(
+        registry,
+        ("de.pseudobulk.edger.v1",),
+    )
+
+    assert readiness == {"edger-v1": True}
+    assert requested_profiles == ["edger-v1"]
 
 
 def test_workflow_reuses_one_session_and_isolates_task_outputs(

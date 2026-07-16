@@ -197,6 +197,34 @@ Status values:
   is frozen.
 - Status: `fixed_unverified`
 
+### PB-044 -- Canary readiness re-ran every scientific environment doctor
+
+- Date: 2026-07-16/17
+- Phase: a19 live canary
+- Affected checkpoint/runs: pre-tag a19 checkpoint at commit
+  `dcf8c076c4ee998bc239deadd07b0be9f7250e0a`; Sherlock job `34239260`
+- Symptom: KANG-01 `pertura_full` failed before provider initialization while
+  the runner was checking `perturbseq-python-v1`, an environment unrelated to
+  the task. The Pertpy import smoke exceeded the environment doctor's
+  120-second subprocess timeout.
+- Root cause: the first P0 readiness implementation iterated every environment
+  profile declared anywhere in the capability registry and called
+  `environment_lock`, which deliberately performs a full live doctor. This
+  duplicated checkpoint-time validation inside every task, ignored the
+  task-scoped candidate allowlist, and made startup sensitive to shared
+  filesystem import latency.
+- Resolution: derive profiles only from the current task's frozen capability
+  candidates and validate their already-frozen environment manifests and lock
+  hashes without launching micromamba, Python, R, or scientific imports. Full
+  environment doctors remain mandatory before resource-lock binding.
+- Verification evidence: local regression tests verify that an edgeR-only
+  candidate reads only the edgeR manifest and launches no unrelated profile.
+  A live KANG-01 rerun is required.
+- Benchmark treatment: job `34239260` is infrastructure-invalid and is not a
+  model or scientific failure. No other a19 canaries may start until the
+  refreshed checkpoint passes KANG-01.
+- Status: `fixed_unverified`
+
 ## Incident index
 
 ### Repository, build, and checkpoint
@@ -266,6 +294,7 @@ Status values:
 | PB-041 | The PAPA-07 output contract listed artifact paths relative to the task output directory without naming that base explicitly, so job `34195147` wrote otherwise usable artifacts directly under `outputs/` and the independent evaluator could not find them. | State the exact workspace-relative destination for every required artifact and explicitly prohibit writing task artifacts directly under `outputs/`; keep the frozen catalog, reference, thresholds, and evaluator unchanged. | Job `34195147` is protocol-only because independent evaluation could not consume the misplaced artifacts; rerun the isolated smoke. | `fixed_unverified` |
 | PB-042 | After dependency repair and artifact destinations were made explicit, PAPA-07 job `34199744` completed one Bash call and three Read calls by `17:31:23Z`, then emitted no further provider event or `ResultMessage` for the remaining roughly 20 minutes before exhausting its 1,800-second budget; cancellation emitted an ignored Claude SDK subprocess-transport cleanup warning after the verdict was safely written. | Keep the frozen wall timeout and fail-closed missing-output result; do not synthesize, move, or repair artifacts. Classify this trace as provider-stream inactivity rather than a running scientific subprocess, and treat the post-verdict transport warning as an upstream cleanup limitation unless it prevents termination or leaves live processes. | The smoke is protocol-only; a formal recurrence is an execution timeout under the frozen `failed_no_fallback` policy, not an independent scientific-evaluator result. | `accepted_limitation` |
 | PB-043 | The agent sees shallow generic MCP schemas while detailed capability YAML contracts remain internal. An existing deterministic planner performs design-aware single-capability routing and dependency validation, but it does not expose a multi-step executable plan or contracts to the model. | a19 P0 adds hash-bound task-scoped contract rendering, frozen-candidate compilation, explicit blockers/routes, and a uniform completion guard; full dynamic Planner V2 remains future work. | a18 is retained as pilot evidence only; a19 formal scoring remains gated on four live canaries. | `fixed_unverified` |
+| PB-044 | KANG-01 a19 canary startup re-ran doctors for every registry environment and timed out in an unrelated Pertpy import smoke. | Scope readiness to current task candidates and validate frozen manifest lock hashes without launching scientific subprocesses; keep full doctors at checkpoint time. | Job `34239260` is infrastructure-invalid; refresh and rerun KANG-01 before any other canary. | `fixed_unverified` |
 
 ## Successful retained milestones
 

@@ -28,7 +28,7 @@ from pertura_runtime.claude.options import ClaudeRuntimeOptions, describe_option
 from pertura_runtime.project.assets import DataAssetRegistry
 from pertura_runtime.project.models import AssetBinding
 from pertura_runtime.project.workspace import ProjectWorkspace
-from pertura_workflow.environment import environment_lock
+from pertura_workflow.environment import environment_prefix
 from pertura_workflow.planner import (
     build_capability_contract_catalog,
     compile_capability_execution_brief,
@@ -283,11 +283,6 @@ def run_paper_agent_workflow(
         }
         for asset in registered
     }
-    environment_ready = (
-        _paper_environment_readiness(agent.product_runtime.registry)
-        if condition == "pertura_full"
-        else None
-    )
     try:
         for task in workflow_turns:
             task = dict(task)
@@ -337,17 +332,21 @@ def run_paper_agent_workflow(
                     for role in task.get("required_input_roles") or ()
                     if role in registered_assets
                 }
+                candidate_capability_ids = tuple(
+                    task.get("expected_capability_dag") or ()
+                )
                 execution_brief = compile_capability_execution_brief(
                     task_id=task_id,
                     objective=str(task["objective"]),
                     execution_mode=str(task["execution_mode"]),
-                    candidate_capability_ids=tuple(
-                        task.get("expected_capability_dag") or ()
-                    ),
+                    candidate_capability_ids=candidate_capability_ids,
                     contract=contract,
                     committed_results=committed,
                     asset_bindings=task_asset_bindings,
-                    environment_ready=environment_ready,
+                    environment_ready=_paper_environment_readiness(
+                        agent.product_runtime.registry,
+                        candidate_capability_ids,
+                    ),
                     registry=agent.product_runtime.registry,
                     completion_checklist=(
                         *(
@@ -986,24 +985,46 @@ def _task_prompt(
     )
 
 
-def _paper_environment_readiness(registry: Any) -> dict[str, bool]:
-    """Resolve each registry-declared environment once for a task workflow."""
+def _paper_environment_readiness(
+    registry: Any,
+    capability_ids: tuple[str, ...],
+) -> dict[str, bool]:
+    """Read frozen manifests for only the current task's environments.
+
+    Scientific environments are fully doctored before checkpoint binding.
+    Re-running every import smoke inside every agent task is both redundant and
+    vulnerable to shared-filesystem startup latency. The task compiler needs
+    lock readiness, not a second live benchmark, so it validates immutable
+    manifests without launching a process.
+    """
 
     profiles = sorted(
         {
-            str(spec.metadata.get("environment_profile"))
-            for spec in registry.specs()
-            if spec.metadata.get("environment_profile")
+            str(registry.get(capability_id).metadata.get("environment_profile"))
+            for capability_id in capability_ids
+            if registry.get(capability_id).metadata.get("environment_profile")
         }
     )
     readiness: dict[str, bool] = {}
     for profile in profiles:
         try:
-            environment_lock(profile)
+            manifest_path = (
+                environment_prefix(profile)
+                / "pertura-environment-manifest.json"
+            )
+            manifest = _load_json(manifest_path)
+            observed_lock = str(manifest.get("lock_hash") or "")
+            unsigned = dict(manifest)
+            unsigned.pop("lock_hash", None)
+            readiness[profile] = bool(
+                observed_lock
+                and observed_lock == canonical_hash(unsigned)
+                and manifest.get("schema_version")
+                == "pertura-environment-manifest-v2"
+                and manifest.get("profile") == profile
+            )
         except (FileNotFoundError, OSError, RuntimeError, ValueError):
             readiness[profile] = False
-        else:
-            readiness[profile] = True
     return readiness
 
 

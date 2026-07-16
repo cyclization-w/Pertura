@@ -163,7 +163,8 @@ At the start of each `pertura_full` task the P0 compiler reads:
 - current committed results for the exact contract hash;
 - task-relevant registered assets and content hashes;
 - registry YAML and capability scientific hashes;
-- environment readiness;
+- environment readiness from candidate-scoped frozen manifests (live doctors
+  run before resource-lock binding, not inside agent tasks);
 - the frozen candidate allowlist.
 
 It writes `task/capability_plans/<task_id>.json` and the current alias
