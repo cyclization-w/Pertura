@@ -755,6 +755,13 @@ def _task_prompt(
         workflow=workflow,
         task=task,
     )
+    task_output_root = f"outputs/tasks/{task['task_id']}"
+    artifact_destinations = {
+        str(role): f"{task_output_root}/{relative}"
+        for role, relative in (
+            (task.get("output_contract") or {}).get("artifact_paths") or {}
+        ).items()
+    }
     if isolated_smoke:
         dependency_payload: Mapping[str, Mapping[str, Any]] = {}
         repair_policy = (
@@ -792,6 +799,11 @@ def _task_prompt(
         f"{json.dumps(anchors, sort_keys=True)}. "
         f"Required artifact roles: {json.dumps(task['required_artifact_roles'])}. "
         f"Output contract: {json.dumps(task['output_contract'], sort_keys=True)}. "
+        "Every artifact_path in that contract is relative to the current task "
+        f"output root {task_output_root}. Write the required artifacts at these "
+        "exact workspace-relative destinations: "
+        f"{json.dumps(artifact_destinations, sort_keys=True)}. "
+        "Do not write them directly under outputs/. "
         f"Hard gates: {json.dumps(task['task_hard_gates'])}. "
         f"Claim ceiling: {task['claim_ceiling']}. "
         f"{repair_policy}"

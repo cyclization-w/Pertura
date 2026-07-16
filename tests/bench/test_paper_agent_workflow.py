@@ -361,6 +361,15 @@ def test_evidence_interpretation_prompt_forbids_recomputation() -> None:
     assert "evidence-interpretation task" in prompt
     assert "do not recompute or refit the frozen evidence" in prompt
     assert 'Upstream repair contracts: {}' in prompt
+    assert (
+        '"global_effect_claims": '
+        '"outputs/tasks/PAPA-07/global_effect_claims.tsv"'
+    ) in prompt
+    assert (
+        '"global_effect_limitations": '
+        '"outputs/tasks/PAPA-07/global_effect_limitations.json"'
+    ) in prompt
+    assert "Do not write them directly under outputs/." in prompt
 
 
 def test_workflow_reuses_one_session_and_isolates_task_outputs(
