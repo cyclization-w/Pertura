@@ -1,8 +1,8 @@
 # Pertura Paper Benchmark Incident Log
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 
-This is the durable incident record for the `0.2.0a17`/`0.2.0a18` paper
+This is the durable incident record for the `0.2.0a17`/`0.2.0a18`/`0.2.0a19` paper
 benchmark. It records failures that can affect correctness, reproducibility,
 fairness, runtime completion, or interpretation. It is not a substitute for
 the frozen task, reference, asset, resource, or server-plan manifests.
@@ -130,6 +130,73 @@ Status values:
   scored as model performance.
 - Status: `fixed_unverified`
 
+### PB-043 -- Detailed capability contracts are not surfaced to the agent
+
+- Date: 2026-07-16/17
+- Phase: formal agent execution and product-surface review
+- Affected checkpoint/runs: `v0.2.0a18-paperbench`; in particular the
+  `WF-PAPA` `pertura_full` repeat-1 run rooted at
+  `be39fdb4bf904466aa820e4c2d1ac462`
+- Symptom: the five public MCP tools expose only shallow top-level input
+  shapes. Fields such as `parameters`, `scope`, and `dependencies` appear as
+  generic objects or arrays, while output documentation lists required field
+  names without the complete nested types, status transitions, artifact-role
+  semantics, or task-specific minimal valid calls. The authoritative
+  capability YAML specifications contain these details, but they are not
+  automatically included in the model context. Agents may therefore spend
+  turns using Bash, repository reads, or failed calls to rediscover contracts
+  that the runtime already knows. In the cited PAPA run, the agent produced
+  the required scientific artifacts but exhausted its turn budget before
+  writing `benchmark_result.json`; the trace supports excessive exploration
+  as a contributing factor but does not prove that contract visibility was
+  the sole cause.
+- First failing gate: `benchmark_result_schema_valid`, followed by the
+  required artifact-path/role gates because no result manifest bound the
+  already-created files.
+- Root cause: the agent-facing MCP schema and procedural skills are separated
+  from the richer capability registry. Capability-specific parameter schemas,
+  defaults, dependencies, output kinds, claim permissions, and completion
+  conditions are enforced internally but are not rendered as task-conditioned
+  tool contracts for the model. Pertura is not missing a planner entirely:
+  `pertura_workflow.planner` already provides deterministic exact-alias and
+  design-aware single-capability routing, explicit-capability validation,
+  blocker reporting, required-upstream guidance, and authoritative committed
+  dependency resolution. It deliberately rejects substring route definitions.
+  However, its current `CapabilityPlan` selects one capability and reports a
+  flat `required_upstream` list; it does not compile a multi-capability DAG,
+  render capability contracts into model context, track node/artifact state,
+  or reserve a finalization phase. The paper task catalog separately records
+  `expected_capability_dag` for protocol validation and evaluation, but that
+  metadata does not currently drive execution or get exposed as an executable
+  plan to the agent.
+- Resolution: do not change the frozen a18 capability, tool, task, or prompt
+  surface during formal execution. For the next product checkpoint, extend
+  the existing planner rather than creating a disconnected planner: preserve
+  its current exact-alias/design gates and dependency resolver, add a versioned
+  multi-node plan with nodes, edges, readiness, artifact roles, and plan-state
+  transitions, and generate contract cards directly from the hashed capability
+  YAML registry. Bind benchmark tasks to explicit capability IDs rather than
+  keyword matching; for open product requests, parse a validated structured
+  intent before invoking the same deterministic compiler. Inject only the
+  relevant contracts into `pertura_full`, including minimal valid calls,
+  required/optional inputs, status handling, artifact roles, next actions, and
+  stop/finalization conditions. Pair the planner extension with a runtime
+  finalization reserve so contract visibility alone is not expected to
+  guarantee delivery. Tasks unsupported by registered capabilities must be
+  allowed to produce an explicit CodeAct, evidence-interpretation, or blocked
+  route instead of being forced into a capability DAG.
+- Verification evidence: a19 P0 now renders hash-bound task-scoped contract
+  views, records explicit missing allowlist dependencies, reserves a uniform
+  closure phase, and has local regression coverage for cross-condition
+  isolation and result-directory write restrictions. Sherlock canary evidence
+  is still required to demonstrate reduced discovery calls and successful
+  result-manifest finalization with the live provider.
+- Benchmark treatment: retain all a18 executions as pilot evidence only. Do
+  not retrospectively repair them or mix them with a19 formal results. Start
+  formal scoring only after all four a19 canaries pass and the a19 checkpoint
+  is frozen.
+- Status: `fixed_unverified`
+
 ## Incident index
 
 ### Repository, build, and checkpoint
@@ -198,6 +265,7 @@ Status values:
 | PB-040 | Isolated PAPA-07 smoke still exposed full upstream repair contracts, so the agent spent the complete 1,800-second budget inspecting environments and missing dependencies instead of writing the interpretation outputs. | In `--smoke-task` mode, suppress upstream contracts, prohibit dependency repair and unrelated environment inspection, and mark evidence-interpretation turns as read-only over frozen evidence. | Job `34199744` used only the current frozen evidence inputs before an independently recorded provider-stream timeout; formal multi-turn dependency repair remains unchanged. | `verified` |
 | PB-041 | The PAPA-07 output contract listed artifact paths relative to the task output directory without naming that base explicitly, so job `34195147` wrote otherwise usable artifacts directly under `outputs/` and the independent evaluator could not find them. | State the exact workspace-relative destination for every required artifact and explicitly prohibit writing task artifacts directly under `outputs/`; keep the frozen catalog, reference, thresholds, and evaluator unchanged. | Job `34195147` is protocol-only because independent evaluation could not consume the misplaced artifacts; rerun the isolated smoke. | `fixed_unverified` |
 | PB-042 | After dependency repair and artifact destinations were made explicit, PAPA-07 job `34199744` completed one Bash call and three Read calls by `17:31:23Z`, then emitted no further provider event or `ResultMessage` for the remaining roughly 20 minutes before exhausting its 1,800-second budget; cancellation emitted an ignored Claude SDK subprocess-transport cleanup warning after the verdict was safely written. | Keep the frozen wall timeout and fail-closed missing-output result; do not synthesize, move, or repair artifacts. Classify this trace as provider-stream inactivity rather than a running scientific subprocess, and treat the post-verdict transport warning as an upstream cleanup limitation unless it prevents termination or leaves live processes. | The smoke is protocol-only; a formal recurrence is an execution timeout under the frozen `failed_no_fallback` policy, not an independent scientific-evaluator result. | `accepted_limitation` |
+| PB-043 | The agent sees shallow generic MCP schemas while detailed capability YAML contracts remain internal. An existing deterministic planner performs design-aware single-capability routing and dependency validation, but it does not expose a multi-step executable plan or contracts to the model. | a19 P0 adds hash-bound task-scoped contract rendering, frozen-candidate compilation, explicit blockers/routes, and a uniform completion guard; full dynamic Planner V2 remains future work. | a18 is retained as pilot evidence only; a19 formal scoring remains gated on four live canaries. | `fixed_unverified` |
 
 ## Successful retained milestones
 
