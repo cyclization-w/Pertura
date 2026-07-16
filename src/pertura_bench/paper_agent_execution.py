@@ -42,6 +42,18 @@ PAPER_CODEACT_PACKAGES = (
     "pyarrow",
 )
 
+PAPER_ASSET_KIND_ADAPTER = {
+    "observed": ("observed", "observed_metadata"),
+    "derived": ("derived", "measured_result"),
+    "exploratory": ("exploratory", "hypothesis"),
+    "external_resource": ("external_resource", "curated_prior"),
+    "environment_lock": ("external_resource", "curated_prior"),
+    "executable": ("external_resource", "curated_prior"),
+    "protocol": ("external_resource", "curated_prior"),
+    "reference_lock": ("external_resource", "curated_prior"),
+    "prior": ("external_resource", "curated_prior"),
+}
+
 
 def load_paper_asset_catalog(path: str | Path) -> dict[str, Any]:
     resolved = Path(path).resolve()
@@ -828,11 +840,20 @@ def _register_workflow_assets(
             raise FileNotFoundError(f"paper agent asset is missing: {role}")
         if not expected_hash.startswith("sha256:"):
             raise ValueError(f"paper agent asset hash is invalid: {role}")
+        catalog_kind = str(raw.get("kind") or "external_resource")
+        try:
+            registered_kind, default_source_class = PAPER_ASSET_KIND_ADAPTER[
+                catalog_kind
+            ]
+        except KeyError as exc:
+            raise ValueError(
+                f"unsupported paper agent asset kind: {catalog_kind}"
+            ) from exc
         asset = registry.register(
             path,
             role=role,
-            kind=str(raw.get("kind") or "external_resource"),
-            source_class=raw.get("source_class"),
+            kind=registered_kind,
+            source_class=raw.get("source_class") or default_source_class,
         )
         if asset.content_sha256 != expected_hash:
             raise ValueError(f"paper agent asset checksum mismatch: {role}")

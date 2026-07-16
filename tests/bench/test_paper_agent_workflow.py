@@ -202,6 +202,59 @@ def test_scientific_failure_does_not_fail_completed_scheduler_job() -> None:
     assert _exit_code("agent", {"status": "failed"}) == 1
 
 
+def test_paper_asset_kinds_adapt_to_product_registry() -> None:
+    expected = {
+        "observed": ("observed", "observed_metadata"),
+        "derived": ("derived", "measured_result"),
+        "exploratory": ("exploratory", "hypothesis"),
+        "external_resource": ("external_resource", "curated_prior"),
+        "environment_lock": ("external_resource", "curated_prior"),
+        "executable": ("external_resource", "curated_prior"),
+        "protocol": ("external_resource", "curated_prior"),
+        "reference_lock": ("external_resource", "curated_prior"),
+        "prior": ("external_resource", "curated_prior"),
+    }
+    assert execution.PAPER_ASSET_KIND_ADAPTER == expected
+
+
+def test_environment_lock_registers_as_external_resource(tmp_path: Path) -> None:
+    project = execution.ProjectWorkspace.initialize(
+        tmp_path / "project",
+        logical_name="asset-adapter",
+    )
+    run = project.create_run(logical_name="asset adapter")
+    registry = execution.DataAssetRegistry(
+        project_id=project.project.project_id,
+        store=project.store,
+        object_root=project.objects_dir,
+    )
+    lock = tmp_path / "paper" / "environment-lock.json"
+    lock.parent.mkdir(parents=True)
+    lock.write_text('{"lock": "fixture"}\n', encoding="utf-8")
+
+    registered, paths = execution._register_workflow_assets(
+        registry,
+        project=project,
+        run_id=run.run_id,
+        raw_assets=(
+            {
+                "role": "edgeR_environment_lock",
+                "root": "paper_root",
+                "relative_path": lock.name,
+                "content_sha256": file_sha256(lock),
+                "kind": "environment_lock",
+            },
+        ),
+        cache=tmp_path / "cache",
+        paper_root=lock.parent,
+    )
+
+    assert len(registered) == 1
+    assert registered[0].kind == "external_resource"
+    assert registered[0].source_class == "curated_prior"
+    assert paths == {"edgeR_environment_lock": str(lock.resolve())}
+
+
 def test_smoke_task_selection_runs_only_requested_turn(
     tmp_path: Path, monkeypatch
 ) -> None:
