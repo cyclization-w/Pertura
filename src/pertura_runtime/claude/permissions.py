@@ -64,6 +64,7 @@ def decide_tool_permission(
     workspace: ClaudeRunWorkspace,
     tool_name: str,
     input_data: dict[str, Any],
+    allow_background_bash: bool = True,
 ) -> PermissionDecision:
     """Pure permission decision used by the SDK callback and unit tests."""
 
@@ -82,6 +83,16 @@ def decide_tool_permission(
                 )
     if tool_name == "Bash":
         command = str(input_data.get("command") or "")
+        if not allow_background_bash and _requests_background_bash(
+            input_data, command
+        ):
+            return PermissionDecision(
+                allowed=False,
+                reason=(
+                    "Background Bash execution is disabled for controlled "
+                    "benchmark turns; run the command synchronously."
+                ),
+            )
         if _looks_like_runtime_state_mutation_command(workspace, command):
             return PermissionDecision(
                 allowed=False,
@@ -93,6 +104,16 @@ def decide_tool_permission(
                 reason="Bash command appears to mutate the read-only input path.",
             )
     return PermissionDecision(allowed=True, updated_input=input_data)
+
+
+def _requests_background_bash(
+    input_data: dict[str, Any], command: str
+) -> bool:
+    if input_data.get("run_in_background") is True:
+        return True
+    if re.search(r"\b(?:nohup|disown|setsid)\b", command):
+        return True
+    return bool(re.search(r"(?<!&)\&\s*(?:$|;)", command))
 
 
 def build_input_readonly_guard(workspace: ClaudeRunWorkspace):

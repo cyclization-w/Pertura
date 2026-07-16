@@ -186,6 +186,7 @@ def test_workflow_reuses_one_session_and_isolates_task_outputs(
     )
     root = Path(result["execution_root"])
     manifest = json.loads((root / "input_manifest.json").read_text())
+    assert manifest["max_turns_per_task"] == 32
     assert len(result["task_records"]) == 4
     assert len({manifest["project_id"]}) == 1
     assert len({manifest["analysis_run_id"]}) == 1
@@ -262,6 +263,104 @@ def test_workflow_resource_gate_accepts_maximum_turn_allocation() -> None:
         )
         is False
     )
+
+
+def test_workflow_regrades_later_additive_upstream_repair(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(execution, "ClaudePerturaAgent", _Agent)
+    monkeypatch.setattr(
+        execution,
+        "_resource_evidence",
+        lambda path: {
+            "mode": "scheduler",
+            "scheduler_job_id": "fixture-job",
+            "requested_memory_gb": 8,
+            "actual_memory_gb": 8,
+            "n_jobs": 1,
+            "timeout_seconds": 7200,
+            "peak_rss_mb": 100,
+        },
+    )
+    evaluation_calls: list[str] = []
+
+    def evaluate(task, *args, **kwargs):
+        evaluation_calls.append(str(task["task_id"]))
+        return {"status": "passed", "problems": []}
+
+    monkeypatch.setattr(execution, "evaluate_paper_task", evaluate)
+
+    def execute(agent, prompt, timeout):
+        if "task KANG-01" in prompt:
+            return None
+        root = agent.workspace.root / "outputs/tasks/KANG-01"
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "pseudobulk_counts.tsv").write_text(
+            "gene\tsample\tcount\nG1\td1_ctrl\t10\n", encoding="utf-8"
+        )
+        (root / "design_matrix.tsv").write_text(
+            "sample\tdonor\tcondition\nd1_ctrl\td1\tctrl\n",
+            encoding="utf-8",
+        )
+        (root / "de_results.tsv").write_text(
+            "gene\tlogFC\tF\tPValue\tFDR\nG1\t1\t2\t0.01\t0.02\n",
+            encoding="utf-8",
+        )
+        (root / "null_calibration.tsv").write_text(
+            "permutation_id\ttype1_rate\tnull_effect_bias\t"
+            "exchangeability_violation_count\n1\t0.05\t0\t0\n",
+            encoding="utf-8",
+        )
+        (root / "benchmark_result.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "pertura-agent-benchmark-result-v1",
+                    "case_id": "KANG-01",
+                    "dataset_id": "kang18_8vs8_pbmc",
+                    "result_type": "donor_aware_de",
+                    "analysis_unit": "donor",
+                    "status": "completed",
+                    "limitations": ["four donors"],
+                    "artifact_roles": [
+                        "pseudobulk_counts",
+                        "design_matrix",
+                        "de_results",
+                        "null_calibration",
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    result = execution.run_paper_agent_workflow(
+        "WF-KANG",
+        repo_root=ROOT,
+        cache=tmp_path / "cache",
+        paper_root=tmp_path / "paper",
+        output=tmp_path / "runs",
+        condition="free_codeact",
+        repeat_index=1,
+        task_catalog_path=ROOT / "benchmarks/paper_v1/agent_tasks.v2.json",
+        task_reference_catalog_path=_bound_task_references(tmp_path),
+        paper_anchor_catalog_path=ROOT
+        / "benchmarks/paper_v1/paper_anchors.v1.json",
+        asset_catalog_path=_asset_catalog(tmp_path),
+        resource_evidence_path=tmp_path / "resource.json",
+        turn_executor=execute,
+        verify_checkpoint=False,
+    )
+    root = Path(result["execution_root"])
+    first = json.loads((root / "tasks/KANG-01/verdict.json").read_text())
+    second = json.loads((root / "tasks/KANG-02/verdict.json").read_text())
+
+    assert first["post_workflow_regraded"] is True
+    assert first["repaired_after_turn"] is True
+    assert first["result_problem"] is None
+    assert first["hard_gates"]["benchmark_result_schema_valid"] is True
+    assert first["hard_gates"]["required_artifact_paths"] is True
+    assert (root / "tasks/KANG-01/benchmark_result.json").is_file()
+    assert second["hard_gates"]["dependencies_present"] is True
+    assert evaluation_calls == ["KANG-01", "KANG-02", "KANG-01"]
 
 
 def test_paper_science_python_uses_frozen_environment(
@@ -396,6 +495,65 @@ def test_dependency_assets_include_transitive_ancestors(tmp_path: Path) -> None:
         "a_result": str(a_path.resolve()),
         "b_result": str(b_path.resolve()),
     }
+
+
+def test_dependency_gate_requires_complete_upstream_contract(
+    tmp_path: Path,
+) -> None:
+    tasks = {
+        "A": {
+            "task_id": "A",
+            "depends_on_tasks": [],
+            "required_artifact_roles": ["table"],
+            "output_contract": {
+                "artifact_roles": ["table"],
+                "artifact_paths": {"table": "table.tsv"},
+                "artifact_schemas": {"table.tsv": ["value"]},
+            },
+        },
+        "B": {
+            "task_id": "B",
+            "depends_on_tasks": ["A"],
+            "required_artifact_roles": [],
+            "output_contract": {},
+        },
+    }
+    output = tmp_path / "outputs/tasks/A"
+    output.mkdir(parents=True)
+    (output / "benchmark_result.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "pertura-agent-benchmark-result-v1",
+                "case_id": "A",
+                "dataset_id": "D",
+                "result_type": "fixture",
+                "analysis_unit": "donor",
+                "status": "completed",
+                "artifact_roles": ["table"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert (
+        execution._dependency_outputs_complete(
+            tmp_path,
+            task=tasks["B"],
+            tasks_by_id=tasks,
+            dataset_id="D",
+        )
+        is False
+    )
+
+    (output / "table.tsv").write_text("value\n1\n", encoding="utf-8")
+    assert (
+        execution._dependency_outputs_complete(
+            tmp_path,
+            task=tasks["B"],
+            tasks_by_id=tasks,
+            dataset_id="D",
+        )
+        is True
+    )
 
 
 def test_prior_output_guard_allows_additive_repair_only() -> None:

@@ -77,6 +77,7 @@ def build_agent_options(
     hooks = build_audit_hooks(
         workspace,
         log_events=config.enable_audit_hooks,
+        allow_background_bash=config.interaction_mode != "benchmark",
     )
     policy = runtime_policy(config)
     env = {

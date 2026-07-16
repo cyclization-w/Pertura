@@ -11,6 +11,7 @@ from pertura_workflow.capabilities import CapabilityRegistry
 
 PAPER_CONDITIONS = ("free_codeact", "prompt_only", "pertura_full")
 PAPER_REPEATS = (1, 2)
+PAPER_AGENT_MAX_TURNS = 32
 
 
 @dataclass(frozen=True)

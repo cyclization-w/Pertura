@@ -13,6 +13,7 @@ from uuid import uuid4
 from pertura_bench.agent_judge import grade_turn_final, project_judge_answer
 from pertura_bench.agent_models import AgentBenchmarkResult
 from pertura_bench.paper_tasks import (
+    PAPER_AGENT_MAX_TURNS,
     PAPER_CONDITIONS,
     PAPER_REPEATS,
     load_paper_task_catalog,
@@ -178,6 +179,7 @@ def run_paper_agent_workflow(
         )
     runtime_options = ClaudeRuntimeOptions(
         model=model or "fixture-model",
+        max_turns=PAPER_AGENT_MAX_TURNS,
         interaction_mode="benchmark",
         enable_bundled_skills=condition == "pertura_full",
         domain_tools_enabled=condition == "pertura_full",
@@ -289,48 +291,20 @@ def run_paper_agent_workflow(
             turns = project.store.list_turns(conversation.conversation_id)
             final = project.store.get_turn_final(turns[-1].turn_id) if turns else None
             result_path = task_output / "benchmark_result.json"
-            benchmark_result, result_problem = _load_task_result(
-                result_path,
-                task_id=task_id,
-                dataset_id=str(workflow["dataset_id"]),
-            )
-            bindings = [
-                references_by_id[reference_id]
-                for reference_id in task.get("task_reference_ids") or ()
-                if reference_id in references_by_id
-            ]
-            evaluation = evaluate_paper_task(
+            (
+                benchmark_result,
+                result_problem,
+                evaluation,
+                output_gates,
+            ) = _evaluate_task_outputs(
                 task,
-                benchmark_result=(
-                    benchmark_result.model_dump(mode="json")
-                    if benchmark_result is not None
-                    else None
-                ),
-                task_output_root=task_output,
+                workspace_root=workspace.root,
+                dataset_id=str(workflow["dataset_id"]),
                 paper_root=paper_root,
-                bindings=bindings,
+                asset_paths=asset_paths,
+                references_by_id=references_by_id,
+                tasks_by_id=tasks_by_id,
             )
-            dependency_outputs = {
-                dependency: (
-                    workspace.root
-                    / "outputs"
-                    / "tasks"
-                    / dependency
-                    / "benchmark_result.json"
-                ).is_file()
-                for dependency in task.get("depends_on_tasks") or ()
-            }
-            resolved_after_turn = dict(asset_paths)
-            resolved_after_turn.update(
-                _dependency_asset_paths(
-                    workspace.root,
-                    task=task,
-                    tasks_by_id=tasks_by_id,
-                )
-            )
-            required_inputs_present = set(
-                task.get("required_input_roles") or ()
-            ).issubset(resolved_after_turn)
             mutation_free = all(
                 _existing_files_unchanged(
                     previous,
@@ -340,25 +314,10 @@ def run_paper_agent_workflow(
                 )
                 for dependency, previous in existing_prior_hashes.items()
             )
-            required_roles = set(task.get("required_artifact_roles") or ())
-            observed_roles = set(
-                benchmark_result.artifact_roles if benchmark_result else ()
-            )
             hard_gates = {
                 "turn_checkpointed": final is not None,
-                "output_contract_present": result_path.is_file(),
-                "benchmark_result_schema_valid": benchmark_result is not None,
-                "required_artifact_roles": required_roles.issubset(observed_roles),
-                "required_artifact_paths": _artifact_paths_present(
-                    task_output, task.get("output_contract") or {}
-                ),
-                "dependencies_present": (
-                    all(dependency_outputs.values()) and required_inputs_present
-                ),
+                **output_gates,
                 "prior_task_outputs_immutable": mutation_free,
-                "task_reference_bound": len(bindings)
-                == len(task.get("task_reference_ids") or ()),
-                "independent_evaluation": evaluation.get("status") == "passed",
                 "timeout_enforced": not timed_out,
                 "resource_evidence": _task_resource_gate(
                     task, resource_evidence
@@ -388,6 +347,15 @@ def run_paper_agent_workflow(
                 "turn_id": final.turn_id if final else None,
                 "wall_seconds": wall_seconds,
                 "resource_evidence": resource_evidence,
+                "post_turn_output_hashes": _tree_hashes(task_output),
+                "post_turn_ancestor_hashes": {
+                    dependency: _tree_hashes(
+                        workspace.root / "outputs" / "tasks" / dependency
+                    )
+                    for dependency in ancestor_ids
+                },
+                "post_workflow_regraded": False,
+                "repaired_after_turn": False,
             }
             _write(task_root / "verdict.json", verdict)
             if final is not None:
@@ -420,6 +388,19 @@ def run_paper_agent_workflow(
     finally:
         agent.product_runtime.close(graceful=True)
 
+    task_records = _refresh_workflow_task_verdicts(
+        execution_root=execution_root,
+        workspace_root=workspace.root,
+        workflow=workflow,
+        condition=condition,
+        repeat_index=repeat_index,
+        paper_root=paper_root,
+        asset_paths=asset_paths,
+        references_by_id=references_by_id,
+        anchors_by_id=anchors_by_id,
+        tasks_by_id=tasks_by_id,
+    )
+
     required_records = [
         item
         for item in task_records
@@ -446,6 +427,7 @@ def run_paper_agent_workflow(
         "condition": condition,
         "repeat_index": repeat_index,
         "model": model,
+        "max_turns_per_task": runtime_options.max_turns,
         "provider_config_hash": provider_config_hash,
         "task_catalog_sha256": task_catalog.sha256,
         "task_reference_catalog_sha256": file_sha256(
@@ -490,6 +472,126 @@ def run_paper_agent_workflow(
     }
     _write(execution_root / "workflow_verdict.json", summary)
     return dict(summary, execution_root=str(execution_root))
+
+
+def _refresh_workflow_task_verdicts(
+    *,
+    execution_root: Path,
+    workspace_root: Path,
+    workflow: Mapping[str, Any],
+    condition: str,
+    repeat_index: int,
+    paper_root: Path,
+    asset_paths: Mapping[str, str],
+    references_by_id: Mapping[str, Mapping[str, Any]],
+    anchors_by_id: Mapping[str, Mapping[str, Any]],
+    tasks_by_id: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Re-evaluate outputs after later turns may have repaired missing files."""
+
+    records: list[dict[str, Any]] = []
+    dataset_id = str(workflow["dataset_id"])
+    for raw_task in workflow.get("turns") or ():
+        task = dict(raw_task)
+        task_id = str(task["task_id"])
+        task_root = execution_root / "tasks" / task_id
+        verdict_path = task_root / "verdict.json"
+        if not verdict_path.is_file():
+            continue
+        verdict = _load_json(verdict_path)
+        if verdict.get("status") == "not_configured":
+            records.append(
+                {
+                    "task_id": task_id,
+                    "status": "not_configured",
+                    "verdict": str(verdict_path),
+                }
+            )
+            continue
+
+        task_output = workspace_root / "outputs" / "tasks" / task_id
+        current_output_hashes = _tree_hashes(task_output)
+        current_ancestor_hashes = {
+            dependency: _tree_hashes(
+                workspace_root / "outputs" / "tasks" / dependency
+            )
+            for dependency in _ancestor_task_ids(task, tasks_by_id)
+        }
+        changed_after_turn = (
+            verdict.get("post_turn_output_hashes") != current_output_hashes
+            or verdict.get("post_turn_ancestor_hashes")
+            != current_ancestor_hashes
+        )
+        if not changed_after_turn:
+            records.append(
+                {
+                    "task_id": task_id,
+                    "status": str(verdict.get("status") or "failed"),
+                    "verdict": str(verdict_path),
+                }
+            )
+            continue
+
+        result_path = task_output / "benchmark_result.json"
+        (
+            benchmark_result,
+            result_problem,
+            evaluation,
+            output_gates,
+        ) = _evaluate_task_outputs(
+            task,
+            workspace_root=workspace_root,
+            dataset_id=dataset_id,
+            paper_root=paper_root,
+            asset_paths=asset_paths,
+            references_by_id=references_by_id,
+            tasks_by_id=tasks_by_id,
+        )
+        hard_gates = dict(verdict.get("hard_gates") or {})
+        original_output_present = bool(
+            hard_gates.get("output_contract_present")
+        )
+        hard_gates.update(output_gates)
+        status = "passed" if all(hard_gates.values()) else "failed"
+        verdict.update(
+            {
+                "status": status,
+                "hard_gates": hard_gates,
+                "result_problem": result_problem,
+                "scientific_evaluation": evaluation,
+                "post_workflow_regraded": True,
+                "repaired_after_turn": (
+                    not original_output_present and result_path.is_file()
+                ),
+                "post_workflow_output_hashes": current_output_hashes,
+                "post_workflow_ancestor_hashes": current_ancestor_hashes,
+            }
+        )
+        if result_path.is_file():
+            (task_root / "benchmark_result.json").write_bytes(
+                result_path.read_bytes()
+            )
+        _write(verdict_path, verdict)
+        final_path = task_root / "turn_final.json"
+        if final_path.is_file():
+            grade_turn_final(
+                _load_json(final_path),
+                execution_verdict=verdict,
+                task_context=_judge_task_context(
+                    workflow=workflow,
+                    task=task,
+                    anchors_by_id=anchors_by_id,
+                ),
+                output_path=task_root / "judge" / "grade.json",
+            )
+        records.append(
+            {
+                "task_id": task_id,
+                "status": status,
+                "verdict": str(verdict_path),
+            }
+        )
+    return records
 
 
 def regrade_paper_agent_workflow(execution_root: str | Path) -> dict[str, Any]:
@@ -582,6 +684,8 @@ def _task_prompt(
         f"Paper benchmark workflow {workflow['workflow_id']}, task {task['task_id']} "
         f"(turn {task['turn_index']}). Objective: {task['objective']} "
         f"Execution mode: {task['execution_mode']}. {surface} "
+        "Run Bash commands synchronously; background or detached execution "
+        "is disabled so task completion and grading share one boundary. "
         f"Registered task assets: {json.dumps(relevant_assets, sort_keys=True)}. "
         f"Missing registered roles: {json.dumps(missing_assets)}. "
         "Upstream repair contracts: "
@@ -784,6 +888,115 @@ def _load_task_result(
     if result.status not in {"completed", "blocked"}:
         return None, f"benchmark result status is {result.status}"
     return result, None
+
+
+def _evaluate_task_outputs(
+    task: Mapping[str, Any],
+    *,
+    workspace_root: Path,
+    dataset_id: str,
+    paper_root: Path,
+    asset_paths: Mapping[str, str],
+    references_by_id: Mapping[str, Mapping[str, Any]],
+    tasks_by_id: Mapping[str, Mapping[str, Any]],
+) -> tuple[
+    AgentBenchmarkResult | None,
+    str | None,
+    dict[str, Any],
+    dict[str, bool],
+]:
+    task_id = str(task["task_id"])
+    task_output = workspace_root / "outputs" / "tasks" / task_id
+    result_path = task_output / "benchmark_result.json"
+    benchmark_result, result_problem = _load_task_result(
+        result_path,
+        task_id=task_id,
+        dataset_id=dataset_id,
+    )
+    bindings = [
+        references_by_id[reference_id]
+        for reference_id in task.get("task_reference_ids") or ()
+        if reference_id in references_by_id
+    ]
+    evaluation = evaluate_paper_task(
+        task,
+        benchmark_result=(
+            benchmark_result.model_dump(mode="json")
+            if benchmark_result is not None
+            else None
+        ),
+        task_output_root=task_output,
+        paper_root=paper_root,
+        bindings=bindings,
+    )
+    resolved_inputs = dict(asset_paths)
+    resolved_inputs.update(
+        _dependency_asset_paths(
+            workspace_root,
+            task=task,
+            tasks_by_id=tasks_by_id,
+        )
+    )
+    required_roles = set(task.get("required_artifact_roles") or ())
+    observed_roles = set(
+        benchmark_result.artifact_roles if benchmark_result else ()
+    )
+    gates = {
+        "output_contract_present": result_path.is_file(),
+        "benchmark_result_schema_valid": benchmark_result is not None,
+        "required_artifact_roles": required_roles.issubset(observed_roles),
+        "required_artifact_paths": _artifact_paths_present(
+            task_output, task.get("output_contract") or {}
+        ),
+        "dependencies_present": (
+            _dependency_outputs_complete(
+                workspace_root,
+                task=task,
+                tasks_by_id=tasks_by_id,
+                dataset_id=dataset_id,
+            )
+            and set(task.get("required_input_roles") or ()).issubset(
+                resolved_inputs
+            )
+        ),
+        "task_reference_bound": len(bindings)
+        == len(task.get("task_reference_ids") or ()),
+        "independent_evaluation": evaluation.get("status") == "passed",
+    }
+    return benchmark_result, result_problem, evaluation, gates
+
+
+def _dependency_outputs_complete(
+    workspace_root: Path,
+    *,
+    task: Mapping[str, Any],
+    tasks_by_id: Mapping[str, Mapping[str, Any]],
+    dataset_id: str,
+) -> bool:
+    for dependency_id in task.get("depends_on_tasks") or ():
+        dependency = tasks_by_id.get(str(dependency_id))
+        if dependency is None:
+            return False
+        output_root = (
+            workspace_root / "outputs" / "tasks" / str(dependency_id)
+        )
+        result, _ = _load_task_result(
+            output_root / "benchmark_result.json",
+            task_id=str(dependency_id),
+            dataset_id=dataset_id,
+        )
+        if result is None:
+            return False
+        required_roles = set(
+            dependency.get("required_artifact_roles") or ()
+        )
+        if not required_roles.issubset(result.artifact_roles):
+            return False
+        if not _artifact_paths_present(
+            output_root, dependency.get("output_contract") or {}
+        ):
+            return False
+    return True
 
 
 def _task_resource_gate(

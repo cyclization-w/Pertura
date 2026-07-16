@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from pertura_bench.capability_models import CapabilityBenchmarkSpec, ServerBenchmarkPlan
+from pertura_bench.paper_tasks import PAPER_AGENT_MAX_TURNS
 from pertura_bench.real_run_policy import real_runs_for_spec, validate_real_run_policy
 from pertura_core.hashing import canonical_hash, file_sha256
 from pertura_workflow.capabilities import CapabilityRegistry
@@ -800,6 +801,7 @@ def build_server_plan(
                             "benchmark_track": workflow["role"],
                             "provider": "claude-agent-sdk",
                             "model_source": "PERTURA_CLAUDE_MODEL",
+                            "max_turns_per_task": PAPER_AGENT_MAX_TURNS,
                             "task_ids": [
                                 task["task_id"]
                                 for task in workflow.get("turns") or ()

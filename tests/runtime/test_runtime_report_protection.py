@@ -54,3 +54,53 @@ def test_pre_tool_hook_enforces_input_readonly_policy(tmp_path: Path) -> None:
         },
     )
     assert allowed == {}
+
+
+def test_benchmark_pre_tool_hook_requires_synchronous_bash(
+    tmp_path: Path,
+) -> None:
+    workspace = ClaudeRunWorkspace.create(
+        root=tmp_path / "runs", run_id="synchronous"
+    )
+    denied = _pre_tool_permission_output(
+        workspace,
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "Rscript analysis.R",
+                "run_in_background": True,
+            },
+        },
+        allow_background_bash=False,
+    )
+    assert (
+        denied["hookSpecificOutput"]["permissionDecision"] == "deny"
+    )
+    assert "synchronously" in denied["hookSpecificOutput"][
+        "permissionDecisionReason"
+    ]
+
+    shell_background = _pre_tool_permission_output(
+        workspace,
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "Rscript analysis.R &"},
+        },
+        allow_background_bash=False,
+    )
+    assert shell_background["hookSpecificOutput"][
+        "permissionDecision"
+    ] == "deny"
+
+    synchronous = _pre_tool_permission_output(
+        workspace,
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "Rscript analysis.R"},
+        },
+        allow_background_bash=False,
+    )
+    assert synchronous == {}

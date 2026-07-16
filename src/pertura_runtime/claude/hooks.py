@@ -27,12 +27,15 @@ def _append_hook_event(
 def _pre_tool_permission_output(
     workspace: ClaudeRunWorkspace,
     input_data: dict[str, Any],
+    *,
+    allow_background_bash: bool = True,
 ) -> dict[str, Any]:
     tool_input = input_data.get("tool_input")
     decision = decide_tool_permission(
         workspace=workspace,
         tool_name=str(input_data.get("tool_name") or ""),
         input_data=dict(tool_input) if isinstance(tool_input, dict) else {},
+        allow_background_bash=allow_background_bash,
     )
     if decision.allowed:
         return {}
@@ -49,6 +52,7 @@ def build_audit_hooks(
     workspace: ClaudeRunWorkspace,
     *,
     log_events: bool = True,
+    allow_background_bash: bool = True,
 ):
     """Build mandatory permission hooks with optional audit logging."""
 
@@ -61,7 +65,11 @@ def build_audit_hooks(
     ) -> dict[str, Any]:
         if log_events:
             _append_hook_event(workspace, input_data, tool_use_id)
-        return _pre_tool_permission_output(workspace, input_data)
+        return _pre_tool_permission_output(
+            workspace,
+            input_data,
+            allow_background_bash=allow_background_bash,
+        )
 
     async def post_tool_hook(
         input_data: dict[str, Any],

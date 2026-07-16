@@ -104,6 +104,32 @@ Status values:
   observed; the job is already invalid under PB-033.
 - Status: `fixed_unverified`
 
+### PB-035 -- KANG turn exhaustion exposed stale repair grading
+
+- Date: 2026-07-15/16
+- Phase: agent smoke
+- Affected run: Sherlock Slurm job `34114385`, `WF-KANG`,
+  `free_codeact`, repeat 1
+- Symptom: both KANG turns ended with SDK subtype `error_max_turns` after
+  21 reported turns. `KANG-01` was graded at 18:30:55 without a result, while
+  its `benchmark_result.json` appeared at 18:50:57 during `KANG-02`.
+- Root cause: the 20-turn generic runtime default was too tight for the
+  multi-step CodeAct task. The later turn was explicitly allowed to repair
+  missing upstream files, but the runner neither regraded the repaired task
+  nor required the complete upstream artifact contract for dependency
+  satisfaction. Background Bash also made turn completion boundaries less
+  deterministic.
+- Resolution: use a frozen 32-turn paper-only budget for every condition,
+  require synchronous Bash in benchmark mode, require complete dependency
+  artifact contracts, and re-evaluate all task verdicts once at workflow end.
+  Per-task scientific wall-time limits remain unchanged.
+- Required verification: rebuild/rebind and rerun the KANG free-CodeAct smoke;
+  confirm no background task is accepted, `max_turns_per_task` is 32, and any
+  additive upstream repair is reflected in the final verdict.
+- Benchmark treatment: job `34114385` is a protocol smoke and must not be
+  scored as model performance.
+- Status: `fixed_unverified`
+
 ## Incident index
 
 ### Repository, build, and checkpoint
@@ -164,6 +190,7 @@ Status values:
 | PB-032 | Paper CodeAct scientific preflight used the main runner environment. | Bind the frozen `python-science-v1` interpreter and its general package surface. | Slurm job `34111544` is infrastructure-invalid. | `verified` |
 | PB-033 | Provider-native skills were treated as Pertura skill leakage. | Compare only the exact managed skill namespace and record provider-native skills separately. | Slurm job `34112683` is infrastructure-invalid. | `fixed_unverified` |
 | PB-034 | Generic tool auto-approval shadowed the input-readonly callback. | Enforce protected-path policy in one mandatory `PreToolUse` hook. | Rerun required before formal benchmark. | `fixed_unverified` |
+| PB-035 | KANG turns exhausted the 20-turn default and later repair left an upstream verdict stale. | Use 32 paper turns, synchronous benchmark Bash, complete dependency contracts, and final workflow regrading. | Job `34114385` is protocol-only and not scored. | `fixed_unverified` |
 
 ## Successful retained milestones
 
