@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from pertura_bench import paper_agent_execution as execution
+from pertura_bench.agent_models import AgentBenchmarkResult
 from pertura_core.hashing import file_sha256
 
 
@@ -110,6 +111,76 @@ def _bound_task_references(tmp_path: Path) -> Path:
     path = tmp_path / "bound-task-references.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
+
+
+def test_task_prompt_separates_result_file_from_turn_draft() -> None:
+    catalog = json.loads(
+        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
+    )
+    for candidate_workflow in catalog["workflows"]:
+        for candidate_task in candidate_workflow["turns"]:
+            candidate = execution._benchmark_result_template(
+                workflow=candidate_workflow,
+                task=candidate_task,
+            )
+            AgentBenchmarkResult.model_validate(candidate)
+            assert candidate["artifact_roles"] == candidate_task[
+                "required_artifact_roles"
+            ]
+
+    workflow = next(
+        item for item in catalog["workflows"] if item["workflow_id"] == "WF-KANG"
+    )
+    task = next(
+        item for item in workflow["turns"] if item["task_id"] == "KANG-01"
+    )
+
+    template = execution._benchmark_result_template(
+        workflow=workflow,
+        task=task,
+    )
+    result = AgentBenchmarkResult.model_validate(template)
+
+    assert set(template) == {
+        "schema_version",
+        "case_id",
+        "dataset_id",
+        "result_type",
+        "analysis_unit",
+        "status",
+        "findings",
+        "metrics",
+        "limitations",
+        "artifact_roles",
+    }
+    assert result.case_id == "KANG-01"
+    assert list(result.artifact_roles) == task["required_artifact_roles"]
+    assert isinstance(template["artifact_roles"], list)
+    assert set(template["findings"][0]) == {
+        "finding_id",
+        "text",
+        "metric_ids",
+        "artifact_roles",
+    }
+
+    for condition in ("pertura_full", "prompt_only", "free_codeact"):
+        prompt = execution._task_prompt(
+            workflow=workflow,
+            task=task,
+            condition=condition,
+            asset_paths={},
+            anchors_by_id={
+                anchor_id: {"anchor_id": anchor_id}
+                for anchor_id in task["paper_anchor_ids"]
+            },
+            dependency_contracts={},
+        )
+        assert "standalone pertura-agent-benchmark-result-v1 JSON file" in prompt
+        assert "separate provider response" in prompt
+        assert "pertura-turn-draft-v1" in prompt
+        assert "Never copy the TurnDraft object" in prompt
+        assert "artifact_roles must be a JSON array" in prompt
+        assert "hypotheses, questions_for_user, next_steps" in prompt
 
 
 def test_workflow_reuses_one_session_and_isolates_task_outputs(

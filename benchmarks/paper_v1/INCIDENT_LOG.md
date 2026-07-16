@@ -191,6 +191,7 @@ Status values:
 | PB-033 | Provider-native skills were treated as Pertura skill leakage. | Compare only the exact managed skill namespace and record provider-native skills separately. | Slurm job `34112683` is infrastructure-invalid. | `fixed_unverified` |
 | PB-034 | Generic tool auto-approval shadowed the input-readonly callback. | Enforce protected-path policy in one mandatory `PreToolUse` hook. | Rerun required before formal benchmark. | `fixed_unverified` |
 | PB-035 | KANG turns exhausted the 20-turn default and later repair left an upstream verdict stale. | Use 32 paper turns, synchronous benchmark Bash, complete dependency contracts, and final workflow regrading. | Job `34114385` is protocol-only and not scored. | `fixed_unverified` |
+| PB-036 | The paper task prompt did not clearly distinguish `benchmark_result.json` from the final `pertura-turn-draft-v1` response, so both KANG tasks wrote TurnDraft-only fields into otherwise complete scientific result files. | Supply one schema-valid task-specific result template, an exact allowed-field list, and an explicit two-output distinction to all three conditions. | Job `34132113` is protocol-only and not scored; scientific artifacts are diagnostic evidence only. | `fixed_unverified` |
 
 ## Successful retained milestones
 

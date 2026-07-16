@@ -652,6 +652,36 @@ def _paper_science_python() -> str:
     )
 
 
+def _benchmark_result_template(
+    *,
+    workflow: Mapping[str, Any],
+    task: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return a schema-valid structural template for the task result file."""
+
+    artifact_roles = list(task["required_artifact_roles"])
+    result_type = f"{str(task['task_id']).lower()}_scientific_result"
+    return {
+        "schema_version": "pertura-agent-benchmark-result-v1",
+        "case_id": str(task["task_id"]),
+        "dataset_id": str(workflow["dataset_id"]),
+        "result_type": result_type,
+        "analysis_unit": "REPLACE_WITH_ACTUAL_ANALYSIS_UNIT",
+        "status": "completed",
+        "findings": [
+            {
+                "finding_id": "finding_1",
+                "text": "REPLACE_WITH_ARTIFACT_GROUNDED_FINDING",
+                "metric_ids": [],
+                "artifact_roles": artifact_roles,
+            }
+        ],
+        "metrics": {},
+        "limitations": ["REPLACE_WITH_MATERIAL_LIMITATION"],
+        "artifact_roles": artifact_roles,
+    }
+
+
 def _task_prompt(
     *,
     workflow: Mapping[str, Any],
@@ -680,6 +710,10 @@ def _task_prompt(
         if condition == "pertura_full"
         else "Use the available generic CodeAct tools under this benchmark condition."
     )
+    result_template = _benchmark_result_template(
+        workflow=workflow,
+        task=task,
+    )
     return (
         f"Paper benchmark workflow {workflow['workflow_id']}, task {task['task_id']} "
         f"(turn {task['turn_index']}). Objective: {task['objective']} "
@@ -699,10 +733,21 @@ def _task_prompt(
         "You may repair a missing upstream artifact by writing its previously "
         "missing file, but must not overwrite an existing prior-turn artifact. "
         f"Before completing, write {task['output_contract']['benchmark_result']} "
-        "using schema pertura-agent-benchmark-result-v1 with case_id equal to "
-        f"{task['task_id']!r}, dataset_id equal to {workflow['dataset_id']!r}, "
-        "an explicit analysis_unit, findings, limitations, metrics as indices "
-        "only, and all required artifact_roles. Independent evaluators, not "
+        "as a standalone pertura-agent-benchmark-result-v1 JSON file. Replace "
+        "the REPLACE_WITH values in this exact structural template: "
+        f"{json.dumps(result_template, sort_keys=True)}. "
+        "The result file permits only these top-level fields: schema_version, "
+        "case_id, dataset_id, result_type, analysis_unit, status, findings, "
+        "metrics, limitations, artifact_roles. artifact_roles must be a JSON "
+        "array of role-name strings. Each finding permits only finding_id, "
+        "text, metric_ids, and artifact_roles. Do not put hypotheses, "
+        "questions_for_user, next_steps, artifact_refs, declared_role, "
+        "result_ids, or finding-level limitations in benchmark_result.json. "
+        "The metrics object is a self-reported index only and cannot replace "
+        "the required scientific artifacts. "
+        "After writing that file, return the separate provider response using "
+        "the existing pertura-turn-draft-v1 contract. Never copy the TurnDraft "
+        "object into benchmark_result.json. Independent evaluators, not "
         "self-reported metrics, determine scientific correctness."
     )
 
