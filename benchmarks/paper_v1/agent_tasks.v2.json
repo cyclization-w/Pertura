@@ -148,6 +148,7 @@
         },
         {
           "task_id": "PAPA-06", "turn_index": 6, "tier": "intermediate", "execution_mode": "codeact_scientific",
+          "codeact_protocol": {"protocol_id": "pseudobulk.edger_ql.v1", "analysis_unit": "replicate", "design": "~ replicate + condition", "pairing": "required", "fit_scope": "per_eligible_target", "baseline": "NTC", "input_role_bindings": {"counts": "trans_de_pseudobulk_counts", "genes": "trans_de_genes", "sample_manifest": "trans_de_sample_manifest", "eligibility": "trans_de_eligibility"}},
           "title": "Per-perturbation trans differential expression",
           "objective": "Using the registered neutral pseudobulk counts and sample manifest, fit edgeR separately for each eligible target with design ~ replicate + condition and NTC as baseline. Return full-gene logFC, PValue, FDR, top up and down genes, design matrices, and cautions. Guides and cells are not biological replicates.",
           "paper_anchor_ids": ["ANCHOR-PAPA-CHECKPOINT"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-01", "PAPA-04"],
@@ -278,6 +279,7 @@
       "turns": [
         {
           "task_id": "KANG-01", "turn_index": 1, "tier": "supplemental", "execution_mode": "capability_or_codeact",
+          "codeact_protocol": {"protocol_id": "pseudobulk.edger_ql.v1", "analysis_unit": "donor", "design": "~ donor + condition", "pairing": "required", "fit_scope": "evaluation_donors", "baseline": "ctrl", "input_role_bindings": {"counts": "raw_counts", "metadata": "donor_metadata", "selection": "evaluation_split"}},
           "title": "Reject cell-level DE and execute donor-aware pseudobulk",
           "objective": "Reject cells-as-replicates differential expression, execute donor-aware edgeR pseudobulk with design ~ donor + condition on the frozen evaluation donors, and report effect estimates, FDR, null calibration, and four-donor limitations.",
           "paper_anchor_ids": ["ANCHOR-KANG-DONOR"], "split_usage": ["evaluation"], "depends_on_tasks": [],
@@ -290,6 +292,7 @@
         },
         {
           "task_id": "KANG-02", "turn_index": 2, "tier": "supplemental", "execution_mode": "capability_or_codeact",
+          "codeact_protocol": {"protocol_id": "composition.propeller.v1", "analysis_unit": "donor_condition", "design": "~ donor + condition", "pairing": "required", "fit_scope": "observed_cell_states", "baseline": "ctrl", "input_role_bindings": {"metadata": "donor_metadata", "selection": "evaluation_split", "state": "cell_state_metadata"}},
           "title": "Composition applicability and missing-state exclusion",
           "objective": "Run donor-aware Propeller composition analysis where state labels are available, explicitly exclude the six evaluation cells with missing state labels, reconcile denominators, and report the four-donor power limitation.",
           "paper_anchor_ids": ["ANCHOR-KANG-DONOR"], "split_usage": ["evaluation"], "depends_on_tasks": ["KANG-01"],

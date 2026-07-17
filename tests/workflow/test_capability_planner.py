@@ -19,6 +19,7 @@ from pertura_workflow.capabilities.registry import capability_scientific_hash
 from pertura_workflow.planner import (
     build_capability_contract_catalog,
     build_capability_contract_view,
+    codeact_protocol_ids,
     compile_capability_execution_brief,
     plan_analysis,
     plan_requested_capability,
@@ -421,14 +422,26 @@ def test_a19_contract_view_is_hash_bound_and_uses_asset_ids() -> None:
 
 
 def test_a19_brief_marks_external_dependency_without_expanding_plan() -> None:
-    brief = compile_capability_execution_brief(
+    kwargs = dict(
         task_id="KANG-01",
         objective="Donor-aware pseudobulk",
         execution_mode="capability_or_codeact",
         candidate_capability_ids=("de.pseudobulk.edger.v1",),
         contract=_contract(),
         environment_ready={"edger-v1": True},
+        codeact_protocol_binding={
+            "protocol_id": "pseudobulk.edger_ql.v1",
+            "analysis_unit": "donor",
+            "design": "~ donor + condition",
+            "pairing": "required",
+        },
+        output_contract={
+            "benchmark_result": "outputs/tasks/KANG-01/benchmark_result.json",
+            "artifact_paths": {"de_results": "de_results.tsv"},
+        },
     )
+    brief = compile_capability_execution_brief(**kwargs)
+    repeated = compile_capability_execution_brief(**kwargs)
 
     assert brief["route"] == "codeact"
     assert brief["candidate_capability_ids"] == ["de.pseudobulk.edger.v1"]
@@ -437,6 +450,23 @@ def test_a19_brief_marks_external_dependency_without_expanding_plan() -> None:
     assert set(brief["nodes"][0]["missing_plan_dependencies"]) == {
         "target.reliability.v2",
         "calibration.replicate_null.v1",
+    }
+    handoff = brief["codeact_handoff"]
+    assert handoff["status"] == "ready"
+    assert handoff["environment"]["profile"] == "edger-v1"
+    assert handoff["invocation"]["command"] == (
+        '"${PERTURA_EDGER_ENV}/bin/Rscript" '
+        '"outputs/tasks/KANG-01/run_edger.R"'
+    )
+    assert handoff["outputs"]["de_results"] == (
+        "outputs/tasks/KANG-01/de_results.tsv"
+    )
+    assert handoff["authority"]["capability_receipt"] is False
+    assert handoff["handoff_hash"] == repeated["codeact_handoff"]["handoff_hash"]
+    assert brief["plan_hash"] == repeated["plan_hash"]
+    assert set(codeact_protocol_ids()) == {
+        "pseudobulk.edger_ql.v1",
+        "composition.propeller.v1",
     }
 
 
@@ -448,6 +478,17 @@ def test_a19_direct_task_routes_are_deterministic() -> None:
         execution_mode="codeact_scientific",
         candidate_capability_ids=(),
         contract=contract,
+        environment_ready={"edger-v1": True},
+        codeact_protocol_binding={
+            "protocol_id": "pseudobulk.edger_ql.v1",
+            "analysis_unit": "replicate",
+            "design": "~ replicate + condition",
+            "pairing": "required",
+        },
+        output_contract={
+            "benchmark_result": "outputs/tasks/PAPA-06/benchmark_result.json",
+            "artifact_paths": {"trans_de_results": "trans_de_results.tsv"},
+        },
     )
     evidence = compile_capability_execution_brief(
         task_id="PAPA-07",
@@ -460,7 +501,36 @@ def test_a19_direct_task_routes_are_deterministic() -> None:
     assert codeact["route"] == "codeact"
     assert evidence["route"] == "evidence_interpretation"
     assert codeact["active_window"] == []
+    assert codeact["codeact_handoff"]["status"] == "ready"
     assert evidence["active_window"] == []
+    assert evidence["codeact_handoff"] is None
+
+
+def test_a19_codeact_handoff_blocks_an_unready_environment() -> None:
+    brief = compile_capability_execution_brief(
+        task_id="PAPA-06",
+        objective="trans-DE",
+        execution_mode="codeact_scientific",
+        candidate_capability_ids=(),
+        contract=_contract(),
+        environment_ready={"edger-v1": False},
+        codeact_protocol_binding={
+            "protocol_id": "pseudobulk.edger_ql.v1",
+            "analysis_unit": "replicate",
+            "design": "~ replicate + condition",
+            "pairing": "required",
+        },
+        output_contract={
+            "benchmark_result": "outputs/tasks/PAPA-06/benchmark_result.json",
+            "artifact_paths": {"trans_de_results": "trans_de_results.tsv"},
+        },
+    )
+
+    assert brief["route"] == "blocked"
+    assert brief["codeact_handoff"]["status"] == "blocked"
+    assert brief["codeact_handoff"]["blockers"] == [
+        "frozen scientific environment is not ready: edger-v1"
+    ]
 
 
 def test_a19_contract_catalog_and_frozen_task_gaps_are_stable() -> None:

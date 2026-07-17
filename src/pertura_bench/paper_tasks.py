@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from pertura_workflow.capabilities import CapabilityRegistry
+from pertura_workflow.planner import codeact_protocol_ids
 
 
 PAPER_CONDITIONS = ("free_codeact", "prompt_only", "pertura_full")
@@ -91,6 +92,7 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
             include_external=False
         ).specs()
     }
+    known_codeact_protocols = set(codeact_protocol_ids())
     workflows = tuple(payload.get("workflows") or ())
     if len(workflows) != 4:
         problems.append("exactly four workflows are required")
@@ -135,6 +137,41 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
                 problems.append(
                     f"{task_id}: non-capability task declares a capability DAG"
                 )
+            codeact = dict(task.get("codeact_protocol") or {})
+            if (
+                task.get("execution_mode") == "codeact_scientific"
+                and not codeact
+            ):
+                problems.append(
+                    f"{task_id}: codeact_scientific requires a frozen protocol"
+                )
+            if (
+                task.get("execution_mode") == "evidence_interpretation"
+                and codeact
+            ):
+                problems.append(
+                    f"{task_id}: evidence interpretation cannot declare CodeAct"
+                )
+            if codeact:
+                protocol_id = str(codeact.get("protocol_id") or "")
+                if protocol_id not in known_codeact_protocols:
+                    problems.append(
+                        f"{task_id}: unknown CodeAct protocol {protocol_id!r}"
+                    )
+                for field in ("analysis_unit", "design", "pairing"):
+                    if not codeact.get(field):
+                        problems.append(
+                            f"{task_id}: CodeAct binding is missing {field}"
+                        )
+                role_bindings = dict(codeact.get("input_role_bindings") or {})
+                unknown_roles = set(role_bindings.values()) - set(
+                    task.get("required_input_roles") or ()
+                )
+                if unknown_roles:
+                    problems.append(
+                        f"{task_id}: CodeAct binding uses unknown input roles: "
+                        f"{sorted(unknown_roles)}"
+                    )
             for field in (
                 "objective",
                 "paper_anchor_ids",

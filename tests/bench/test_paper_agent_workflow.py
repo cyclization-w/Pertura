@@ -431,6 +431,36 @@ def test_capability_brief_is_disclosed_only_to_pertura_full() -> None:
                 "status": "blocked",
             }
         ],
+        "codeact_handoff": {
+            "protocol_id": "pseudobulk.edger_ql.v1",
+            "handoff_hash": "sha256:" + "3" * 64,
+            "status": "ready",
+            "blockers": [],
+            "method_family": "edgeR_ql_pseudobulk",
+            "binding": {
+                "analysis_unit": "donor",
+                "design": "~ donor + condition",
+                "pairing": "required",
+            },
+            "environment": {
+                "profile": "edger-v1",
+                "variable": "PERTURA_EDGER_ENV",
+                "ready": True,
+            },
+            "invocation": {
+                "script_path": "outputs/tasks/PAPA-01/run_edger.R",
+                "command": "fixture-edger-command",
+            },
+            "outputs": {
+                "benchmark_result": (
+                    "outputs/tasks/PAPA-01/benchmark_result.json"
+                )
+            },
+            "authority": {
+                "source_class": "exploratory",
+                "capability_receipt": False,
+            },
+        },
         "completion_checklist": ["write result"],
         "stop_conditions": ["do not inspect YAML"],
     }
@@ -453,8 +483,12 @@ def test_capability_brief_is_disclosed_only_to_pertura_full() -> None:
     assert "plan_fixture" in full
     assert "task/capability_plans/PAPA-01.json" in full
     assert "Do not call inspect_dataset again" in full
+    assert "fixture-edger-command" in full
+    assert "do not probe rpy2" in full
     assert "plan_fixture" not in prompt
     assert "plan_fixture" not in free
+    assert "fixture-edger-command" not in prompt
+    assert "fixture-edger-command" not in free
     for text in (full, prompt, free):
         assert "completion guard" in text
 
@@ -466,7 +500,7 @@ def test_pertura_full_runner_writes_answer_free_task_brief(
     monkeypatch.setattr(
         execution,
         "_paper_environment_readiness",
-        lambda registry, capability_ids: {
+        lambda registry, capability_ids, **kwargs: {
             "python-science-v1": True,
             "perturbseq-python-v1": True,
         },

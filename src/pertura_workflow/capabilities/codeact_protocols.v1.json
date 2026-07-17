@@ -1,0 +1,31 @@
+{
+  "schema_version": "pertura-codeact-protocol-catalog-v1",
+  "protocols": [
+    {
+      "protocol_id": "pseudobulk.edger_ql.v1",
+      "method_family": "edgeR_ql_pseudobulk",
+      "environment_profile": "edger-v1",
+      "environment_variable": "PERTURA_EDGER_ENV",
+      "entrypoint": "Rscript",
+      "script_name": "run_edger.R",
+      "required_binding_fields": [
+        "analysis_unit",
+        "design",
+        "pairing"
+      ]
+    },
+    {
+      "protocol_id": "composition.propeller.v1",
+      "method_family": "propeller_composition",
+      "environment_profile": "composition-v1",
+      "environment_variable": "PERTURA_COMPOSITION_ENV",
+      "entrypoint": "Rscript",
+      "script_name": "run_propeller.R",
+      "required_binding_fields": [
+        "analysis_unit",
+        "design",
+        "pairing"
+      ]
+    }
+  ]
+}

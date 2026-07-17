@@ -31,6 +31,7 @@ from pertura_runtime.project.workspace import ProjectWorkspace
 from pertura_workflow.environment import environment_prefix
 from pertura_workflow.planner import (
     build_capability_contract_catalog,
+    codeact_protocol_environment_profile,
     compile_capability_execution_brief,
 )
 
@@ -335,6 +336,10 @@ def run_paper_agent_workflow(
                 candidate_capability_ids = tuple(
                     task.get("expected_capability_dag") or ()
                 )
+                codeact_protocol = dict(task.get("codeact_protocol") or {})
+                codeact_profile = codeact_protocol_environment_profile(
+                    codeact_protocol
+                )
                 execution_brief = compile_capability_execution_brief(
                     task_id=task_id,
                     objective=str(task["objective"]),
@@ -346,14 +351,23 @@ def run_paper_agent_workflow(
                     environment_ready=_paper_environment_readiness(
                         agent.product_runtime.registry,
                         candidate_capability_ids,
+                        extra_profiles=(
+                            (codeact_profile,) if codeact_profile else ()
+                        ),
                     ),
+                    codeact_protocol_binding=codeact_protocol,
+                    output_contract=dict(task.get("output_contract") or {}),
                     registry=agent.product_runtime.registry,
                     completion_checklist=(
                         *(
-                            f"Write {task_output.relative_to(workspace.root).as_posix()}/{relative} for role {role}."
+                            "Write "
+                            f"{task_output.relative_to(workspace.root).as_posix()}"
+                            f"/{relative} for role {role}."
                             for role, relative in artifact_paths.items()
                         ),
-                        f"Write {task_output.relative_to(workspace.root).as_posix()}/benchmark_result.json.",
+                        "Write "
+                        f"{task_output.relative_to(workspace.root).as_posix()}"
+                        "/benchmark_result.json.",
                         "Return one pertura-turn-draft-v1 JSON object.",
                     ),
                 )
@@ -918,12 +932,28 @@ def _task_prompt(
     )
     brief_policy = ""
     if condition == "pertura_full" and execution_brief is not None:
+        handoff = execution_brief.get("codeact_handoff")
+        compact_handoff = None
+        if handoff:
+            compact_handoff = {
+                "protocol_id": handoff["protocol_id"],
+                "handoff_hash": handoff["handoff_hash"],
+                "status": handoff["status"],
+                "blockers": handoff["blockers"],
+                "method_family": handoff["method_family"],
+                "binding": handoff["binding"],
+                "environment": handoff["environment"],
+                "invocation": handoff["invocation"],
+                "outputs": handoff["outputs"],
+                "authority": handoff["authority"],
+            }
         compact_window = {
             "plan_id": execution_brief["plan_id"],
             "plan_hash": execution_brief["plan_hash"],
             "route": execution_brief["route"],
             "dataset_contract": execution_brief["dataset_contract"],
             "active_window": execution_brief["active_window"],
+            "codeact_handoff": compact_handoff,
             "completion_checklist": execution_brief["completion_checklist"],
             "stop_conditions": execution_brief["stop_conditions"],
         }
@@ -936,6 +966,10 @@ def _task_prompt(
             "must use the registered asset IDs in the full brief, not filesystem "
             "paths. Do not read repository source, capability YAML, tests, or "
             "scientific-environment directories to rediscover contracts. "
+            "When route is codeact and the handoff is ready, create its declared "
+            "script and use its invocation command directly; do not probe rpy2, "
+            "alternative package managers, or unrelated environments. Never "
+            "call a capability node whose status is blocked. "
         )
     return (
         f"Paper benchmark workflow {workflow['workflow_id']}, task {task['task_id']} "
@@ -988,6 +1022,8 @@ def _task_prompt(
 def _paper_environment_readiness(
     registry: Any,
     capability_ids: tuple[str, ...],
+    *,
+    extra_profiles: tuple[str, ...] = (),
 ) -> dict[str, bool]:
     """Read frozen manifests for only the current task's environments.
 
@@ -999,7 +1035,8 @@ def _paper_environment_readiness(
     """
 
     profiles = sorted(
-        {
+        set(extra_profiles)
+        | {
             str(registry.get(capability_id).metadata.get("environment_profile"))
             for capability_id in capability_ids
             if registry.get(capability_id).metadata.get("environment_profile")

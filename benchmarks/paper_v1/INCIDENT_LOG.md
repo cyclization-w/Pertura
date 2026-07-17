@@ -219,10 +219,43 @@ Status values:
   environment doctors remain mandatory before resource-lock binding.
 - Verification evidence: local regression tests verify that an edgeR-only
   candidate reads only the edgeR manifest and launches no unrelated profile.
-  A live KANG-01 rerun is required.
+  The refreshed KANG-01 run `adf4d508f2c64b228e1b11dbccc1d1d1`
+  reached provider execution without invoking the unrelated Pertpy doctor;
+  its later CodeAct handoff issue is tracked separately as PB-045.
 - Benchmark treatment: job `34239260` is infrastructure-invalid and is not a
   model or scientific failure. No other a19 canaries may start until the
   refreshed checkpoint passes KANG-01.
+- Status: `verified`
+
+### PB-045 -- CodeAct route lacked a deterministic environment handoff
+
+- Date: 2026-07-16/17
+- Phase: a19 live canary
+- Affected checkpoint/runs: pre-tag a19 checkpoint at commit
+  `7080d42340ae67962b4e39df4aa8edac1b5e9db0`; KANG-01 run
+  `adf4d508f2c64b228e1b11dbccc1d1d1`
+- Symptom: the compiler correctly marked all three frozen KANG capabilities
+  blocked, but the resulting `route=codeact` brief exposed only the blocked
+  capability contracts. The provider then reconsidered Python, rpy2, and
+  edgeR instead of directly using the already-locked edgeR environment, and
+  produced no task artifact during the observed pilot interval.
+- Root cause: a19 P0 compiled capability contracts and route status but did
+  not instantiate an execution contract for the CodeAct branch. The edgeR
+  profile appeared only inside a blocked node, whose minimal capability call
+  was correctly forbidden. The task had no deterministic script path or
+  invocation command for the legal fallback.
+- Resolution: bind frozen generic CodeAct protocol ids for PAPA-06, KANG-01,
+  and KANG-02. Compile a canonical-hashed handoff from the task binding,
+  registered assets, output contract, and candidate-scoped frozen environment
+  readiness. Inline its method, environment variable, invocation, outputs,
+  and non-receipt authority boundary only for `pertura_full`.
+- Verification evidence: local tests cover deterministic handoff and plan
+  hashes, edgeR invocation, output binding, environment blocking, authority
+  separation, and cross-condition prompt isolation. A refreshed live KANG-01
+  canary is required.
+- Benchmark treatment: the affected run is retained as a pre-fix pilot and is
+  not scored. Do not start another canary until the refreshed KANG-01 handoff
+  is observed as ready and used without environment discovery.
 - Status: `fixed_unverified`
 
 ## Incident index
@@ -294,7 +327,8 @@ Status values:
 | PB-041 | The PAPA-07 output contract listed artifact paths relative to the task output directory without naming that base explicitly, so job `34195147` wrote otherwise usable artifacts directly under `outputs/` and the independent evaluator could not find them. | State the exact workspace-relative destination for every required artifact and explicitly prohibit writing task artifacts directly under `outputs/`; keep the frozen catalog, reference, thresholds, and evaluator unchanged. | Job `34195147` is protocol-only because independent evaluation could not consume the misplaced artifacts; rerun the isolated smoke. | `fixed_unverified` |
 | PB-042 | After dependency repair and artifact destinations were made explicit, PAPA-07 job `34199744` completed one Bash call and three Read calls by `17:31:23Z`, then emitted no further provider event or `ResultMessage` for the remaining roughly 20 minutes before exhausting its 1,800-second budget; cancellation emitted an ignored Claude SDK subprocess-transport cleanup warning after the verdict was safely written. | Keep the frozen wall timeout and fail-closed missing-output result; do not synthesize, move, or repair artifacts. Classify this trace as provider-stream inactivity rather than a running scientific subprocess, and treat the post-verdict transport warning as an upstream cleanup limitation unless it prevents termination or leaves live processes. | The smoke is protocol-only; a formal recurrence is an execution timeout under the frozen `failed_no_fallback` policy, not an independent scientific-evaluator result. | `accepted_limitation` |
 | PB-043 | The agent sees shallow generic MCP schemas while detailed capability YAML contracts remain internal. An existing deterministic planner performs design-aware single-capability routing and dependency validation, but it does not expose a multi-step executable plan or contracts to the model. | a19 P0 adds hash-bound task-scoped contract rendering, frozen-candidate compilation, explicit blockers/routes, and a uniform completion guard; full dynamic Planner V2 remains future work. | a18 is retained as pilot evidence only; a19 formal scoring remains gated on four live canaries. | `fixed_unverified` |
-| PB-044 | KANG-01 a19 canary startup re-ran doctors for every registry environment and timed out in an unrelated Pertpy import smoke. | Scope readiness to current task candidates and validate frozen manifest lock hashes without launching scientific subprocesses; keep full doctors at checkpoint time. | Job `34239260` is infrastructure-invalid; refresh and rerun KANG-01 before any other canary. | `fixed_unverified` |
+| PB-044 | KANG-01 a19 canary startup re-ran doctors for every registry environment and timed out in an unrelated Pertpy import smoke. | Scope readiness to current task candidates and validate frozen manifest lock hashes without launching scientific subprocesses; keep full doctors at checkpoint time. | Job `34239260` is infrastructure-invalid; the refreshed run verified startup before exposing the separate PB-045 handoff issue. | `verified` |
+| PB-045 | KANG-01 compiled a legal CodeAct fallback without a deterministic environment/script handoff, so the provider rediscovered edgeR execution. | Bind a frozen generic CodeAct protocol and compile a hash-bound runner, assets, outputs, and authority boundary only for `pertura_full`. | Run `adf4d508f2c64b228e1b11dbccc1d1d1` is pre-fix pilot evidence only; refresh and rerun KANG-01. | `fixed_unverified` |
 
 ## Successful retained milestones
 

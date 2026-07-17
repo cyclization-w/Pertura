@@ -4,6 +4,7 @@ import json
 from functools import lru_cache
 from importlib import resources
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Any, Iterable, Mapping
 
 from pertura_core import (
@@ -75,6 +76,152 @@ _PLAN_NODE_STATUS_ORDER = {
     "blocked": 2,
     "completed": 3,
 }
+
+
+@lru_cache(maxsize=1)
+def _codeact_protocols() -> Mapping[str, Mapping[str, Any]]:
+    resource = resources.files("pertura_workflow.capabilities").joinpath(
+        "codeact_protocols.v1.json"
+    )
+    payload = json.loads(resource.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != "pertura-codeact-protocol-catalog-v1":
+        raise ValueError("unsupported CodeAct protocol catalog schema")
+    protocols = {
+        str(item.get("protocol_id") or ""): dict(item)
+        for item in payload.get("protocols") or ()
+    }
+    if not protocols or "" in protocols:
+        raise ValueError("CodeAct protocols must declare protocol_id")
+    if len(protocols) != len(tuple(payload.get("protocols") or ())):
+        raise ValueError("CodeAct protocol ids must be unique")
+    return dict(sorted(protocols.items()))
+
+
+def codeact_protocol_ids() -> tuple[str, ...]:
+    """Return the frozen deterministic CodeAct protocol identifiers."""
+
+    return tuple(_codeact_protocols())
+
+
+def codeact_protocol_environment_profile(
+    binding: Mapping[str, Any] | None,
+) -> str | None:
+    if not binding:
+        return None
+    protocol_id = str(binding.get("protocol_id") or "")
+    try:
+        protocol = _codeact_protocols()[protocol_id]
+    except KeyError as exc:
+        raise ValueError(f"unknown CodeAct protocol: {protocol_id}") from exc
+    return str(protocol["environment_profile"])
+
+
+def build_codeact_handoff(
+    *,
+    task_id: str,
+    binding: Mapping[str, Any],
+    asset_bindings: Mapping[str, Mapping[str, Any]],
+    output_contract: Mapping[str, Any],
+    environment_ready: Mapping[str, bool],
+) -> dict[str, Any]:
+    """Instantiate an answer-free CodeAct handoff from one frozen protocol.
+
+    The task binds scientific roles to a protocol id.  Runtime-owned assets,
+    output paths, and environment readiness are compiled without asking the
+    provider to discover packages or inspect the repository.
+    """
+
+    protocol_id = str(binding.get("protocol_id") or "")
+    try:
+        protocol = _codeact_protocols()[protocol_id]
+    except KeyError as exc:
+        raise ValueError(f"unknown CodeAct protocol: {protocol_id}") from exc
+    required = tuple(
+        str(item) for item in protocol.get("required_binding_fields") or ()
+    )
+    missing = [name for name in required if not binding.get(name)]
+    if missing:
+        raise ValueError(
+            f"{task_id}: CodeAct protocol binding is missing {sorted(missing)}"
+        )
+
+    benchmark_result = PurePosixPath(
+        str(output_contract.get("benchmark_result") or "")
+    )
+    if (
+        not str(benchmark_result)
+        or benchmark_result.is_absolute()
+        or ".." in benchmark_result.parts
+    ):
+        raise ValueError(f"{task_id}: invalid CodeAct benchmark result path")
+    script_path = benchmark_result.parent / str(protocol["script_name"])
+    environment_variable = str(protocol["environment_variable"])
+    entrypoint = str(protocol["entrypoint"])
+    profile = str(protocol["environment_profile"])
+    outputs = {
+        str(role): (benchmark_result.parent / str(relative)).as_posix()
+        for role, relative in sorted(
+            dict(output_contract.get("artifact_paths") or {}).items()
+        )
+    }
+    outputs["benchmark_result"] = benchmark_result.as_posix()
+    inputs = {
+        str(role): {
+            key: value
+            for key, value in dict(asset).items()
+            if key in (
+                "asset_id",
+                "path",
+                "content_sha256",
+                "kind",
+                "source_class",
+            )
+        }
+        for role, asset in sorted(asset_bindings.items())
+    }
+    frozen_binding = {
+        str(key): value
+        for key, value in sorted(binding.items())
+        if key != "protocol_id"
+    }
+    blockers = []
+    if not environment_ready.get(profile, False):
+        blockers.append(
+            f"frozen scientific environment is not ready: {profile}"
+        )
+    payload = {
+        "schema_version": "pertura-codeact-handoff-v1",
+        "task_id": task_id,
+        "protocol_id": protocol_id,
+        "protocol_hash": canonical_hash(protocol),
+        "status": "blocked" if blockers else "ready",
+        "blockers": blockers,
+        "method_family": protocol["method_family"],
+        "binding": frozen_binding,
+        "environment": {
+            "profile": profile,
+            "variable": environment_variable,
+            "ready": not blockers,
+        },
+        "invocation": {
+            "script_path": script_path.as_posix(),
+            "command": (
+                f'"${{{environment_variable}}}/bin/{entrypoint}" '
+                f'"{script_path.as_posix()}"'
+            ),
+        },
+        "inputs": inputs,
+        "outputs": outputs,
+        "authority": {
+            "source_class": "exploratory",
+            "capability_receipt": False,
+            "claim_rule": (
+                "CodeAct outputs cannot be represented as verifier-signed "
+                "capability results."
+            ),
+        },
+    }
+    return {**payload, "handoff_hash": canonical_hash(payload)}
 
 
 def build_capability_contract_view(
@@ -167,6 +314,8 @@ def compile_capability_execution_brief(
     committed_results: Iterable[ResultEnvelope] = (),
     asset_bindings: Mapping[str, Mapping[str, Any]] | None = None,
     environment_ready: Mapping[str, bool] | None = None,
+    codeact_protocol_binding: Mapping[str, Any] | None = None,
+    output_contract: Mapping[str, Any] | None = None,
     registry: CapabilityRegistry | None = None,
     completion_checklist: Iterable[str] = (),
     active_window_size: int = 5,
@@ -180,6 +329,8 @@ def compile_capability_execution_brief(
     if active_window_size < 1 or active_window_size > 5:
         raise ValueError("active_window_size must be between 1 and 5")
     asset_bindings = asset_bindings or {}
+    environment_ready = environment_ready or {}
+    output_contract = output_contract or {}
     registry = registry or CapabilityRegistry.load_default(include_external=False)
     candidates = tuple(dict.fromkeys(str(item) for item in candidate_capability_ids))
     results = tuple(committed_results)
@@ -279,6 +430,17 @@ def compile_capability_execution_brief(
         }
         for role, binding in sorted(asset_bindings.items())
     }
+    codeact_handoff = None
+    if route in {"codeact", "capability_or_codeact"} and codeact_protocol_binding:
+        codeact_handoff = build_codeact_handoff(
+            task_id=task_id,
+            binding=codeact_protocol_binding,
+            asset_bindings=asset_bindings,
+            output_contract=output_contract,
+            environment_ready=environment_ready,
+        )
+        if route == "codeact" and codeact_handoff["status"] == "blocked":
+            route = "blocked"
     payload = {
         "schema_version": "pertura-capability-execution-brief-v1",
         "task_id": task_id,
@@ -295,6 +457,7 @@ def compile_capability_execution_brief(
             "design_facts": facts,
         },
         "assets": assets,
+        "codeact_handoff": codeact_handoff,
         "nodes": nodes,
         "active_window": [
             {

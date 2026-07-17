@@ -8,6 +8,7 @@ recursive-include ui *.html *.json *.ts *.tsx *.css
 recursive-include docs *.md *.json *.yaml
 recursive-include src/pertura_workflow/capabilities/specs *.yaml
 include src/pertura_workflow/capabilities/planner_routes.json
+include src/pertura_workflow/capabilities/codeact_protocols.v1.json
 recursive-include src/pertura_workflow/capabilities/profiles *.yaml
 recursive-include src/pertura_workflow/capabilities/runners *.R *.py
 recursive-include src/pertura_workflow/environments *.yml *.R
