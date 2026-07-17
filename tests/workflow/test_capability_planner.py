@@ -434,10 +434,32 @@ def test_a19_brief_marks_external_dependency_without_expanding_plan() -> None:
             "analysis_unit": "donor",
             "design": "~ donor + condition",
             "pairing": "required",
+            "column_bindings": {
+                "cell_id_column": "cell_id",
+                "unit_column": "ind",
+                "condition_column": "stim",
+            },
         },
         output_contract={
             "benchmark_result": "outputs/tasks/KANG-01/benchmark_result.json",
             "artifact_paths": {"de_results": "de_results.tsv"},
+        },
+        skill_plan={
+            "startup": ("execute-task-scoped-plan",),
+            "method": (
+                "run-replicate-aware-pseudobulk-de",
+                "run-design-preserving-null-calibration",
+            ),
+            "closure": ("finalize-scientific-task",),
+        },
+        skill_resources={
+            "run-replicate-aware-pseudobulk-de": (
+                "scripts/materialize_pseudobulk.py",
+                "scripts/run_edger_ql.R",
+            ),
+            "run-design-preserving-null-calibration": (
+                "scripts/run_paired_label_null.R",
+            ),
         },
     )
     brief = compile_capability_execution_brief(**kwargs)
@@ -454,10 +476,18 @@ def test_a19_brief_marks_external_dependency_without_expanding_plan() -> None:
     handoff = brief["codeact_handoff"]
     assert handoff["status"] == "ready"
     assert handoff["environment"]["profile"] == "edger-v1"
-    assert handoff["invocation"]["command"] == (
-        '"${PERTURA_EDGER_ENV}/bin/Rscript" '
-        '"outputs/tasks/KANG-01/run_edger.R"'
-    )
+    assert "invocation" not in handoff
+    assert handoff["execution"]["mode"] == "bound_skill_pipeline"
+    assert handoff["execution"]["single_script_wrapper_required"] is False
+    assert [
+        step["skill_id"] for step in handoff["execution"]["steps"]
+    ] == [
+        "execute-task-scoped-plan",
+        "run-replicate-aware-pseudobulk-de",
+        "run-design-preserving-null-calibration",
+        "finalize-scientific-task",
+    ]
+    assert handoff["binding"]["column_bindings"]["unit_column"] == "ind"
     assert handoff["outputs"]["de_results"] == (
         "outputs/tasks/KANG-01/de_results.tsv"
     )
@@ -488,6 +518,11 @@ def test_a19_direct_task_routes_are_deterministic() -> None:
         output_contract={
             "benchmark_result": "outputs/tasks/PAPA-06/benchmark_result.json",
             "artifact_paths": {"trans_de_results": "trans_de_results.tsv"},
+        },
+        skill_plan={
+            "startup": ("execute-task-scoped-plan",),
+            "method": ("run-replicate-aware-pseudobulk-de",),
+            "closure": ("finalize-scientific-task",),
         },
     )
     evidence = compile_capability_execution_brief(

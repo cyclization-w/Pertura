@@ -123,6 +123,8 @@ def build_codeact_handoff(
     asset_bindings: Mapping[str, Mapping[str, Any]],
     output_contract: Mapping[str, Any],
     environment_ready: Mapping[str, bool],
+    skill_plan: Mapping[str, Iterable[str]] | None = None,
+    skill_resources: Mapping[str, Iterable[str]] | None = None,
 ) -> dict[str, Any]:
     """Instantiate an answer-free CodeAct handoff from one frozen protocol.
 
@@ -152,10 +154,11 @@ def build_codeact_handoff(
         or ".." in benchmark_result.parts
     ):
         raise ValueError(f"{task_id}: invalid CodeAct benchmark result path")
-    script_path = benchmark_result.parent / str(protocol["script_name"])
     environment_variable = str(protocol["environment_variable"])
     entrypoint = str(protocol["entrypoint"])
     profile = str(protocol["environment_profile"])
+    skill_plan = skill_plan or {}
+    skill_resources = skill_resources or {}
     outputs = {
         str(role): (benchmark_result.parent / str(relative)).as_posix()
         for role, relative in sorted(
@@ -186,6 +189,44 @@ def build_codeact_handoff(
     blockers = []
     if not environment_ready.get(profile, False):
         blockers.append(f"frozen scientific environment is not ready: {profile}")
+    method_skills = tuple(skill_plan.get("method") or ())
+    bound_skills = [
+        (str(phase), str(skill))
+        for phase in ("startup", "method", "closure")
+        for skill in skill_plan.get(phase) or ()
+    ]
+    if method_skills:
+        execution = {
+            "mode": "bound_skill_pipeline",
+            "single_script_wrapper_required": False,
+            "steps": [
+                {
+                    "step_index": index,
+                    "phase": phase,
+                    "skill_id": skill,
+                    "resources": [
+                        str(resource)
+                        for resource in skill_resources.get(skill) or ()
+                    ],
+                }
+                for index, (phase, skill) in enumerate(bound_skills, start=1)
+            ],
+        }
+        invocation = None
+    else:
+        script_path = benchmark_result.parent / str(protocol["script_name"])
+        execution = {
+            "mode": "single_script",
+            "single_script_wrapper_required": True,
+            "steps": [],
+        }
+        invocation = {
+            "script_path": script_path.as_posix(),
+            "command": (
+                f'"${{{environment_variable}}}/bin/{entrypoint}" '
+                f'"{script_path.as_posix()}"'
+            ),
+        }
     payload = {
         "schema_version": "pertura-codeact-handoff-v1",
         "task_id": task_id,
@@ -200,13 +241,7 @@ def build_codeact_handoff(
             "variable": environment_variable,
             "ready": not blockers,
         },
-        "invocation": {
-            "script_path": script_path.as_posix(),
-            "command": (
-                f'"${{{environment_variable}}}/bin/{entrypoint}" '
-                f'"{script_path.as_posix()}"'
-            ),
-        },
+        "execution": execution,
         "inputs": inputs,
         "outputs": outputs,
         "authority": {
@@ -218,6 +253,8 @@ def build_codeact_handoff(
             ),
         },
     }
+    if invocation is not None:
+        payload["invocation"] = invocation
     return {**payload, "handoff_hash": canonical_hash(payload)}
 
 
@@ -440,6 +477,8 @@ def compile_capability_execution_brief(
             asset_bindings=asset_bindings,
             output_contract=output_contract,
             environment_ready=environment_ready,
+            skill_plan=skill_plan,
+            skill_resources=skill_resources,
         )
         if route == "codeact" and codeact_handoff["status"] == "blocked":
             route = "blocked"

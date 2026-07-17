@@ -94,6 +94,30 @@ def test_materializer_aggregates_independent_units(tmp_path: Path) -> None:
     assert accounting["cell_is_replicate"] is False
 
 
+def test_materializer_reads_compressed_tsv_selection(tmp_path: Path) -> None:
+    h5ad, selection = _write_fixture(tmp_path)
+    compressed = tmp_path / "selection.tsv.gz"
+    pd.read_csv(selection, sep="\t").to_csv(
+        compressed,
+        sep="\t",
+        index=False,
+        compression="gzip",
+    )
+    config = {
+        "input_h5ad": str(h5ad),
+        "selection_tsv": str(compressed),
+        "unit_column": "donor",
+        "condition_column": "condition",
+        "output_counts": str(tmp_path / "counts.tsv"),
+        "output_samples": str(tmp_path / "samples.tsv"),
+    }
+    config_path = tmp_path / "compressed.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    assert _load_materializer().main([str(config_path)]) == 0
+    assert pd.read_csv(tmp_path / "samples.tsv", sep="\t").shape[0] == 4
+
+
 def test_materializer_rejects_cells_and_noninteger_counts(tmp_path: Path) -> None:
     h5ad, selection = _write_fixture(tmp_path, fractional=True)
     config = {

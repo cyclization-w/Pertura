@@ -16,7 +16,8 @@ def _path(value: str, *, base: Path) -> Path:
 def _table(path: Path):
     import pandas as pd
 
-    separator = "\t" if path.suffix.lower() in {".tsv", ".txt"} else ","
+    suffixes = {suffix.lower() for suffix in path.suffixes}
+    separator = "\t" if suffixes.intersection({".tsv", ".txt"}) else ","
     return pd.read_csv(path, sep=separator, dtype=str)
 
 

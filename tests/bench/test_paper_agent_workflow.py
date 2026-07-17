@@ -449,9 +449,17 @@ def test_capability_brief_is_disclosed_only_to_pertura_full() -> None:
                 "variable": "PERTURA_EDGER_ENV",
                 "ready": True,
             },
-            "invocation": {
-                "script_path": "outputs/tasks/PAPA-01/run_edger.R",
-                "command": "fixture-edger-command",
+            "execution": {
+                "mode": "bound_skill_pipeline",
+                "single_script_wrapper_required": False,
+                "steps": [
+                    {
+                        "step_index": 1,
+                        "phase": "method",
+                        "skill_id": "run-replicate-aware-pseudobulk-de",
+                        "resources": ["scripts/run_edger_ql.R"],
+                    }
+                ],
             },
             "outputs": {
                 "benchmark_result": ("outputs/tasks/PAPA-01/benchmark_result.json")
@@ -483,12 +491,13 @@ def test_capability_brief_is_disclosed_only_to_pertura_full() -> None:
     assert "plan_fixture" in full
     assert "task/capability_plans/PAPA-01.json" in full
     assert "Do not call inspect_dataset again" in full
-    assert "fixture-edger-command" in full
+    assert "bound skill pipeline" in full
+    assert "Do not create a master wrapper script" in full
     assert "do not probe rpy2" in full
     assert "plan_fixture" not in prompt
     assert "plan_fixture" not in free
-    assert "fixture-edger-command" not in prompt
-    assert "fixture-edger-command" not in free
+    assert "bound skill pipeline" not in prompt
+    assert "bound skill pipeline" not in free
     assert "execute-task-scoped-plan" in full
     assert "execute-task-scoped-plan" not in prompt
     assert "execute-task-scoped-plan" not in free

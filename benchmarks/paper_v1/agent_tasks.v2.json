@@ -299,7 +299,7 @@
         {
           "task_id": "KANG-01", "turn_index": 1, "tier": "supplemental", "execution_mode": "capability_or_codeact",
           "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": ["run-replicate-aware-pseudobulk-de", "run-design-preserving-null-calibration"], "closure": ["finalize-scientific-task"]},
-          "codeact_protocol": {"protocol_id": "pseudobulk.edger_ql.v1", "analysis_unit": "donor", "design": "~ donor + condition", "pairing": "required", "fit_scope": "evaluation_donors", "baseline": "ctrl", "input_role_bindings": {"counts": "raw_counts", "metadata": "donor_metadata", "selection": "evaluation_split", "calibration_selection": "calibration_split"}},
+          "codeact_protocol": {"protocol_id": "pseudobulk.edger_ql.v1", "analysis_unit": "donor", "design": "~ donor + condition", "pairing": "required", "fit_scope": "evaluation_donors", "baseline": "ctrl", "target": "stim", "column_bindings": {"cell_id_column": "cell_id", "selection_cell_id_column": "cell_id", "unit_column": "ind", "condition_column": "stim"}, "input_role_bindings": {"counts": "raw_counts", "metadata": "donor_metadata", "selection": "evaluation_split", "calibration_selection": "calibration_split"}},
           "title": "Reject cell-level DE and execute donor-aware pseudobulk",
           "objective": "Reject cells-as-replicates differential expression, execute donor-aware edgeR pseudobulk with design ~ donor + condition on the frozen evaluation donors, and report effect estimates, FDR, null calibration, and four-donor limitations.",
           "paper_anchor_ids": ["ANCHOR-KANG-DONOR"], "split_usage": ["calibration", "evaluation"], "depends_on_tasks": [],

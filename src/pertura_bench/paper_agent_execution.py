@@ -987,10 +987,12 @@ def _task_prompt(
                 "method_family": handoff["method_family"],
                 "binding": handoff["binding"],
                 "environment": handoff["environment"],
-                "invocation": handoff["invocation"],
+                "execution": handoff["execution"],
                 "outputs": handoff["outputs"],
                 "authority": handoff["authority"],
             }
+            if handoff.get("invocation"):
+                compact_handoff["invocation"] = handoff["invocation"]
         compact_window = {
             "plan_id": execution_brief["plan_id"],
             "plan_hash": execution_brief["plan_hash"],
@@ -1004,6 +1006,21 @@ def _task_prompt(
             "completion_checklist": execution_brief["completion_checklist"],
             "stop_conditions": execution_brief["stop_conditions"],
         }
+        handoff_policy = ""
+        if compact_handoff:
+            execution = compact_handoff.get("execution") or {}
+            if execution.get("mode") == "bound_skill_pipeline":
+                handoff_policy = (
+                    "When the CodeAct handoff is ready, execute its bound skill "
+                    "pipeline in the declared step order. Do not create a master "
+                    "wrapper script and do not substitute a legacy single-script "
+                    "invocation. "
+                )
+            else:
+                handoff_policy = (
+                    "When the CodeAct handoff is ready, create its declared script "
+                    "and use its invocation command directly. "
+                )
         brief_policy = (
             "Pertura already inspected and registered this dataset. Do not call "
             "inspect_dataset again. The frozen task-scoped execution brief is at "
@@ -1017,8 +1034,7 @@ def _task_prompt(
             "must use the registered asset IDs in the full brief, not filesystem "
             "paths. Do not read repository source, capability YAML, tests, or "
             "scientific-environment directories to rediscover contracts. "
-            "When route is codeact and the handoff is ready, create its declared "
-            "script and use its invocation command directly; do not probe rpy2, "
+            f"{handoff_policy}Also, do not probe rpy2, "
             "alternative package managers, or unrelated environments. Never "
             "call a capability node whose status is blocked. "
         )

@@ -225,6 +225,13 @@ def test_v2_catalog_freezes_task_scoped_skill_plans() -> None:
         ]
         == "calibration_split"
     )
+    assert by_id["KANG-01"]["codeact_protocol"]["target"] == "stim"
+    assert by_id["KANG-01"]["codeact_protocol"]["column_bindings"] == {
+        "cell_id_column": "cell_id",
+        "selection_cell_id_column": "cell_id",
+        "unit_column": "ind",
+        "condition_column": "stim",
+    }
 
 
 def test_formal_server_plan_rejects_unbound_paper_catalogs() -> None:
