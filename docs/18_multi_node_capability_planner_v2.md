@@ -275,6 +275,20 @@ The plan export and bind commands must receive that file through
 `PERTURA_CAPABILITY_CONTRACT_CATALOG`; the runner verifies the file hash and
 catalog contents before starting any workflow.
 
+After the Sherlock a19 main environment and six reusable scientific
+environments exist, refresh a pushed checkpoint with one command:
+
+```bash
+bash scripts/refresh_sherlock_a19_checkpoint.sh
+```
+
+The script fetches the frozen branch, builds and audits the a19 distributions,
+installs the wheel into the a19 main environment, regenerates the answer-free
+contract catalog and resource lock, binds the server plan, validates 24
+workflow sessions, 120 scored turns, and nine bundled skills, and updates the
+external canary script commit. It does not rebuild scientific environments,
+data caches, REF packs, task references, or dataset splits.
+
 The four canary selectors are intentionally short and reuse the formal workflow
 runner:
 
