@@ -103,7 +103,7 @@ assert version("pertura") == "0.2.0a19"
 assert plan["executable"] is True
 assert plan["checkpoint_binding"]["git_commit"] == commit
 assert len(jobs) == 24 and turns == 120
-assert len(skills["skills"]) == 9
+assert len(skills["skills"]) == 7
 print("paper_workflow_jobs:", len(jobs))
 print("required_scored_turns:", turns)
 print("skill_count:", len(skills["skills"]))
