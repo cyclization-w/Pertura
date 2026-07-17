@@ -16,6 +16,41 @@ from pertura_workflow.capabilities import CapabilityRegistry
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_codeact_task_prompt_freezes_environment_for_all_conditions() -> None:
+    catalog = json.loads(
+        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
+    )
+    workflow = next(
+        item for item in catalog["workflows"] if item["workflow_id"] == "WF-KANG"
+    )
+    task = next(item for item in workflow["turns"] if item["task_id"] == "KANG-01")
+    anchors = {
+        anchor_id: {"anchor_id": anchor_id}
+        for anchor_id in task["paper_anchor_ids"]
+    }
+
+    for condition in ("pertura_full", "prompt_only", "free_codeact"):
+        prompt = execution._task_prompt(
+            workflow=workflow,
+            task=task,
+            condition=condition,
+            asset_paths={},
+            anchors_by_id=anchors,
+            dependency_contracts={},
+            contract_context={} if condition == "pertura_full" else None,
+            contract_subset_record=(
+                {"path": "task/capability_contracts/KANG-01.json"}
+                if condition == "pertura_full"
+                else None
+            ),
+        )
+
+        assert "edger-v1" in prompt
+        assert "$PERTURA_EDGER_ENV/bin/Rscript" in prompt
+        assert "Do not install scientific packages" in prompt
+        assert "load an alternative module or runtime" in prompt
+
+
 class _Runtime:
     def __init__(self):
         self.registry = CapabilityRegistry.load_default(include_external=False)

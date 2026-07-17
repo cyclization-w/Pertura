@@ -1,5 +1,5 @@
 {
-  "bundle_hash": "sha256:410ffb9b559e1009144c7d214978d7716c496277dec0d51c6983f8c55a6ce3cb",
+  "bundle_hash": "sha256:a62fe3a8ca68d1279007ebc8f333947e2b17920e6c352285118ea43e4e2e1328",
   "bundle_id": "pertura",
   "bundle_version": "0.2.0",
   "schema_version": "pertura-agent-skill-bundle-v1",
@@ -57,23 +57,25 @@
       "version": "0.1.0"
     },
     {
-      "content_hash": "sha256:a47de4814adfb103edd96ff1aca1b8f44b0837dbf6c8b6ec2677690063fa8a4c",
+      "content_hash": "sha256:c96ab80bdbd1b8e0b0f90fdb0d83cb0662458919c26c1ff334ab0473cc932df0",
       "files": [
         "SKILL.md",
         "agents/openai.yaml",
         "references/configuration.md",
         "scripts/materialize_pseudobulk.py",
-        "scripts/run_edger_ql.R"
+        "scripts/run_edger_ql.R",
+        "scripts/run_locked.sh"
       ],
       "name": "run-replicate-aware-pseudobulk-de",
       "version": "0.1.0"
     },
     {
-      "content_hash": "sha256:b23094d3b877b759806c066619ebe886803f3203f53b3502889e5e83218c73f6",
+      "content_hash": "sha256:d367d5f344864b27bbe8047f0e8fec7bd6d726c06f0bf5409c0a3c34dacfeee3",
       "files": [
         "SKILL.md",
         "agents/openai.yaml",
         "references/configuration.md",
+        "scripts/run_locked.sh",
         "scripts/run_paired_label_null.R"
       ],
       "name": "run-design-preserving-null-calibration",

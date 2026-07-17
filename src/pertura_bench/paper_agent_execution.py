@@ -958,6 +958,23 @@ def _task_prompt(
         if task.get("execution_mode") == "evidence_interpretation"
         else ""
     )
+    codeact_protocol = task.get("codeact_protocol") or {}
+    environment_variable = codeact_protocol.get("environment_variable")
+    environment_entrypoint = codeact_protocol.get("entrypoint")
+    locked_entrypoint = (
+        f"${environment_variable}/bin/{environment_entrypoint}"
+        if environment_variable and environment_entrypoint
+        else str(environment_variable or "")
+    )
+    environment_policy = (
+        "Use only the frozen scientific environment declared by the CodeAct "
+        f"protocol ({codeact_protocol.get('environment_profile')}); invoke its "
+        f"declared entrypoint as {locked_entrypoint}. Do not install "
+        "scientific packages, load an alternative module or runtime, or rewrite "
+        "a packaged method template when a bound skill supplies one. "
+        if codeact_protocol.get("environment_profile")
+        else ""
+    )
     contract_policy = ""
     if condition == "pertura_full":
         contract_policy = (
@@ -996,7 +1013,8 @@ def _task_prompt(
         f"Claim ceiling: {task['claim_ceiling']}. "
         "The following CodeAct protocol is a precommitted curator/user-confirmed "
         "design contract shared by all benchmark conditions; it is not an answer "
-        f"or evaluation truth: {json.dumps(task.get('codeact_protocol') or {}, sort_keys=True)}. "
+        f"or evaluation truth: {json.dumps(codeact_protocol, sort_keys=True)}. "
+        f"{environment_policy}"
         f"{repair_policy}"
         f"{interpretation_policy}"
         f"{contract_policy}"

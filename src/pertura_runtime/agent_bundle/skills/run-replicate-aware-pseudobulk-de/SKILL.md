@@ -17,11 +17,23 @@ Use only the inputs, environment, analysis unit, baseline, design, column bindin
 
 ## Execute
 
-1. For cell-level input, parameterize and run `scripts/materialize_pseudobulk.py` to aggregate counts by independent unit and condition.
-2. Parameterize and run `scripts/run_edger_ql.R` in the declared locked environment.
-3. Use `filterByExpr`, TMM normalization, dispersion estimation, quasi-likelihood fitting, and the declared condition contrast.
-4. Write the design and result tables before summaries.
-5. For per-target mode, preserve the full registered gene universe and mark untested genes explicitly.
-6. Record package versions, the actual analysis unit, pairing, design, and cautions.
+1. Set `SKILL_DIR` to the base directory reported by the Skill tool for this skill.
+2. Write only task-local JSON configuration files described in [configuration](references/configuration.md). Do not write a replacement Python or R analysis script.
+3. For cell-level input, aggregate counts with:
 
-Do not require an execution brief or CodeAct handoff. Do not install packages, probe unrelated environments, read reference results, or reuse evaluator code. Read [configuration](references/configuration.md) before creating the template configuration.
+   ```bash
+   bash "$SKILL_DIR/scripts/run_locked.sh" materialize CONFIG.json
+   ```
+
+4. Run the registered pseudobulk input with:
+
+   ```bash
+   bash "$SKILL_DIR/scripts/run_locked.sh" edger CONFIG.json
+   ```
+
+5. Use `filterByExpr`, TMM normalization, dispersion estimation, quasi-likelihood fitting, and the declared condition contrast.
+6. Write the design and result tables before summaries.
+7. For per-target mode, preserve the full registered gene universe and mark untested genes explicitly.
+8. Record package versions, the actual analysis unit, pairing, design, and cautions.
+
+Use only the two commands above. Do not use `module load`, a PATH-resolved `python` or `Rscript`, `pip`, `conda`, `install.packages`, or `BiocManager::install`. Do not rename, suffix, or deduplicate gene identities. If the frozen gene identity is not unique, stop rather than inventing identifiers. Do not require an execution brief or CodeAct handoff. Do not probe unrelated environments, read reference results, or reuse evaluator code.

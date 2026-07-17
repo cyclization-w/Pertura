@@ -7,3 +7,18 @@ Pass one JSON file to `run_paired_label_null.R` with:
 - optional `robust` and `details_path`.
 
 The counts table is gene-by-sample with the first column containing gene IDs. The sample table contains `sample_id` plus the declared unit and condition columns. The script aligns samples by ID, checks exact pairing and design rank, sorts unit IDs, and writes the required four-column calibration table.
+
+Use pseudobulk counts materialized from the registered calibration selection, never the evaluation selection. Example with arbitrary column names:
+
+```json
+{
+  "counts_tsv": "outputs/tasks/TASK/calibration_pseudobulk_counts.tsv",
+  "samples_tsv": "outputs/tasks/TASK/calibration_sample_manifest.tsv",
+  "output_path": "outputs/tasks/TASK/null_calibration.tsv",
+  "unit_column": "subject",
+  "condition_column": "arm",
+  "baseline": "vehicle",
+  "target": "drug",
+  "robust": true
+}
+```

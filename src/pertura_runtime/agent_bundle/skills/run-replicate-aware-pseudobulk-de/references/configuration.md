@@ -10,6 +10,25 @@ Pass one JSON file to `materialize_pseudobulk.py` with:
 
 The script writes a gene-by-sample integer table and a sample manifest. It rejects missing joins, duplicate identities, noninteger counts, and groups with zero cells.
 
+Omit `gene_column` when the frozen protocol binds gene identity to `adata.var_names`. Do not switch to a display-symbol column, suffix duplicate symbols, or otherwise create identifiers. Set `gene_column` only when the frozen protocol explicitly names a unique `adata.var` column.
+
+Example using arbitrary column names:
+
+```json
+{
+  "input_h5ad": "/registered/input.h5ad",
+  "metadata_tsv": "/registered/metadata.tsv",
+  "selection_tsv": "/registered/evaluation.cells.tsv.gz",
+  "cell_id_column": "cell_id",
+  "selection_cell_id_column": "cell_id",
+  "unit_column": "subject",
+  "condition_column": "arm",
+  "output_counts": "outputs/tasks/TASK/pseudobulk_counts.tsv",
+  "output_samples": "outputs/tasks/TASK/sample_manifest.tsv",
+  "output_accounting": "outputs/tasks/TASK/pseudobulk_accounting.json"
+}
+```
+
 ## edgeR QL
 
 Pass one JSON file to `run_edger_ql.R` with:
@@ -21,3 +40,22 @@ Pass one JSON file to `run_edger_ql.R` with:
 - optional `full_gene_output` and `robust`.
 
 The sample table must contain `sample_id`. Per-target mode requires at least two paired units for every eligible target. Output filenames come from the task output contract; rename only within the current task directory when the generic defaults differ.
+
+Example for a registered per-target pseudobulk input:
+
+```json
+{
+  "mode": "per_target",
+  "counts_tsv": "/registered/pseudobulk_counts.tsv",
+  "samples_tsv": "/registered/sample_manifest.tsv",
+  "eligibility_tsv": "/registered/eligibility.tsv",
+  "output_dir": "outputs/tasks/TASK",
+  "unit_column": "replicate",
+  "condition_column": "condition",
+  "target_column": "perturbation",
+  "baseline": "control",
+  "control_label": "control",
+  "full_gene_output": true,
+  "robust": true
+}
+```

@@ -238,6 +238,17 @@ def test_v2_catalog_freezes_task_scoped_skill_bindings() -> None:
         == "calibration_split"
     )
     assert by_id["KANG-01"]["codeact_protocol"]["target"] == "stim"
+    for task_id in ("KANG-01", "PAPA-06"):
+        protocol = by_id[task_id]["codeact_protocol"]
+        assert protocol["environment_profile"] == "edger-v1"
+        assert protocol["environment_variable"] == "PERTURA_EDGER_ENV"
+        assert protocol["entrypoint"] == "Rscript"
+    assert by_id["KANG-01"]["codeact_protocol"]["gene_identity"] == (
+        "adata.var_names"
+    )
+    assert by_id["PAPA-06"]["codeact_protocol"]["gene_identity"] == (
+        "registered_gene_id"
+    )
     assert by_id["KANG-01"]["codeact_protocol"]["column_bindings"] == {
         "cell_id_column": "cell_id",
         "selection_cell_id_column": "cell_id",

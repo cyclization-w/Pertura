@@ -18,8 +18,20 @@ MATERIALIZER = (
 )
 EDGER = SKILLS / "run-replicate-aware-pseudobulk-de/scripts/run_edger_ql.R"
 NULL = SKILLS / "run-design-preserving-null-calibration/scripts/run_paired_label_null.R"
+PSEUDOBULK_LAUNCHER = (
+    SKILLS / "run-replicate-aware-pseudobulk-de/scripts/run_locked.sh"
+)
+NULL_LAUNCHER = (
+    SKILLS / "run-design-preserving-null-calibration/scripts/run_locked.sh"
+)
 PSEUDOBULK_SKILL = SKILLS / "run-replicate-aware-pseudobulk-de/SKILL.md"
 NULL_SKILL = SKILLS / "run-design-preserving-null-calibration/SKILL.md"
+PSEUDOBULK_CONFIG = (
+    SKILLS / "run-replicate-aware-pseudobulk-de/references/configuration.md"
+)
+NULL_CONFIG = (
+    SKILLS / "run-design-preserving-null-calibration/references/configuration.md"
+)
 
 
 def _load_materializer():
@@ -120,6 +132,52 @@ def test_materializer_reads_compressed_tsv_selection(tmp_path: Path) -> None:
     assert pd.read_csv(tmp_path / "samples.tsv", sep="\t").shape[0] == 4
 
 
+def test_materializer_uses_parameterized_columns_and_frozen_var_names(
+    tmp_path: Path,
+) -> None:
+    cells = ["c1", "c2", "c3", "c4"]
+    data = ad.AnnData(
+        X=sparse.csr_matrix(np.array([[1, 2], [3, 4], [5, 6], [7, 8]])),
+        obs=pd.DataFrame(
+            {
+                "subject": ["s1", "s1", "s2", "s2"],
+                "arm": ["vehicle", "drug", "vehicle", "drug"],
+            },
+            index=cells,
+        ),
+        var=pd.DataFrame(
+            {"display_symbol": ["DUP", "DUP"]},
+            index=["feature_a", "feature_b"],
+        ),
+    )
+    h5ad = tmp_path / "anonymous.h5ad"
+    data.write_h5ad(h5ad)
+    selection = tmp_path / "selection.tsv"
+    pd.DataFrame({"cell_id": cells}).to_csv(selection, sep="\t", index=False)
+    config = {
+        "input_h5ad": str(h5ad),
+        "selection_tsv": str(selection),
+        "unit_column": "subject",
+        "condition_column": "arm",
+        "output_counts": str(tmp_path / "counts.tsv"),
+        "output_samples": str(tmp_path / "samples.tsv"),
+    }
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    assert _load_materializer().main([str(config_path)]) == 0
+    counts = pd.read_csv(tmp_path / "counts.tsv", sep="\t")
+    samples = pd.read_csv(tmp_path / "samples.tsv", sep="\t")
+
+    assert counts["gene"].tolist() == ["feature_a", "feature_b"]
+    assert samples["sample_id"].tolist() == [
+        "s1__drug",
+        "s1__vehicle",
+        "s2__drug",
+        "s2__vehicle",
+    ]
+
+
 def test_materializer_rejects_cells_and_noninteger_counts(tmp_path: Path) -> None:
     h5ad, selection = _write_fixture(tmp_path, fractional=True)
     config = {
@@ -170,3 +228,53 @@ def test_method_skills_consume_frozen_protocol_without_handoff() -> None:
     assert "frozen `codeact_protocol`" in null
     assert "Do not require an execution brief or CodeAct handoff" in pseudobulk
     assert "Do not require an execution brief or CodeAct handoff" in null
+
+
+def test_method_skills_use_only_locked_launchers() -> None:
+    pseudobulk_skill = PSEUDOBULK_SKILL.read_text(encoding="utf-8")
+    null_skill = NULL_SKILL.read_text(encoding="utf-8")
+    pseudobulk_launcher = PSEUDOBULK_LAUNCHER.read_text(encoding="utf-8")
+    null_launcher = NULL_LAUNCHER.read_text(encoding="utf-8")
+
+    assert 'bash "$SKILL_DIR/scripts/run_locked.sh" materialize CONFIG.json' in (
+        pseudobulk_skill
+    )
+    assert 'bash "$SKILL_DIR/scripts/run_locked.sh" edger CONFIG.json' in (
+        pseudobulk_skill
+    )
+    assert 'bash "$SKILL_DIR/scripts/run_locked.sh" CONFIG.json' in null_skill
+    assert "$PERTURA_PERTURBSEQ_PYTHON_ENV/bin/python" in pseudobulk_launcher
+    assert "$PERTURA_EDGER_ENV/bin/Rscript" in pseudobulk_launcher
+    assert "$PERTURA_EDGER_ENV/bin/Rscript" in null_launcher
+    assert "materialize_pseudobulk.py" in pseudobulk_launcher
+    assert "run_edger_ql.R" in pseudobulk_launcher
+    assert "run_paired_label_null.R" in null_launcher
+    combined = (pseudobulk_launcher + null_launcher).lower()
+    for forbidden in (
+        "module load",
+        "pip install",
+        "conda install",
+        "install.packages",
+        "biocmanager::install",
+    ):
+        assert forbidden not in combined
+
+
+def test_method_skill_implementation_is_dataset_agnostic() -> None:
+    combined = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            MATERIALIZER,
+            EDGER,
+            NULL,
+            PSEUDOBULK_LAUNCHER,
+            NULL_LAUNCHER,
+            PSEUDOBULK_SKILL,
+            NULL_SKILL,
+            PSEUDOBULK_CONFIG,
+            NULL_CONFIG,
+        )
+    ).lower()
+
+    for dataset_token in ("kang", "papalexi", "replogle", "norman"):
+        assert dataset_token not in combined

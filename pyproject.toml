@@ -72,7 +72,7 @@ exclude = ["pertura_gate", "pertura_gate.*"]
 [tool.setuptools.package-data]
 "pertura_workflow.capabilities" = ["specs/*.yaml", "profiles/*.yaml", "runners/*.R", "runners/*.py", "planner_routes.json", "codeact_protocols.v1.json"]
 "pertura_workflow" = ["environments/*.yml", "environments/*.R", "knowledge_resource_profiles/*.json"]
-"pertura_runtime" = ["dashboard_static/**/*", "agent_bundle/bundle.json", "agent_bundle/.claude-plugin/plugin.json", "agent_bundle/skills/*/SKILL.md", "agent_bundle/skills/*/agents/*.yaml", "agent_bundle/skills/*/references/*.md", "agent_bundle/skills/*/scripts/*.py", "agent_bundle/skills/*/scripts/*.R"]
+"pertura_runtime" = ["dashboard_static/**/*", "agent_bundle/bundle.json", "agent_bundle/.claude-plugin/plugin.json", "agent_bundle/skills/*/SKILL.md", "agent_bundle/skills/*/agents/*.yaml", "agent_bundle/skills/*/references/*.md", "agent_bundle/skills/*/scripts/*.py", "agent_bundle/skills/*/scripts/*.R", "agent_bundle/skills/*/scripts/*.sh"]
 "pertura_bench" = ["runners/*.R", "schemas/*.json", "cases/*.json"]
 "pertura_core" = ["compatibility/v0.2/*.json"]
 

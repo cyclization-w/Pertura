@@ -80,6 +80,7 @@ def test_package_data_and_sdist_manifest_cover_product_resources() -> None:
     assert "agent_bundle/skills/*/SKILL.md" in package_data["pertura_runtime"]
     assert "agent_bundle/skills/*/scripts/*.py" in package_data["pertura_runtime"]
     assert "agent_bundle/skills/*/scripts/*.R" in package_data["pertura_runtime"]
+    assert "agent_bundle/skills/*/scripts/*.sh" in package_data["pertura_runtime"]
     assert "compatibility/v0.2/*.json" in package_data["pertura_core"]
 
     manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
@@ -114,6 +115,16 @@ def test_distribution_checker_declares_wheel_and_sdist_contracts() -> None:
         "pertura_runtime/agent_bundle/skills/"
         "run-design-preserving-null-calibration/scripts/"
         "run_paired_label_null.R" in script["WHEEL_REQUIRED"]
+    )
+    assert (
+        "pertura_runtime/agent_bundle/skills/"
+        "run-replicate-aware-pseudobulk-de/scripts/run_locked.sh"
+        in script["WHEEL_REQUIRED"]
+    )
+    assert (
+        "pertura_runtime/agent_bundle/skills/"
+        "run-design-preserving-null-calibration/scripts/run_locked.sh"
+        in script["WHEEL_REQUIRED"]
     )
 
 

@@ -23,4 +23,10 @@ Use only the registered calibration split and the task's frozen `codeact_protoco
 5. Write one row per permutation with `permutation_id`, `type1_rate`, `null_effect_bias`, and `exchangeability_violation_count`.
 6. Keep optional swapped-unit details separate from the required table.
 
-Do not require an execution brief or CodeAct handoff. Never permute cells, copy reference values, or inspect evaluator files. Parameterize `scripts/run_paired_label_null.R` using [configuration](references/configuration.md).
+Set `SKILL_DIR` to the base directory reported by the Skill tool, write only the JSON configuration described in [configuration](references/configuration.md), and run exactly:
+
+```bash
+bash "$SKILL_DIR/scripts/run_locked.sh" CONFIG.json
+```
+
+Do not write a replacement R script. Do not use `module load`, a PATH-resolved `Rscript`, `conda`, `install.packages`, or `BiocManager::install`. Do not require an execution brief or CodeAct handoff. Never permute cells, copy reference values, or inspect evaluator files.
