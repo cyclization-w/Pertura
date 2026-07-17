@@ -1,4 +1,4 @@
-# PerturaBench 0.2.0a17 evaluation protocol
+# PerturaBench 0.2.0a19 evaluation protocol
 
 PerturaBench has two independent objectives:
 
@@ -6,6 +6,8 @@ PerturaBench has two independent objectives:
 2. **Agent workflow evaluation** asks whether an LLM selects and composes analyses correctly, handles missing information, and avoids unsupported scientific claims.
 
 Synthetic fixtures test code and protocol behavior. They never validate a method on real data, issue a trusted receipt, or promote an exploratory capability.
+
+The primary mechanism claim is that scientific authority is conditional on resolved, provenance-backed design identity and verified, scope-compatible, dependency-complete evidence. Unresolved design facts produce a checkpointed clarification or fail closed; user confirmation may resolve identity but cannot create scientific evidence. The comparative benchmark is conditional on a frozen, provenance-backed design contract and does not test autonomous statistical-design discovery.
 
 ## 1. Frozen execution identity
 
@@ -93,7 +95,11 @@ The controlled comparison uses the same dataset split, objective, Claude model, 
 | `prompt_only` | static analysis and safety guidance, CodeAct, no Pertura domain tools or runtime claim enforcement |
 | `free_codeact` | task and data plus CodeAct only; no Pertura skills or gate |
 
-There are six primary Perturb-seq agent cases. Each condition is repeated twice, producing 36 primary runs. The two Kang agent cases remain supplemental statistical demonstrations because Kang is not Perturb-seq. Every run receives a fresh project, analysis run, conversation, provider session, authority namespace, and output directory.
+There are 18 primary Perturb-seq tasks and two supplemental Kang tasks. Each condition is repeated twice, producing 120 required scored turns inside 24 workflow sessions. The optional prediction task does not affect required gates. Every workflow/condition/repeat receives a fresh project, analysis run, conversation, provider session, authority namespace, and output directory; turns within that workflow share the session.
+
+All conditions receive the same frozen `codeact_protocol`, input paths/hashes, split, output contract, hard gates, claim ceiling, and resource budget. Only `pertura_full` receives registered DatasetContract/asset identities, answer-free static capability-contract subsets, five Pertura tools, and its frozen 1-3 task skills. No formal run compiles a Planner active window, CodeAct handoff, or CompletionGuard.
+
+The runner initializes a neutral blocked `benchmark_result.json` before every turn and records its hash. The provider must update it. Unchanged, deleted, or invalid JSON fails closed; the runner never fabricates scientific content from task metadata or TurnDraft.
 
 ### Hard gates
 
@@ -147,4 +153,4 @@ real_agent_behavior_ready: false
 release_ready: false
 ```
 
-Release remains blocked on locked real datasets/subsets, frozen catalogs, current scientific verdicts, 36 primary comparative agent runs, expert-adjudicated CRISPRi/CRISPRa profiles, and required scientific environments.
+Release remains blocked on locked real datasets/subsets, frozen catalogs, current scientific verdicts, all 120 required comparative turns, expert-adjudicated CRISPRi/CRISPRa profiles, and required scientific environments.

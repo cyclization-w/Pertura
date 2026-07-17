@@ -68,13 +68,7 @@ def build_server_plan(
     except (OSError, ValueError):
         manifests = {}
     datasets = tuple(
-        sorted(
-            {
-                dataset
-                for item in specs
-                for dataset in item.required_real_datasets
-            }
-        )
+        sorted({dataset for item in specs for dataset in item.required_real_datasets})
     )
     artifacts: list[dict[str, Any]] = []
     jobs: list[dict[str, Any]] = []
@@ -304,9 +298,15 @@ def build_server_plan(
                         kind="reference_generation",
                         depends_on=[subset_jobs[(dataset_id, split)]],
                         argv=[
-                            "python", "-m", "pertura_bench", "references", "generate",
-                            "--dataset", dataset_id,
-                            "--split", split,
+                            "python",
+                            "-m",
+                            "pertura_bench",
+                            "references",
+                            "generate",
+                            "--dataset",
+                            dataset_id,
+                            "--split",
+                            split,
                             "--subset-lock",
                             f"$PERTURA_BENCH_CACHE/datasets/{dataset_id}/subset/{split}/subset.lock.json",
                             "--generator-script",
@@ -334,9 +334,7 @@ def build_server_plan(
                         walltime_minutes=720,
                     )
                 )
-    agent_asset_ids_by_dataset_split: dict[
-        tuple[str, str], dict[str, str]
-    ] = {}
+    agent_asset_ids_by_dataset_split: dict[tuple[str, str], dict[str, str]] = {}
     from pertura_bench.real_execution import select_real_parameter_run
 
     for dataset_id in real_parameter_catalog["datasets"]:
@@ -353,9 +351,9 @@ def build_server_plan(
             for asset in dataset_mapping.get("agent_assets") or ():
                 role = str(asset["role"])
                 artifact_id = f"artifact:{dataset_id}:{split}:agent:{role}"
-                agent_asset_ids_by_dataset_split.setdefault(
-                    (dataset_id, split), {}
-                )[role] = artifact_id
+                agent_asset_ids_by_dataset_split.setdefault((dataset_id, split), {})[
+                    role
+                ] = artifact_id
                 artifacts.append(
                     {
                         "artifact_id": artifact_id,
@@ -427,8 +425,7 @@ def build_server_plan(
                 preparation_dependency = preparation_roots[dataset_id]
                 artifact_id = artifact_ids["converted"]
             job_id = (
-                f"benchmark:{dataset_id}:{bench_spec.capability_id}:"
-                f"{tier}:{split}"
+                f"benchmark:{dataset_id}:{bench_spec.capability_id}:" f"{tier}:{split}"
             )
             jobs.append(
                 {
@@ -553,11 +550,15 @@ def build_server_plan(
                 }
             )
 
-    agent_catalog_path = root / "src" / "pertura_bench" / "cases" / "server_agent_cases.v1.json"
+    agent_catalog_path = (
+        root / "src" / "pertura_bench" / "cases" / "server_agent_cases.v1.json"
+    )
     agent_catalog = json.loads(agent_catalog_path.read_text(encoding="utf-8"))
     conditions = tuple(str(item) for item in agent_catalog.get("conditions") or ())
     if conditions != ("pertura_full", "prompt_only", "free_codeact"):
-        raise ValueError("agent benchmark catalog must declare the three controlled conditions")
+        raise ValueError(
+            "agent benchmark catalog must declare the three controlled conditions"
+        )
     for case in agent_catalog["cases"]:
         benchmark_track = str(case.get("benchmark_track") or "primary")
         dataset_id = case["dataset_id"]
@@ -574,124 +575,144 @@ def build_server_plan(
         for condition in conditions:
             for repeat_index in (1, 2):
                 job_id = f"agent:{case['case_id']}:{condition}:repeat-{repeat_index}"
-                jobs.append({
-                    "job_id": job_id,
-                    "kind": "agent_workflow",
-                    "dataset_id": dataset_id,
-                    "case_id": case["case_id"],
-                    "objective": case["objective"],
-                    "benchmark_condition": condition,
-                    "repeat_index": repeat_index,
-                    "benchmark_track": benchmark_track,
-                    "provider": "claude-agent-sdk",
-                    "model_source": "PERTURA_CLAUDE_MODEL",
-                    "metric_configuration_state": metric_configuration_state,
-                    "configuration_state": (
-                        "configured"
-                        if metric_configuration_state == "frozen_reference"
-                        else "not_configured"
-                    ),
-                    "controlled_comparison": {
-                        "same_dataset_split": "evaluation",
-                        "same_objective": True,
-                        "same_model": True,
-                        "same_context_budget": True,
-                        "same_timeout": True,
-                        "same_resource_budget": True,
-                    },
-                    "depends_on": [
-                        subset_jobs[(dataset_id, "evaluation")],
-                        *reference_jobs.get((dataset_id, "evaluation"), ()),
-                    ],
-                    "fresh_namespace": {
-                        "project_id": True,
-                        "analysis_run_id": True,
-                        "conversation_id": True,
-                        "provider_session": True,
-                        "authority_namespace": True,
-                        "workspace_binding": True,
-                    },
-                    "command": {
-                        "argv": [
-                            "python", "-m", "pertura_bench", "agent", "run-server",
-                            case["case_id"], "--cache", "$PERTURA_BENCH_CACHE",
-                            "--output", "$PERTURA_BENCH_OUTPUT", "--repo", "$PERTURA_REPO",
-                            "--condition", condition,
-                            "--repeat-index", str(repeat_index),
-                            "--parameter-catalog", "$PERTURA_BENCH_PARAMETER_CATALOG",
-                            "--design-confirmations", "$PERTURA_BENCH_DESIGN_CONFIRMATIONS",
-                            "--metric-reference-catalog", "$PERTURA_BENCH_METRIC_REFERENCES",
-                            "--resource-enforcement", "scheduler",
-                            "--resource-evidence", "$PERTURA_BENCH_RESOURCE_EVIDENCE",
-                            "--enforced-memory-gb", str(float(case.get("max_memory_gb", 4.0))),
-                            "--enforced-n-jobs", "1",
-                        ]
-                    },
-                    "consumes": [
-                        artifact_ids_by_dataset[dataset_id]["evaluation"],
-                        *[
-                            artifact_id
-                            for role, artifact_id in
-                            agent_asset_ids_by_dataset_split.get(
-                                (dataset_id, "evaluation"), {}
-                            ).items()
-                            if role in set(
-                                case.get("required_artifact_roles") or ()
-                            )
+                jobs.append(
+                    {
+                        "job_id": job_id,
+                        "kind": "agent_workflow",
+                        "dataset_id": dataset_id,
+                        "case_id": case["case_id"],
+                        "objective": case["objective"],
+                        "benchmark_condition": condition,
+                        "repeat_index": repeat_index,
+                        "benchmark_track": benchmark_track,
+                        "provider": "claude-agent-sdk",
+                        "model_source": "PERTURA_CLAUDE_MODEL",
+                        "metric_configuration_state": metric_configuration_state,
+                        "configuration_state": (
+                            "configured"
+                            if metric_configuration_state == "frozen_reference"
+                            else "not_configured"
+                        ),
+                        "controlled_comparison": {
+                            "same_dataset_split": "evaluation",
+                            "same_objective": True,
+                            "same_model": True,
+                            "same_context_budget": True,
+                            "same_timeout": True,
+                            "same_resource_budget": True,
+                        },
+                        "depends_on": [
+                            subset_jobs[(dataset_id, "evaluation")],
+                            *reference_jobs.get((dataset_id, "evaluation"), ()),
                         ],
-                    ],
-                    "produces": [
-                        f"agent-verdict:{case['case_id']}:{condition}:repeat-{repeat_index}",
-                        f"agent-grade:{case['case_id']}:{condition}:repeat-{repeat_index}",
-                    ],
-                    "judge": {
-                        "provider": "deepseek",
-                        "model": "deepseek-v4-pro",
-                        "fallback_allowed": False,
-                        "unavailable_status": "judge_unavailable",
-                    },
-                    "checkpoint_requirement": {
-                        "required": True,
-                        "binding_fields": list(_BINDING_FIELDS),
-                        "binding_source": "server_plan.checkpoint_binding",
-                    },
-                    "environment": _bound_job_environment(),
-                    "resource_evidence": {
-                        "schema_version": "pertura-resource-evidence-v1",
-                        "path": "$PERTURA_BENCH_RESOURCE_EVIDENCE",
-                        "generated_by": "bound_plan_scheduler_wrapper",
-                        "required": True,
-                    },
-                    "resources": {
-                        "cpus": 1,
-                        "memory_gb": float(case.get("max_memory_gb", 4.0)),
-                        "walltime_minutes": max(1, int(case.get("timeout_seconds", 1800)) // 60),
-                    },
-                    "failure_policy": {
-                        "missing_lock": "not_available",
-                        "judge_unavailable": "failed_no_fallback",
-                        "timeout": "failed_no_fallback",
-                    },
-                })
+                        "fresh_namespace": {
+                            "project_id": True,
+                            "analysis_run_id": True,
+                            "conversation_id": True,
+                            "provider_session": True,
+                            "authority_namespace": True,
+                            "workspace_binding": True,
+                        },
+                        "command": {
+                            "argv": [
+                                "python",
+                                "-m",
+                                "pertura_bench",
+                                "agent",
+                                "run-server",
+                                case["case_id"],
+                                "--cache",
+                                "$PERTURA_BENCH_CACHE",
+                                "--output",
+                                "$PERTURA_BENCH_OUTPUT",
+                                "--repo",
+                                "$PERTURA_REPO",
+                                "--condition",
+                                condition,
+                                "--repeat-index",
+                                str(repeat_index),
+                                "--parameter-catalog",
+                                "$PERTURA_BENCH_PARAMETER_CATALOG",
+                                "--design-confirmations",
+                                "$PERTURA_BENCH_DESIGN_CONFIRMATIONS",
+                                "--metric-reference-catalog",
+                                "$PERTURA_BENCH_METRIC_REFERENCES",
+                                "--resource-enforcement",
+                                "scheduler",
+                                "--resource-evidence",
+                                "$PERTURA_BENCH_RESOURCE_EVIDENCE",
+                                "--enforced-memory-gb",
+                                str(float(case.get("max_memory_gb", 4.0))),
+                                "--enforced-n-jobs",
+                                "1",
+                            ]
+                        },
+                        "consumes": [
+                            artifact_ids_by_dataset[dataset_id]["evaluation"],
+                            *[
+                                artifact_id
+                                for role, artifact_id in agent_asset_ids_by_dataset_split.get(
+                                    (dataset_id, "evaluation"), {}
+                                ).items()
+                                if role
+                                in set(case.get("required_artifact_roles") or ())
+                            ],
+                        ],
+                        "produces": [
+                            f"agent-verdict:{case['case_id']}:{condition}:repeat-{repeat_index}",
+                            f"agent-grade:{case['case_id']}:{condition}:repeat-{repeat_index}",
+                        ],
+                        "judge": {
+                            "provider": "deepseek",
+                            "model": "deepseek-v4-pro",
+                            "fallback_allowed": False,
+                            "unavailable_status": "judge_unavailable",
+                        },
+                        "checkpoint_requirement": {
+                            "required": True,
+                            "binding_fields": list(_BINDING_FIELDS),
+                            "binding_source": "server_plan.checkpoint_binding",
+                        },
+                        "environment": _bound_job_environment(),
+                        "resource_evidence": {
+                            "schema_version": "pertura-resource-evidence-v1",
+                            "path": "$PERTURA_BENCH_RESOURCE_EVIDENCE",
+                            "generated_by": "bound_plan_scheduler_wrapper",
+                            "required": True,
+                        },
+                        "resources": {
+                            "cpus": 1,
+                            "memory_gb": float(case.get("max_memory_gb", 4.0)),
+                            "walltime_minutes": max(
+                                1, int(case.get("timeout_seconds", 1800)) // 60
+                            ),
+                        },
+                        "failure_policy": {
+                            "missing_lock": "not_available",
+                            "judge_unavailable": "failed_no_fallback",
+                            "timeout": "failed_no_fallback",
+                        },
+                    }
+                )
 
     paper_catalog_hashes = {
         "paper_task_catalog_hash": canonical_hash({"paper_tasks": "not_configured"}),
-        "paper_task_reference_catalog_hash": canonical_hash({"paper_task_references": "not_configured"}),
-        "paper_anchor_catalog_hash": canonical_hash({"paper_anchors": "not_configured"}),
+        "paper_task_reference_catalog_hash": canonical_hash(
+            {"paper_task_references": "not_configured"}
+        ),
+        "paper_anchor_catalog_hash": canonical_hash(
+            {"paper_anchors": "not_configured"}
+        ),
         "paper_asset_catalog_hash": canonical_hash({"paper_assets": "not_configured"}),
     }
     capability_contract_catalog_hash = canonical_hash(
         {"capability_contract_catalog": "not_configured"}
     )
     if capability_contract_catalog_path is not None:
-        contract_catalog_path = Path(
-            capability_contract_catalog_path
-        ).resolve()
+        contract_catalog_path = Path(capability_contract_catalog_path).resolve()
         if not contract_catalog_path.is_file():
             raise FileNotFoundError(contract_catalog_path)
-        contract_catalog = json.loads(
-            contract_catalog_path.read_text(encoding="utf-8")
-        )
+        contract_catalog = json.loads(contract_catalog_path.read_text(encoding="utf-8"))
         if (
             contract_catalog.get("schema_version")
             != "pertura-capability-contract-catalog-v1"
@@ -716,8 +737,7 @@ def build_server_plan(
         ]
         if missing_catalogs:
             raise ValueError(
-                "paper server plan is missing catalogs: "
-                + ", ".join(missing_catalogs)
+                "paper server plan is missing catalogs: " + ", ".join(missing_catalogs)
             )
         resolved_catalogs = {
             name: Path(path).resolve()
@@ -739,9 +759,9 @@ def build_server_plan(
             resolved_catalogs["paper_task_catalog_hash"]
         )
         task_references = json.loads(
-            resolved_catalogs[
-                "paper_task_reference_catalog_hash"
-            ].read_text(encoding="utf-8")
+            resolved_catalogs["paper_task_reference_catalog_hash"].read_text(
+                encoding="utf-8"
+            )
         )
         if (
             task_references.get("schema_version")
@@ -749,9 +769,7 @@ def build_server_plan(
             or task_references.get("status") != "bound"
             or task_references.get("passed") is not True
         ):
-            raise ValueError(
-                "paper task-reference catalog is not bound and validated"
-            )
+            raise ValueError("paper task-reference catalog is not bound and validated")
         reference_problems = validate_task_reference_catalog(
             task_references, paper_catalog.tasks()
         )
@@ -761,57 +779,45 @@ def build_server_plan(
                 + "; ".join(reference_problems)
             )
         paper_anchors = json.loads(
-            resolved_catalogs["paper_anchor_catalog_hash"].read_text(
-                encoding="utf-8"
-            )
+            resolved_catalogs["paper_anchor_catalog_hash"].read_text(encoding="utf-8")
         )
         anchor_problems = validate_paper_anchor_catalog(
             paper_anchors, paper_catalog.tasks()
         )
         if anchor_problems:
             raise ValueError(
-                "invalid paper-anchor catalog: "
-                + "; ".join(anchor_problems)
+                "invalid paper-anchor catalog: " + "; ".join(anchor_problems)
             )
         paper_assets = json.loads(
-            resolved_catalogs["paper_asset_catalog_hash"].read_text(
-                encoding="utf-8"
-            )
+            resolved_catalogs["paper_asset_catalog_hash"].read_text(encoding="utf-8")
         )
         if (
-            paper_assets.get("schema_version")
-            != "pertura-paper-agent-assets-v1"
+            paper_assets.get("schema_version") != "pertura-paper-agent-assets-v1"
             or paper_assets.get("status") != "bound"
             or paper_assets.get("passed") is not True
         ):
             raise ValueError("paper asset catalog is not bound and validated")
-        asset_problems = validate_paper_asset_catalog(
-            paper_assets, paper_catalog
-        )
+        asset_problems = validate_paper_asset_catalog(paper_assets, paper_catalog)
         if asset_problems:
             raise ValueError(
-                "invalid bound paper asset catalog: "
-                + "; ".join(asset_problems)
+                "invalid bound paper asset catalog: " + "; ".join(asset_problems)
             )
         jobs = [item for item in jobs if item.get("kind") != "agent_workflow"]
         for workflow in paper_catalog.workflows:
             dataset_id = str(workflow["dataset_id"])
             if dataset_id not in artifact_ids_by_dataset:
-                raise ValueError(
-                    f"paper workflow lacks prepared dataset: {dataset_id}"
-                )
+                raise ValueError(f"paper workflow lacks prepared dataset: {dataset_id}")
             required_tasks = [
                 task
                 for task in workflow.get("turns") or ()
                 if task.get("role") != "optional"
             ]
             maximum_memory = max(
-                float(task["resources"]["max_memory_gb"])
-                for task in required_tasks
+                [32.0]
+                + [float(task["resources"]["max_memory_gb"]) for task in required_tasks]
             )
             total_timeout = sum(
-                int(task["resources"]["timeout_seconds"])
-                for task in required_tasks
+                int(task["resources"]["timeout_seconds"]) for task in required_tasks
             )
             for condition in paper_catalog.payload["execution_protocol"]["conditions"]:
                 for repeat_index in (1, 2):
@@ -829,8 +835,7 @@ def build_server_plan(
                             "model_source": "PERTURA_CLAUDE_MODEL",
                             "max_turns_per_task": PAPER_AGENT_MAX_TURNS,
                             "task_ids": [
-                                task["task_id"]
-                                for task in workflow.get("turns") or ()
+                                task["task_id"] for task in workflow.get("turns") or ()
                             ],
                             "required_task_count": len(required_tasks),
                             "session_scope": {
@@ -846,20 +851,36 @@ def build_server_plan(
                             ],
                             "command": {
                                 "argv": [
-                                    "python", "-m", "pertura_bench", "agent",
-                                    "run-paper-workflow", workflow_id,
-                                    "--cache", "$PERTURA_BENCH_CACHE",
-                                    "--paper-root", "$PERTURA_PAPER_ROOT",
-                                    "--output", "$PERTURA_BENCH_OUTPUT",
-                                    "--repo", "$PERTURA_REPO",
-                                    "--condition", condition,
-                                    "--repeat-index", str(repeat_index),
-                                    "--task-catalog", "$PERTURA_PAPER_TASK_CATALOG",
-                                    "--task-reference-catalog", "$PERTURA_PAPER_TASK_REFERENCES",
-                                    "--paper-anchor-catalog", "$PERTURA_PAPER_ANCHORS",
-                                    "--asset-catalog", "$PERTURA_PAPER_ASSETS",
-                                    "--capability-contract-catalog", "$PERTURA_CAPABILITY_CONTRACT_CATALOG",
-                                    "--resource-evidence", "$PERTURA_BENCH_RESOURCE_EVIDENCE",
+                                    "python",
+                                    "-m",
+                                    "pertura_bench",
+                                    "agent",
+                                    "run-paper-workflow",
+                                    workflow_id,
+                                    "--cache",
+                                    "$PERTURA_BENCH_CACHE",
+                                    "--paper-root",
+                                    "$PERTURA_PAPER_ROOT",
+                                    "--output",
+                                    "$PERTURA_BENCH_OUTPUT",
+                                    "--repo",
+                                    "$PERTURA_REPO",
+                                    "--condition",
+                                    condition,
+                                    "--repeat-index",
+                                    str(repeat_index),
+                                    "--task-catalog",
+                                    "$PERTURA_PAPER_TASK_CATALOG",
+                                    "--task-reference-catalog",
+                                    "$PERTURA_PAPER_TASK_REFERENCES",
+                                    "--paper-anchor-catalog",
+                                    "$PERTURA_PAPER_ANCHORS",
+                                    "--asset-catalog",
+                                    "$PERTURA_PAPER_ASSETS",
+                                    "--capability-contract-catalog",
+                                    "$PERTURA_CAPABILITY_CONTRACT_CATALOG",
+                                    "--resource-evidence",
+                                    "$PERTURA_BENCH_RESOURCE_EVIDENCE",
                                 ]
                             },
                             "consumes": [
@@ -878,7 +899,9 @@ def build_server_plan(
                             "resources": {
                                 "cpus": 1,
                                 "memory_gb": maximum_memory,
-                                "walltime_minutes": max(1, math.ceil(total_timeout / 60)),
+                                "walltime_minutes": max(
+                                    1, math.ceil((total_timeout + 3600) / 60)
+                                ),
                             },
                             "failure_policy": {
                                 "missing_catalog": "failed_not_configured",
@@ -898,15 +921,16 @@ def build_server_plan(
     )
     from pertura_runtime.agent_bundle.bundle import bundled_skill_manifest
     from pertura_runtime.project.models import ReportRevision, TurnDraft, TurnFinal
+
     agent_case_catalog_hash = (
         paper_catalog_hashes["paper_task_catalog_hash"]
         if paper_task_catalog_path is not None
         else file_sha256(agent_catalog_path)
     )
     skill_bundle_hash = bundled_skill_manifest()["bundle_hash"]
-    capability_spec_hash = canonical_hash([
-        item.model_dump(mode="json") for item in registry.specs()
-    ])
+    capability_spec_hash = canonical_hash(
+        [item.model_dump(mode="json") for item in registry.specs()]
+    )
     parameter_schema_hash = canonical_hash(
         {
             f"{item.capability_id}@{item.version}": item.parameters_schema
@@ -914,11 +938,13 @@ def build_server_plan(
         }
     )
     judge_manifest_hash = canonical_hash(agent_catalog["judge"])
-    report_turn_schema_hash = canonical_hash({
-        "TurnDraft": TurnDraft.model_json_schema(),
-        "TurnFinal": TurnFinal.model_json_schema(),
-        "ReportRevision": ReportRevision.model_json_schema(),
-    })
+    report_turn_schema_hash = canonical_hash(
+        {
+            "TurnDraft": TurnDraft.model_json_schema(),
+            "TurnFinal": TurnFinal.model_json_schema(),
+            "ReportRevision": ReportRevision.model_json_schema(),
+        }
+    )
     return ServerBenchmarkPlan(
         artifacts=tuple(artifacts),
         jobs=tuple(jobs),
@@ -1002,17 +1028,30 @@ def assert_server_plan_executable(plan: ServerBenchmarkPlan) -> None:
         )
     git_commit = str(binding.get("git_commit") or "")
     if not _GIT_COMMIT.fullmatch(git_commit):
-        raise ValueError("checkpoint git_commit must be a 40- or 64-character lowercase hex digest")
+        raise ValueError(
+            "checkpoint git_commit must be a 40- or 64-character lowercase hex digest"
+        )
     for name in (
-        "wheel_sha256", "case_catalog_hash", "agent_case_catalog_hash",
-        "skill_bundle_hash", "capability_spec_hash", "judge_manifest_hash",
-        "parameter_schema_hash", "subset_catalog_hash",
-        "report_turn_schema_hash", "template_digest", "resource_lock_set_hash",
-        "prediction_bundle_set_hash", "server_plan_hash",
-        "parameter_catalog_hash", "design_confirmation_catalog_hash",
+        "wheel_sha256",
+        "case_catalog_hash",
+        "agent_case_catalog_hash",
+        "skill_bundle_hash",
+        "capability_spec_hash",
+        "judge_manifest_hash",
+        "parameter_schema_hash",
+        "subset_catalog_hash",
+        "report_turn_schema_hash",
+        "template_digest",
+        "resource_lock_set_hash",
+        "prediction_bundle_set_hash",
+        "server_plan_hash",
+        "parameter_catalog_hash",
+        "design_confirmation_catalog_hash",
         "metric_reference_catalog_hash",
-        "paper_task_catalog_hash", "paper_task_reference_catalog_hash",
-        "paper_anchor_catalog_hash", "paper_asset_catalog_hash",
+        "paper_task_catalog_hash",
+        "paper_task_reference_catalog_hash",
+        "paper_anchor_catalog_hash",
+        "paper_asset_catalog_hash",
         "capability_contract_catalog_hash",
     ):
         value = str(binding.get(name) or "")
@@ -1142,6 +1181,7 @@ def _configured_reference_generators(
                         generator_ids.add(str(metric["reference_generator_id"]))
     return tuple(sorted(generator_ids))
 
+
 def _capability_runtime_dag(
     registry: CapabilityRegistry, target_capability_id: str
 ) -> tuple[str, ...]:
@@ -1193,9 +1233,8 @@ def _real_parameter_coverage(
         dataset = {}
     entries = dict(dataset.get("capabilities") or {})
     target_override = target_case.parameters.get("real_execution")
-    target_override_configured = (
-        isinstance(target_override, Mapping)
-        and isinstance(target_override.get("parameters"), Mapping)
+    target_override_configured = isinstance(target_override, Mapping) and isinstance(
+        target_override.get("parameters"), Mapping
     )
     coverage: list[dict[str, Any]] = []
     for capability_id in runtime_dag:
@@ -1309,10 +1348,16 @@ def _bound_plan_digest(binding: Mapping[str, Any]) -> str:
             "subset_catalog_hash": binding.get("subset_catalog_hash"),
             "prediction_bundle_set_hash": binding.get("prediction_bundle_set_hash"),
             "parameter_catalog_hash": binding.get("parameter_catalog_hash"),
-            "design_confirmation_catalog_hash": binding.get("design_confirmation_catalog_hash"),
-            "metric_reference_catalog_hash": binding.get("metric_reference_catalog_hash"),
+            "design_confirmation_catalog_hash": binding.get(
+                "design_confirmation_catalog_hash"
+            ),
+            "metric_reference_catalog_hash": binding.get(
+                "metric_reference_catalog_hash"
+            ),
             "paper_task_catalog_hash": binding.get("paper_task_catalog_hash"),
-            "paper_task_reference_catalog_hash": binding.get("paper_task_reference_catalog_hash"),
+            "paper_task_reference_catalog_hash": binding.get(
+                "paper_task_reference_catalog_hash"
+            ),
             "paper_anchor_catalog_hash": binding.get("paper_anchor_catalog_hash"),
             "paper_asset_catalog_hash": binding.get("paper_asset_catalog_hash"),
             "capability_contract_catalog_hash": binding.get(

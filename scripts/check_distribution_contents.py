@@ -28,9 +28,6 @@ WHEEL_REQUIRED = (
     "pertura_runtime/agent_bundle/skills/interpret-perturb-seq-results/SKILL.md",
     "pertura_runtime/agent_bundle/skills/evaluate-virtual-perturb-seq-model/SKILL.md",
     "pertura_runtime/agent_bundle/skills/interpret-perturb-seq-results/references/claim-language.md",
-    "pertura_runtime/agent_bundle/skills/execute-task-scoped-plan/SKILL.md",
-    "pertura_runtime/agent_bundle/skills/execute-task-scoped-plan/agents/openai.yaml",
-    "pertura_runtime/agent_bundle/skills/execute-task-scoped-plan/references/route-semantics.md",
     "pertura_runtime/agent_bundle/skills/run-replicate-aware-pseudobulk-de/SKILL.md",
     "pertura_runtime/agent_bundle/skills/run-replicate-aware-pseudobulk-de/agents/openai.yaml",
     "pertura_runtime/agent_bundle/skills/run-replicate-aware-pseudobulk-de/scripts/materialize_pseudobulk.py",
@@ -38,9 +35,6 @@ WHEEL_REQUIRED = (
     "pertura_runtime/agent_bundle/skills/run-design-preserving-null-calibration/SKILL.md",
     "pertura_runtime/agent_bundle/skills/run-design-preserving-null-calibration/agents/openai.yaml",
     "pertura_runtime/agent_bundle/skills/run-design-preserving-null-calibration/scripts/run_paired_label_null.R",
-    "pertura_runtime/agent_bundle/skills/finalize-scientific-task/SKILL.md",
-    "pertura_runtime/agent_bundle/skills/finalize-scientific-task/agents/openai.yaml",
-    "pertura_runtime/agent_bundle/skills/finalize-scientific-task/references/result-checklist.md",
     "pertura_bench/cases/capability_cases.v1.json",
     "pertura_bench/cases/skill_cases.v1.json",
     "pertura_bench/cases/agent_workflow_cases.v1.json",
@@ -95,6 +89,10 @@ FORBIDDEN_ACTIVE_FILES = (
     "pertura_bench/p21_classic_workflow.py",
     "pertura_bench/stage_benchmark.py",
 )
+FORBIDDEN_REMOVED_SKILL_PREFIXES = (
+    "pertura_runtime/agent_bundle/skills/execute-task-scoped-plan/",
+    "pertura_runtime/agent_bundle/skills/finalize-scientific-task/",
+)
 FORBIDDEN_AUTHORITY_TOKENS = (
     b"Evidence" + b"Artifact",
     b"Evidence" + b"Registry",
@@ -136,6 +134,8 @@ def _forbidden(names: set[str], *, artifact: Path) -> list[str]:
         if name.lower().endswith(FORBIDDEN_SUFFIXES):
             findings.append(name)
         if name in FORBIDDEN_ACTIVE_FILES:
+            findings.append(name)
+        if name.startswith(FORBIDDEN_REMOVED_SKILL_PREFIXES):
             findings.append(name)
     return sorted(set(findings))
 

@@ -5,7 +5,7 @@ description: Run replicate-aware pseudobulk differential expression with a paire
 
 # Run Replicate-Aware Pseudobulk DE
 
-Use only the inputs, environment, analysis unit, baseline, design, and outputs declared by the task handoff.
+Use only the inputs, environment, analysis unit, baseline, design, column bindings, and outputs declared by the task's frozen `codeact_protocol` and output contract. The protocol is a precommitted curator/user-confirmed design contract, not an evaluator answer.
 
 ## Validate
 
@@ -24,4 +24,4 @@ Use only the inputs, environment, analysis unit, baseline, design, and outputs d
 5. For per-target mode, preserve the full registered gene universe and mark untested genes explicitly.
 6. Record package versions, the actual analysis unit, pairing, design, and cautions.
 
-Do not install packages, probe unrelated environments, read reference results, or reuse evaluator code. Read [configuration](references/configuration.md) before creating the template configuration.
+Do not require an execution brief or CodeAct handoff. Do not install packages, probe unrelated environments, read reference results, or reuse evaluator code. Read [configuration](references/configuration.md) before creating the template configuration.

@@ -7,25 +7,68 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from pertura_workflow.capabilities import CapabilityRegistry
-from pertura_workflow.planner import codeact_protocol_ids
 from pertura_runtime.agent_bundle import BUNDLED_SKILL_NAMES
 
 
 PAPER_CONDITIONS = ("free_codeact", "prompt_only", "pertura_full")
 PAPER_REPEATS = (1, 2)
 PAPER_AGENT_MAX_TURNS = 32
-PAPER_SKILL_PLAN_PHASES = ("startup", "method", "closure")
-PAPER_SKILL_STARTUP = (
-    "execute-task-scoped-plan",
-    "finalize-scientific-task",
+PAPER_CODEACT_PROTOCOL_IDS = (
+    "composition.propeller.v1",
+    "pseudobulk.edger_ql.v1",
 )
-PAPER_SKILL_CLOSURE = ("finalize-scientific-task",)
-PAPER_METHOD_SKILLS = {
+PAPER_TASK_SKILLS = {
+    "REPL-01": ("operate-pertura-workflow", "inspect-perturb-seq-design"),
+    "REPL-02": ("operate-pertura-workflow", "diagnose-perturb-seq-screen"),
+    "REPL-03": (
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "diagnose-perturb-seq-screen",
+    ),
+    "REPL-04": ("operate-pertura-workflow", "interpret-perturb-seq-results"),
+    "PAPA-01": ("operate-pertura-workflow", "diagnose-perturb-seq-screen"),
+    "PAPA-02": ("operate-pertura-workflow", "inspect-perturb-seq-design"),
+    "PAPA-03": ("operate-pertura-workflow",),
+    "PAPA-04": ("operate-pertura-workflow", "diagnose-perturb-seq-screen"),
+    "PAPA-05": ("operate-pertura-workflow", "diagnose-perturb-seq-screen"),
+    "PAPA-06": (
+        "operate-pertura-workflow",
+        "run-replicate-aware-pseudobulk-de",
+    ),
+    "PAPA-07": ("interpret-perturb-seq-results",),
+    "PAPA-08": ("operate-pertura-workflow", "interpret-perturb-seq-results"),
+    "NORM-01": ("operate-pertura-workflow", "inspect-perturb-seq-design"),
+    "NORM-02": (
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "diagnose-perturb-seq-screen",
+    ),
+    "NORM-03": ("operate-pertura-workflow", "inspect-perturb-seq-design"),
+    "NORM-04": ("operate-pertura-workflow", "interpret-perturb-seq-results"),
+    "NORM-05": (
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "interpret-perturb-seq-results",
+    ),
+    "NORM-06": (
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "interpret-perturb-seq-results",
+    ),
     "KANG-01": (
+        "operate-pertura-workflow",
         "run-replicate-aware-pseudobulk-de",
         "run-design-preserving-null-calibration",
     ),
-    "PAPA-06": ("run-replicate-aware-pseudobulk-de",),
+    "KANG-02": (
+        "operate-pertura-workflow",
+        "inspect-perturb-seq-design",
+        "interpret-perturb-seq-results",
+    ),
+    "VIRT-01": (
+        "operate-pertura-workflow",
+        "evaluate-virtual-perturb-seq-model",
+    ),
 }
 
 
@@ -97,7 +140,7 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
         item.capability_id
         for item in CapabilityRegistry.load_default(include_external=False).specs()
     }
-    known_codeact_protocols = set(codeact_protocol_ids())
+    known_codeact_protocols = set(PAPER_CODEACT_PROTOCOL_IDS)
     workflows = tuple(payload.get("workflows") or ())
     if len(workflows) != 4:
         problems.append("exactly four workflows are required")
@@ -170,35 +213,22 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
                         f"{task_id}: CodeAct binding uses unknown input roles: "
                         f"{sorted(unknown_roles)}"
                     )
-            skill_plan = task.get("pertura_skill_plan")
-            if not isinstance(skill_plan, Mapping):
-                problems.append(f"{task_id}: missing pertura_skill_plan")
+            raw_skills = task.get("pertura_skills")
+            if not isinstance(raw_skills, list):
+                problems.append(f"{task_id}: missing pertura_skills")
             else:
-                if set(skill_plan) != set(PAPER_SKILL_PLAN_PHASES):
-                    problems.append(f"{task_id}: invalid skill plan phases")
-                normalized = {
-                    phase: tuple(str(item) for item in skill_plan.get(phase) or ())
-                    for phase in PAPER_SKILL_PLAN_PHASES
-                }
-                if normalized["startup"] != PAPER_SKILL_STARTUP:
-                    problems.append(f"{task_id}: invalid startup skill plan")
-                if normalized["closure"] != PAPER_SKILL_CLOSURE:
-                    problems.append(f"{task_id}: invalid closure skill plan")
-                expected_methods = PAPER_METHOD_SKILLS.get(task_id, ())
-                if normalized["method"] != expected_methods:
-                    problems.append(f"{task_id}: invalid method skill plan")
-                flattened = [
-                    item
-                    for phase in PAPER_SKILL_PLAN_PHASES
-                    for item in normalized[phase]
-                ]
-                unknown_skills = set(flattened) - set(BUNDLED_SKILL_NAMES)
+                normalized_skills = tuple(str(item) for item in raw_skills)
+                if normalized_skills != PAPER_TASK_SKILLS.get(task_id):
+                    problems.append(f"{task_id}: invalid frozen skill binding")
+                unknown_skills = set(normalized_skills) - set(BUNDLED_SKILL_NAMES)
                 if unknown_skills:
                     problems.append(
                         f"{task_id}: unknown skills: {sorted(unknown_skills)}"
                     )
-                if len(set(flattened)) > 4:
-                    problems.append(f"{task_id}: more than four unique skills")
+                if len(normalized_skills) != len(set(normalized_skills)):
+                    problems.append(f"{task_id}: duplicate skill binding")
+                if len(normalized_skills) > 3:
+                    problems.append(f"{task_id}: more than three skills")
             for field in (
                 "objective",
                 "paper_anchor_ids",

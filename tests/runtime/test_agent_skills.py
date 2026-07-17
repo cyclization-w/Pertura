@@ -24,7 +24,7 @@ def test_bundled_skill_manifest_is_current_and_provider_neutral() -> None:
 
     assert manifest["schema_version"] == "pertura-agent-skill-bundle-v1"
     assert manifest["bundle_version"] == "0.2.0"
-    assert len(BUNDLED_SKILL_NAMES) == 9
+    assert len(BUNDLED_SKILL_NAMES) == 7
     assert [item["name"] for item in manifest["skills"]] == list(BUNDLED_SKILL_NAMES)
     assert manifest["bundle_hash"].startswith("sha256:")
     assert all(

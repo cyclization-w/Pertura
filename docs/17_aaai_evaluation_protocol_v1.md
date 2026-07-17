@@ -1,6 +1,6 @@
 # Pertura AAAI Evaluation Protocol v1
 
-Status: frozen pre-benchmark protocol for `0.2.0a17`.
+Status: final pre-benchmark protocol for `0.2.0a19`.
 
 This protocol evaluates two distinct questions:
 
@@ -8,6 +8,26 @@ This protocol evaluates two distinct questions:
 2. Does the complete agent workflow reduce scientific overclaim while retaining useful analysis coverage?
 
 Synthetic fixtures validate code paths only. They cannot establish real-data validity or promote an exploratory capability to trusted status.
+
+The mechanism claim is deliberately bounded:
+
+> Pertura makes scientific authority conditional on resolved, provenance-backed design identity and verified, scope-compatible, dependency-complete evidence. Unresolved design facts trigger a checkpointed clarification or fail closed; user confirmation may resolve identity but cannot create scientific evidence.
+
+The main benchmark is conditional on a frozen, provenance-backed design contract. It evaluates execution completeness, method applicability, evidence traceability, and claim calibration. It does not claim that the system autonomously derives an optimal statistical design from arbitrary raw data, that the LLM always asks the optimal clarification question, or that results generalize beyond the frozen data, tasks, model, provider, and resource budget.
+
+The formal a19 path is:
+
+```text
+frozen task/assets/confirmed protocol
+-> condition-specific tools, static contracts, and skills
+-> Claude SDK execution
+-> provider artifacts plus TurnDraft
+-> runner structural validation
+-> independent evaluator
+-> Pertura promotion and narrative evaluation
+```
+
+The runner does not compile an execution brief, CodeAct handoff, active-window state, or CompletionGuard. The shared `codeact_protocol` is a precommitted curator/user-confirmed design contract and contains no reference value, grader, metric threshold, expected result, or evaluation truth.
 
 ## 1. Frozen study boundary
 
@@ -147,16 +167,13 @@ Condition-specific tool exposure and instructions are published verbatim. Baseli
 
 ### 4.3 Cases and repetitions
 
-Use six frozen primary Perturb-seq cases:
+Use 18 frozen primary Perturb-seq tasks: four Replogle, eight Papalexi, and six Norman tasks. Two Kang paired-donor tasks are supplemental statistical demonstrations; Kang is not Perturb-seq and is never assigned a guide design or MOI. `VIRT-01` is optional and does not affect the required release gate.
 
-1. Replogle intake integrity and perturbation-label QC;
-2. Replogle target/control coverage and target-reliability applicability;
-3. Papalexi state/Mixscape analysis;
-4. Papalexi GDO guide assignment, retained-cell QC, and candidate target reliability;
-5. Norman predefined dual-sgRNA construct integrity and method applicability;
-6. Norman SCEPTRE suitability audit and correct refusal without cell-by-guide counts;
+The claim surface is reported in three strata:
 
-Kang paired-donor design auditing and Propeller agent tasks are reported separately as supplemental statistical demonstrations. Kang is not Perturb-seq and is never assigned a guide design or MOI. Its edgeR result is evaluated through the direct-R scientific golden/reference harness rather than the guide-dependent Pertura product route.
+1. design adequacy and method applicability (`REPL-01`, `REPL-03`, `NORM-01`, `NORM-03`);
+2. contract-conditioned scientific execution, including `PAPA-06`, `KANG-01`, and `KANG-02`;
+3. claim authority and scope enforcement across split discipline, frozen-reference use, dependency consumption, staleness, source classes, receipts, and promotion.
 
 These mappings follow the frozen artifacts actually available to the benchmark. The processed Replogle artifact contains perturbation labels but not a cell-by-guide count matrix, so it cannot evaluate guide assignment or ambient-guide estimation. Norman contains predefined dual-sgRNA constructs rather than random high-MOI guide exposure, so the primary Norman task must not invoke SCEPTRE. Papalexi's raw GDO assay is exported as a separately hash-bound auxiliary asset bundle for guide-level tasks.
 
@@ -169,13 +186,30 @@ The server configuration must bind the following observed fields rather than gue
 | Norman | `counts` layer (raw); `X` is normalized | `guide_identity`/`guide_merged`; control value `ctrl`; predefined combinatorial dual-sgRNA constructs | `gemgroup` is technical; no independent biological replicate is asserted | Do not confirm `design_moi=high`; do not route to SCEPTRE without cell-by-guide counts and a compatible exposure design. |
 | Kang | `X` (raw counts) | condition `stim`, control value `ctrl`; no guide or target facts | donor `ind` (eight paired donors); state `cell`; `multiplets` is a cell-QC label | Not Perturb-seq. Use for paired design, Propeller, and direct-R edgeR reference tests only; never fabricate guide/MOI confirmations. |
 
-Run each case/condition twice:
+Run each required task/condition twice inside a shared workflow session:
 
 ```text
-6 cases x 3 conditions x 2 repetitions = 36 primary agent executions
+20 required tasks x 3 conditions x 2 repetitions = 120 scored turns
+4 workflows x 3 conditions x 2 repetitions = 24 agent sessions
 ```
 
 Two repetitions are a deliberate time and cost compromise. They measure gross workflow stability, not a population distribution. A failed or timed-out run remains an outcome. One rerun is allowed only for a documented infrastructure failure that occurred before usable scientific output; both attempts remain logged.
+
+### 4.4 Clarification boundary
+
+The 120-turn experiment has no live human intervention. Its frozen design catalog represents a completed product interaction:
+
+```text
+unresolved design fact
+-> checkpointed needs_input
+-> explicit user confirmation
+-> new DatasetContract version
+-> dependent result invalidation and stale propagation
+-> resume the same conversation/provider session
+-> execution or continued block
+```
+
+Deterministic lifecycle, contract, promotion, and `NORM-03` tests establish this mechanism. The experiment does not evaluate the linguistic optimality of the clarification question. Confirmation can resolve identity, but it cannot create an effect, measurement, validation, or receipt.
 
 ## 5. Agent outputs and hard gates
 
@@ -192,6 +226,8 @@ judge/grade.json
 usage.json
 benchmark_result.json
 ```
+
+Before each task, the runner writes the same schema-valid neutral blocked checkpoint for all conditions. The provider must update it from actual execution evidence. An unchanged, deleted, or invalid result fails the `provider_result_updated` and/or schema gate; the runner never derives findings, analysis units, artifact roles, or completion from the task protocol, TurnDraft, filenames, or references.
 
 For `pertura_full`, automatic hard gates include:
 
@@ -216,6 +252,8 @@ For `prompt_only` and `free_codeact`, hard gates focus on:
 - adequate limitations and traceability to generated artifacts.
 
 A baseline does not fail for absence of Pertura-specific IDs, receipts, or tool calls.
+
+Infrastructure-invalid events are catalog/hash/environment/provider-auth/SDK-init failures, bundled-skill leakage into a baseline, Slurm OOM/preemption, and isolated provider network outages. They may be rerun at the same checkpoint. Task timeout, max-turns, provider cancellation caused by the task wall-time, omitted/invalid result submission, wrong artifacts, and independent scientific-evaluator failure are scored agent failures and are not rerun.
 
 ## 6. Primary endpoints
 
@@ -243,18 +281,18 @@ Human reviewers inspect all failed runs and at least 20% of passed runs. Reviewe
 
 ## 8. Statistical analysis
 
-The six primary task cases are the primary strata; cells, genes, findings, and tool events are not independent experimental units.
+The statistical unit is task x condition x repeat, nested within workflow session. Cells, genes, findings, and tool events are not independent experimental units, and 120 turns are not treated as 120 independent samples.
 
 For each endpoint:
 
 - publish every run-level outcome;
 - compute paired condition differences within case and repetition;
-- report case-stratified paired bootstrap confidence intervals where meaningful;
+- report workflow-clustered or hierarchical paired bootstrap confidence intervals where meaningful;
 - use exact paired binary or paired permutation tests only as secondary analyses;
 - report effect sizes and uncertainty regardless of p-values;
 - do not describe stochastic repeats as biological replicates.
 
-With six primary cases and two repetitions, emphasis is on effect direction, magnitude, failure modes, and transparent case-level results rather than strong population-level significance claims.
+With two repetitions, emphasis is on gross workflow stability, effect direction, magnitude, failure modes, and transparent task-level results rather than full provider/model variance or strong population-level significance claims. Report effect size, pass rate, critical-error rate, and uncertainty rather than relying on one pooled p-value.
 
 ## 9. Success interpretation
 
@@ -277,7 +315,7 @@ Failure to meet a criterion is a study result, not permission to alter the proto
 4. Freeze commit, wheel, environments, skills, cases, metrics, and analysis script
 5. Bind the evaluation manifest and server-plan hashes
 6. Run real scientific capability evaluation
-7. Run 36 primary agent executions
+7. Run 24 workflow sessions containing 120 required scored turns
 8. Seal and export all execution artifacts
 9. Run automatic hard gates
 10. Run the fixed narrative judge
@@ -294,7 +332,7 @@ Failure to meet a criterion is a study result, not permission to alter the proto
 - [ ] design, parameter, and metric-reference catalogs are frozen;
 - [ ] required scientific reference verdicts and continuous metrics exist;
 - [ ] all three conditions run through one condition-aware harness;
-- [ ] all 36 primary executions have a terminal verdict, including failures;
+- [ ] all 120 required turns have a terminal verdict, including failures;
 - [ ] judge-unavailable runs are not silently regraded by another model;
 - [ ] all failed and at least 20% of passed runs have human review;
 - [ ] the analysis script and endpoint definitions were frozen before unblinding;

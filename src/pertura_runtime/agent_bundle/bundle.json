@@ -1,11 +1,11 @@
 {
-  "bundle_hash": "sha256:068be2a9786a639c3959c0dddfbc11142a18f59c7f997e3d698a4e286566c9e7",
+  "bundle_hash": "sha256:410ffb9b559e1009144c7d214978d7716c496277dec0d51c6983f8c55a6ce3cb",
   "bundle_id": "pertura",
   "bundle_version": "0.2.0",
   "schema_version": "pertura-agent-skill-bundle-v1",
   "skills": [
     {
-      "content_hash": "sha256:22a8a0f0f7e5a1a6e404d9d5eebe3cf7dee5915153cf5b0fb362a6b2b2f12a76",
+      "content_hash": "sha256:db19f5b86e76b9bbe4553a580e3a7e40c4b534d906fa30f2a9d42af6dbeb397a",
       "files": [
         "SKILL.md",
         "agents/openai.yaml"
@@ -57,17 +57,7 @@
       "version": "0.1.0"
     },
     {
-      "content_hash": "sha256:07a6af9a567f5467999b084d2982bf5816e06825f01812817e5259d1051da4c6",
-      "files": [
-        "SKILL.md",
-        "agents/openai.yaml",
-        "references/route-semantics.md"
-      ],
-      "name": "execute-task-scoped-plan",
-      "version": "0.1.0"
-    },
-    {
-      "content_hash": "sha256:21b2ea9081d94207f6cfbafca52ea559117b37eb64c051a093473b67007e8b91",
+      "content_hash": "sha256:a47de4814adfb103edd96ff1aca1b8f44b0837dbf6c8b6ec2677690063fa8a4c",
       "files": [
         "SKILL.md",
         "agents/openai.yaml",
@@ -79,7 +69,7 @@
       "version": "0.1.0"
     },
     {
-      "content_hash": "sha256:22e6abd0bcb91d4a796e2251bedd26c20b5623d71e94398778b897bb87a1b6ef",
+      "content_hash": "sha256:b23094d3b877b759806c066619ebe886803f3203f53b3502889e5e83218c73f6",
       "files": [
         "SKILL.md",
         "agents/openai.yaml",
@@ -87,16 +77,6 @@
         "scripts/run_paired_label_null.R"
       ],
       "name": "run-design-preserving-null-calibration",
-      "version": "0.1.0"
-    },
-    {
-      "content_hash": "sha256:2c80a2308375fd898e06edf31335f8d805d59b3920f091a2bde379e99e6d74d6",
-      "files": [
-        "SKILL.md",
-        "agents/openai.yaml",
-        "references/result-checklist.md"
-      ],
-      "name": "finalize-scientific-task",
       "version": "0.1.0"
     }
   ]

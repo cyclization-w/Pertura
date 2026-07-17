@@ -32,12 +32,7 @@ from pertura_runtime.claude.options import ClaudeRuntimeOptions, describe_option
 from pertura_runtime.project.assets import DataAssetRegistry
 from pertura_runtime.project.models import AssetBinding
 from pertura_runtime.project.workspace import ProjectWorkspace
-from pertura_workflow.environment import environment_prefix
-from pertura_workflow.planner import (
-    build_capability_contract_catalog,
-    codeact_protocol_environment_profile,
-    compile_capability_execution_brief,
-)
+from pertura_workflow.capability_contracts import build_capability_contract_catalog
 
 
 TurnExecutor = Callable[[ClaudePerturaAgent, str, int], Any]
@@ -62,20 +57,6 @@ PAPER_ASSET_KIND_ADAPTER = {
     "protocol": ("external_resource", "curated_prior"),
     "reference_lock": ("external_resource", "curated_prior"),
     "prior": ("external_resource", "curated_prior"),
-}
-
-PAPER_SKILL_RESOURCES = {
-    "execute-task-scoped-plan": ("references/route-semantics.md",),
-    "run-replicate-aware-pseudobulk-de": (
-        "scripts/materialize_pseudobulk.py",
-        "scripts/run_edger_ql.R",
-        "references/configuration.md",
-    ),
-    "run-design-preserving-null-calibration": (
-        "scripts/run_paired_label_null.R",
-        "references/configuration.md",
-    ),
-    "finalize-scientific-task": ("references/result-checklist.md",),
 }
 
 
@@ -137,15 +118,23 @@ def run_paper_agent_workflow(
     task_references = _load_json(task_reference_catalog_path)
     paper_anchors = _load_json(paper_anchor_catalog_path)
     asset_catalog = load_paper_asset_catalog(asset_catalog_path)
-    contract_catalog = build_capability_contract_catalog()
     skill_manifest = bundled_skill_manifest() if condition == "pertura_full" else None
     if capability_contract_catalog_path is not None:
-        if _load_json(capability_contract_catalog_path) != contract_catalog:
-            raise ValueError("a19 capability contract catalog drift")
+        contract_catalog = _load_json(capability_contract_catalog_path)
+        if (
+            contract_catalog.get("schema_version")
+            != "pertura-capability-contract-catalog-v1"
+            or int(contract_catalog.get("capability_count", 0)) != 44
+            or int(contract_catalog.get("active_capability_count", 0)) != 40
+            or not str(contract_catalog.get("catalog_hash") or "").startswith("sha256:")
+        ):
+            raise ValueError("a19 capability contract catalog is invalid")
     elif verify_checkpoint:
         raise FileNotFoundError(
             "formal paper execution requires a capability contract catalog"
         )
+    else:
+        contract_catalog = build_capability_contract_catalog()
     tasks = task_catalog.tasks()
     catalog_problems = [
         *validate_task_reference_catalog(task_references, tasks),
@@ -247,9 +236,6 @@ def run_paper_agent_workflow(
         benchmark_condition=condition,
         python_exe=(_paper_science_python() if turn_executor is None else None),
         python_preflight_packages=list(PAPER_CODEACT_PACKAGES),
-        completion_guard_enabled=True,
-        completion_guard_exploration_limit=24,
-        completion_guard_read_limit=2,
     )
     provider_config_hash = canonical_hash(describe_options(runtime_options))
     agent = ClaudePerturaAgent(
@@ -278,7 +264,7 @@ def run_paper_agent_workflow(
     }
     tasks_by_id = {str(item["task_id"]): item for item in workflow.get("turns") or ()}
     task_records: list[dict[str, Any]] = []
-    execution_briefs: list[dict[str, str]] = []
+    contract_subsets: list[dict[str, Any]] = []
     registered_assets = {
         asset.role: {
             "asset_id": asset.asset_id,
@@ -308,6 +294,16 @@ def run_paper_agent_workflow(
 
             task_output = workspace.root / "outputs" / "tasks" / task_id
             task_output.mkdir(parents=True, exist_ok=True)
+            task_root = execution_root / "tasks" / task_id
+            task_root.mkdir(parents=True, exist_ok=True)
+            result_path = task_output / "benchmark_result.json"
+            neutral_result = _neutral_benchmark_result(
+                workflow=workflow,
+                task=task,
+            )
+            _write(result_path, neutral_result)
+            initial_result_sha256 = file_sha256(result_path)
+            _write(task_root / "benchmark_result.initial.json", neutral_result)
             ancestor_ids = _ancestor_task_ids(task, tasks_by_id)
             existing_prior_hashes = {
                 dependency: _tree_hashes(
@@ -323,78 +319,34 @@ def run_paper_agent_workflow(
                     tasks_by_id=tasks_by_id,
                 )
             )
-            execution_brief = None
+            contract_context = None
+            contract_subset_record = None
             if condition == "pertura_full":
                 if inspected_contract is None:
                     raise RuntimeError("pertura_full lacks a pre-inspected contract")
                 contract, committed = agent.product_runtime.planning_material(
                     str(inspected_contract["contract_id"])
                 )
-                artifact_paths = dict(
-                    (task.get("output_contract") or {}).get("artifact_paths") or {}
-                )
-                task_asset_bindings = {
-                    role: registered_assets[role]
-                    for role in task.get("required_input_roles") or ()
-                    if role in registered_assets
-                }
-                candidate_capability_ids = tuple(
-                    task.get("expected_capability_dag") or ()
-                )
-                codeact_protocol = dict(task.get("codeact_protocol") or {})
-                codeact_profile = codeact_protocol_environment_profile(codeact_protocol)
-                execution_brief = compile_capability_execution_brief(
-                    task_id=task_id,
-                    objective=str(task["objective"]),
-                    execution_mode=str(task["execution_mode"]),
-                    candidate_capability_ids=candidate_capability_ids,
+                contract_context = _dataset_contract_context(
                     contract=contract,
                     committed_results=committed,
-                    asset_bindings=task_asset_bindings,
-                    environment_ready=_paper_environment_readiness(
-                        agent.product_runtime.registry,
-                        candidate_capability_ids,
-                        extra_profiles=((codeact_profile,) if codeact_profile else ()),
-                    ),
-                    codeact_protocol_binding=codeact_protocol,
-                    output_contract=dict(task.get("output_contract") or {}),
-                    registry=agent.product_runtime.registry,
-                    completion_checklist=(
-                        *(
-                            "Write "
-                            f"{task_output.relative_to(workspace.root).as_posix()}"
-                            f"/{relative} for role {role}."
-                            for role, relative in artifact_paths.items()
-                        ),
-                        "Write "
-                        f"{task_output.relative_to(workspace.root).as_posix()}"
-                        "/benchmark_result.json.",
-                        "Return one pertura-turn-draft-v1 JSON object.",
-                    ),
-                    skill_plan=dict(task["pertura_skill_plan"]),
-                    skill_bundle_hash=str(skill_manifest["bundle_hash"]),
-                    skill_resources={
-                        skill: PAPER_SKILL_RESOURCES.get(skill, ())
-                        for phase in task["pertura_skill_plan"].values()
-                        for skill in phase
-                    },
+                    registered_assets=registered_assets,
                 )
-                brief_path = workspace.task_dir / "capability_plans" / f"{task_id}.json"
-                workspace.write_json(brief_path, execution_brief)
-                workspace.write_json(
-                    workspace.task_dir / "PERTURA_CAPABILITY_PLAN.json",
-                    execution_brief,
+                subset = _task_capability_contract_subset(
+                    task=task,
+                    contract_catalog=contract_catalog,
                 )
-                execution_briefs.append(
-                    {
-                        "task_id": task_id,
-                        "plan_id": str(execution_brief["plan_id"]),
-                        "plan_hash": str(execution_brief["plan_hash"]),
-                        "path": str(brief_path.relative_to(workspace.root)),
-                        "skill_plan": execution_brief["skill_plan"],
-                        "skill_bundle_hash": execution_brief["skill_bundle_hash"],
-                    }
+                subset_path = (
+                    workspace.task_dir / "capability_contracts" / f"{task_id}.json"
                 )
+                workspace.write_json(subset_path, subset)
+                contract_subset_record = {
+                    "task_id": task_id,
+                    "subset_hash": subset["subset_hash"],
+                    "capability_ids": subset["capability_ids"],
+                    "path": subset_path.relative_to(workspace.root).as_posix(),
+                }
+                contract_subsets.append(contract_subset_record)
             prompt = _task_prompt(
                 workflow=workflow,
                 task=task,
@@ -406,15 +358,14 @@ def run_paper_agent_workflow(
                     for dependency in ancestor_ids
                 },
                 isolated_smoke=smoke_task_ids is not None,
-                execution_brief=execution_brief,
+                contract_context=contract_context,
+                contract_subset_record=contract_subset_record,
             )
             timeout_seconds = int(task["resources"]["timeout_seconds"])
             timed_out = False
             started = time.monotonic()
             event_log = workspace.logs_dir / "events.jsonl"
             event_offset = event_log.stat().st_size if event_log.is_file() else 0
-            if hasattr(agent, "configure_completion_guard"):
-                agent.configure_completion_guard(task_output)
             try:
                 (turn_executor or _run_with_timeout)(agent, prompt, timeout_seconds)
             except TimeoutError:
@@ -428,19 +379,6 @@ def run_paper_agent_workflow(
                     except Exception:
                         agent.product_runtime.close(graceful=False)
             wall_seconds = time.monotonic() - started
-            completion_guard = (
-                agent.completion_guard_snapshot()
-                if hasattr(agent, "completion_guard_snapshot")
-                else {
-                    "schema_version": "pertura-benchmark-completion-guard-v1",
-                    "enabled": True,
-                    "triggered": False,
-                    "expensive_calls": 0,
-                    "closure_calls": 0,
-                    "completion_reads": 0,
-                    "denied_calls": 0,
-                }
-            )
             skill_leakage_audit = _audit_baseline_skill_access(
                 event_log,
                 start_offset=event_offset,
@@ -451,7 +389,6 @@ def run_paper_agent_workflow(
             )
             turns = project.store.list_turns(conversation.conversation_id)
             final = project.store.get_turn_final(turns[-1].turn_id) if turns else None
-            result_path = task_output / "benchmark_result.json"
             (
                 benchmark_result,
                 result_problem,
@@ -465,6 +402,7 @@ def run_paper_agent_workflow(
                 asset_paths=asset_paths,
                 references_by_id=references_by_id,
                 tasks_by_id=tasks_by_id,
+                initial_result_sha256=initial_result_sha256,
             )
             mutation_free = all(
                 _existing_files_unchanged(
@@ -482,8 +420,6 @@ def run_paper_agent_workflow(
                 "no_skill_leakage": skill_leakage_audit["status"] != "failed",
             }
             status = "passed" if all(hard_gates.values()) else "failed"
-            task_root = execution_root / "tasks" / task_id
-            task_root.mkdir(parents=True, exist_ok=True)
             if result_path.is_file():
                 (task_root / "benchmark_result.json").write_bytes(
                     result_path.read_bytes()
@@ -505,38 +441,24 @@ def run_paper_agent_workflow(
                 "turn_id": final.turn_id if final else None,
                 "wall_seconds": wall_seconds,
                 "resource_evidence": resource_evidence,
-                "completion_guard": completion_guard,
-                "skill_plan": (
-                    execution_brief["skill_plan"]
-                    if execution_brief is not None
-                    else None
+                "initial_benchmark_result_sha256": initial_result_sha256,
+                "pertura_skills": (
+                    list(task.get("pertura_skills") or ())
+                    if condition == "pertura_full"
+                    else []
                 ),
                 "skill_bundle_hash": (
-                    execution_brief["skill_bundle_hash"]
-                    if execution_brief is not None
+                    skill_manifest["bundle_hash"]
+                    if skill_manifest is not None
                     else None
                 ),
                 "requested_skills": (
-                    sorted(
-                        {
-                            skill
-                            for skills in execution_brief["skill_plan"].values()
-                            for skill in skills
-                        }
-                    )
-                    if execution_brief is not None
+                    list(task.get("pertura_skills") or ())
+                    if condition == "pertura_full"
                     else []
                 ),
                 "skill_leakage_audit": skill_leakage_audit,
-                "capability_execution_brief": (
-                    {
-                        "plan_id": execution_brief["plan_id"],
-                        "plan_hash": execution_brief["plan_hash"],
-                        "route": execution_brief["route"],
-                    }
-                    if execution_brief is not None
-                    else None
-                ),
+                "capability_contract_subset": contract_subset_record,
                 "post_turn_output_hashes": _tree_hashes(task_output),
                 "post_turn_ancestor_hashes": {
                     dependency: _tree_hashes(
@@ -622,11 +544,7 @@ def run_paper_agent_workflow(
         else dict(
             workflow,
             turns=[
-                {
-                    key: value
-                    for key, value in task.items()
-                    if key != "pertura_skill_plan"
-                }
+                {key: value for key, value in task.items() if key != "pertura_skills"}
                 for task in workflow.get("turns") or ()
             ],
         )
@@ -641,18 +559,15 @@ def run_paper_agent_workflow(
         "repeat_index": repeat_index,
         "model": model,
         "max_turns_per_task": runtime_options.max_turns,
-        "completion_guard": {
-            "enabled": runtime_options.completion_guard_enabled,
-            "exploration_limit": (runtime_options.completion_guard_exploration_limit),
-            "completion_read_limit": runtime_options.completion_guard_read_limit,
-        },
-        "capability_execution_briefs": execution_briefs,
+        "capability_contract_subsets": (
+            contract_subsets if condition == "pertura_full" else []
+        ),
         "skill_bundle_hash": (
             skill_manifest["bundle_hash"] if skill_manifest is not None else None
         ),
-        "task_skill_plans": (
+        "task_skills": (
             {
-                str(task["task_id"]): task["pertura_skill_plan"]
+                str(task["task_id"]): list(task.get("pertura_skills") or ())
                 for task in workflow_turns
             }
             if condition == "pertura_full"
@@ -783,9 +698,12 @@ def _refresh_workflow_task_verdicts(
             asset_paths=asset_paths,
             references_by_id=references_by_id,
             tasks_by_id=tasks_by_id,
+            initial_result_sha256=str(
+                verdict.get("initial_benchmark_result_sha256") or ""
+            ),
         )
         hard_gates = dict(verdict.get("hard_gates") or {})
-        original_output_present = bool(hard_gates.get("output_contract_present"))
+        original_result_updated = bool(hard_gates.get("provider_result_updated"))
         hard_gates.update(output_gates)
         status = "passed" if all(hard_gates.values()) else "failed"
         verdict.update(
@@ -796,7 +714,8 @@ def _refresh_workflow_task_verdicts(
                 "scientific_evaluation": evaluation,
                 "post_workflow_regraded": True,
                 "repaired_after_turn": (
-                    not original_output_present and result_path.is_file()
+                    not original_result_updated
+                    and bool(output_gates.get("provider_result_updated"))
                 ),
                 "post_workflow_output_hashes": current_output_hashes,
                 "post_workflow_ancestor_hashes": current_ancestor_hashes,
@@ -881,34 +800,102 @@ def _paper_science_python() -> str:
     raise FileNotFoundError(f"python-science-v1 interpreter is missing under {prefix}")
 
 
-def _benchmark_result_template(
+def _neutral_benchmark_result(
     *,
     workflow: Mapping[str, Any],
     task: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Return a schema-valid structural template for the task result file."""
+    """Return the fail-closed checkpoint written before provider execution."""
 
-    artifact_roles = list(task["required_artifact_roles"])
     result_type = f"{str(task['task_id']).lower()}_scientific_result"
     return {
         "schema_version": "pertura-agent-benchmark-result-v1",
         "case_id": str(task["task_id"]),
         "dataset_id": str(workflow["dataset_id"]),
         "result_type": result_type,
-        "analysis_unit": "REPLACE_WITH_ACTUAL_ANALYSIS_UNIT",
-        "status": "completed",
-        "findings": [
-            {
-                "finding_id": "finding_1",
-                "text": "REPLACE_WITH_ARTIFACT_GROUNDED_FINDING",
-                "metric_ids": [],
-                "artifact_roles": artifact_roles,
-            }
-        ],
+        "analysis_unit": "unresolved",
+        "status": "blocked",
+        "findings": [],
         "metrics": {},
-        "limitations": ["REPLACE_WITH_MATERIAL_LIMITATION"],
-        "artifact_roles": artifact_roles,
+        "limitations": [
+            "runner-initialized neutral checkpoint; provider has not submitted "
+            "a scientific result"
+        ],
+        "artifact_roles": [],
     }
+
+
+def _dataset_contract_context(
+    *,
+    contract: Any,
+    committed_results: tuple[Any, ...],
+    registered_assets: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    identity_fields = dict(contract.identity_fields)
+    confirmed = {
+        name: value
+        for name, value in identity_fields.items()
+        if str(value.get("status") or "").lower() == "confirmed"
+    }
+    conflicting = {
+        name: value
+        for name, value in identity_fields.items()
+        if str(value.get("status") or "").lower() in {"conflict", "conflicting"}
+    }
+    return {
+        "contract_id": contract.contract_id,
+        "contract_hash": contract.canonical_hash,
+        "confirmed_design_facts": confirmed,
+        "conflicting_design_facts": conflicting,
+        "unresolved_design_facts": list(contract.unresolved_fields),
+        "registered_assets": {
+            role: {
+                "asset_id": record["asset_id"],
+                "content_sha256": record["content_sha256"],
+                "path": record["path"],
+            }
+            for role, record in sorted(registered_assets.items())
+        },
+        "committed_results": [
+            {
+                "result_id": result.result_id,
+                "capability_id": result.capability_id,
+                "status": str(result.status),
+                "result_kind": result.result_kind,
+                "source_class": str(result.source_class),
+                "stale": bool(result.stale),
+                "output_paths": list(result.output_paths),
+            }
+            for result in committed_results
+        ],
+    }
+
+
+def _task_capability_contract_subset(
+    *,
+    task: Mapping[str, Any],
+    contract_catalog: Mapping[str, Any],
+) -> dict[str, Any]:
+    requested = [str(item) for item in task.get("expected_capability_dag") or ()]
+    catalog = {
+        str(item["capability_id"]): dict(item)
+        for item in contract_catalog.get("capabilities") or ()
+    }
+    missing = [
+        capability_id for capability_id in requested if capability_id not in catalog
+    ]
+    if missing:
+        raise ValueError(
+            f"{task['task_id']}: capability contract subset is unbound: {missing}"
+        )
+    payload = {
+        "schema_version": "pertura-paper-capability-contract-subset-v1",
+        "task_id": str(task["task_id"]),
+        "catalog_hash": str(contract_catalog["catalog_hash"]),
+        "capability_ids": requested,
+        "capabilities": [catalog[capability_id] for capability_id in requested],
+    }
+    return payload | {"subset_hash": canonical_hash(payload)}
 
 
 def _task_prompt(
@@ -920,7 +907,8 @@ def _task_prompt(
     anchors_by_id: Mapping[str, Mapping[str, Any]],
     dependency_contracts: Mapping[str, Mapping[str, Any]],
     isolated_smoke: bool = False,
-    execution_brief: Mapping[str, Any] | None = None,
+    contract_context: Mapping[str, Any] | None = None,
+    contract_subset_record: Mapping[str, Any] | None = None,
 ) -> str:
     relevant_assets = {
         role: asset_paths[role]
@@ -939,10 +927,6 @@ def _task_prompt(
         "non-capability scientific tasks."
         if condition == "pertura_full"
         else "Use the available generic CodeAct tools under this benchmark condition."
-    )
-    result_template = _benchmark_result_template(
-        workflow=workflow,
-        task=task,
     )
     task_output_root = f"outputs/tasks/{task['task_id']}"
     artifact_destinations = {
@@ -974,69 +958,20 @@ def _task_prompt(
         if task.get("execution_mode") == "evidence_interpretation"
         else ""
     )
-    brief_policy = ""
-    if condition == "pertura_full" and execution_brief is not None:
-        handoff = execution_brief.get("codeact_handoff")
-        compact_handoff = None
-        if handoff:
-            compact_handoff = {
-                "protocol_id": handoff["protocol_id"],
-                "handoff_hash": handoff["handoff_hash"],
-                "status": handoff["status"],
-                "blockers": handoff["blockers"],
-                "method_family": handoff["method_family"],
-                "binding": handoff["binding"],
-                "environment": handoff["environment"],
-                "execution": handoff["execution"],
-                "outputs": handoff["outputs"],
-                "authority": handoff["authority"],
-            }
-            if handoff.get("invocation"):
-                compact_handoff["invocation"] = handoff["invocation"]
-        compact_window = {
-            "plan_id": execution_brief["plan_id"],
-            "plan_hash": execution_brief["plan_hash"],
-            "route": execution_brief["route"],
-            "skill_plan": execution_brief["skill_plan"],
-            "skill_bundle_hash": execution_brief["skill_bundle_hash"],
-            "skill_resources": execution_brief["skill_resources"],
-            "dataset_contract": execution_brief["dataset_contract"],
-            "active_window": execution_brief["active_window"],
-            "codeact_handoff": compact_handoff,
-            "completion_checklist": execution_brief["completion_checklist"],
-            "stop_conditions": execution_brief["stop_conditions"],
-        }
-        handoff_policy = ""
-        if compact_handoff:
-            execution = compact_handoff.get("execution") or {}
-            if execution.get("mode") == "bound_skill_pipeline":
-                handoff_policy = (
-                    "When the CodeAct handoff is ready, execute its bound skill "
-                    "pipeline in the declared step order. Do not create a master "
-                    "wrapper script and do not substitute a legacy single-script "
-                    "invocation. "
-                )
-            else:
-                handoff_policy = (
-                    "When the CodeAct handoff is ready, create its declared script "
-                    "and use its invocation command directly. "
-                )
-        brief_policy = (
-            "Pertura already inspected and registered this dataset. Do not call "
-            "inspect_dataset again. The frozen task-scoped execution brief is at "
-            f"task/capability_plans/{task['task_id']}.json; its compact active "
-            f"window is {json.dumps(compact_window, sort_keys=True)}. Follow its "
-            "route and frozen skill phases rather than selecting a method by "
-            "keyword matching. Apply the startup skills immediately, including "
-            "a conservative benchmark_result.json checkpoint before the first "
-            "high-cost call. Use only the bound method skills, then apply the "
-            "closure skill before returning. Asset-valued capability parameters "
-            "must use the registered asset IDs in the full brief, not filesystem "
-            "paths. Do not read repository source, capability YAML, tests, or "
-            "scientific-environment directories to rediscover contracts. "
-            f"{handoff_policy}Also, do not probe rpy2, "
-            "alternative package managers, or unrelated environments. Never "
-            "call a capability node whose status is blocked. "
+    contract_policy = ""
+    if condition == "pertura_full":
+        contract_policy = (
+            "Pertura already inspected and registered this dataset; do not call "
+            "inspect_dataset again. The frozen DatasetContract and committed-result "
+            f"summary are {json.dumps(contract_context or {}, sort_keys=True)}. "
+            "The answer-free static capability contracts for this task are at "
+            f"{(contract_subset_record or {}).get('path', '')}; their bound IDs are "
+            f"{json.dumps((contract_subset_record or {}).get('capability_ids', []))}. "
+            "Use registered asset IDs for asset-valued capability parameters. The "
+            f"skills bound to this task are {json.dumps(task.get('pertura_skills') or [])}. "
+            "Do not read repository source, capability YAML, tests, or scientific-"
+            "environment directories to rediscover contracts. Do not probe rpy2, "
+            "alternative package managers, or unrelated environments. "
         )
     return (
         f"Paper benchmark workflow {workflow['workflow_id']}, task {task['task_id']} "
@@ -1059,17 +994,16 @@ def _task_prompt(
         "Do not write them directly under outputs/. "
         f"Hard gates: {json.dumps(task['task_hard_gates'])}. "
         f"Claim ceiling: {task['claim_ceiling']}. "
+        "The following CodeAct protocol is a precommitted curator/user-confirmed "
+        "design contract shared by all benchmark conditions; it is not an answer "
+        f"or evaluation truth: {json.dumps(task.get('codeact_protocol') or {}, sort_keys=True)}. "
         f"{repair_policy}"
         f"{interpretation_policy}"
-        f"{brief_policy}"
-        "A task-scoped completion guard reserves finalization after 24 "
-        "high-cost exploration calls. If it activates, stop new scientific "
-        "execution and use the remaining reads/writes to finish the required "
-        "artifacts and benchmark_result.json. "
-        f"Before completing, write {task['output_contract']['benchmark_result']} "
-        "as a standalone pertura-agent-benchmark-result-v1 JSON file. Replace "
-        "the REPLACE_WITH values in this exact structural template: "
-        f"{json.dumps(result_template, sort_keys=True)}. "
+        f"{contract_policy}"
+        f"The runner initialized {task['output_contract']['benchmark_result']} "
+        "with a schema-valid neutral blocked checkpoint. Before completing, update "
+        "that standalone pertura-agent-benchmark-result-v1 JSON file from actual "
+        "execution evidence. Leaving it unchanged is a scored task failure. "
         "The result file permits only these top-level fields: schema_version, "
         "case_id, dataset_id, result_type, analysis_unit, status, findings, "
         "metrics, limitations, artifact_roles. artifact_roles must be a JSON "
@@ -1084,50 +1018,6 @@ def _task_prompt(
         "object into benchmark_result.json. Independent evaluators, not "
         "self-reported metrics, determine scientific correctness."
     )
-
-
-def _paper_environment_readiness(
-    registry: Any,
-    capability_ids: tuple[str, ...],
-    *,
-    extra_profiles: tuple[str, ...] = (),
-) -> dict[str, bool]:
-    """Read frozen manifests for only the current task's environments.
-
-    Scientific environments are fully doctored before checkpoint binding.
-    Re-running every import smoke inside every agent task is both redundant and
-    vulnerable to shared-filesystem startup latency. The task compiler needs
-    lock readiness, not a second live benchmark, so it validates immutable
-    manifests without launching a process.
-    """
-
-    profiles = sorted(
-        set(extra_profiles)
-        | {
-            str(registry.get(capability_id).metadata.get("environment_profile"))
-            for capability_id in capability_ids
-            if registry.get(capability_id).metadata.get("environment_profile")
-        }
-    )
-    readiness: dict[str, bool] = {}
-    for profile in profiles:
-        try:
-            manifest_path = (
-                environment_prefix(profile) / "pertura-environment-manifest.json"
-            )
-            manifest = _load_json(manifest_path)
-            observed_lock = str(manifest.get("lock_hash") or "")
-            unsigned = dict(manifest)
-            unsigned.pop("lock_hash", None)
-            readiness[profile] = bool(
-                observed_lock
-                and observed_lock == canonical_hash(unsigned)
-                and manifest.get("schema_version") == "pertura-environment-manifest-v2"
-                and manifest.get("profile") == profile
-            )
-        except (FileNotFoundError, OSError, RuntimeError, ValueError):
-            readiness[profile] = False
-    return readiness
 
 
 def _judge_task_context(
@@ -1325,6 +1215,7 @@ def _evaluate_task_outputs(
     asset_paths: Mapping[str, str],
     references_by_id: Mapping[str, Mapping[str, Any]],
     tasks_by_id: Mapping[str, Mapping[str, Any]],
+    initial_result_sha256: str,
 ) -> tuple[AgentBenchmarkResult | None, str | None, dict[str, Any], dict[str, bool],]:
     task_id = str(task["task_id"])
     task_output = workspace_root / "outputs" / "tasks" / task_id
@@ -1334,6 +1225,13 @@ def _evaluate_task_outputs(
         task_id=task_id,
         dataset_id=dataset_id,
     )
+    provider_result_updated = bool(
+        result_path.is_file()
+        and initial_result_sha256
+        and file_sha256(result_path) != initial_result_sha256
+    )
+    if not provider_result_updated and result_problem is None:
+        result_problem = "provider did not update runner-initialized benchmark result"
     bindings = [
         references_by_id[reference_id]
         for reference_id in task.get("task_reference_ids") or ()
@@ -1361,6 +1259,7 @@ def _evaluate_task_outputs(
     required_roles = set(task.get("required_artifact_roles") or ())
     observed_roles = set(benchmark_result.artifact_roles if benchmark_result else ())
     gates = {
+        "provider_result_updated": provider_result_updated,
         "output_contract_present": result_path.is_file(),
         "benchmark_result_schema_valid": benchmark_result is not None,
         "required_artifact_roles": required_roles.issubset(observed_roles),

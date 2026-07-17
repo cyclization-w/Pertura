@@ -368,16 +368,6 @@
       "prompt": "Check whether this weather model beats persistence forecasting."
     },
     {
-      "case_id": "task_plan_frozen_route",
-      "expected_first_action": "read_task_execution_brief",
-      "expected_skills": [
-        "execute-task-scoped-plan"
-      ],
-      "forbidden_skills": [],
-      "kind": "single_positive",
-      "prompt": "Follow this registered PERTURA_CAPABILITY_PLAN.json without inspecting source or rediscovering contracts."
-    },
-    {
       "case_id": "pseudobulk_independent_units",
       "expected_first_action": "validate_independent_unit_and_pairing",
       "expected_skills": [
@@ -398,21 +388,10 @@
       "prompt": "Calibrate this paired pseudobulk design by deterministic within-donor label swaps on the calibration split."
     },
     {
-      "case_id": "scientific_task_checkpoint",
-      "expected_first_action": "write_conservative_result_checkpoint",
-      "expected_skills": [
-        "finalize-scientific-task"
-      ],
-      "forbidden_skills": [],
-      "kind": "single_positive",
-      "prompt": "Checkpoint the task result before analysis and close it against the declared artifact contract before returning."
-    },
-    {
       "case_id": "combo_kang_donor_de",
-      "expected_first_action": "read_task_execution_brief",
+      "expected_first_action": "read_static_contract_and_protocol",
       "expected_skills": [
-        "execute-task-scoped-plan",
-        "finalize-scientific-task",
+        "operate-pertura-workflow",
         "run-replicate-aware-pseudobulk-de",
         "run-design-preserving-null-calibration"
       ],
@@ -422,10 +401,9 @@
     },
     {
       "case_id": "combo_target_trans_de",
-      "expected_first_action": "read_task_execution_brief",
+      "expected_first_action": "read_static_contract_and_protocol",
       "expected_skills": [
-        "execute-task-scoped-plan",
-        "finalize-scientific-task",
+        "operate-pertura-workflow",
         "run-replicate-aware-pseudobulk-de"
       ],
       "forbidden_skills": [
@@ -435,25 +413,10 @@
       "prompt": "Use the registered per-target pseudobulk inputs to run trans-DE and finalize the full-gene outputs; no null calibration is requested."
     },
     {
-      "case_id": "combo_blocked_plan_close",
-      "expected_first_action": "read_task_execution_brief",
-      "expected_skills": [
-        "execute-task-scoped-plan",
-        "finalize-scientific-task"
-      ],
-      "forbidden_skills": [
-        "run-replicate-aware-pseudobulk-de",
-        "run-design-preserving-null-calibration"
-      ],
-      "kind": "multi_positive",
-      "prompt": "The task-scoped plan is blocked by a missing registered dependency. Preserve the blocker and produce an honest result without substituting a method."
-    },
-    {
-      "case_id": "negative_frozen_effect_evidence",
+      "case_id": "negative_papa07_effect_evidence",
       "expected_first_action": "interpret_registered_evidence",
       "expected_skills": [
-        "execute-task-scoped-plan",
-        "finalize-scientific-task"
+        "interpret-perturb-seq-results"
       ],
       "forbidden_skills": [
         "run-replicate-aware-pseudobulk-de",

@@ -5,7 +5,7 @@
 Pertura lets an LLM inspect files, write Python/R, use Bash and notebooks, while keeping scientific statements tied to committed analysis results. The agent remains flexible; dataset contracts, dependency resolution, execution provenance, claim ceilings, and report rendering live outside the model.
 
 > [!IMPORTANT]
-> **Current status: `0.2.0a17` research alpha.** Local product and synthetic protocols are implemented. Expanded capabilities remain exploratory and `synthetic_only` until real-data server benchmarks are complete. Pertura is not a production-validated scientific or clinical decision system.
+> **Current status: `0.2.0a19` research alpha.** Local product and synthetic protocols are implemented. Expanded capabilities remain exploratory and `synthetic_only` until real-data server benchmarks are complete. Pertura is not a production-validated scientific or clinical decision system.
 
 ## Why Pertura?
 
@@ -62,7 +62,7 @@ The catalog phase is presentation metadata only. Scientific dependencies are det
 
 ## Scientific authority
 
-Pertura does not infer evidence strength from wording.
+Pertura does not infer evidence strength from wording. Its stable mechanism claim is: **scientific authority is conditional on resolved, provenance-backed design identity and verified, scope-compatible, dependency-complete evidence. Unresolved design facts trigger a checkpointed clarification or fail closed; user confirmation may resolve identity but cannot create scientific evidence.**
 
 | Result class | Meaning | Strong measured claim? |
 |---|---|---|
@@ -122,7 +122,7 @@ Missing design facts, dependencies, asset roles, or environments return blockers
 
 ### Claude adapter
 
-Five provider-neutral Perturb-seq skills are bundled while free CodeAct remains available:
+Seven provider-neutral Perturb-seq skills are bundled while free CodeAct remains available:
 
 ```bash
 pertura-claude ./my-screen   --new-conversation   --task "Inspect this Perturb-seq screen and propose the next valid analysis."
@@ -163,7 +163,7 @@ flowchart TD
     S["210 synthetic capability cases"] --> C["Code and protocol readiness"]
     L["12 local workflow cases"] --> C
     D["Locked real datasets"] --> R["Scientific v3 verdicts"]
-    A["6 primary cases x 3 conditions x 2 repeats"] --> W["Agent workflow verdicts"]
+    A["20 required tasks x 3 conditions x 2 repeats"] --> W["120 scored turns in 24 workflow sessions"]
     R --> B["Benchmark evidence"]
     W --> B
 ```
@@ -187,7 +187,7 @@ metric-references.json
 
 The initial datasets are Replogle, Papalexi, Norman, and Kang. Kang is used only as a replicated statistical reference, not presented as Perturb-seq.
 
-The agent comparison runs the same Claude model, data, task, context, time, scheduler/cgroup-enforced resources, and scientific reference catalog under `pertura_full`, `prompt_only`, and `free_codeact`. Every condition writes the same provider-neutral `benchmark_result.json`; formatting alone cannot pass without case-specific frozen scientific metrics. Six Perturb-seq cases, three conditions, and two repeats produce 36 primary runs. The two Kang agent cases are supplemental statistical demonstrations and do not enter the primary system comparison. Narrative judging uses fixed `deepseek-v4-pro` with no fallback.
+The agent comparison runs the same Claude model, data, task, frozen scientific protocol, time, scheduler/cgroup-enforced resources, and scientific reference catalog under `pertura_full`, `prompt_only`, and `free_codeact`. Every condition writes the same provider-neutral `benchmark_result.json`; formatting alone cannot pass without case-specific frozen scientific metrics. Eighteen Perturb-seq tasks are primary and two Kang tasks are supplemental. Across three conditions and two repeats, the benchmark contains 120 required scored turns in 24 shared-workflow sessions. The frozen protocol represents a completed curator/user-confirmation step; the benchmark does not claim autonomous statistical-design discovery. Narrative judging uses fixed `deepseek-v4-pro` with no fallback.
 
 See [benchmark design](docs/benchmark_design.md), the [server operations guide](docs/16_server_benchmark_operations_and_extension_guide.md), the [Multi-node Capability Planner V2 design](docs/18_multi_node_capability_planner_v2.md), and the [paper benchmark incident log](benchmarks/paper_v1/INCIDENT_LOG.md).
 
@@ -196,7 +196,7 @@ See [benchmark design](docs/benchmark_design.md), the [server operations guide](
 The checked-in protocol targets:
 
 ```text
-build_version:              0.2.0a17
+build_version:              0.2.0a19
 repository_ready:           true
 runtime_spine_ready:        true
 dependency_policy_ready:    true

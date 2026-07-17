@@ -317,8 +317,7 @@ def _agent_run_current(
         "resource_budget_enforced",
     }
     return (
-        verdict.get("schema_version")
-        == "pertura-server-agent-execution-verdict-v2"
+        verdict.get("schema_version") == "pertura-server-agent-execution-verdict-v2"
         and verdict.get("status") in {"passed", "failed"}
         and condition in {"pertura_full", "prompt_only", "free_codeact"}
         and repeat_index in {1, 2}
@@ -336,6 +335,7 @@ def _agent_run_current(
         and manifest.get("rubric_hash") == canonical_hash(RUBRIC)
         and manifest.get("fallback_allowed") is False
     )
+
 
 def audit_v020(
     repo_root: str | Path, *, require_clean_worktree: bool = True
@@ -373,7 +373,11 @@ def audit_v020(
         "from pertura_" + "gate",
     )
     authority_findings: list[str] = []
-    for package_root in (root / "src" / "pertura_runtime", root / "src" / "pertura_workflow", root / "src" / "pertura_bench"):
+    for package_root in (
+        root / "src" / "pertura_runtime",
+        root / "src" / "pertura_workflow",
+        root / "src" / "pertura_bench",
+    ):
         for source in package_root.rglob("*.py"):
             content = source.read_text(encoding="utf-8")
             if any(token in content for token in forbidden_authority_tokens):
@@ -440,6 +444,7 @@ def audit_v020(
     )
     from pertura_runtime.parameter_protocol import parameter_protocol_complete
     from pertura_workflow.capabilities import CapabilityRegistry
+
     active_registry = CapabilityRegistry.load_default(include_external=False)
     active_specs = active_registry.specs()
     parameter_incomplete = [
@@ -458,7 +463,8 @@ def audit_v020(
     dependency_policy_incomplete = [
         item.capability_id
         for item in active_specs
-        if set(item.depends_on) != set((item.metadata.get("dependency_policy") or {}).keys())
+        if set(item.depends_on)
+        != set((item.metadata.get("dependency_policy") or {}).keys())
     ]
     checks.append(
         ReleaseCheck(
@@ -469,13 +475,21 @@ def audit_v020(
         )
     )
     sparse_requirements = {
-        "guide_count_source": root / "src/pertura_workflow/capabilities/guide_counts.py",
-        "guide_candidate_runner": root / "src/pertura_workflow/capabilities/guide_candidates.py",
-        "state_candidate_runner": root / "src/pertura_workflow/capabilities/state_candidates.py",
-        "virtual_candidate_runner": root / "src/pertura_workflow/capabilities/p5_candidates.py",
+        "guide_count_source": root
+        / "src/pertura_workflow/capabilities/guide_counts.py",
+        "guide_candidate_runner": root
+        / "src/pertura_workflow/capabilities/guide_candidates.py",
+        "state_candidate_runner": root
+        / "src/pertura_workflow/capabilities/state_candidates.py",
+        "virtual_candidate_runner": root
+        / "src/pertura_workflow/capabilities/p5_candidates.py",
     }
     sparse_tokens = {
-        "guide_count_source": ("GuideCountSource", "iter_row_chunks", "estimated_peak_memory"),
+        "guide_count_source": (
+            "GuideCountSource",
+            "iter_row_chunks",
+            "estimated_peak_memory",
+        ),
         "guide_candidate_runner": ("open_guide_count_source", "resource_budget"),
         "state_candidate_runner": ("resource_budget",),
         "virtual_candidate_runner": ("resource_budget",),
@@ -484,7 +498,10 @@ def audit_v020(
         name
         for name, path in sparse_requirements.items()
         if not path.is_file()
-        or any(token not in path.read_text(encoding="utf-8") for token in sparse_tokens[name])
+        or any(
+            token not in path.read_text(encoding="utf-8")
+            for token in sparse_tokens[name]
+        )
     ]
     checks.append(
         ReleaseCheck(
@@ -508,21 +525,26 @@ def audit_v020(
             "code",
         )
     )
-    from pertura_bench.agent_execution import agent_execution_bundle_hash, load_agent_cases
+    from pertura_bench.agent_execution import (
+        agent_execution_bundle_hash,
+        load_agent_cases,
+    )
+
     local_agent_path = root / "src/pertura_bench/cases/agent_workflow_verdicts.v1.json"
     local_agent_payload = (
         json.loads(local_agent_path.read_text(encoding="utf-8"))
         if local_agent_path.is_file()
         else {}
     )
-    current_agent_case_hash = canonical_hash([
-        item.model_dump(mode="json") for item in load_agent_cases()
-    ])
+    current_agent_case_hash = canonical_hash(
+        [item.model_dump(mode="json") for item in load_agent_cases()]
+    )
     local_agent_verdicts = local_agent_payload.get("verdicts") or []
     current_agent_execution_hash = agent_execution_bundle_hash(root)
     local_agent_ready = (
         local_agent_payload.get("case_catalog_hash") == current_agent_case_hash
-        and local_agent_payload.get("execution_bundle_hash") == current_agent_execution_hash
+        and local_agent_payload.get("execution_bundle_hash")
+        == current_agent_execution_hash
         and len(local_agent_verdicts) == 12
         and all(item.get("status") == "passed" for item in local_agent_verdicts)
     )
@@ -618,7 +640,9 @@ def audit_v020(
     )
 
     server_agent_catalog = json.loads(
-        (root / "src/pertura_bench/cases/server_agent_cases.v1.json").read_text(encoding="utf-8")
+        (root / "src/pertura_bench/cases/server_agent_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     agent_verdict_root = Path(
         os.environ.get("PERTURA_REAL_AGENT_VERDICT_ROOT")
@@ -654,13 +678,17 @@ def audit_v020(
                     int(verdict.get("repeat_index") or 0),
                 )
                 case = case_by_id.get(key[0])
-                if key in required_agent_runs and case is not None and _agent_run_current(
-                    root,
-                    verdict,
-                    grade,
-                    input_manifest,
-                    case=case,
-                    catalog_hash=agent_catalog_hash,
+                if (
+                    key in required_agent_runs
+                    and case is not None
+                    and _agent_run_current(
+                        root,
+                        verdict,
+                        grade,
+                        input_manifest,
+                        case=case,
+                        catalog_hash=agent_catalog_hash,
+                    )
                 ):
                     observed_agent_runs[key] = {
                         "verdict": verdict,
@@ -673,18 +701,15 @@ def audit_v020(
         and item["grade"].get("status") in {"passed", "failed"}
         for item in observed_agent_runs.values()
     )
-    real_agent_behavior_complete = (
-        set(observed_agent_runs) == required_agent_runs
-        and graded_agent_runs == len(required_agent_runs)
-    )
+    real_agent_behavior_complete = set(
+        observed_agent_runs
+    ) == required_agent_runs and graded_agent_runs == len(required_agent_runs)
     required_pertura_runs = {
         key for key in required_agent_runs if key[1] == "pertura_full"
     }
     passed_pertura_runs = sum(
-        observed_agent_runs.get(key, {}).get("verdict", {}).get("status")
-        == "passed"
-        and observed_agent_runs.get(key, {}).get("grade", {}).get("status")
-        == "passed"
+        observed_agent_runs.get(key, {}).get("verdict", {}).get("status") == "passed"
+        and observed_agent_runs.get(key, {}).get("grade", {}).get("status") == "passed"
         for key in required_pertura_runs
     )
     pertura_agent_target_met = (
@@ -808,13 +833,22 @@ def audit_v020(
             "local agent workflow verdicts must be regenerated for the current execution bundle"
         )
     if not real_benchmark_ready:
-        remaining.append("real-data artifact/subset locks, frozen design/parameter/reference catalogs, and capability verdicts")
+        remaining.append(
+            "real-data artifact/subset locks, frozen design/parameter/reference catalogs, and capability verdicts"
+        )
     if not real_agent_behavior_complete:
-        remaining.append("36 primary three-condition agent runs and deepseek-v4-pro narrative grades")
+        remaining.append(
+            "120 required scored turns across 24 paper workflow sessions and "
+            "deepseek-v4-pro narrative grades"
+        )
     if not candidate_validation_passed:
-        remaining.append("primary scientific metrics have not all passed frozen references")
+        remaining.append(
+            "primary scientific metrics have not all passed frozen references"
+        )
     if not pertura_agent_target_met:
-        remaining.append("primary Pertura agent runs have not all met execution and narrative targets")
+        remaining.append(
+            "primary Pertura agent runs have not all met execution and narrative targets"
+        )
     if "crispri_screen_v1.yaml" not in profiles:
         remaining.append("expert-adjudicated CRISPRi profile")
     if "crispra_screen_v1.yaml" not in profiles:
@@ -830,9 +864,15 @@ def audit_v020(
         "repository_ready": repository_ready,
         "runtime_spine_ready": runtime_spine_ready,
         "project_lifecycle_ready": all(path.is_file() for path in project_files),
-        "asset_registry_ready": (root / "src/pertura_runtime/project/assets.py").is_file(),
-        "conversation_turn_ready": (root / "src/pertura_runtime/project/lifecycle.py").is_file(),
-        "report_revision_ready": (root / "src/pertura_runtime/project/models.py").is_file(),
+        "asset_registry_ready": (
+            root / "src/pertura_runtime/project/assets.py"
+        ).is_file(),
+        "conversation_turn_ready": (
+            root / "src/pertura_runtime/project/lifecycle.py"
+        ).is_file(),
+        "report_revision_ready": (
+            root / "src/pertura_runtime/project/models.py"
+        ).is_file(),
         "dependency_policy_ready": not dependency_policy_incomplete,
         "split_protocol_ready": all(
             (
@@ -859,9 +899,7 @@ def audit_v020(
         "candidate_validation_passed": candidate_validation_passed,
         "pertura_agent_target_met": pertura_agent_target_met,
         "skill_bundle_ready": bool(skill_state["skill_bundle_ready"]),
-        "claude_skill_adapter_ready": bool(
-            skill_state["claude_skill_adapter_ready"]
-        ),
+        "claude_skill_adapter_ready": bool(skill_state["claude_skill_adapter_ready"]),
         "openai_adapter_ready": bool(skill_state["openai_adapter_ready"]),
         "skill_behavior_benchmark_ready": bool(
             skill_state["skill_behavior_benchmark_ready"]

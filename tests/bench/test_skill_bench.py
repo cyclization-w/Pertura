@@ -16,10 +16,10 @@ def test_skill_case_catalog_has_locked_behavior_mix() -> None:
     verdict = validate_skill_cases()
 
     assert verdict["ok"] is True
-    assert verdict["case_count"] == 40
+    assert verdict["case_count"] == 37
     assert verdict["counts"] == {
-        "single_positive": 19,
-        "multi_positive": 10,
+        "single_positive": 17,
+        "multi_positive": 9,
         "negative": 11,
     }
 
@@ -28,7 +28,7 @@ def test_skill_bundle_static_validation_passes() -> None:
     verdict = validate_skill_bundle_static(ROOT)
 
     assert verdict["ok"] is True
-    assert verdict["case_count"] == 40
+    assert verdict["case_count"] == 37
     assert verdict["bundle_hash"].startswith("sha256:")
     assert verdict["problems"] == []
 

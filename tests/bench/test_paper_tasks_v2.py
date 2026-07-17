@@ -182,6 +182,18 @@ def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
     assert all(job["max_turns_per_task"] == 32 for job in jobs)
     assert all(job["session_scope"]["shared_provider_session"] for job in jobs)
     assert all(job["session_scope"]["condition_repeat_isolated"] for job in jobs)
+    assert all(float(job["resources"]["memory_gb"]) >= 32 for job in jobs)
+    for job in jobs:
+        workflow = task_catalog.workflow(str(job["workflow_id"]))
+        required_timeout = sum(
+            int(task["resources"]["timeout_seconds"])
+            for task in workflow["turns"]
+            if task.get("role") != "optional"
+        )
+        assert (
+            int(job["resources"]["walltime_minutes"])
+            == (required_timeout + 3600 + 59) // 60
+        )
     assert plan.checkpoint_binding["capability_contract_catalog_hash"] == file_sha256(
         contract_catalog_path
     )
@@ -199,24 +211,24 @@ def test_trans_de_and_global_effect_are_not_new_capabilities() -> None:
     assert by_id["PAPA-07"]["expected_capability_dag"] == []
 
 
-def test_v2_catalog_freezes_task_scoped_skill_plans() -> None:
+def test_v2_catalog_freezes_task_scoped_skill_bindings() -> None:
     catalog = load_paper_task_catalog(CATALOG)
     by_id = {task["task_id"]: task for task in catalog.tasks()}
-    expected_startup = [
-        "execute-task-scoped-plan",
-        "finalize-scientific-task",
-    ]
-    for task in by_id.values():
-        assert task["pertura_skill_plan"]["startup"] == expected_startup
-        assert task["pertura_skill_plan"]["closure"] == ["finalize-scientific-task"]
-    assert by_id["KANG-01"]["pertura_skill_plan"]["method"] == [
+    from pertura_bench.paper_tasks import PAPER_TASK_SKILLS
+
+    assert {
+        task_id: tuple(task["pertura_skills"]) for task_id, task in by_id.items()
+    } == PAPER_TASK_SKILLS
+    assert by_id["KANG-01"]["pertura_skills"] == [
+        "operate-pertura-workflow",
         "run-replicate-aware-pseudobulk-de",
         "run-design-preserving-null-calibration",
     ]
-    assert by_id["PAPA-06"]["pertura_skill_plan"]["method"] == [
-        "run-replicate-aware-pseudobulk-de"
+    assert by_id["PAPA-06"]["pertura_skills"] == [
+        "operate-pertura-workflow",
+        "run-replicate-aware-pseudobulk-de",
     ]
-    assert by_id["PAPA-07"]["pertura_skill_plan"]["method"] == []
+    assert by_id["PAPA-07"]["pertura_skills"] == ["interpret-perturb-seq-results"]
     assert by_id["KANG-01"]["split_usage"] == ["calibration", "evaluation"]
     assert "calibration_split" in by_id["KANG-01"]["required_input_roles"]
     assert (

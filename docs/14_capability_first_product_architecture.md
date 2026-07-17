@@ -658,6 +658,12 @@ keyword matching.
 
 Hard non-laundering rules:
 
+The stable mechanism claim is: **Pertura makes scientific authority conditional
+on resolved, provenance-backed design identity and verified, scope-compatible,
+dependency-complete evidence. Unresolved design facts trigger a checkpointed
+clarification or fail closed; user confirmation may resolve identity but cannot
+create scientific evidence.**
+
 - prediction plus prior cannot become measurement;
 - hypothesis consensus cannot become measurement;
 - user confirmation can resolve identity but cannot create effect;

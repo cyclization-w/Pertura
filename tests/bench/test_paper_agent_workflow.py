@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import re
 from pathlib import Path
 
@@ -8,7 +9,7 @@ from pertura_bench import paper_agent_execution as execution
 from pertura_bench.agent_models import AgentBenchmarkResult
 from pertura_bench.cli import _exit_code
 from pertura_core import DatasetContract
-from pertura_core.hashing import canonical_hash, file_sha256
+from pertura_core.hashing import file_sha256
 from pertura_workflow.capabilities import CapabilityRegistry
 
 
@@ -47,20 +48,6 @@ class _Agent:
         self.workspace = workspace
         self.product_runtime = _Runtime()
         self.turn_manager = None
-
-    def configure_completion_guard(self, output_root):
-        self.completion_output_root = output_root
-
-    def completion_guard_snapshot(self):
-        return {
-            "schema_version": "pertura-benchmark-completion-guard-v1",
-            "enabled": True,
-            "triggered": False,
-            "expensive_calls": 0,
-            "closure_calls": 0,
-            "completion_reads": 0,
-            "denied_calls": 0,
-        }
 
 
 def _asset_catalog(tmp_path: Path) -> Path:
@@ -151,21 +138,21 @@ def test_task_prompt_separates_result_file_from_turn_draft() -> None:
     catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
     for candidate_workflow in catalog["workflows"]:
         for candidate_task in candidate_workflow["turns"]:
-            candidate = execution._benchmark_result_template(
+            candidate = execution._neutral_benchmark_result(
                 workflow=candidate_workflow,
                 task=candidate_task,
             )
             AgentBenchmarkResult.model_validate(candidate)
-            assert (
-                candidate["artifact_roles"] == candidate_task["required_artifact_roles"]
-            )
+            assert candidate["artifact_roles"] == []
+            assert candidate["status"] == "blocked"
+            assert candidate["analysis_unit"] == "unresolved"
 
     workflow = next(
         item for item in catalog["workflows"] if item["workflow_id"] == "WF-KANG"
     )
     task = next(item for item in workflow["turns"] if item["task_id"] == "KANG-01")
 
-    template = execution._benchmark_result_template(
+    template = execution._neutral_benchmark_result(
         workflow=workflow,
         task=task,
     )
@@ -184,14 +171,9 @@ def test_task_prompt_separates_result_file_from_turn_draft() -> None:
         "artifact_roles",
     }
     assert result.case_id == "KANG-01"
-    assert list(result.artifact_roles) == task["required_artifact_roles"]
+    assert list(result.artifact_roles) == []
     assert isinstance(template["artifact_roles"], list)
-    assert set(template["findings"][0]) == {
-        "finding_id",
-        "text",
-        "metric_ids",
-        "artifact_roles",
-    }
+    assert template["findings"] == []
 
     for condition in ("pertura_full", "prompt_only", "free_codeact"):
         prompt = execution._task_prompt(
@@ -211,6 +193,102 @@ def test_task_prompt_separates_result_file_from_turn_draft() -> None:
         assert "Never copy the TurnDraft object" in prompt
         assert "artifact_roles must be a JSON array" in prompt
         assert "hypotheses, questions_for_user, next_steps" in prompt
+        assert "runner initialized" in prompt
+        assert "Leaving it unchanged is a scored task failure" in prompt
+        assert '"analysis_unit": "donor"' in prompt
+
+
+def test_formal_runner_excludes_experimental_control_layers() -> None:
+    source = inspect.getsource(execution.run_paper_agent_workflow)
+    for forbidden in (
+        "compile_capability_execution_brief",
+        "build_codeact_handoff",
+        "configure_completion_guard",
+        "completion_guard_snapshot",
+        "PERTURA_CAPABILITY_PLAN",
+        "capability_plans",
+    ):
+        assert forbidden not in source
+
+
+def test_neutral_checkpoint_update_gate_is_fail_closed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        execution,
+        "evaluate_paper_task",
+        lambda *args, **kwargs: {"status": "passed", "problems": []},
+    )
+    task = {
+        "task_id": "T-01",
+        "required_artifact_roles": [],
+        "required_input_roles": [],
+        "task_reference_ids": [],
+        "depends_on_tasks": [],
+        "output_contract": {"artifact_roles": [], "artifact_paths": {}},
+    }
+    root = tmp_path / "workspace"
+    result_path = root / "outputs/tasks/T-01/benchmark_result.json"
+    neutral = {
+        "schema_version": "pertura-agent-benchmark-result-v1",
+        "case_id": "T-01",
+        "dataset_id": "D-01",
+        "result_type": "fixture",
+        "analysis_unit": "unresolved",
+        "status": "blocked",
+        "findings": [],
+        "metrics": {},
+        "limitations": [
+            "runner-initialized neutral checkpoint; provider has not submitted "
+            "a scientific result"
+        ],
+        "artifact_roles": [],
+    }
+    execution._write(result_path, neutral)
+    initial_hash = file_sha256(result_path)
+
+    def evaluate():
+        return execution._evaluate_task_outputs(
+            task,
+            workspace_root=root,
+            dataset_id="D-01",
+            paper_root=tmp_path,
+            asset_paths={},
+            references_by_id={},
+            tasks_by_id={"T-01": task},
+            initial_result_sha256=initial_hash,
+        )
+
+    _, problem, _, gates = evaluate()
+    assert gates["provider_result_updated"] is False
+    assert gates["benchmark_result_schema_valid"] is True
+    assert problem == "provider did not update runner-initialized benchmark result"
+
+    execution._write(
+        result_path,
+        neutral
+        | {
+            "analysis_unit": "donor",
+            "status": "completed",
+            "limitations": ["provider-updated scientific result"],
+        },
+    )
+    _, problem, _, gates = evaluate()
+    assert gates["provider_result_updated"] is True
+    assert gates["benchmark_result_schema_valid"] is True
+    assert problem is None
+
+    result_path.write_text("{invalid", encoding="utf-8")
+    _, problem, _, gates = evaluate()
+    assert gates["provider_result_updated"] is True
+    assert gates["benchmark_result_schema_valid"] is False
+    assert problem
+
+    result_path.unlink()
+    _, problem, _, gates = evaluate()
+    assert gates["provider_result_updated"] is False
+    assert gates["output_contract_present"] is False
+    assert problem == "benchmark_result.json is missing"
 
 
 def test_scientific_failure_does_not_fail_completed_scheduler_job() -> None:
@@ -338,9 +416,10 @@ def test_smoke_task_selection_runs_only_requested_turn(
     )
     assert manifest["smoke_task_ids"] == ["REPL-03"]
     assert manifest["skill_bundle_hash"] is None
-    assert manifest["task_skill_plans"] == {}
+    assert manifest["task_skills"] == {}
+    assert manifest["capability_contract_subsets"] == []
     serialized_manifest = json.dumps(manifest)
-    assert "pertura_skill_plan" not in serialized_manifest
+    assert "pertura_skills" not in serialized_manifest
     assert "execute-task-scoped-plan" not in serialized_manifest
 
 
@@ -400,78 +479,12 @@ def test_evidence_interpretation_prompt_forbids_recomputation() -> None:
     assert "Do not write them directly under outputs/." in prompt
 
 
-def test_capability_brief_is_disclosed_only_to_pertura_full() -> None:
+def test_static_contract_context_is_disclosed_only_to_pertura_full() -> None:
     catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
     workflow = next(
         item for item in catalog["workflows"] if item["workflow_id"] == "WF-PAPA"
     )
     task = next(item for item in workflow["turns"] if item["task_id"] == "PAPA-01")
-    brief = {
-        "plan_id": "plan_fixture",
-        "plan_hash": "sha256:" + "1" * 64,
-        "route": "capability_or_codeact",
-        "skill_plan": {
-            "startup": [
-                "execute-task-scoped-plan",
-                "finalize-scientific-task",
-            ],
-            "method": [],
-            "closure": ["finalize-scientific-task"],
-        },
-        "skill_bundle_hash": "sha256:" + "4" * 64,
-        "skill_resources": {
-            "execute-task-scoped-plan": ["references/route-semantics.md"],
-            "finalize-scientific-task": ["references/result-checklist.md"],
-        },
-        "dataset_contract": {
-            "contract_id": "contract_fixture",
-            "contract_hash": "sha256:" + "2" * 64,
-        },
-        "active_window": [
-            {
-                "capability_id": "guide.integrity.v1",
-                "status": "blocked",
-            }
-        ],
-        "codeact_handoff": {
-            "protocol_id": "pseudobulk.edger_ql.v1",
-            "handoff_hash": "sha256:" + "3" * 64,
-            "status": "ready",
-            "blockers": [],
-            "method_family": "edgeR_ql_pseudobulk",
-            "binding": {
-                "analysis_unit": "donor",
-                "design": "~ donor + condition",
-                "pairing": "required",
-            },
-            "environment": {
-                "profile": "edger-v1",
-                "variable": "PERTURA_EDGER_ENV",
-                "ready": True,
-            },
-            "execution": {
-                "mode": "bound_skill_pipeline",
-                "single_script_wrapper_required": False,
-                "steps": [
-                    {
-                        "step_index": 1,
-                        "phase": "method",
-                        "skill_id": "run-replicate-aware-pseudobulk-de",
-                        "resources": ["scripts/run_edger_ql.R"],
-                    }
-                ],
-            },
-            "outputs": {
-                "benchmark_result": ("outputs/tasks/PAPA-01/benchmark_result.json")
-            },
-            "authority": {
-                "source_class": "exploratory",
-                "capability_receipt": False,
-            },
-        },
-        "completion_checklist": ["write result"],
-        "stop_conditions": ["do not inspect YAML"],
-    }
     common = {
         "workflow": workflow,
         "task": task,
@@ -481,42 +494,44 @@ def test_capability_brief_is_disclosed_only_to_pertura_full() -> None:
             for anchor_id in task["paper_anchor_ids"]
         },
         "dependency_contracts": {},
-        "execution_brief": brief,
+        "contract_context": {
+            "contract_id": "contract_fixture",
+            "contract_hash": "sha256:" + "2" * 64,
+            "confirmed_design_facts": {"control": {"value": ["NTC"]}},
+            "conflicting_design_facts": {},
+            "unresolved_design_facts": [],
+            "registered_assets": {},
+            "committed_results": [],
+        },
+        "contract_subset_record": {
+            "path": "task/capability_contracts/PAPA-01.json",
+            "capability_ids": task["expected_capability_dag"],
+        },
     }
 
     full = execution._task_prompt(condition="pertura_full", **common)
     prompt = execution._task_prompt(condition="prompt_only", **common)
     free = execution._task_prompt(condition="free_codeact", **common)
 
-    assert "plan_fixture" in full
-    assert "task/capability_plans/PAPA-01.json" in full
-    assert "Do not call inspect_dataset again" in full
-    assert "bound skill pipeline" in full
-    assert "Do not create a master wrapper script" in full
-    assert "do not probe rpy2" in full
-    assert "plan_fixture" not in prompt
-    assert "plan_fixture" not in free
-    assert "bound skill pipeline" not in prompt
-    assert "bound skill pipeline" not in free
-    assert "execute-task-scoped-plan" in full
-    assert "execute-task-scoped-plan" not in prompt
-    assert "execute-task-scoped-plan" not in free
+    assert "contract_fixture" in full
+    assert "task/capability_contracts/PAPA-01.json" in full
+    assert "do not call inspect_dataset again" in full
+    assert "diagnose-perturb-seq-screen" in full
+    assert "do not probe rpy2" in full.lower()
+    assert "contract_fixture" not in prompt
+    assert "contract_fixture" not in free
+    assert "diagnose-perturb-seq-screen" not in prompt
+    assert "diagnose-perturb-seq-screen" not in free
     for text in (full, prompt, free):
-        assert "completion guard" in text
+        assert "execution brief" not in text
+        assert "CodeAct handoff" not in text
+        assert "completion guard" not in text
 
 
-def test_pertura_full_runner_writes_answer_free_task_brief(
+def test_pertura_full_runner_writes_answer_free_static_contract_subset(
     tmp_path: Path, monkeypatch
 ) -> None:
     monkeypatch.setattr(execution, "ClaudePerturaAgent", _Agent)
-    monkeypatch.setattr(
-        execution,
-        "_paper_environment_readiness",
-        lambda registry, capability_ids, **kwargs: {
-            "python-science-v1": True,
-            "perturbseq-python-v1": True,
-        },
-    )
     monkeypatch.setattr(
         execution,
         "_resource_evidence",
@@ -579,14 +594,14 @@ def test_pertura_full_runner_writes_answer_free_task_brief(
 
     root = Path(result["execution_root"])
     manifest = json.loads((root / "input_manifest.json").read_text())
-    brief_record = manifest["capability_execution_briefs"][0]
-    brief_path = root / "project/.pertura/runs"
-    generated = list(brief_path.rglob("task/capability_plans/PAPA-01.json"))
+    subset_record = manifest["capability_contract_subsets"][0]
+    run_root = root / "project/.pertura/runs"
+    generated = list(run_root.rglob("task/capability_contracts/PAPA-01.json"))
     assert len(generated) == 1
-    brief = json.loads(generated[0].read_text())
+    subset = json.loads(generated[0].read_text())
 
-    assert brief_record["task_id"] == "PAPA-01"
-    assert brief_record["plan_hash"] == brief["plan_hash"]
+    assert subset_record["task_id"] == "PAPA-01"
+    assert subset_record["subset_hash"] == subset["subset_hash"]
     expected_task = next(
         task
         for workflow in json.loads(
@@ -595,13 +610,13 @@ def test_pertura_full_runner_writes_answer_free_task_brief(
         for task in workflow["turns"]
         if task["task_id"] == "PAPA-01"
     )
-    assert brief["candidate_capability_ids"] == expected_task["expected_capability_dag"]
-    assert brief["skill_plan"] == expected_task["pertura_skill_plan"]
-    assert brief["skill_bundle_hash"].startswith("sha256:")
-    assert brief["skill_resources"]["execute-task-scoped-plan"] == [
-        "references/route-semantics.md"
-    ]
-    serialized = json.dumps(brief).lower()
+    assert subset["capability_ids"] == expected_task["expected_capability_dag"]
+    assert [item["capability_id"] for item in subset["capabilities"]] == (
+        expected_task["expected_capability_dag"]
+    )
+    assert manifest["task_skills"]["PAPA-01"] == expected_task["pertura_skills"]
+    assert manifest["skill_bundle_hash"].startswith("sha256:")
+    serialized = json.dumps(subset).lower()
     for forbidden in (
         "grader",
         "task_reference",
@@ -610,43 +625,10 @@ def test_pertura_full_runner_writes_answer_free_task_brief(
         "evaluation truth",
     ):
         assert forbidden not in serialized
-    assert brief["assets"]
-    assert all(item.get("asset_id") for item in brief["assets"].values())
-    assert brief["plan_id"] in prompts[0]
-
-
-def test_environment_readiness_is_candidate_scoped_and_manifest_only(
-    tmp_path: Path, monkeypatch
-) -> None:
-    registry = CapabilityRegistry.load_default(include_external=False)
-    prefix = tmp_path / "edger-v1"
-    prefix.mkdir()
-    manifest = {
-        "schema_version": "pertura-environment-manifest-v2",
-        "profile": "edger-v1",
-        "platform": "fixture",
-        "resource_hashes": {},
-        "expected_versions": {},
-    }
-    manifest["lock_hash"] = canonical_hash(manifest)
-    prefix.joinpath("pertura-environment-manifest.json").write_text(
-        json.dumps(manifest), encoding="utf-8"
-    )
-    requested_profiles = []
-
-    def resolve_prefix(profile: str) -> Path:
-        requested_profiles.append(profile)
-        assert profile == "edger-v1"
-        return prefix
-
-    monkeypatch.setattr(execution, "environment_prefix", resolve_prefix)
-    readiness = execution._paper_environment_readiness(
-        registry,
-        ("de.pseudobulk.edger.v1",),
-    )
-
-    assert readiness == {"edger-v1": True}
-    assert requested_profiles == ["edger-v1"]
+    assert "asset_id" in prompts[0]
+    assert "task/capability_contracts/PAPA-01.json" in prompts[0]
+    assert "execution brief" not in prompts[0]
+    assert "CodeAct handoff" not in prompts[0]
 
 
 def test_workflow_reuses_one_session_and_isolates_task_outputs(
@@ -972,7 +954,7 @@ def test_baseline_skill_access_audit_detects_tool_input(tmp_path: Path) -> None:
             "content": [
                 "ToolUseBlock(name='Read', input={'file_path': "
                 "'/env/site-packages/pertura_runtime/agent_bundle/skills/"
-                "execute-task-scoped-plan/SKILL.md'})"
+                "operate-pertura-workflow/SKILL.md'})"
             ]
         },
     }
@@ -1033,7 +1015,7 @@ def test_baseline_skill_leakage_invalidates_workflow_infrastructure(
                 "content": [
                     "ToolUseBlock(name='Read', input={'file_path': "
                     "'/env/pertura_runtime/agent_bundle/skills/"
-                    "finalize-scientific-task/SKILL.md'})"
+                    "operate-pertura-workflow/SKILL.md'})"
                 ]
             },
         }

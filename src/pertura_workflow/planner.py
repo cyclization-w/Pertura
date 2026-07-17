@@ -22,6 +22,7 @@ from pertura_workflow.capabilities.registry import (
     CapabilityRegistry,
     capability_scientific_hash,
 )
+from pertura_workflow.capability_contracts import build_capability_contract_catalog
 
 
 _SUCCESS_STATUSES = {
@@ -205,8 +206,7 @@ def build_codeact_handoff(
                     "phase": phase,
                     "skill_id": skill,
                     "resources": [
-                        str(resource)
-                        for resource in skill_resources.get(skill) or ()
+                        str(resource) for resource in skill_resources.get(skill) or ()
                     ],
                 }
                 for index, (phase, skill) in enumerate(bound_skills, start=1)
@@ -534,42 +534,6 @@ def compile_capability_execution_brief(
         "plan_id": f"plan_{plan_hash.removeprefix('sha256:')[:20]}",
         "plan_hash": plan_hash,
     }
-
-
-def build_capability_contract_catalog(
-    registry: CapabilityRegistry | None = None,
-) -> dict[str, Any]:
-    """Return the hash-bound, answer-free a19 capability contract catalog."""
-
-    registry = registry or CapabilityRegistry.load_default(include_external=False)
-    capabilities = []
-    for spec in registry.specs():
-        capabilities.append(
-            {
-                "capability_id": spec.capability_id,
-                "version": spec.version,
-                "kind": spec.kind,
-                "summary": spec.summary,
-                "scientific_hash": capability_scientific_hash(spec),
-                "deprecated": bool(spec.metadata.get("deprecated", False)),
-                "parameters_schema": dict(spec.parameters_schema or {}),
-                "input_requirements": list(spec.input_requirements),
-                "depends_on": list(spec.depends_on),
-                "dependency_kinds": list(spec.dependency_kinds),
-                "dependency_policy": dict(spec.metadata.get("dependency_policy") or {}),
-                "environment_profile": spec.metadata.get("environment_profile"),
-                "output_kind": spec.output_kind,
-                "source_class": spec.source_class.value,
-                "claim_permissions": list(spec.claim_permissions),
-            }
-        )
-    payload = {
-        "schema_version": "pertura-capability-contract-catalog-v1",
-        "capability_count": len(capabilities),
-        "active_capability_count": sum(not item["deprecated"] for item in capabilities),
-        "capabilities": capabilities,
-    }
-    return {**payload, "catalog_hash": canonical_hash(payload)}
 
 
 def plan_analysis(

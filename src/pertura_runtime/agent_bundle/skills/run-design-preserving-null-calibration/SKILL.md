@@ -5,7 +5,7 @@ description: Run deterministic null calibration for paired pseudobulk designs by
 
 # Run Design-Preserving Null Calibration
 
-Use only the registered calibration split. Never derive calibration labels from evaluation outcomes.
+Use only the registered calibration split and the task's frozen `codeact_protocol`. The protocol is a precommitted curator/user-confirmed design contract. Never derive calibration labels from evaluation outcomes.
 
 ## Validate
 
@@ -23,4 +23,4 @@ Use only the registered calibration split. Never derive calibration labels from 
 5. Write one row per permutation with `permutation_id`, `type1_rate`, `null_effect_bias`, and `exchangeability_violation_count`.
 6. Keep optional swapped-unit details separate from the required table.
 
-Never permute cells, copy reference values, or inspect evaluator files. Parameterize `scripts/run_paired_label_null.R` using [configuration](references/configuration.md).
+Do not require an execution brief or CodeAct handoff. Never permute cells, copy reference values, or inspect evaluator files. Parameterize `scripts/run_paired_label_null.R` using [configuration](references/configuration.md).
