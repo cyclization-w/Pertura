@@ -782,7 +782,7 @@ def test_workflow_reuses_one_session_and_isolates_task_outputs(
     assert result["execution_status"] == "completed"
     assert result["score_status"] == result["status"]
     assert result["smoke_task_ids"] is None
-    assert manifest["max_turns_per_task"] == 32
+    assert manifest["max_turns_per_task"] == 48
     assert len(result["task_records"]) == 4
     assert len({manifest["project_id"]}) == 1
     assert len({manifest["analysis_run_id"]}) == 1

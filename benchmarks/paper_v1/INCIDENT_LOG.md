@@ -286,6 +286,32 @@ Status values:
   plan -> DE -> null -> finalize and a schema-valid result.
 - Status: `fixed_unverified`
 
+### PB-051 -- KANG-01 reached the frozen turn cap after starting the locked method pipeline
+
+- Date: 2026-07-17/18
+- Phase: final a19 live canary
+- Affected job/run: Sherlock Slurm job `34369647`, `WF-KANG`,
+  `pertura_full`, KANG-01
+- Symptom: the provider invoked all three task-bound skills, used the packaged
+  locked launcher, materialized donor-level pseudobulk counts, and wrote the
+  edgeR configuration, but returned `error_max_turns` before executing edgeR,
+  null calibration, and result submission.
+- Root cause: the 32-turn paper budget was consumed by legitimate skill
+  loading, input validation, configuration, and one recoverable launcher
+  retry. The trace no longer showed method discovery or an infrastructure
+  stall; the remaining failure boundary was the frozen provider-turn cap.
+- Resolution: raise the paper-only provider budget uniformly from 32 to 48
+  turns for all three conditions. Keep every per-task scientific wall-time,
+  input, protocol, skill mapping, evaluator, and result gate unchanged.
+- Required verification: rebuild and bind one checkpoint, confirm all 24
+  server-plan jobs and every workflow input manifest report
+  `max_turns_per_task = 48`, then rerun all four final canaries from that same
+  checkpoint.
+- Benchmark treatment: job `34369647` is pre-freeze canary evidence and is not
+  scored. The 48-turn value must be frozen before formal condition results are
+  generated and may not be adjusted based on condition-specific scores.
+- Status: `fixed_unverified`
+
 ## Incident index
 
 ### Repository, build, and checkpoint
@@ -362,6 +388,7 @@ Status values:
 | PB-048 | a18/a19 pilots accumulated overlapping execution ownership across the capability execution brief, CodeAct handoff, task-scoped Planner states, CompletionGuard, orchestration skills, and provider finalization. The layers could disagree about route and outputs, encouraged repeated inspection, and still allowed two-hour KANG turns to end without a usable result. | Contract the formal a19 runner to frozen task/assets/protocol, condition-specific static contracts and skills, provider artifacts, runner validation, independent evaluation, and promotion. Keep Planner/handoff/guard implementations only as post-benchmark product experiments, disabled in the paper path. | All a18 and pre-contraction a19 outputs remain pilot evidence and are excluded from formal results. The four final canaries must use one post-contraction checkpoint. | `fixed_unverified` |
 | PB-049 | A provider could create useful intermediate artifacts but omit or corrupt `benchmark_result.json`; runner-side late finalization would either lose the run or risk inventing scientific content. | Preinitialize the same schema-valid neutral blocked checkpoint in all three conditions, hash it, require a provider update through `provider_result_updated`, preserve invalid submissions, and fail closed without inferring findings, analysis units, roles, or status. | Missing, unchanged, deleted, invalid, max-turn, and timeout results are scored agent failures rather than runner crashes; later additive workflow repair is regraded deterministically. | `fixed_unverified` |
 | PB-050 | Freezing a statistical protocol removes open-ended design selection from many execution tasks and could make the paper claim appear broader than the evaluated mechanism. | Define `codeact_protocol` as a precommitted curator/user-confirmed design contract, separate design-adequacy tasks from contract-conditioned execution and claim-authority tasks, and document the real product `needs_input -> confirmation -> new contract -> stale -> resume` lifecycle. | The paper claims execution/evidence authority conditional on resolved design identity, not autonomous optimal-design discovery or optimal clarification wording. | `accepted_limitation` |
+| PB-051 | KANG-01 invoked its bound skills and started the locked method pipeline but exhausted the 32-turn provider budget before edgeR and final submission. | Freeze 48 paper turns uniformly across all three conditions while leaving task wall-time, scientific protocol, skills, and scoring unchanged. | Job `34369647` is pre-freeze canary evidence and is not scored; all four final canaries must use the refreshed checkpoint. | `fixed_unverified` |
 
 ## Successful retained milestones
 

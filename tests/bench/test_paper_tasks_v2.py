@@ -179,7 +179,7 @@ def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
     assert len(jobs) == 24
     assert sum(int(job["required_task_count"]) for job in jobs) == 120
     assert not [job for job in plan.jobs if job.get("kind") == "agent_workflow"]
-    assert all(job["max_turns_per_task"] == 32 for job in jobs)
+    assert all(job["max_turns_per_task"] == 48 for job in jobs)
     assert all(job["session_scope"]["shared_provider_session"] for job in jobs)
     assert all(job["session_scope"]["condition_repeat_isolated"] for job in jobs)
     assert all(float(job["resources"]["memory_gb"]) >= 32 for job in jobs)
