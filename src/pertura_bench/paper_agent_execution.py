@@ -977,6 +977,10 @@ def _task_prompt(
     )
     contract_policy = ""
     if condition == "pertura_full":
+        qualified_task_skills = [
+            skill if ":" in str(skill) else f"pertura:{skill}"
+            for skill in (task.get("pertura_skills") or ())
+        ]
         contract_policy = (
             "Pertura already inspected and registered this dataset; do not call "
             "inspect_dataset again. The frozen DatasetContract and committed-result "
@@ -985,7 +989,13 @@ def _task_prompt(
             f"{(contract_subset_record or {}).get('path', '')}; their bound IDs are "
             f"{json.dumps((contract_subset_record or {}).get('capability_ids', []))}. "
             "Use registered asset IDs for asset-valued capability parameters. The "
-            f"skills bound to this task are {json.dumps(task.get('pertura_skills') or [])}. "
+            "exact SDK Skill tool names frozen for this task are "
+            f"{json.dumps(qualified_task_skills)}. Before any task-scientific Read, "
+            "Glob, Grep, Bash, Notebook, or scientific MCP call, invoke each of "
+            "those exact names once with the Skill tool, in the listed order. "
+            "Treat the loaded instructions as the task method contract. Do not "
+            "repeat a successful Skill invocation, substitute an unbound skill, "
+            "or proceed by rediscovering the method when a bound invocation fails. "
             "Do not read repository source, capability YAML, tests, or scientific-"
             "environment directories to rediscover contracts. Do not probe rpy2, "
             "alternative package managers, or unrelated environments. "

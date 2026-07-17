@@ -551,16 +551,57 @@ def test_static_contract_context_is_disclosed_only_to_pertura_full() -> None:
     assert "contract_fixture" in full
     assert "task/capability_contracts/PAPA-01.json" in full
     assert "do not call inspect_dataset again" in full
-    assert "diagnose-perturb-seq-screen" in full
+    assert (
+        'exact SDK Skill tool names frozen for this task are '
+        '["pertura:operate-pertura-workflow", '
+        '"pertura:diagnose-perturb-seq-screen"]'
+    ) in full
+    assert "invoke each of those exact names once with the Skill tool" in full
+    assert "in the listed order" in full
+    assert "Do not repeat a successful Skill invocation" in full
     assert "do not probe rpy2" in full.lower()
     assert "contract_fixture" not in prompt
     assert "contract_fixture" not in free
-    assert "diagnose-perturb-seq-screen" not in prompt
-    assert "diagnose-perturb-seq-screen" not in free
+    assert "pertura:diagnose-perturb-seq-screen" not in prompt
+    assert "pertura:diagnose-perturb-seq-screen" not in free
+    assert "exact SDK Skill tool names" not in prompt
+    assert "exact SDK Skill tool names" not in free
     for text in (full, prompt, free):
         assert "execution brief" not in text
         assert "CodeAct handoff" not in text
         assert "completion guard" not in text
+
+
+def test_kang_full_prompt_requires_exact_frozen_skill_order() -> None:
+    catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
+    workflow = next(
+        item for item in catalog["workflows"] if item["workflow_id"] == "WF-KANG"
+    )
+    task = next(item for item in workflow["turns"] if item["task_id"] == "KANG-01")
+    common = {
+        "workflow": workflow,
+        "task": task,
+        "asset_paths": {},
+        "anchors_by_id": {
+            anchor_id: {"anchor_id": anchor_id}
+            for anchor_id in task["paper_anchor_ids"]
+        },
+        "dependency_contracts": {},
+    }
+
+    full = execution._task_prompt(condition="pertura_full", **common)
+    prompt = execution._task_prompt(condition="prompt_only", **common)
+    free = execution._task_prompt(condition="free_codeact", **common)
+
+    expected = [f"pertura:{skill}" for skill in task["pertura_skills"]]
+    assert f"frozen for this task are {json.dumps(expected)}" in full
+    assert full.index(expected[0]) < full.index(expected[1]) < full.index(expected[2])
+    assert "Before any task-scientific Read" in full
+    assert "invoke each of those exact names once with the Skill tool" in full
+    for skill in expected:
+        assert full.count(skill) == 1
+        assert skill not in prompt
+        assert skill not in free
 
 
 def test_pertura_full_runner_writes_answer_free_static_contract_subset(
@@ -662,6 +703,9 @@ def test_pertura_full_runner_writes_answer_free_static_contract_subset(
         assert forbidden not in serialized
     assert "asset_id" in prompts[0]
     assert "task/capability_contracts/PAPA-01.json" in prompts[0]
+    assert "pertura:operate-pertura-workflow" in prompts[0]
+    assert "pertura:diagnose-perturb-seq-screen" in prompts[0]
+    assert "invoke each of those exact names once with the Skill tool" in prompts[0]
     assert "execution brief" not in prompts[0]
     assert "CodeAct handoff" not in prompts[0]
 
