@@ -16,8 +16,8 @@ Read `task/PERTURA_CAPABILITY_PLAN.json` once. Treat it as the task-local execut
 
 ## Select One Route
 
-- `capability_or_codeact`: invoke only a ready capability with its rendered minimal call. If all candidates are blocked and a ready handoff exists, use the handoff.
-- `codeact`: use the declared environment, invocation, inputs, outputs, and bound method skill. Keep outputs exploratory.
+- `capability_or_codeact`: invoke only a ready capability with its rendered minimal call. If all candidates are blocked and a ready handoff exists, follow the handoff execution mode.
+- `codeact`: use the declared environment, bindings, inputs, and outputs. For `bound_skill_pipeline`, execute the declared steps in order and do not create a wrapper script. For `single_script`, use only the declared invocation. Never combine the two modes. Keep outputs exploratory.
 - `evidence_interpretation`: read the registered evidence and protocol; do not recompute or refit them.
 - `blocked`: record the exact blockers and stop scientific execution.
 

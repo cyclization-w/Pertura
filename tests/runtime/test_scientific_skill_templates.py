@@ -18,6 +18,7 @@ MATERIALIZER = (
 )
 EDGER = SKILLS / "run-replicate-aware-pseudobulk-de/scripts/run_edger_ql.R"
 NULL = SKILLS / "run-design-preserving-null-calibration/scripts/run_paired_label_null.R"
+PLAN_SKILL = SKILLS / "execute-task-scoped-plan/SKILL.md"
 
 
 def _load_materializer():
@@ -158,3 +159,11 @@ def test_r_templates_encode_answer_free_frozen_methods() -> None:
     assert "full_gene_output" in edger
     for forbidden in ("papalexi", "kang18", "task_reference", "evaluator"):
         assert forbidden not in combined
+
+
+def test_task_plan_skill_keeps_codeact_modes_mutually_exclusive() -> None:
+    text = PLAN_SKILL.read_text(encoding="utf-8")
+
+    assert "bound_skill_pipeline" in text
+    assert "single_script" in text
+    assert "Never combine the two modes" in text
