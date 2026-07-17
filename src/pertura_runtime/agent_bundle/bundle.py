@@ -17,10 +17,12 @@ BUNDLED_SKILL_NAMES = (
     "diagnose-perturb-seq-screen",
     "interpret-perturb-seq-results",
     "evaluate-virtual-perturb-seq-model",
+    "execute-task-scoped-plan",
+    "run-replicate-aware-pseudobulk-de",
+    "run-design-preserving-null-calibration",
+    "finalize-scientific-task",
 )
-BUNDLED_CLAUDE_SKILL_NAMES = tuple(
-    f"pertura:{name}" for name in BUNDLED_SKILL_NAMES
-)
+BUNDLED_CLAUDE_SKILL_NAMES = tuple(f"pertura:{name}" for name in BUNDLED_SKILL_NAMES)
 SKILL_BUNDLE_SCHEMA_VERSION = "pertura-agent-skill-bundle-v1"
 
 
@@ -125,7 +127,7 @@ def build_skill_manifest(root: Path | None = None) -> dict[str, Any]:
     payload = {
         "schema_version": SKILL_BUNDLE_SCHEMA_VERSION,
         "bundle_id": "pertura",
-        "bundle_version": "0.1.0",
+        "bundle_version": "0.2.0",
         "skills": skills,
     }
     return payload | {"bundle_hash": canonical_hash(payload)}

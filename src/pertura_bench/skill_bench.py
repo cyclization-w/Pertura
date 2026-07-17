@@ -42,8 +42,8 @@ def validate_skill_cases() -> dict[str, Any]:
     cases = list(payload.get("cases") or [])
     if payload.get("schema_version") != CASE_SCHEMA_VERSION:
         problems.append("skill case schema version mismatch")
-    if len(cases) != 32:
-        problems.append(f"expected 32 cases, observed {len(cases)}")
+    if len(cases) != 40:
+        problems.append(f"expected 40 cases, observed {len(cases)}")
     ids = [str(item.get("case_id") or "") for item in cases]
     if len(ids) != len(set(ids)):
         problems.append("duplicate skill case IDs")
@@ -52,9 +52,9 @@ def validate_skill_cases() -> dict[str, Any]:
         for kind in ("single_positive", "multi_positive", "negative")
     }
     if counts != {
-        "single_positive": 15,
-        "multi_positive": 7,
-        "negative": 10,
+        "single_positive": 19,
+        "multi_positive": 10,
+        "negative": 11,
     }:
         problems.append(f"unexpected skill case mix: {counts}")
     allowed = set(BUNDLED_SKILL_NAMES)

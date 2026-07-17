@@ -366,6 +366,101 @@
       ],
       "kind": "negative",
       "prompt": "Check whether this weather model beats persistence forecasting."
+    },
+    {
+      "case_id": "task_plan_frozen_route",
+      "expected_first_action": "read_task_execution_brief",
+      "expected_skills": [
+        "execute-task-scoped-plan"
+      ],
+      "forbidden_skills": [],
+      "kind": "single_positive",
+      "prompt": "Follow this registered PERTURA_CAPABILITY_PLAN.json without inspecting source or rediscovering contracts."
+    },
+    {
+      "case_id": "pseudobulk_independent_units",
+      "expected_first_action": "validate_independent_unit_and_pairing",
+      "expected_skills": [
+        "run-replicate-aware-pseudobulk-de"
+      ],
+      "forbidden_skills": [],
+      "kind": "single_positive",
+      "prompt": "Aggregate these single-cell counts by donor and condition, then fit paired edgeR QL without using cells as replicates."
+    },
+    {
+      "case_id": "paired_null_calibration",
+      "expected_first_action": "validate_calibration_pairs",
+      "expected_skills": [
+        "run-design-preserving-null-calibration"
+      ],
+      "forbidden_skills": [],
+      "kind": "single_positive",
+      "prompt": "Calibrate this paired pseudobulk design by deterministic within-donor label swaps on the calibration split."
+    },
+    {
+      "case_id": "scientific_task_checkpoint",
+      "expected_first_action": "write_conservative_result_checkpoint",
+      "expected_skills": [
+        "finalize-scientific-task"
+      ],
+      "forbidden_skills": [],
+      "kind": "single_positive",
+      "prompt": "Checkpoint the task result before analysis and close it against the declared artifact contract before returning."
+    },
+    {
+      "case_id": "combo_kang_donor_de",
+      "expected_first_action": "read_task_execution_brief",
+      "expected_skills": [
+        "execute-task-scoped-plan",
+        "finalize-scientific-task",
+        "run-replicate-aware-pseudobulk-de",
+        "run-design-preserving-null-calibration"
+      ],
+      "forbidden_skills": [],
+      "kind": "multi_positive",
+      "prompt": "Execute the frozen donor-aware DE plan, calibrate it with the registered paired null split, and finish every required artifact."
+    },
+    {
+      "case_id": "combo_target_trans_de",
+      "expected_first_action": "read_task_execution_brief",
+      "expected_skills": [
+        "execute-task-scoped-plan",
+        "finalize-scientific-task",
+        "run-replicate-aware-pseudobulk-de"
+      ],
+      "forbidden_skills": [
+        "run-design-preserving-null-calibration"
+      ],
+      "kind": "multi_positive",
+      "prompt": "Use the registered per-target pseudobulk inputs to run trans-DE and finalize the full-gene outputs; no null calibration is requested."
+    },
+    {
+      "case_id": "combo_blocked_plan_close",
+      "expected_first_action": "read_task_execution_brief",
+      "expected_skills": [
+        "execute-task-scoped-plan",
+        "finalize-scientific-task"
+      ],
+      "forbidden_skills": [
+        "run-replicate-aware-pseudobulk-de",
+        "run-design-preserving-null-calibration"
+      ],
+      "kind": "multi_positive",
+      "prompt": "The task-scoped plan is blocked by a missing registered dependency. Preserve the blocker and produce an honest result without substituting a method."
+    },
+    {
+      "case_id": "negative_frozen_effect_evidence",
+      "expected_first_action": "interpret_registered_evidence",
+      "expected_skills": [
+        "execute-task-scoped-plan",
+        "finalize-scientific-task"
+      ],
+      "forbidden_skills": [
+        "run-replicate-aware-pseudobulk-de",
+        "run-design-preserving-null-calibration"
+      ],
+      "kind": "negative",
+      "prompt": "Interpret the registered global-effect evidence under its frozen protocol. Do not recompute differential expression or null permutations."
     }
   ],
   "schema_version": "pertura-skill-case-catalog-v1"

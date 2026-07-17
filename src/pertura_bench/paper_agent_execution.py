@@ -23,6 +23,10 @@ from pertura_bench.paper_tasks import (
 )
 from pertura_bench.paper_task_evaluation import evaluate_paper_task
 from pertura_core.hashing import canonical_hash, file_sha256
+from pertura_runtime.agent_bundle import (
+    BUNDLED_SKILL_NAMES,
+    bundled_skill_manifest,
+)
 from pertura_runtime.claude.agent import ClaudePerturaAgent
 from pertura_runtime.claude.options import ClaudeRuntimeOptions, describe_options
 from pertura_runtime.project.assets import DataAssetRegistry
@@ -58,6 +62,20 @@ PAPER_ASSET_KIND_ADAPTER = {
     "protocol": ("external_resource", "curated_prior"),
     "reference_lock": ("external_resource", "curated_prior"),
     "prior": ("external_resource", "curated_prior"),
+}
+
+PAPER_SKILL_RESOURCES = {
+    "execute-task-scoped-plan": ("references/route-semantics.md",),
+    "run-replicate-aware-pseudobulk-de": (
+        "scripts/materialize_pseudobulk.py",
+        "scripts/run_edger_ql.R",
+        "references/configuration.md",
+    ),
+    "run-design-preserving-null-calibration": (
+        "scripts/run_paired_label_null.R",
+        "references/configuration.md",
+    ),
+    "finalize-scientific-task": ("references/result-checklist.md",),
 }
 
 
@@ -110,19 +128,17 @@ def run_paper_agent_workflow(
             raise ValueError("smoke_task_ids cannot be empty")
         if unknown:
             raise ValueError(
-                "unknown smoke task IDs for "
-                f"{workflow_id}: {', '.join(unknown)}"
+                "unknown smoke task IDs for " f"{workflow_id}: {', '.join(unknown)}"
             )
         selected = set(requested)
         workflow_turns = tuple(
-            item
-            for item in workflow_turns
-            if str(item["task_id"]) in selected
+            item for item in workflow_turns if str(item["task_id"]) in selected
         )
     task_references = _load_json(task_reference_catalog_path)
     paper_anchors = _load_json(paper_anchor_catalog_path)
     asset_catalog = load_paper_asset_catalog(asset_catalog_path)
     contract_catalog = build_capability_contract_catalog()
+    skill_manifest = bundled_skill_manifest() if condition == "pertura_full" else None
     if capability_contract_catalog_path is not None:
         if _load_json(capability_contract_catalog_path) != contract_catalog:
             raise ValueError("a19 capability contract catalog drift")
@@ -137,9 +153,7 @@ def run_paper_agent_workflow(
         *validate_paper_asset_catalog(asset_catalog, task_catalog),
     ]
     if catalog_problems:
-        raise ValueError(
-            "invalid bound paper catalogs: " + "; ".join(catalog_problems)
-        )
+        raise ValueError("invalid bound paper catalogs: " + "; ".join(catalog_problems))
     from pertura_bench.resource_evidence import (
         enforce_runtime_resource_budget,
         observe_runtime_resources,
@@ -159,9 +173,7 @@ def run_paper_agent_workflow(
             task_reference_catalog_path=task_reference_catalog_path,
             paper_anchor_catalog_path=paper_anchor_catalog_path,
             asset_catalog_path=asset_catalog_path,
-            capability_contract_catalog_path=Path(
-                capability_contract_catalog_path
-            ),
+            capability_contract_catalog_path=Path(capability_contract_catalog_path),
         )
         if verify_checkpoint
         else {"test_only": "checkpoint_verification_disabled"}
@@ -233,11 +245,7 @@ def run_paper_agent_workflow(
         enable_bundled_skills=condition == "pertura_full",
         domain_tools_enabled=condition == "pertura_full",
         benchmark_condition=condition,
-        python_exe=(
-            _paper_science_python()
-            if turn_executor is None
-            else None
-        ),
+        python_exe=(_paper_science_python() if turn_executor is None else None),
         python_preflight_packages=list(PAPER_CODEACT_PACKAGES),
         completion_guard_enabled=True,
         completion_guard_exploration_limit=24,
@@ -262,16 +270,13 @@ def run_paper_agent_workflow(
         )
 
     anchors_by_id = {
-        str(item["anchor_id"]): item
-        for item in paper_anchors.get("anchors") or ()
+        str(item["anchor_id"]): item for item in paper_anchors.get("anchors") or ()
     }
     references_by_id = {
         str(item["task_reference_id"]): item
         for item in task_references.get("bindings") or ()
     }
-    tasks_by_id = {
-        str(item["task_id"]): item for item in workflow.get("turns") or ()
-    }
+    tasks_by_id = {str(item["task_id"]): item for item in workflow.get("turns") or ()}
     task_records: list[dict[str, Any]] = []
     execution_briefs: list[dict[str, str]] = []
     registered_assets = {
@@ -337,9 +342,7 @@ def run_paper_agent_workflow(
                     task.get("expected_capability_dag") or ()
                 )
                 codeact_protocol = dict(task.get("codeact_protocol") or {})
-                codeact_profile = codeact_protocol_environment_profile(
-                    codeact_protocol
-                )
+                codeact_profile = codeact_protocol_environment_profile(codeact_protocol)
                 execution_brief = compile_capability_execution_brief(
                     task_id=task_id,
                     objective=str(task["objective"]),
@@ -351,9 +354,7 @@ def run_paper_agent_workflow(
                     environment_ready=_paper_environment_readiness(
                         agent.product_runtime.registry,
                         candidate_capability_ids,
-                        extra_profiles=(
-                            (codeact_profile,) if codeact_profile else ()
-                        ),
+                        extra_profiles=((codeact_profile,) if codeact_profile else ()),
                     ),
                     codeact_protocol_binding=codeact_protocol,
                     output_contract=dict(task.get("output_contract") or {}),
@@ -370,12 +371,15 @@ def run_paper_agent_workflow(
                         "/benchmark_result.json.",
                         "Return one pertura-turn-draft-v1 JSON object.",
                     ),
+                    skill_plan=dict(task["pertura_skill_plan"]),
+                    skill_bundle_hash=str(skill_manifest["bundle_hash"]),
+                    skill_resources={
+                        skill: PAPER_SKILL_RESOURCES.get(skill, ())
+                        for phase in task["pertura_skill_plan"].values()
+                        for skill in phase
+                    },
                 )
-                brief_path = (
-                    workspace.task_dir
-                    / "capability_plans"
-                    / f"{task_id}.json"
-                )
+                brief_path = workspace.task_dir / "capability_plans" / f"{task_id}.json"
                 workspace.write_json(brief_path, execution_brief)
                 workspace.write_json(
                     workspace.task_dir / "PERTURA_CAPABILITY_PLAN.json",
@@ -387,6 +391,8 @@ def run_paper_agent_workflow(
                         "plan_id": str(execution_brief["plan_id"]),
                         "plan_hash": str(execution_brief["plan_hash"]),
                         "path": str(brief_path.relative_to(workspace.root)),
+                        "skill_plan": execution_brief["skill_plan"],
+                        "skill_bundle_hash": execution_brief["skill_bundle_hash"],
                     }
                 )
             prompt = _task_prompt(
@@ -405,12 +411,12 @@ def run_paper_agent_workflow(
             timeout_seconds = int(task["resources"]["timeout_seconds"])
             timed_out = False
             started = time.monotonic()
+            event_log = workspace.logs_dir / "events.jsonl"
+            event_offset = event_log.stat().st_size if event_log.is_file() else 0
             if hasattr(agent, "configure_completion_guard"):
                 agent.configure_completion_guard(task_output)
             try:
-                (turn_executor or _run_with_timeout)(
-                    agent, prompt, timeout_seconds
-                )
+                (turn_executor or _run_with_timeout)(agent, prompt, timeout_seconds)
             except TimeoutError:
                 timed_out = True
                 if (
@@ -418,9 +424,7 @@ def run_paper_agent_workflow(
                     and agent.turn_manager.turn is not None
                 ):
                     try:
-                        asyncio.run(
-                            agent.cancel_turn(agent.turn_manager.turn.turn_id)
-                        )
+                        asyncio.run(agent.cancel_turn(agent.turn_manager.turn.turn_id))
                     except Exception:
                         agent.product_runtime.close(graceful=False)
             wall_seconds = time.monotonic() - started
@@ -436,6 +440,11 @@ def run_paper_agent_workflow(
                     "completion_reads": 0,
                     "denied_calls": 0,
                 }
+            )
+            skill_leakage_audit = _audit_baseline_skill_access(
+                event_log,
+                start_offset=event_offset,
+                condition=condition,
             )
             resource_evidence = observe_runtime_resources(
                 resource_evidence, started_monotonic=resource_started
@@ -460,9 +469,7 @@ def run_paper_agent_workflow(
             mutation_free = all(
                 _existing_files_unchanged(
                     previous,
-                    _tree_hashes(
-                        workspace.root / "outputs" / "tasks" / dependency
-                    ),
+                    _tree_hashes(workspace.root / "outputs" / "tasks" / dependency),
                 )
                 for dependency, previous in existing_prior_hashes.items()
             )
@@ -471,9 +478,8 @@ def run_paper_agent_workflow(
                 **output_gates,
                 "prior_task_outputs_immutable": mutation_free,
                 "timeout_enforced": not timed_out,
-                "resource_evidence": _task_resource_gate(
-                    task, resource_evidence
-                ),
+                "resource_evidence": _task_resource_gate(task, resource_evidence),
+                "no_skill_leakage": skill_leakage_audit["status"] != "failed",
             }
             status = "passed" if all(hard_gates.values()) else "failed"
             task_root = execution_root / "tasks" / task_id
@@ -500,6 +506,28 @@ def run_paper_agent_workflow(
                 "wall_seconds": wall_seconds,
                 "resource_evidence": resource_evidence,
                 "completion_guard": completion_guard,
+                "skill_plan": (
+                    execution_brief["skill_plan"]
+                    if execution_brief is not None
+                    else None
+                ),
+                "skill_bundle_hash": (
+                    execution_brief["skill_bundle_hash"]
+                    if execution_brief is not None
+                    else None
+                ),
+                "requested_skills": (
+                    sorted(
+                        {
+                            skill
+                            for skills in execution_brief["skill_plan"].values()
+                            for skill in skills
+                        }
+                    )
+                    if execution_brief is not None
+                    else []
+                ),
+                "skill_leakage_audit": skill_leakage_audit,
                 "capability_execution_brief": (
                     {
                         "plan_id": execution_brief["plan_id"],
@@ -567,9 +595,7 @@ def run_paper_agent_workflow(
         item
         for item in task_records
         if next(
-            task
-            for task in workflow_turns
-            if task["task_id"] == item["task_id"]
+            task for task in workflow_turns if task["task_id"] == item["task_id"]
         ).get("role")
         != "optional"
     ]
@@ -579,13 +605,35 @@ def run_paper_agent_workflow(
         and all(item["status"] == "passed" for item in required_records)
         else "failed"
     )
+    skill_leakage_detected = any(
+        (_load_json(Path(item["verdict"])).get("skill_leakage_audit") or {}).get(
+            "status"
+        )
+        == "failed"
+        for item in required_records
+    )
     resource_evidence = observe_runtime_resources(
         resource_evidence, started_monotonic=resource_started
     )
     _write(execution_root / "resource_evidence.observed.json", resource_evidence)
+    manifest_workflow = (
+        workflow
+        if condition == "pertura_full"
+        else dict(
+            workflow,
+            turns=[
+                {
+                    key: value
+                    for key, value in task.items()
+                    if key != "pertura_skill_plan"
+                }
+                for task in workflow.get("turns") or ()
+            ],
+        )
+    )
     input_manifest = {
         "schema_version": "pertura-paper-workflow-input-manifest-v1",
-        "workflow": workflow,
+        "workflow": manifest_workflow,
         "smoke_task_ids": (
             list(smoke_task_ids) if smoke_task_ids is not None else None
         ),
@@ -595,20 +643,25 @@ def run_paper_agent_workflow(
         "max_turns_per_task": runtime_options.max_turns,
         "completion_guard": {
             "enabled": runtime_options.completion_guard_enabled,
-            "exploration_limit": (
-                runtime_options.completion_guard_exploration_limit
-            ),
+            "exploration_limit": (runtime_options.completion_guard_exploration_limit),
             "completion_read_limit": runtime_options.completion_guard_read_limit,
         },
         "capability_execution_briefs": execution_briefs,
+        "skill_bundle_hash": (
+            skill_manifest["bundle_hash"] if skill_manifest is not None else None
+        ),
+        "task_skill_plans": (
+            {
+                str(task["task_id"]): task["pertura_skill_plan"]
+                for task in workflow_turns
+            }
+            if condition == "pertura_full"
+            else {}
+        ),
         "provider_config_hash": provider_config_hash,
         "task_catalog_sha256": task_catalog.sha256,
-        "task_reference_catalog_sha256": file_sha256(
-            Path(task_reference_catalog_path)
-        ),
-        "paper_anchor_catalog_sha256": file_sha256(
-            Path(paper_anchor_catalog_path)
-        ),
+        "task_reference_catalog_sha256": file_sha256(Path(task_reference_catalog_path)),
+        "paper_anchor_catalog_sha256": file_sha256(Path(paper_anchor_catalog_path)),
         "asset_catalog_sha256": asset_catalog["_catalog_sha256"],
         "capability_contract_catalog_hash": contract_catalog["catalog_hash"],
         "capability_contract_catalog_sha256": (
@@ -625,9 +678,7 @@ def run_paper_agent_workflow(
             else None
         ),
         "resource_observation_hash": canonical_hash(resource_evidence),
-        "asset_hashes": {
-            asset.role: asset.content_sha256 for asset in registered
-        },
+        "asset_hashes": {asset.role: asset.content_sha256 for asset in registered},
         "project_id": project.project.project_id,
         "analysis_run_id": run.run_id,
         "conversation_id": conversation.conversation_id,
@@ -642,9 +693,14 @@ def run_paper_agent_workflow(
         "smoke_task_ids": (
             list(smoke_task_ids) if smoke_task_ids is not None else None
         ),
-        "execution_status": "completed",
-        "score_status": workflow_status,
-        "status": workflow_status,
+        "execution_status": (
+            "invalid_infrastructure" if skill_leakage_detected else "completed"
+        ),
+        "score_status": "not_scored" if skill_leakage_detected else workflow_status,
+        "status": (
+            "invalid_infrastructure" if skill_leakage_detected else workflow_status
+        ),
+        "skill_leakage_detected": skill_leakage_detected,
         "task_records": task_records,
         "required_task_count": len(required_records),
         "passed_required_task_count": sum(
@@ -696,15 +752,12 @@ def _refresh_workflow_task_verdicts(
         task_output = workspace_root / "outputs" / "tasks" / task_id
         current_output_hashes = _tree_hashes(task_output)
         current_ancestor_hashes = {
-            dependency: _tree_hashes(
-                workspace_root / "outputs" / "tasks" / dependency
-            )
+            dependency: _tree_hashes(workspace_root / "outputs" / "tasks" / dependency)
             for dependency in _ancestor_task_ids(task, tasks_by_id)
         }
         changed_after_turn = (
             verdict.get("post_turn_output_hashes") != current_output_hashes
-            or verdict.get("post_turn_ancestor_hashes")
-            != current_ancestor_hashes
+            or verdict.get("post_turn_ancestor_hashes") != current_ancestor_hashes
         )
         if not changed_after_turn:
             records.append(
@@ -732,9 +785,7 @@ def _refresh_workflow_task_verdicts(
             tasks_by_id=tasks_by_id,
         )
         hard_gates = dict(verdict.get("hard_gates") or {})
-        original_output_present = bool(
-            hard_gates.get("output_contract_present")
-        )
+        original_output_present = bool(hard_gates.get("output_contract_present"))
         hard_gates.update(output_gates)
         status = "passed" if all(hard_gates.values()) else "failed"
         verdict.update(
@@ -752,9 +803,7 @@ def _refresh_workflow_task_verdicts(
             }
         )
         if result_path.is_file():
-            (task_root / "benchmark_result.json").write_bytes(
-                result_path.read_bytes()
-            )
+            (task_root / "benchmark_result.json").write_bytes(result_path.read_bytes())
         _write(verdict_path, verdict)
         final_path = task_root / "turn_final.json"
         if final_path.is_file():
@@ -804,9 +853,7 @@ def regrade_paper_agent_workflow(execution_root: str | Path) -> dict[str, Any]:
             },
             output_path=task_root / "judge" / "grade.json",
         )
-        records.append(
-            {"task_id": task_id, "status": grade.get("status", "failed")}
-        )
+        records.append({"task_id": task_id, "status": grade.get("status", "failed")})
     payload = {
         "schema_version": "pertura-paper-workflow-regrade-v1",
         "workflow_id": input_manifest["workflow"]["workflow_id"],
@@ -831,9 +878,7 @@ def _paper_science_python() -> str:
     for candidate in candidates:
         if candidate.is_file():
             return str(candidate)
-    raise FileNotFoundError(
-        f"python-science-v1 interpreter is missing under {prefix}"
-    )
+    raise FileNotFoundError(f"python-science-v1 interpreter is missing under {prefix}")
 
 
 def _benchmark_result_template(
@@ -886,8 +931,7 @@ def _task_prompt(
         set(task.get("required_input_roles") or ()) - set(relevant_assets)
     )
     anchors = [
-        anchors_by_id[anchor_id]
-        for anchor_id in task.get("paper_anchor_ids") or ()
+        anchors_by_id[anchor_id] for anchor_id in task.get("paper_anchor_ids") or ()
     ]
     surface = (
         "Use the Pertura workflow and domain tools where the task declares "
@@ -951,6 +995,9 @@ def _task_prompt(
             "plan_id": execution_brief["plan_id"],
             "plan_hash": execution_brief["plan_hash"],
             "route": execution_brief["route"],
+            "skill_plan": execution_brief["skill_plan"],
+            "skill_bundle_hash": execution_brief["skill_bundle_hash"],
+            "skill_resources": execution_brief["skill_resources"],
             "dataset_contract": execution_brief["dataset_contract"],
             "active_window": execution_brief["active_window"],
             "codeact_handoff": compact_handoff,
@@ -962,7 +1009,11 @@ def _task_prompt(
             "inspect_dataset again. The frozen task-scoped execution brief is at "
             f"task/capability_plans/{task['task_id']}.json; its compact active "
             f"window is {json.dumps(compact_window, sort_keys=True)}. Follow its "
-            "route and minimal legal calls. Asset-valued capability parameters "
+            "route and frozen skill phases rather than selecting a method by "
+            "keyword matching. Apply the startup skills immediately, including "
+            "a conservative benchmark_result.json checkpoint before the first "
+            "high-cost call. Use only the bound method skills, then apply the "
+            "closure skill before returning. Asset-valued capability parameters "
             "must use the registered asset IDs in the full brief, not filesystem "
             "paths. Do not read repository source, capability YAML, tests, or "
             "scientific-environment directories to rediscover contracts. "
@@ -1046,8 +1097,7 @@ def _paper_environment_readiness(
     for profile in profiles:
         try:
             manifest_path = (
-                environment_prefix(profile)
-                / "pertura-environment-manifest.json"
+                environment_prefix(profile) / "pertura-environment-manifest.json"
             )
             manifest = _load_json(manifest_path)
             observed_lock = str(manifest.get("lock_hash") or "")
@@ -1056,8 +1106,7 @@ def _paper_environment_readiness(
             readiness[profile] = bool(
                 observed_lock
                 and observed_lock == canonical_hash(unsigned)
-                and manifest.get("schema_version")
-                == "pertura-environment-manifest-v2"
+                and manifest.get("schema_version") == "pertura-environment-manifest-v2"
                 and manifest.get("profile") == profile
             )
         except (FileNotFoundError, OSError, RuntimeError, ValueError):
@@ -1145,9 +1194,7 @@ def _primary_asset_path(asset_paths: Mapping[str, str]) -> Path:
     for role in ("evaluation_split", "primary_h5ad"):
         if role in asset_paths:
             return Path(asset_paths[role]).resolve()
-    raise FileNotFoundError(
-        "paper workflow requires evaluation_split or primary_h5ad"
-    )
+    raise FileNotFoundError("paper workflow requires evaluation_split or primary_h5ad")
 
 
 def _optional_configured(
@@ -1172,11 +1219,7 @@ def _dependency_asset_paths(
         contract = dependency_task.get("output_contract") or {}
         for role, relative in (contract.get("artifact_paths") or {}).items():
             path = (
-                workspace_root
-                / "outputs"
-                / "tasks"
-                / str(dependency)
-                / str(relative)
+                workspace_root / "outputs" / "tasks" / str(dependency) / str(relative)
             ).resolve()
             if path.exists():
                 paths[str(role)] = str(path)
@@ -1266,12 +1309,7 @@ def _evaluate_task_outputs(
     asset_paths: Mapping[str, str],
     references_by_id: Mapping[str, Mapping[str, Any]],
     tasks_by_id: Mapping[str, Mapping[str, Any]],
-) -> tuple[
-    AgentBenchmarkResult | None,
-    str | None,
-    dict[str, Any],
-    dict[str, bool],
-]:
+) -> tuple[AgentBenchmarkResult | None, str | None, dict[str, Any], dict[str, bool],]:
     task_id = str(task["task_id"])
     task_output = workspace_root / "outputs" / "tasks" / task_id
     result_path = task_output / "benchmark_result.json"
@@ -1305,9 +1343,7 @@ def _evaluate_task_outputs(
         )
     )
     required_roles = set(task.get("required_artifact_roles") or ())
-    observed_roles = set(
-        benchmark_result.artifact_roles if benchmark_result else ()
-    )
+    observed_roles = set(benchmark_result.artifact_roles if benchmark_result else ())
     gates = {
         "output_contract_present": result_path.is_file(),
         "benchmark_result_schema_valid": benchmark_result is not None,
@@ -1322,9 +1358,7 @@ def _evaluate_task_outputs(
                 tasks_by_id=tasks_by_id,
                 dataset_id=dataset_id,
             )
-            and set(task.get("required_input_roles") or ()).issubset(
-                resolved_inputs
-            )
+            and set(task.get("required_input_roles") or ()).issubset(resolved_inputs)
         ),
         "task_reference_bound": len(bindings)
         == len(task.get("task_reference_ids") or ()),
@@ -1344,9 +1378,7 @@ def _dependency_outputs_complete(
         dependency = tasks_by_id.get(str(dependency_id))
         if dependency is None:
             return False
-        output_root = (
-            workspace_root / "outputs" / "tasks" / str(dependency_id)
-        )
+        output_root = workspace_root / "outputs" / "tasks" / str(dependency_id)
         result, _ = _load_task_result(
             output_root / "benchmark_result.json",
             task_id=str(dependency_id),
@@ -1354,9 +1386,7 @@ def _dependency_outputs_complete(
         )
         if result is None:
             return False
-        required_roles = set(
-            dependency.get("required_artifact_roles") or ()
-        )
+        required_roles = set(dependency.get("required_artifact_roles") or ())
         if not required_roles.issubset(result.artifact_roles):
             return False
         if not _artifact_paths_present(
@@ -1366,9 +1396,7 @@ def _dependency_outputs_complete(
     return True
 
 
-def _task_resource_gate(
-    task: Mapping[str, Any], evidence: Mapping[str, Any]
-) -> bool:
+def _task_resource_gate(task: Mapping[str, Any], evidence: Mapping[str, Any]) -> bool:
     resources = task.get("resources") or {}
     requested_memory_gb = float(evidence.get("requested_memory_gb", 0))
     actual_memory_gb = float(evidence.get("actual_memory_gb", 0))
@@ -1417,11 +1445,7 @@ def _artifact_paths_present(
         return False
     for relative in artifact_paths.values():
         path = (base / str(relative)).resolve()
-        if (
-            path == base
-            or base not in path.parents
-            or not path.exists()
-        ):
+        if path == base or base not in path.parents or not path.exists():
             return False
     for relative, required_columns in (
         output_contract.get("artifact_schemas") or {}
@@ -1492,16 +1516,12 @@ def _verify_paper_checkpoint(
         "paper_task_reference_catalog_hash": Path(task_reference_catalog_path),
         "paper_anchor_catalog_hash": Path(paper_anchor_catalog_path),
         "paper_asset_catalog_hash": Path(asset_catalog_path),
-        "capability_contract_catalog_hash": Path(
-            capability_contract_catalog_path
-        ),
+        "capability_contract_catalog_hash": Path(capability_contract_catalog_path),
     }
     for field, path in catalogs.items():
         if not path.is_file() or file_sha256(path) != binding[field]:
             raise ValueError(f"paper checkpoint catalog drift: {field}")
-    expected_job_id = (
-        f"paper-agent:{workflow_id}:{condition}:repeat-{repeat_index}"
-    )
+    expected_job_id = f"paper-agent:{workflow_id}:{condition}:repeat-{repeat_index}"
     matching = [job for job in plan.jobs if job.get("job_id") == expected_job_id]
     if len(matching) != 1:
         raise ValueError(f"bound plan lacks paper workflow job: {expected_job_id}")
@@ -1512,7 +1532,10 @@ def _verify_paper_checkpoint(
         capture_output=True,
         check=False,
     )
-    if completed.returncode or completed.stdout.strip().lower() != binding["git_commit"]:
+    if (
+        completed.returncode
+        or completed.stdout.strip().lower() != binding["git_commit"]
+    ):
         raise ValueError("paper checkpoint checkout commit drift")
     wheel_value = os.environ.get("PERTURA_BENCH_WHEEL")
     if not wheel_value:
@@ -1537,6 +1560,77 @@ def _tree_hashes(root: Path) -> dict[str, str]:
         path.relative_to(root).as_posix(): file_sha256(path)
         for path in sorted(root.rglob("*"))
         if path.is_file()
+    }
+
+
+def _audit_baseline_skill_access(
+    event_log: Path,
+    *,
+    start_offset: int,
+    condition: str,
+) -> dict[str, Any]:
+    """Detect baseline tool calls that inspect the installed skill bundle."""
+
+    if condition == "pertura_full":
+        return {
+            "schema_version": "pertura-benchmark-skill-leakage-audit-v1",
+            "status": "not_applicable",
+            "scanned_tool_events": 0,
+            "hits": [],
+        }
+    if not event_log.is_file():
+        return {
+            "schema_version": "pertura-benchmark-skill-leakage-audit-v1",
+            "status": "passed",
+            "scanned_tool_events": 0,
+            "hits": [],
+        }
+
+    forbidden = (
+        "agent_bundle/skills",
+        "agent_bundle\\skills",
+        ".claude-plugin",
+        "skill.md",
+        *(name.lower() for name in BUNDLED_SKILL_NAMES),
+    )
+    with event_log.open("rb") as handle:
+        handle.seek(max(0, start_offset))
+        text = handle.read().decode("utf-8", errors="replace")
+    hits: list[dict[str, Any]] = []
+    scanned = 0
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("message_type") != "AssistantMessage":
+            continue
+        content = (event.get("payload") or {}).get("content") or []
+        for item in content if isinstance(content, list) else [content]:
+            serialized = json.dumps(item, sort_keys=True, default=str)
+            lowered = serialized.lower()
+            is_tool_use = (
+                "tooluseblock" in lowered
+                or '"type": "tool_use"' in lowered
+                or '"type":"tool_use"' in lowered
+            )
+            if not is_tool_use:
+                continue
+            scanned += 1
+            matched = sorted({token for token in forbidden if token in lowered})
+            if matched:
+                hits.append(
+                    {
+                        "event_line": line_number,
+                        "matched_tokens": matched,
+                        "tool_use_excerpt": serialized[:500],
+                    }
+                )
+    return {
+        "schema_version": "pertura-benchmark-skill-leakage-audit-v1",
+        "status": "failed" if hits else "passed",
+        "scanned_tool_events": scanned,
+        "hits": hits[:20],
     }
 
 

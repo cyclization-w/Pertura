@@ -34,6 +34,7 @@
       "turns": [
         {
           "task_id": "REPL-01", "turn_index": 1, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Design, expression layer, and evidence sufficiency",
           "objective": "Audit the Replogle screen, distinguish the raw count representation from transformed expression, identify perturbation and control identities, and state which analyses are supported without inventing replicates or raw guide-count evidence.",
           "paper_anchor_ids": ["ANCHOR-REPL-DESIGN"], "split_usage": ["calibration", "evaluation"], "depends_on_tasks": [],
@@ -46,6 +47,7 @@
         },
         {
           "task_id": "REPL-02", "turn_index": 2, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Retained-cell and split accounting",
           "objective": "Audit label evidence and retained-cell accounting on the frozen split. Reconcile included and excluded cells and controls while keeping metadata labels distinct from raw guide-count validation.",
           "paper_anchor_ids": ["ANCHOR-REPL-DESIGN"], "split_usage": ["evaluation"], "depends_on_tasks": ["REPL-01"],
@@ -59,6 +61,7 @@
         },
         {
           "task_id": "REPL-03", "turn_index": 3, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Target estimand and guide-identifiability boundary",
           "objective": "Define the target-level estimand supported by this artifact and explain why guide-level efficacy, guide leave-one-out sensitivity, and raw guide assignment are not identifiable without cell-by-guide counts. Return supported target summaries and explicit unresolved guide-level quantities.",
           "paper_anchor_ids": ["ANCHOR-REPL-ATLAS"], "split_usage": ["evaluation"], "depends_on_tasks": ["REPL-02"],
@@ -71,6 +74,7 @@
         },
         {
           "task_id": "REPL-04", "turn_index": 4, "tier": "advanced", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Response structure, claim boundary, and follow-up prioritization",
           "objective": "Characterize supported response structure, compare it with frozen pathway or complex priors, distinguish recovered known structure from candidate novel structure, and propose a constrained follow-up panel without converting derived clusters into validated mechanisms.",
           "paper_anchor_ids": ["ANCHOR-REPL-ATLAS"], "split_usage": ["evaluation"], "depends_on_tasks": ["REPL-03"],
@@ -88,6 +92,7 @@
       "turns": [
         {
           "task_id": "PAPA-01", "turn_index": 1, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "RNA-guide alignment, assignment, ambient signal, and retention",
           "objective": "Verify RNA-guide barcode alignment, evaluate guide assignment and ambient guide signal using the registered guide-count assets, distinguish multi-guide cells from transcriptomic doublets, and produce reconciled retained-cell accounting.",
           "paper_anchor_ids": ["ANCHOR-PAPA-ECCITE"], "split_usage": ["calibration", "evaluation"], "depends_on_tasks": [],
@@ -100,6 +105,7 @@
         },
         {
           "task_id": "PAPA-02", "turn_index": 2, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Control-only state reference",
           "objective": "Fit a frozen state reference using retained calibration controls only. Record the cells, features, representation, parameters, and provenance needed for held-out mapping without using evaluation labels.",
           "paper_anchor_ids": ["ANCHOR-PAPA-ECCITE"], "split_usage": ["calibration"], "depends_on_tasks": ["PAPA-01"],
@@ -112,6 +118,7 @@
         },
         {
           "task_id": "PAPA-03", "turn_index": 3, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Held-out state mapping and rejection",
           "objective": "Map retained evaluation cells to the frozen control reference, quantify rejected or unmapped cells, and report mapping uncertainty without refitting the reference or consuming excluded cells.",
           "paper_anchor_ids": ["ANCHOR-PAPA-ECCITE"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-02"],
@@ -124,6 +131,7 @@
         },
         {
           "task_id": "PAPA-04", "turn_index": 4, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Cis efficacy and guide sensitivity",
           "objective": "Estimate target-expression efficacy and guide sensitivity for eligible evaluation targets, preserve paired replicate structure, report leave-one-guide-out stability, and keep unresolved targets unresolved.",
           "paper_anchor_ids": ["ANCHOR-PAPA-CHECKPOINT"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-03"],
@@ -136,6 +144,7 @@
         },
         {
           "task_id": "PAPA-05", "turn_index": 5, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Mixscape responder classification and target reliability",
           "objective": "Classify responder and escape states using the frozen representation, report target-specific responder summaries, and aggregate cis efficacy with responder evidence without applying one target's evidence to another.",
           "paper_anchor_ids": ["ANCHOR-PAPA-CHECKPOINT"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-03", "PAPA-04"],
@@ -148,6 +157,7 @@
         },
         {
           "task_id": "PAPA-06", "turn_index": 6, "tier": "intermediate", "execution_mode": "codeact_scientific",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": ["run-replicate-aware-pseudobulk-de"], "closure": ["finalize-scientific-task"]},
           "codeact_protocol": {"protocol_id": "pseudobulk.edger_ql.v1", "analysis_unit": "replicate", "design": "~ replicate + condition", "pairing": "required", "fit_scope": "per_eligible_target", "baseline": "NTC", "input_role_bindings": {"counts": "trans_de_pseudobulk_counts", "genes": "trans_de_genes", "sample_manifest": "trans_de_sample_manifest", "eligibility": "trans_de_eligibility"}},
           "title": "Per-perturbation trans differential expression",
           "objective": "Using the registered neutral pseudobulk counts and sample manifest, fit edgeR separately for each eligible target with design ~ replicate + condition and NTC as baseline. Return full-gene logFC, PValue, FDR, top up and down genes, design matrices, and cautions. Guides and cells are not biological replicates.",
@@ -161,6 +171,7 @@
         },
         {
           "task_id": "PAPA-07", "turn_index": 7, "tier": "intermediate", "execution_mode": "evidence_interpretation",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Global-effect claim calibration",
           "objective": "Interpret the registered target-level E-distance, permutation PValue, FDR, coverage, and sampling protocol. Assign detectable, borderline, or not-detected claims with calibrated language. Do not interpret E-distance as a DEG, mechanism, causal effect, or proof that a nonsignificant effect is absent.",
           "paper_anchor_ids": ["ANCHOR-PAPA-CHECKPOINT"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-03"],
@@ -173,6 +184,7 @@
         },
         {
           "task_id": "PAPA-08", "turn_index": 8, "tier": "advanced", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Checkpoint-regulation synthesis and next panel",
           "objective": "Synthesize guide QC, cis efficacy, responder evidence, trans-DE, global-effect calibration, pathway context, contradictions, and uncertainty to prioritize a constrained checkpoint-regulation follow-up panel. Cite artifacts and preserve each evidence class and claim ceiling.",
           "paper_anchor_ids": ["ANCHOR-PAPA-CHECKPOINT"], "split_usage": ["evaluation"], "depends_on_tasks": ["PAPA-04", "PAPA-05", "PAPA-06", "PAPA-07"],
@@ -190,6 +202,7 @@
       "turns": [
         {
           "task_id": "NORM-01", "turn_index": 1, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Combinatorial construct design audit",
           "objective": "Audit the Norman CRISPRa combinatorial construct design, expression representation, controls, construct and target identities, and the analyses supported by the available artifact.",
           "paper_anchor_ids": ["ANCHOR-NORM-DESIGN"], "split_usage": ["calibration", "evaluation"], "depends_on_tasks": [],
@@ -202,6 +215,7 @@
         },
         {
           "task_id": "NORM-02", "turn_index": 2, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Intended combinations versus doublets",
           "objective": "Distinguish intended multi-guide constructs from transcriptomic doublets, audit construct preservation and retention, and avoid filtering valid combinations solely because more than one guide is present.",
           "paper_anchor_ids": ["ANCHOR-NORM-DESIGN"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-01"],
@@ -214,6 +228,7 @@
         },
         {
           "task_id": "NORM-03", "turn_index": 3, "tier": "basic", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "SCEPTRE suitability and correct refusal",
           "objective": "Determine whether the registered Norman inputs support SCEPTRE. If cell-by-guide counts are absent, block before the scientific runner, state the missing asset precisely, and propose the minimum evidence needed to resume without fabricating performance results.",
           "paper_anchor_ids": ["ANCHOR-NORM-DESIGN"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-02"],
@@ -226,6 +241,7 @@
         },
         {
           "task_id": "NORM-04", "turn_index": 4, "tier": "intermediate", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Candidate response programs",
           "objective": "Assemble construct-level effects and identify stable candidate response programs while preserving combinatorial construct identities and reporting stability, missingness, and applicability limits.",
           "paper_anchor_ids": ["ANCHOR-NORM-GI"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-02"],
@@ -238,6 +254,7 @@
         },
         {
           "task_id": "NORM-05", "turn_index": 5, "tier": "advanced", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Genetic-interaction claim boundary",
           "objective": "Evaluate which combination effects support candidate genetic-interaction hypotheses and which remain additive, ambiguous, or unresolved. Keep response structure, prior biology, and causal mechanism distinct.",
           "paper_anchor_ids": ["ANCHOR-NORM-GI"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-04"],
@@ -250,6 +267,7 @@
         },
         {
           "task_id": "NORM-06", "turn_index": 6, "tier": "advanced", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Missing evidence and next experiment",
           "objective": "Integrate the construct audit, SCEPTRE refusal, candidate programs, and GI boundary into a next-experiment design that directly resolves the highest-value missing evidence under fixed panel constraints.",
           "paper_anchor_ids": ["ANCHOR-NORM-GI"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-03", "NORM-05"],
@@ -262,6 +280,7 @@
         },
         {
           "task_id": "VIRT-01", "turn_index": 7, "tier": "optional", "role": "optional", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "title": "Frozen prediction-bundle evaluation",
           "objective": "If and only if a frozen prediction manifest is registered, audit leakage and evaluate the prediction bundle on the held-out split. Otherwise return not_configured without affecting required workflow gates.",
           "paper_anchor_ids": ["ANCHOR-VIRTUAL-PREDICTION"], "split_usage": ["evaluation"], "depends_on_tasks": ["NORM-01"],
@@ -279,12 +298,13 @@
       "turns": [
         {
           "task_id": "KANG-01", "turn_index": 1, "tier": "supplemental", "execution_mode": "capability_or_codeact",
-          "codeact_protocol": {"protocol_id": "pseudobulk.edger_ql.v1", "analysis_unit": "donor", "design": "~ donor + condition", "pairing": "required", "fit_scope": "evaluation_donors", "baseline": "ctrl", "input_role_bindings": {"counts": "raw_counts", "metadata": "donor_metadata", "selection": "evaluation_split"}},
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": ["run-replicate-aware-pseudobulk-de", "run-design-preserving-null-calibration"], "closure": ["finalize-scientific-task"]},
+          "codeact_protocol": {"protocol_id": "pseudobulk.edger_ql.v1", "analysis_unit": "donor", "design": "~ donor + condition", "pairing": "required", "fit_scope": "evaluation_donors", "baseline": "ctrl", "input_role_bindings": {"counts": "raw_counts", "metadata": "donor_metadata", "selection": "evaluation_split", "calibration_selection": "calibration_split"}},
           "title": "Reject cell-level DE and execute donor-aware pseudobulk",
           "objective": "Reject cells-as-replicates differential expression, execute donor-aware edgeR pseudobulk with design ~ donor + condition on the frozen evaluation donors, and report effect estimates, FDR, null calibration, and four-donor limitations.",
-          "paper_anchor_ids": ["ANCHOR-KANG-DONOR"], "split_usage": ["evaluation"], "depends_on_tasks": [],
+          "paper_anchor_ids": ["ANCHOR-KANG-DONOR"], "split_usage": ["calibration", "evaluation"], "depends_on_tasks": [],
           "capability_scenarios": ["CAP-11"], "expected_capability_dag": ["de.pseudobulk.edger.v1", "calibration.replicate_null.v1", "calibration.method_null.v1"],
-          "required_input_roles": ["evaluation_split", "donor_metadata", "raw_counts"], "required_artifact_roles": ["pseudobulk_counts", "design_matrix", "de_results", "null_calibration"],
+          "required_input_roles": ["calibration_split", "evaluation_split", "donor_metadata", "raw_counts"], "required_artifact_roles": ["pseudobulk_counts", "design_matrix", "de_results", "null_calibration"],
           "output_contract": {"benchmark_result": "outputs/tasks/KANG-01/benchmark_result.json", "artifact_roles": ["pseudobulk_counts", "design_matrix", "de_results", "null_calibration"], "artifact_paths": {"pseudobulk_counts": "pseudobulk_counts.tsv", "design_matrix": "design_matrix.tsv", "de_results": "de_results.tsv", "null_calibration": "null_calibration.tsv"}, "artifact_schemas": {"de_results.tsv": ["gene", "logFC", "F", "PValue", "FDR"], "null_calibration.tsv": ["permutation_id", "type1_rate", "null_effect_bias", "exchangeability_violation_count"]}},
           "task_hard_gates": ["cell_level_de_rejected", "donor_is_analysis_unit", "paired_design_used", "four_donor_caution_visible"],
           "metric_ids": ["analysis_unit_correctness", "effect_error", "fdr_agreement", "null_calibration_error"], "task_reference_ids": ["TREF-KANG-01"],
@@ -292,6 +312,7 @@
         },
         {
           "task_id": "KANG-02", "turn_index": 2, "tier": "supplemental", "execution_mode": "capability_or_codeact",
+          "pertura_skill_plan": {"startup": ["execute-task-scoped-plan", "finalize-scientific-task"], "method": [], "closure": ["finalize-scientific-task"]},
           "codeact_protocol": {"protocol_id": "composition.propeller.v1", "analysis_unit": "donor_condition", "design": "~ donor + condition", "pairing": "required", "fit_scope": "observed_cell_states", "baseline": "ctrl", "input_role_bindings": {"metadata": "donor_metadata", "selection": "evaluation_split", "state": "cell_state_metadata"}},
           "title": "Composition applicability and missing-state exclusion",
           "objective": "Run donor-aware Propeller composition analysis where state labels are available, explicitly exclude the six evaluation cells with missing state labels, reconcile denominators, and report the four-donor power limitation.",

@@ -8,11 +8,25 @@ from typing import Any, Iterable, Mapping
 
 from pertura_workflow.capabilities import CapabilityRegistry
 from pertura_workflow.planner import codeact_protocol_ids
+from pertura_runtime.agent_bundle import BUNDLED_SKILL_NAMES
 
 
 PAPER_CONDITIONS = ("free_codeact", "prompt_only", "pertura_full")
 PAPER_REPEATS = (1, 2)
 PAPER_AGENT_MAX_TURNS = 32
+PAPER_SKILL_PLAN_PHASES = ("startup", "method", "closure")
+PAPER_SKILL_STARTUP = (
+    "execute-task-scoped-plan",
+    "finalize-scientific-task",
+)
+PAPER_SKILL_CLOSURE = ("finalize-scientific-task",)
+PAPER_METHOD_SKILLS = {
+    "KANG-01": (
+        "run-replicate-aware-pseudobulk-de",
+        "run-design-preserving-null-calibration",
+    ),
+    "PAPA-06": ("run-replicate-aware-pseudobulk-de",),
+}
 
 
 @dataclass(frozen=True)
@@ -33,9 +47,7 @@ class PaperTaskCatalog:
 
     def tasks(self, *, include_optional: bool = True) -> tuple[Mapping[str, Any], ...]:
         tasks = tuple(
-            task
-            for workflow in self.workflows
-            for task in workflow.get("turns") or ()
+            task for workflow in self.workflows for task in workflow.get("turns") or ()
         )
         if include_optional:
             return tasks
@@ -43,12 +55,7 @@ class PaperTaskCatalog:
 
 
 def default_paper_task_catalog(repo_root: str | Path) -> Path:
-    return (
-        Path(repo_root).resolve()
-        / "benchmarks"
-        / "paper_v1"
-        / "agent_tasks.v2.json"
-    )
+    return Path(repo_root).resolve() / "benchmarks" / "paper_v1" / "agent_tasks.v2.json"
 
 
 def load_paper_task_catalog(
@@ -88,9 +95,7 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
 
     known_capabilities = {
         item.capability_id
-        for item in CapabilityRegistry.load_default(
-            include_external=False
-        ).specs()
+        for item in CapabilityRegistry.load_default(include_external=False).specs()
     }
     known_codeact_protocols = set(codeact_protocol_ids())
     workflows = tuple(payload.get("workflows") or ())
@@ -123,8 +128,7 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
                 )
             prior.add(task_id)
             unknown_capabilities = (
-                set(task.get("expected_capability_dag") or ())
-                - known_capabilities
+                set(task.get("expected_capability_dag") or ()) - known_capabilities
             )
             if unknown_capabilities:
                 problems.append(
@@ -138,17 +142,11 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
                     f"{task_id}: non-capability task declares a capability DAG"
                 )
             codeact = dict(task.get("codeact_protocol") or {})
-            if (
-                task.get("execution_mode") == "codeact_scientific"
-                and not codeact
-            ):
+            if task.get("execution_mode") == "codeact_scientific" and not codeact:
                 problems.append(
                     f"{task_id}: codeact_scientific requires a frozen protocol"
                 )
-            if (
-                task.get("execution_mode") == "evidence_interpretation"
-                and codeact
-            ):
+            if task.get("execution_mode") == "evidence_interpretation" and codeact:
                 problems.append(
                     f"{task_id}: evidence interpretation cannot declare CodeAct"
                 )
@@ -172,6 +170,35 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
                         f"{task_id}: CodeAct binding uses unknown input roles: "
                         f"{sorted(unknown_roles)}"
                     )
+            skill_plan = task.get("pertura_skill_plan")
+            if not isinstance(skill_plan, Mapping):
+                problems.append(f"{task_id}: missing pertura_skill_plan")
+            else:
+                if set(skill_plan) != set(PAPER_SKILL_PLAN_PHASES):
+                    problems.append(f"{task_id}: invalid skill plan phases")
+                normalized = {
+                    phase: tuple(str(item) for item in skill_plan.get(phase) or ())
+                    for phase in PAPER_SKILL_PLAN_PHASES
+                }
+                if normalized["startup"] != PAPER_SKILL_STARTUP:
+                    problems.append(f"{task_id}: invalid startup skill plan")
+                if normalized["closure"] != PAPER_SKILL_CLOSURE:
+                    problems.append(f"{task_id}: invalid closure skill plan")
+                expected_methods = PAPER_METHOD_SKILLS.get(task_id, ())
+                if normalized["method"] != expected_methods:
+                    problems.append(f"{task_id}: invalid method skill plan")
+                flattened = [
+                    item
+                    for phase in PAPER_SKILL_PLAN_PHASES
+                    for item in normalized[phase]
+                ]
+                unknown_skills = set(flattened) - set(BUNDLED_SKILL_NAMES)
+                if unknown_skills:
+                    problems.append(
+                        f"{task_id}: unknown skills: {sorted(unknown_skills)}"
+                    )
+                if len(set(flattened)) > 4:
+                    problems.append(f"{task_id}: more than four unique skills")
             for field in (
                 "objective",
                 "paper_anchor_ids",
@@ -203,9 +230,7 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
             artifact_schemas = dict(
                 (task.get("output_contract") or {}).get("artifact_schemas") or {}
             )
-            if set(artifact_paths) != set(
-                task.get("required_artifact_roles") or ()
-            ):
+            if set(artifact_paths) != set(task.get("required_artifact_roles") or ()):
                 problems.append(
                     f"{task_id}: every required artifact role needs one path"
                 )
@@ -219,9 +244,7 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
                     or ":" in str(relative_name)
                     or "\\" in str(relative_name)
                 ):
-                    problems.append(
-                        f"{task_id}: unsafe artifact path for {role_name}"
-                    )
+                    problems.append(f"{task_id}: unsafe artifact path for {role_name}")
             if not set(artifact_schemas).issubset(set(artifact_paths.values())):
                 problems.append(
                     f"{task_id}: artifact_schemas contains an undeclared path"
@@ -250,9 +273,7 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
     if len(primary) != 18:
         problems.append(f"expected 18 primary tasks, observed {len(primary)}")
     if len(supplemental) != 2:
-        problems.append(
-            f"expected 2 supplemental tasks, observed {len(supplemental)}"
-        )
+        problems.append(f"expected 2 supplemental tasks, observed {len(supplemental)}")
     if len(optional) != 1 or optional[0].get("task_id") != "VIRT-01":
         problems.append("VIRT-01 must be the only optional task")
     if tier_counts != {"basic": 6, "intermediate": 8, "advanced": 4}:
@@ -271,9 +292,7 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
     }
     for field, expected in expected_protocol.items():
         if protocol.get(field) != expected:
-            problems.append(
-                f"execution_protocol.{field} must equal {expected}"
-            )
+            problems.append(f"execution_protocol.{field} must equal {expected}")
     return problems
 
 
@@ -332,11 +351,16 @@ def validate_task_reference_catalog(
         protocol = binding.get("protocol_evaluator") or {}
         covered_metrics.update(str(item) for item in protocol.get("metric_ids") or ())
         if route == "custom_artifact_evaluator":
-            covered_metrics.update(str(item) for item in binding.get("metric_ids") or ())
+            covered_metrics.update(
+                str(item) for item in binding.get("metric_ids") or ()
+            )
         if covered_metrics != binding_metrics:
             problems.append(f"{reference_id}: scoring routes do not cover metric ids")
         artifact_paths = set(
-            ((task_by_id[task_id].get("output_contract") or {}).get("artifact_paths") or {}).values()
+            (
+                (task_by_id[task_id].get("output_contract") or {}).get("artifact_paths")
+                or {}
+            ).values()
         )
         for evaluator in binding.get("evaluator_templates") or ():
             if evaluator.get("observed_output") not in artifact_paths:
@@ -382,9 +406,7 @@ def validate_task_reference_catalog(
                     or not isinstance(balance.get("parts"), list)
                     or not balance.get("parts")
                 ):
-                    problems.append(
-                        f"{reference_id}: protocol JSON balance is invalid"
-                    )
+                    problems.append(f"{reference_id}: protocol JSON balance is invalid")
         if bound:
             sources = tuple(binding.get("reference_sources") or ())
             bound_sources = tuple(binding.get("bound_reference_sources") or ())
@@ -403,8 +425,7 @@ def validate_task_reference_catalog(
     for task_id, task in task_by_id.items():
         expected = set(task.get("task_reference_ids") or ())
         observed = {
-            str(item.get("task_reference_id"))
-            for item in by_task.get(task_id, ())
+            str(item.get("task_reference_id")) for item in by_task.get(task_id, ())
         }
         if expected != observed:
             problems.append(
@@ -472,7 +493,11 @@ def validate_paper_asset_catalog(
         entry = workflows.get(workflow_id) or {}
         assets = tuple(entry.get("assets") or ())
         roles = [str(item.get("role") or "") for item in assets]
-        if not roles or len(roles) != len(set(roles)) or any(not role for role in roles):
+        if (
+            not roles
+            or len(roles) != len(set(roles))
+            or any(not role for role in roles)
+        ):
             problems.append(f"{workflow_id}: asset roles are empty or duplicated")
         for asset in assets:
             if not str(asset.get("root") or "") or not str(
@@ -527,9 +552,7 @@ def validate_paper_asset_catalog(
             for task in turns
             for role in task.get("required_artifact_roles") or ()
         }
-        masking = (
-            set(roles) & produced_roles
-        ) - external_inputs - optional_external
+        masking = (set(roles) & produced_roles) - external_inputs - optional_external
         if masking:
             problems.append(
                 f"{workflow_id}: unexpected external assets could mask dependencies: "

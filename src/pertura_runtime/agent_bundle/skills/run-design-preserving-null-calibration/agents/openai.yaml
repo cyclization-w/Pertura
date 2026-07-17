@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design-Preserving Null Calibration"
+  short_description: "Calibrate paired designs with valid label swaps"
+  default_prompt: "Use $run-design-preserving-null-calibration to run deterministic paired-unit null permutations."

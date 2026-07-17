@@ -28,6 +28,19 @@ WHEEL_REQUIRED = (
     "pertura_runtime/agent_bundle/skills/interpret-perturb-seq-results/SKILL.md",
     "pertura_runtime/agent_bundle/skills/evaluate-virtual-perturb-seq-model/SKILL.md",
     "pertura_runtime/agent_bundle/skills/interpret-perturb-seq-results/references/claim-language.md",
+    "pertura_runtime/agent_bundle/skills/execute-task-scoped-plan/SKILL.md",
+    "pertura_runtime/agent_bundle/skills/execute-task-scoped-plan/agents/openai.yaml",
+    "pertura_runtime/agent_bundle/skills/execute-task-scoped-plan/references/route-semantics.md",
+    "pertura_runtime/agent_bundle/skills/run-replicate-aware-pseudobulk-de/SKILL.md",
+    "pertura_runtime/agent_bundle/skills/run-replicate-aware-pseudobulk-de/agents/openai.yaml",
+    "pertura_runtime/agent_bundle/skills/run-replicate-aware-pseudobulk-de/scripts/materialize_pseudobulk.py",
+    "pertura_runtime/agent_bundle/skills/run-replicate-aware-pseudobulk-de/scripts/run_edger_ql.R",
+    "pertura_runtime/agent_bundle/skills/run-design-preserving-null-calibration/SKILL.md",
+    "pertura_runtime/agent_bundle/skills/run-design-preserving-null-calibration/agents/openai.yaml",
+    "pertura_runtime/agent_bundle/skills/run-design-preserving-null-calibration/scripts/run_paired_label_null.R",
+    "pertura_runtime/agent_bundle/skills/finalize-scientific-task/SKILL.md",
+    "pertura_runtime/agent_bundle/skills/finalize-scientific-task/agents/openai.yaml",
+    "pertura_runtime/agent_bundle/skills/finalize-scientific-task/references/result-checklist.md",
     "pertura_bench/cases/capability_cases.v1.json",
     "pertura_bench/cases/skill_cases.v1.json",
     "pertura_bench/cases/agent_workflow_cases.v1.json",
@@ -130,7 +143,8 @@ def _forbidden(names: set[str], *, artifact: Path) -> list[str]:
 def _authority_token_findings(path: Path, *, kind: str, names: set[str]) -> list[str]:
     findings: list[str] = []
     source_names = sorted(
-        name for name in names
+        name
+        for name in names
         if name.endswith(".py")
         and name.startswith(("pertura_runtime/", "pertura_workflow/", "pertura_bench/"))
     )
@@ -142,7 +156,11 @@ def _authority_token_findings(path: Path, *, kind: str, names: set[str]) -> list
                     findings.append(name)
     else:
         with tarfile.open(path, "r:*") as archive:
-            members = {member.name.split("/", 1)[1]: member for member in archive.getmembers() if "/" in member.name}
+            members = {
+                member.name.split("/", 1)[1]: member
+                for member in archive.getmembers()
+                if "/" in member.name
+            }
             for name in source_names:
                 extracted = archive.extractfile(members[name])
                 payload = extracted.read() if extracted is not None else b""

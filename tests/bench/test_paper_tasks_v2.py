@@ -42,7 +42,10 @@ def test_v2_catalog_freezes_required_shape_without_capability_growth() -> None:
     assert [task["task_id"] for task in tasks if task.get("role") == "optional"] == [
         "VIRT-01"
     ]
-    assert {tier: sum(task["tier"] == tier for task in primary) for tier in ("basic", "intermediate", "advanced")} == {
+    assert {
+        tier: sum(task["tier"] == tier for task in primary)
+        for tier in ("basic", "intermediate", "advanced")
+    } == {
         "basic": 6,
         "intermediate": 8,
         "advanced": 4,
@@ -62,9 +65,7 @@ def test_every_task_has_one_reference_binding_and_known_paper_anchor() -> None:
 
 def test_papa02_binds_the_frozen_ref03_control_reference() -> None:
     payload = json.loads(REFERENCES.read_text(encoding="utf-8"))
-    binding = next(
-        item for item in payload["bindings"] if item["task_id"] == "PAPA-02"
-    )
+    binding = next(item for item in payload["bindings"] if item["task_id"] == "PAPA-02")
     assert binding["evaluator_templates"][0]["reference_output"] == (
         "control_state_reference/control_assignments.tsv"
     )
@@ -96,8 +97,7 @@ def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
                 {
                     key: value
                     for key, value in evaluator.items()
-                    if key
-                    not in {"reference_source", "reference_output", "metric_ids"}
+                    if key not in {"reference_source", "reference_output", "metric_ids"}
                 }
                 | {
                     "reference_path": "fixture.tsv",
@@ -108,9 +108,7 @@ def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
         if binding["scoring_route"] == "custom_artifact_evaluator":
             binding["bound_evaluator"] = {"type": "fixture"}
     bound_reference_path = tmp_path / "bound-task-references.json"
-    bound_reference_path.write_text(
-        json.dumps(bound_references), encoding="utf-8"
-    )
+    bound_reference_path.write_text(json.dumps(bound_references), encoding="utf-8")
     asset_path = tmp_path / "bound-assets.json"
     task_catalog = load_paper_task_catalog(CATALOG)
     asset_workflows = {}
@@ -184,12 +182,11 @@ def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
     assert all(job["max_turns_per_task"] == 32 for job in jobs)
     assert all(job["session_scope"]["shared_provider_session"] for job in jobs)
     assert all(job["session_scope"]["condition_repeat_isolated"] for job in jobs)
-    assert plan.checkpoint_binding[
-        "capability_contract_catalog_hash"
-    ] == file_sha256(contract_catalog_path)
+    assert plan.checkpoint_binding["capability_contract_catalog_hash"] == file_sha256(
+        contract_catalog_path
+    )
     assert all(
-        "--capability-contract-catalog" in job["command"]["argv"]
-        for job in jobs
+        "--capability-contract-catalog" in job["command"]["argv"] for job in jobs
     )
 
 
@@ -202,10 +199,36 @@ def test_trans_de_and_global_effect_are_not_new_capabilities() -> None:
     assert by_id["PAPA-07"]["expected_capability_dag"] == []
 
 
+def test_v2_catalog_freezes_task_scoped_skill_plans() -> None:
+    catalog = load_paper_task_catalog(CATALOG)
+    by_id = {task["task_id"]: task for task in catalog.tasks()}
+    expected_startup = [
+        "execute-task-scoped-plan",
+        "finalize-scientific-task",
+    ]
+    for task in by_id.values():
+        assert task["pertura_skill_plan"]["startup"] == expected_startup
+        assert task["pertura_skill_plan"]["closure"] == ["finalize-scientific-task"]
+    assert by_id["KANG-01"]["pertura_skill_plan"]["method"] == [
+        "run-replicate-aware-pseudobulk-de",
+        "run-design-preserving-null-calibration",
+    ]
+    assert by_id["PAPA-06"]["pertura_skill_plan"]["method"] == [
+        "run-replicate-aware-pseudobulk-de"
+    ]
+    assert by_id["PAPA-07"]["pertura_skill_plan"]["method"] == []
+    assert by_id["KANG-01"]["split_usage"] == ["calibration", "evaluation"]
+    assert "calibration_split" in by_id["KANG-01"]["required_input_roles"]
+    assert (
+        by_id["KANG-01"]["codeact_protocol"]["input_role_bindings"][
+            "calibration_selection"
+        ]
+        == "calibration_split"
+    )
+
+
 def test_formal_server_plan_rejects_unbound_paper_catalogs() -> None:
-    with pytest.raises(
-        ValueError, match="task-reference catalog is not bound"
-    ):
+    with pytest.raises(ValueError, match="task-reference catalog is not bound"):
         server_benchmark_plan(
             ROOT,
             paper_task_catalog_path=CATALOG,

@@ -258,6 +258,34 @@ Status values:
   is observed as ready and used without environment discovery.
 - Status: `fixed_unverified`
 
+### PB-046 -- KANG-01 exhausted its task budget without a result checkpoint
+
+- Date: 2026-07-16/17
+- Phase: a19 live canary
+- Affected checkpoint/runs: pre-tag a19 KANG-01 run
+  `f6a96ca613494661aef3353a578461c8`
+- Symptom: the agent materialized a design matrix, preprocessing script, and
+  pseudobulk counts, but continued method exploration until the 7,200-second
+  task timeout. It never wrote `benchmark_result.json`, so independent
+  evaluation was unavailable and the provider turn was cancelled.
+- Root cause: the frozen CodeAct handoff named the method and environment but
+  did not provide reusable method execution skills or require a conservative
+  result checkpoint before expensive work. The model therefore owned too
+  much procedural rediscovery and had no durable partial result at closure.
+- Resolution: add four reusable, task-scoped skills for plan consumption,
+  replicate-aware edgeR execution, design-preserving null calibration, and
+  checkpoint/finalization. Bind them deterministically by task, expose them
+  only to `pertura_full`, and audit both baseline conditions for skill access.
+  Package the parameterized Python/R templates in the wheel without adding a
+  capability or changing scientific references/evaluators.
+- Verification evidence: local skill validation, frozen task-binding tests,
+  template tests, baseline leakage-audit tests, wheel-content audit, and all
+  four refreshed live canaries are required before tagging a19.
+- Benchmark treatment: the affected run is infrastructure-invalid pilot
+  evidence and is not scored. A refreshed KANG-01 canary must demonstrate
+  plan -> DE -> null -> finalize and a schema-valid result.
+- Status: `fixed_unverified`
+
 ## Incident index
 
 ### Repository, build, and checkpoint
@@ -329,6 +357,7 @@ Status values:
 | PB-043 | The agent sees shallow generic MCP schemas while detailed capability YAML contracts remain internal. An existing deterministic planner performs design-aware single-capability routing and dependency validation, but it does not expose a multi-step executable plan or contracts to the model. | a19 P0 adds hash-bound task-scoped contract rendering, frozen-candidate compilation, explicit blockers/routes, and a uniform completion guard; full dynamic Planner V2 remains future work. | a18 is retained as pilot evidence only; a19 formal scoring remains gated on four live canaries. | `fixed_unverified` |
 | PB-044 | KANG-01 a19 canary startup re-ran doctors for every registry environment and timed out in an unrelated Pertpy import smoke. | Scope readiness to current task candidates and validate frozen manifest lock hashes without launching scientific subprocesses; keep full doctors at checkpoint time. | Job `34239260` is infrastructure-invalid; the refreshed run verified startup before exposing the separate PB-045 handoff issue. | `verified` |
 | PB-045 | KANG-01 compiled a legal CodeAct fallback without a deterministic environment/script handoff, so the provider rediscovered edgeR execution. | Bind a frozen generic CodeAct protocol and compile a hash-bound runner, assets, outputs, and authority boundary only for `pertura_full`. | Run `adf4d508f2c64b228e1b11dbccc1d1d1` is pre-fix pilot evidence only; refresh and rerun KANG-01. | `fixed_unverified` |
+| PB-046 | KANG-01 produced partial scientific files but exhausted its task budget without `benchmark_result.json`. | Add task-scoped plan, edgeR, null-calibration, and finalization skills with an early conservative checkpoint and baseline leakage audit. | Run `f6a96ca613494661aef3353a578461c8` is infrastructure-invalid pilot evidence; all four a19 canaries must be rerun. | `fixed_unverified` |
 
 ## Successful retained milestones
 

@@ -76,11 +76,10 @@ def test_package_data_and_sdist_manifest_cover_product_resources() -> None:
     assert "planner_routes.json" in package_data["pertura_workflow.capabilities"]
     assert "dashboard_static/**/*" in package_data["pertura_runtime"]
     assert "agent_bundle/bundle.json" in package_data["pertura_runtime"]
-    assert (
-        "agent_bundle/.claude-plugin/plugin.json"
-        in package_data["pertura_runtime"]
-    )
+    assert "agent_bundle/.claude-plugin/plugin.json" in package_data["pertura_runtime"]
     assert "agent_bundle/skills/*/SKILL.md" in package_data["pertura_runtime"]
+    assert "agent_bundle/skills/*/scripts/*.py" in package_data["pertura_runtime"]
+    assert "agent_bundle/skills/*/scripts/*.R" in package_data["pertura_runtime"]
     assert "compatibility/v0.2/*.json" in package_data["pertura_core"]
 
     manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
@@ -104,13 +103,17 @@ def test_distribution_checker_declares_wheel_and_sdist_contracts() -> None:
     assert "ui/package-lock.json" in script["SDIST_REQUIRED"]
     assert "scripts/export_papalexi_guide_assets.R" in script["SDIST_REQUIRED"]
     assert "scripts/export_h5ad_benchmark_tables.py" in script["SDIST_REQUIRED"]
+    assert "pertura_runtime/agent_bundle/bundle.json" in script["WHEEL_REQUIRED"]
+    assert "pertura_bench/cases/skill_cases.v1.json" in script["WHEEL_REQUIRED"]
     assert (
-        "pertura_runtime/agent_bundle/bundle.json"
+        "pertura_runtime/agent_bundle/skills/"
+        "run-replicate-aware-pseudobulk-de/scripts/run_edger_ql.R"
         in script["WHEEL_REQUIRED"]
     )
     assert (
-        "pertura_bench/cases/skill_cases.v1.json"
-        in script["WHEEL_REQUIRED"]
+        "pertura_runtime/agent_bundle/skills/"
+        "run-design-preserving-null-calibration/scripts/"
+        "run_paired_label_null.R" in script["WHEEL_REQUIRED"]
     )
 
 
@@ -160,6 +163,7 @@ def test_distribution_checker_rejects_retired_authority_packages(
     assert verdict["passed"] is False
     assert "pertura_gate/__init__.py" in verdict["forbidden"]
     assert "pertura_runtime/retired.py" in verdict["forbidden"]
+
 
 def test_distribution_contract_excludes_legacy_from_sdist() -> None:
     script = runpy.run_path(str(ROOT / "scripts" / "check_distribution_contents.py"))

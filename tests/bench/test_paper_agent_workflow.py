@@ -64,9 +64,7 @@ class _Agent:
 
 
 def _asset_catalog(tmp_path: Path) -> Path:
-    catalog = json.loads(
-        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
-    )
+    catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
     bound_workflows = {}
     for workflow in catalog["workflows"]:
         by_task = {task["task_id"]: task for task in workflow["turns"]}
@@ -150,9 +148,7 @@ def _bound_task_references(tmp_path: Path) -> Path:
 
 
 def test_task_prompt_separates_result_file_from_turn_draft() -> None:
-    catalog = json.loads(
-        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
-    )
+    catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
     for candidate_workflow in catalog["workflows"]:
         for candidate_task in candidate_workflow["turns"]:
             candidate = execution._benchmark_result_template(
@@ -160,16 +156,14 @@ def test_task_prompt_separates_result_file_from_turn_draft() -> None:
                 task=candidate_task,
             )
             AgentBenchmarkResult.model_validate(candidate)
-            assert candidate["artifact_roles"] == candidate_task[
-                "required_artifact_roles"
-            ]
+            assert (
+                candidate["artifact_roles"] == candidate_task["required_artifact_roles"]
+            )
 
     workflow = next(
         item for item in catalog["workflows"] if item["workflow_id"] == "WF-KANG"
     )
-    task = next(
-        item for item in workflow["turns"] if item["task_id"] == "KANG-01"
-    )
+    task = next(item for item in workflow["turns"] if item["task_id"] == "KANG-01")
 
     template = execution._benchmark_result_template(
         workflow=workflow,
@@ -324,8 +318,7 @@ def test_smoke_task_selection_runs_only_requested_turn(
         repeat_index=1,
         task_catalog_path=ROOT / "benchmarks/paper_v1/agent_tasks.v2.json",
         task_reference_catalog_path=_bound_task_references(tmp_path),
-        paper_anchor_catalog_path=ROOT
-        / "benchmarks/paper_v1/paper_anchors.v1.json",
+        paper_anchor_catalog_path=ROOT / "benchmarks/paper_v1/paper_anchors.v1.json",
         asset_catalog_path=_asset_catalog(tmp_path),
         resource_evidence_path=tmp_path / "resource.json",
         smoke_task_ids=("REPL-03",),
@@ -344,6 +337,11 @@ def test_smoke_task_selection_runs_only_requested_turn(
         (Path(result["execution_root"]) / "input_manifest.json").read_text()
     )
     assert manifest["smoke_task_ids"] == ["REPL-03"]
+    assert manifest["skill_bundle_hash"] is None
+    assert manifest["task_skill_plans"] == {}
+    serialized_manifest = json.dumps(manifest)
+    assert "pertura_skill_plan" not in serialized_manifest
+    assert "execute-task-scoped-plan" not in serialized_manifest
 
 
 def test_smoke_task_selection_rejects_unknown_task(tmp_path: Path) -> None:
@@ -371,15 +369,11 @@ def test_smoke_task_selection_rejects_unknown_task(tmp_path: Path) -> None:
 
 
 def test_evidence_interpretation_prompt_forbids_recomputation() -> None:
-    catalog = json.loads(
-        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
-    )
+    catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
     workflow = next(
         item for item in catalog["workflows"] if item["workflow_id"] == "WF-PAPA"
     )
-    task = next(
-        item for item in workflow["turns"] if item["task_id"] == "PAPA-07"
-    )
+    task = next(item for item in workflow["turns"] if item["task_id"] == "PAPA-07")
     prompt = execution._task_prompt(
         workflow=workflow,
         task=task,
@@ -395,10 +389,9 @@ def test_evidence_interpretation_prompt_forbids_recomputation() -> None:
 
     assert "evidence-interpretation task" in prompt
     assert "do not recompute or refit the frozen evidence" in prompt
-    assert 'Upstream repair contracts: {}' in prompt
+    assert "Upstream repair contracts: {}" in prompt
     assert (
-        '"global_effect_claims": '
-        '"outputs/tasks/PAPA-07/global_effect_claims.tsv"'
+        '"global_effect_claims": ' '"outputs/tasks/PAPA-07/global_effect_claims.tsv"'
     ) in prompt
     assert (
         '"global_effect_limitations": '
@@ -408,19 +401,28 @@ def test_evidence_interpretation_prompt_forbids_recomputation() -> None:
 
 
 def test_capability_brief_is_disclosed_only_to_pertura_full() -> None:
-    catalog = json.loads(
-        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
-    )
+    catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
     workflow = next(
         item for item in catalog["workflows"] if item["workflow_id"] == "WF-PAPA"
     )
-    task = next(
-        item for item in workflow["turns"] if item["task_id"] == "PAPA-01"
-    )
+    task = next(item for item in workflow["turns"] if item["task_id"] == "PAPA-01")
     brief = {
         "plan_id": "plan_fixture",
         "plan_hash": "sha256:" + "1" * 64,
         "route": "capability_or_codeact",
+        "skill_plan": {
+            "startup": [
+                "execute-task-scoped-plan",
+                "finalize-scientific-task",
+            ],
+            "method": [],
+            "closure": ["finalize-scientific-task"],
+        },
+        "skill_bundle_hash": "sha256:" + "4" * 64,
+        "skill_resources": {
+            "execute-task-scoped-plan": ["references/route-semantics.md"],
+            "finalize-scientific-task": ["references/result-checklist.md"],
+        },
         "dataset_contract": {
             "contract_id": "contract_fixture",
             "contract_hash": "sha256:" + "2" * 64,
@@ -452,9 +454,7 @@ def test_capability_brief_is_disclosed_only_to_pertura_full() -> None:
                 "command": "fixture-edger-command",
             },
             "outputs": {
-                "benchmark_result": (
-                    "outputs/tasks/PAPA-01/benchmark_result.json"
-                )
+                "benchmark_result": ("outputs/tasks/PAPA-01/benchmark_result.json")
             },
             "authority": {
                 "source_class": "exploratory",
@@ -489,6 +489,9 @@ def test_capability_brief_is_disclosed_only_to_pertura_full() -> None:
     assert "plan_fixture" not in free
     assert "fixture-edger-command" not in prompt
     assert "fixture-edger-command" not in free
+    assert "execute-task-scoped-plan" in full
+    assert "execute-task-scoped-plan" not in prompt
+    assert "execute-task-scoped-plan" not in free
     for text in (full, prompt, free):
         assert "completion guard" in text
 
@@ -557,8 +560,7 @@ def test_pertura_full_runner_writes_answer_free_task_brief(
         repeat_index=1,
         task_catalog_path=ROOT / "benchmarks/paper_v1/agent_tasks.v2.json",
         task_reference_catalog_path=_bound_task_references(tmp_path),
-        paper_anchor_catalog_path=ROOT
-        / "benchmarks/paper_v1/paper_anchors.v1.json",
+        paper_anchor_catalog_path=ROOT / "benchmarks/paper_v1/paper_anchors.v1.json",
         asset_catalog_path=_asset_catalog(tmp_path),
         resource_evidence_path=tmp_path / "resource.json",
         smoke_task_ids=("PAPA-01",),
@@ -576,15 +578,20 @@ def test_pertura_full_runner_writes_answer_free_task_brief(
 
     assert brief_record["task_id"] == "PAPA-01"
     assert brief_record["plan_hash"] == brief["plan_hash"]
-    expected = next(
-        task["expected_capability_dag"]
+    expected_task = next(
+        task
         for workflow in json.loads(
             (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
         )["workflows"]
         for task in workflow["turns"]
         if task["task_id"] == "PAPA-01"
     )
-    assert brief["candidate_capability_ids"] == expected
+    assert brief["candidate_capability_ids"] == expected_task["expected_capability_dag"]
+    assert brief["skill_plan"] == expected_task["pertura_skill_plan"]
+    assert brief["skill_bundle_hash"].startswith("sha256:")
+    assert brief["skill_resources"]["execute-task-scoped-plan"] == [
+        "references/route-semantics.md"
+    ]
     serialized = json.dumps(brief).lower()
     for forbidden in (
         "grader",
@@ -650,13 +657,8 @@ def test_workflow_reuses_one_session_and_isolates_task_outputs(
             "peak_rss_mb": 100,
         },
     )
-    catalog = json.loads(
-        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
-    )
-    repl_tasks = {
-        task["task_id"]: task
-        for task in catalog["workflows"][0]["turns"]
-    }
+    catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
+    repl_tasks = {task["task_id"]: task for task in catalog["workflows"][0]["turns"]}
 
     def execute(agent, prompt, timeout):
         task_id = re.search(r"task (REPL-\d+)", prompt).group(1)
@@ -716,12 +718,10 @@ def test_workflow_reuses_one_session_and_isolates_task_outputs(
     assert len({manifest["analysis_run_id"]}) == 1
     assert len({manifest["conversation_id"]}) == 1
     assert {
-        path.parent.name
-        for path in (root / "tasks").glob("*/benchmark_result.json")
+        path.parent.name for path in (root / "tasks").glob("*/benchmark_result.json")
     } == set(repl_tasks)
     assert all(
-        (root / "tasks" / task_id / "verdict.json").is_file()
-        for task_id in repl_tasks
+        (root / "tasks" / task_id / "verdict.json").is_file() for task_id in repl_tasks
     )
 
     second = execution.run_paper_agent_workflow(
@@ -866,8 +866,7 @@ def test_workflow_regrades_later_additive_upstream_repair(
         repeat_index=1,
         task_catalog_path=ROOT / "benchmarks/paper_v1/agent_tasks.v2.json",
         task_reference_catalog_path=_bound_task_references(tmp_path),
-        paper_anchor_catalog_path=ROOT
-        / "benchmarks/paper_v1/paper_anchors.v1.json",
+        paper_anchor_catalog_path=ROOT / "benchmarks/paper_v1/paper_anchors.v1.json",
         asset_catalog_path=_asset_catalog(tmp_path),
         resource_evidence_path=tmp_path / "resource.json",
         turn_executor=execute,
@@ -909,15 +908,10 @@ def test_judge_task_context_resolves_declared_paper_anchors() -> None:
         (ROOT / "benchmarks/paper_v1/paper_anchors.v1.json").read_text()
     )
     workflow = next(
-        item for item in task_catalog["workflows"]
-        if item["workflow_id"] == "WF-KANG"
+        item for item in task_catalog["workflows"] if item["workflow_id"] == "WF-KANG"
     )
-    task = next(
-        item for item in workflow["turns"] if item["task_id"] == "KANG-01"
-    )
-    anchors_by_id = {
-        item["anchor_id"]: item for item in anchor_catalog["anchors"]
-    }
+    task = next(item for item in workflow["turns"] if item["task_id"] == "KANG-01")
+    anchors_by_id = {item["anchor_id"]: item for item in anchor_catalog["anchors"]}
 
     context = execution._judge_task_context(
         workflow=workflow,
@@ -935,12 +929,8 @@ def test_judge_task_context_resolves_declared_paper_anchors() -> None:
 def test_artifact_contract_checks_table_headers_and_json_fields(
     tmp_path: Path,
 ) -> None:
-    (tmp_path / "result.tsv").write_text(
-        "cell_id\tstate\nc1\tkept\n", encoding="utf-8"
-    )
-    (tmp_path / "summary.json").write_text(
-        json.dumps({"count": 1}), encoding="utf-8"
-    )
+    (tmp_path / "result.tsv").write_text("cell_id\tstate\nc1\tkept\n", encoding="utf-8")
+    (tmp_path / "summary.json").write_text(json.dumps({"count": 1}), encoding="utf-8")
     contract = {
         "artifact_roles": ["result", "summary"],
         "artifact_paths": {
@@ -955,6 +945,117 @@ def test_artifact_contract_checks_table_headers_and_json_fields(
     assert execution._artifact_paths_present(tmp_path, contract) is True
     contract["artifact_schemas"]["result.tsv"].append("missing")
     assert execution._artifact_paths_present(tmp_path, contract) is False
+
+
+def test_baseline_skill_access_audit_detects_tool_input(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    safe = {
+        "message_type": "AssistantMessage",
+        "payload": {
+            "content": [
+                "ToolUseBlock(name='Bash', input={'command': 'python analysis.py'})"
+            ]
+        },
+    }
+    leaked = {
+        "message_type": "AssistantMessage",
+        "payload": {
+            "content": [
+                "ToolUseBlock(name='Read', input={'file_path': "
+                "'/env/site-packages/pertura_runtime/agent_bundle/skills/"
+                "execute-task-scoped-plan/SKILL.md'})"
+            ]
+        },
+    }
+    events.write_text(
+        json.dumps(safe) + "\n" + json.dumps(leaked) + "\n",
+        encoding="utf-8",
+    )
+
+    audit = execution._audit_baseline_skill_access(
+        events,
+        start_offset=0,
+        condition="prompt_only",
+    )
+    assert audit["status"] == "failed"
+    assert audit["scanned_tool_events"] == 2
+    assert audit["hits"]
+    assert (
+        execution._audit_baseline_skill_access(
+            events,
+            start_offset=events.stat().st_size,
+            condition="free_codeact",
+        )["status"]
+        == "passed"
+    )
+    assert (
+        execution._audit_baseline_skill_access(
+            events,
+            start_offset=0,
+            condition="pertura_full",
+        )["status"]
+        == "not_applicable"
+    )
+
+
+def test_baseline_skill_leakage_invalidates_workflow_infrastructure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(execution, "ClaudePerturaAgent", _Agent)
+    monkeypatch.setattr(
+        execution,
+        "_resource_evidence",
+        lambda path: {
+            "mode": "scheduler",
+            "scheduler_job_id": "fixture-job",
+            "requested_memory_gb": 8,
+            "actual_memory_gb": 8,
+            "n_jobs": 1,
+            "timeout_seconds": 7200,
+            "peak_rss_mb": 100,
+        },
+    )
+
+    def execute(agent, prompt, timeout):
+        del prompt, timeout
+        event = {
+            "message_type": "AssistantMessage",
+            "payload": {
+                "content": [
+                    "ToolUseBlock(name='Read', input={'file_path': "
+                    "'/env/pertura_runtime/agent_bundle/skills/"
+                    "finalize-scientific-task/SKILL.md'})"
+                ]
+            },
+        }
+        events = agent.workspace.logs_dir / "events.jsonl"
+        events.parent.mkdir(parents=True, exist_ok=True)
+        events.write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+    result = execution.run_paper_agent_workflow(
+        "WF-REPL",
+        repo_root=ROOT,
+        cache=tmp_path / "cache",
+        paper_root=tmp_path / "paper",
+        output=tmp_path / "runs",
+        condition="prompt_only",
+        repeat_index=1,
+        task_catalog_path=ROOT / "benchmarks/paper_v1/agent_tasks.v2.json",
+        task_reference_catalog_path=_bound_task_references(tmp_path),
+        paper_anchor_catalog_path=ROOT / "benchmarks/paper_v1/paper_anchors.v1.json",
+        asset_catalog_path=_asset_catalog(tmp_path),
+        resource_evidence_path=tmp_path / "resource.json",
+        smoke_task_ids=("REPL-03",),
+        turn_executor=execute,
+        verify_checkpoint=False,
+    )
+
+    assert result["execution_status"] == "invalid_infrastructure"
+    assert result["score_status"] == "not_scored"
+    assert result["skill_leakage_detected"] is True
+    verdict = json.loads(Path(result["task_records"][0]["verdict"]).read_text())
+    assert verdict["hard_gates"]["no_skill_leakage"] is False
+    assert verdict["skill_leakage_audit"]["status"] == "failed"
 
 
 def test_regrade_never_invokes_provider(tmp_path: Path) -> None:
@@ -976,9 +1077,7 @@ def test_regrade_never_invokes_provider(tmp_path: Path) -> None:
     (root / "tasks/T/verdict.json").write_text("{}", encoding="utf-8")
     result = execution.regrade_paper_agent_workflow(root)
     assert result["provider_invoked"] is False
-    assert result["task_records"] == [
-        {"task_id": "T", "status": "judge_unavailable"}
-    ]
+    assert result["task_records"] == [{"task_id": "T", "status": "judge_unavailable"}]
 
 
 def test_dependency_assets_include_transitive_ancestors(tmp_path: Path) -> None:

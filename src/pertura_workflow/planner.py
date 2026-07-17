@@ -145,9 +145,7 @@ def build_codeact_handoff(
             f"{task_id}: CodeAct protocol binding is missing {sorted(missing)}"
         )
 
-    benchmark_result = PurePosixPath(
-        str(output_contract.get("benchmark_result") or "")
-    )
+    benchmark_result = PurePosixPath(str(output_contract.get("benchmark_result") or ""))
     if (
         not str(benchmark_result)
         or benchmark_result.is_absolute()
@@ -169,7 +167,8 @@ def build_codeact_handoff(
         str(role): {
             key: value
             for key, value in dict(asset).items()
-            if key in (
+            if key
+            in (
                 "asset_id",
                 "path",
                 "content_sha256",
@@ -186,9 +185,7 @@ def build_codeact_handoff(
     }
     blockers = []
     if not environment_ready.get(profile, False):
-        blockers.append(
-            f"frozen scientific environment is not ready: {profile}"
-        )
+        blockers.append(f"frozen scientific environment is not ready: {profile}")
     payload = {
         "schema_version": "pertura-codeact-handoff-v1",
         "task_id": task_id,
@@ -318,6 +315,9 @@ def compile_capability_execution_brief(
     output_contract: Mapping[str, Any] | None = None,
     registry: CapabilityRegistry | None = None,
     completion_checklist: Iterable[str] = (),
+    skill_plan: Mapping[str, Iterable[str]] | None = None,
+    skill_bundle_hash: str | None = None,
+    skill_resources: Mapping[str, Iterable[str]] | None = None,
     active_window_size: int = 5,
 ) -> dict[str, Any]:
     """Compile a deterministic P0 brief from an explicit candidate allowlist.
@@ -331,6 +331,8 @@ def compile_capability_execution_brief(
     asset_bindings = asset_bindings or {}
     environment_ready = environment_ready or {}
     output_contract = output_contract or {}
+    skill_plan = skill_plan or {}
+    skill_resources = skill_resources or {}
     registry = registry or CapabilityRegistry.load_default(include_external=False)
     candidates = tuple(dict.fromkeys(str(item) for item in candidate_capability_ids))
     results = tuple(committed_results)
@@ -457,6 +459,15 @@ def compile_capability_execution_brief(
             "design_facts": facts,
         },
         "assets": assets,
+        "skill_plan": {
+            str(phase): [str(item) for item in items]
+            for phase, items in skill_plan.items()
+        },
+        "skill_bundle_hash": skill_bundle_hash,
+        "skill_resources": {
+            str(skill): [str(item) for item in resources]
+            for skill, resources in skill_resources.items()
+        },
         "codeact_handoff": codeact_handoff,
         "nodes": nodes,
         "active_window": [
@@ -506,12 +517,8 @@ def build_capability_contract_catalog(
                 "input_requirements": list(spec.input_requirements),
                 "depends_on": list(spec.depends_on),
                 "dependency_kinds": list(spec.dependency_kinds),
-                "dependency_policy": dict(
-                    spec.metadata.get("dependency_policy") or {}
-                ),
-                "environment_profile": spec.metadata.get(
-                    "environment_profile"
-                ),
+                "dependency_policy": dict(spec.metadata.get("dependency_policy") or {}),
+                "environment_profile": spec.metadata.get("environment_profile"),
                 "output_kind": spec.output_kind,
                 "source_class": spec.source_class.value,
                 "claim_permissions": list(spec.claim_permissions),
@@ -585,7 +592,11 @@ def plan_analysis(
             "use the matching product tool"
         )
     profile = str(spec.metadata.get("environment_profile") or "")
-    if profile and environment_ready is not None and not environment_ready.get(profile, False):
+    if (
+        profile
+        and environment_ready is not None
+        and not environment_ready.get(profile, False)
+    ):
         blockers.append(f"required environment is unavailable: {profile}")
 
     required = tuple(spec.depends_on)
@@ -667,9 +678,17 @@ def resolve_dependencies(
     trusted_ids = set(trusted_receipt_result_ids)
     hints = tuple(dependency_hints)
     hint_ids = {
-        str(item.object_id if isinstance(item, DependencyRef) else item.get("object_id") or "")
+        str(
+            item.object_id
+            if isinstance(item, DependencyRef)
+            else item.get("object_id") or ""
+        )
         for item in hints
-        if str(item.object_id if isinstance(item, DependencyRef) else item.get("object_id") or "")
+        if str(
+            item.object_id
+            if isinstance(item, DependencyRef)
+            else item.get("object_id") or ""
+        )
     }
     by_id = {item.result_id: item for item in results}
     blockers: list[str] = []
@@ -687,15 +706,25 @@ def resolve_dependencies(
     ]
 
     for hint in hints:
-        hint_id = str(hint.object_id if isinstance(hint, DependencyRef) else hint.get("object_id") or "")
+        hint_id = str(
+            hint.object_id
+            if isinstance(hint, DependencyRef)
+            else hint.get("object_id") or ""
+        )
         stored = by_id.get(hint_id)
         if stored is None:
-            blockers.append(f"dependency hint does not reference a committed result: {hint_id}")
+            blockers.append(
+                f"dependency hint does not reference a committed result: {hint_id}"
+            )
             continue
         supplied_hash = str(
-            hint.object_hash if isinstance(hint, DependencyRef) else hint.get("object_hash") or ""
+            hint.object_hash
+            if isinstance(hint, DependencyRef)
+            else hint.get("object_hash") or ""
         )
-        supplied_kind = str(hint.kind if isinstance(hint, DependencyRef) else hint.get("kind") or "")
+        supplied_kind = str(
+            hint.kind if isinstance(hint, DependencyRef) else hint.get("kind") or ""
+        )
         supplied_state = str(
             hint.state if isinstance(hint, DependencyRef) else hint.get("state") or ""
         )
@@ -703,7 +732,9 @@ def resolve_dependencies(
             blockers.append(f"dependency hint hash mismatch: {hint_id}")
         if supplied_kind and supplied_kind != stored.result_kind:
             blockers.append(f"dependency hint kind mismatch: {hint_id}")
-        if supplied_state and supplied_state != ("stale" if stored.stale else "current"):
+        if supplied_state and supplied_state != (
+            "stale" if stored.stale else "current"
+        ):
             blockers.append(f"dependency hint state mismatch: {hint_id}")
 
     policy = dict(spec.metadata.get("dependency_policy") or {})
@@ -718,9 +749,9 @@ def resolve_dependencies(
         metadata.setdefault("upstream_spec_hashes", {})[
             dependency_capability
         ] = capability_scientific_hash(upstream_spec)
-        metadata.setdefault("upstream_dependency_policy_hashes", {})[dependency_capability] = canonical_hash(
-            dict(upstream_spec.metadata.get("dependency_policy") or {})
-        )
+        metadata.setdefault("upstream_dependency_policy_hashes", {})[
+            dependency_capability
+        ] = canonical_hash(dict(upstream_spec.metadata.get("dependency_policy") or {}))
         effective_spec = spec.model_copy(update={"metadata": metadata})
         expected_kind = str(
             dependency_policy.get("result_kind") or upstream_spec.output_kind
@@ -804,19 +835,13 @@ def resolve_dependencies(
         if not name:
             blockers.append("capability dependency set is missing a name")
             continue
-        accepted_kinds = {
-            str(item) for item in group.get("result_kinds") or ()
-        }
+        accepted_kinds = {str(item) for item in group.get("result_kinds") or ()}
         accepted_capabilities = {
             str(item) for item in group.get("capability_ids") or ()
         }
-        accepted_sources = {
-            str(item) for item in group.get("source_classes") or ()
-        }
+        accepted_sources = {str(item) for item in group.get("source_classes") or ()}
         accepted_statuses = {
-            str(item)
-            for item in group.get("accepted_statuses")
-            or _SUCCESS_STATUSES
+            str(item) for item in group.get("accepted_statuses") or _SUCCESS_STATUSES
         }
         scope_rule = str(group.get("scope_rule") or "exact")
         minimum = int(group.get("min_count", 1 if group.get("required", True) else 0))
@@ -828,7 +853,10 @@ def resolve_dependencies(
             issues: list[str] = []
             if accepted_kinds and item.result_kind not in accepted_kinds:
                 continue
-            if accepted_capabilities and item.capability_id not in accepted_capabilities:
+            if (
+                accepted_capabilities
+                and item.capability_id not in accepted_capabilities
+            ):
                 continue
             if accepted_sources and item.source_class.value not in accepted_sources:
                 continue
@@ -929,7 +957,9 @@ def design_facts(
     controls_defined = _confirmed(identity.get("control"))
     replicate_field = identity.get("replicate")
     replicate_value = (replicate_field or {}).get("value")
-    replicate_count = _count_values(replicate_value) if _confirmed(replicate_field) else 0
+    replicate_count = (
+        _count_values(replicate_value) if _confirmed(replicate_field) else 0
+    )
     moi_field = identity.get("design_moi")
     guide_design_field = identity.get("guide_design")
     moi = _confirmed_enum(moi_field, {"low", "high"})
@@ -1100,7 +1130,6 @@ def _requirement_blockers(
     return blockers
 
 
-
 def _candidate_issues(
     result: ResultEnvelope,
     *,
@@ -1124,24 +1153,21 @@ def _candidate_issues(
     if result.stale:
         issues.append("stale")
     accepted = set(
-        dependency_policy.get("accepted_statuses")
-        or _accepted_statuses(upstream_kind)
+        dependency_policy.get("accepted_statuses") or _accepted_statuses(upstream_kind)
     )
     if _status(result) not in accepted:
         issues.append("status_not_accepted")
     if expected_kind and result.result_kind != expected_kind:
         issues.append("wrong_result_kind")
-    if any(
-        item.required and item.state != "current" for item in result.dependencies
-    ):
+    if any(item.required and item.state != "current" for item in result.dependencies):
         issues.append("upstream_dependency_not_current")
     scope_mode = str(dependency_policy["scope"])
     if not _dependency_set_scope_ok(required_scope, result.scope, scope_mode):
         issues.append("scope_mismatch")
     if result.capability_version == upstream_version:
-        expected_spec_hash = downstream_spec.metadata.get("upstream_spec_hashes", {}).get(
-            result.capability_id
-        )
+        expected_spec_hash = downstream_spec.metadata.get(
+            "upstream_spec_hashes", {}
+        ).get(result.capability_id)
         # The registry-owned caller supplies current hashes below; absence in old
         # result metadata makes the result historical-only.
         actual_spec_hash = str(result.metadata.get("capability_spec_hash") or "")
@@ -1208,8 +1234,6 @@ def _append_dependency(
     if any((item.kind, item.object_id) == identity for item in dependencies):
         return
     dependencies.append(dependency)
-
-
 
 
 def _confirmed(value: Mapping[str, Any] | None) -> bool:

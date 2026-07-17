@@ -23,14 +23,18 @@ def test_bundled_skill_manifest_is_current_and_provider_neutral() -> None:
     manifest = bundled_skill_manifest()
 
     assert manifest["schema_version"] == "pertura-agent-skill-bundle-v1"
-    assert [item["name"] for item in manifest["skills"]] == list(
-        BUNDLED_SKILL_NAMES
-    )
+    assert manifest["bundle_version"] == "0.2.0"
+    assert len(BUNDLED_SKILL_NAMES) == 9
+    assert [item["name"] for item in manifest["skills"]] == list(BUNDLED_SKILL_NAMES)
     assert manifest["bundle_hash"].startswith("sha256:")
-    assert all(item["content_hash"].startswith("sha256:") for item in manifest["skills"])
+    assert all(
+        item["content_hash"].startswith("sha256:") for item in manifest["skills"]
+    )
 
 
-def test_default_skill_configuration_is_allowlisted_and_path_free_in_provenance() -> None:
+def test_default_skill_configuration_is_allowlisted_and_path_free_in_provenance() -> (
+    None
+):
     resolved = resolve_skill_configuration()
 
     assert [item["type"] for item in resolved.plugins] == ["local"]
@@ -132,6 +136,7 @@ def test_sdk_initialized_skill_surface_must_match_allowlist() -> None:
     with pytest.raises(RuntimeError, match="unexpected skill surface"):
         _validate_sdk_skill_surface((), (expected[0], *provider_native))
 
+
 def test_sdk_init_event_records_available_skills(tmp_path: Path) -> None:
     from pertura_runtime.claude.manifest import ClaudeRunManifest
     from pertura_runtime.claude.workspace import ClaudeRunWorkspace
@@ -151,7 +156,9 @@ def test_sdk_init_event_records_available_skills(tmp_path: Path) -> None:
     manifest.capture(SystemMessage())
     manifest.flush()
 
-    recorded = json.loads((workspace.root / "manifest.json").read_text(encoding="utf-8"))
+    recorded = json.loads(
+        (workspace.root / "manifest.json").read_text(encoding="utf-8")
+    )
     assert recorded["sdk_init_seen"] is True
     assert recorded["sdk_plugins"] == ["pertura"]
     assert recorded["sdk_available_skills"] == [

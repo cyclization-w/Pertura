@@ -1,0 +1,4 @@
+interface:
+  display_name: "Replicate-Aware Pseudobulk DE"
+  short_description: "Run paired pseudobulk differential expression"
+  default_prompt: "Use $run-replicate-aware-pseudobulk-de to aggregate independent units and fit a paired edgeR QL model."

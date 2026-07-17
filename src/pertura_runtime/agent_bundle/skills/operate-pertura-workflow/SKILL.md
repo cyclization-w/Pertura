@@ -9,7 +9,7 @@ Use Pertura as the scientific commit path while keeping CodeAct available for ex
 
 ## Workflow
 
-1. Call `inspect_dataset` before scientific analysis. Review unresolved design fields and the recommended next capabilities.
+1. If the run provides `task/PERTURA_CAPABILITY_PLAN.json`, read it once and use its registered DatasetContract, assets, route, blockers, and output contract. Do not call `inspect_dataset` again. Otherwise, call `inspect_dataset` before scientific analysis and review unresolved design fields and recommended next capabilities.
 2. Use file inspection, shell commands, Python, R, or notebooks to understand the data. Write exploratory outputs only under the run output directory.
 3. Run the relevant diagnostics with `run_diagnostic`. Treat `blocked` and `unresolved` as information about missing design or data, not as permission to guess.
 4. Call `run_analysis` with the scientific objective. Let the runtime select or validate the capability; do not silently replace a blocked method.

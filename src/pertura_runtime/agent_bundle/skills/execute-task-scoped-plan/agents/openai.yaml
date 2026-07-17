@@ -1,0 +1,4 @@
+interface:
+  display_name: "Execute Task-Scoped Plan"
+  short_description: "Follow a frozen scientific task plan safely"
+  default_prompt: "Use $execute-task-scoped-plan to follow the frozen task brief without rediscovering contracts."

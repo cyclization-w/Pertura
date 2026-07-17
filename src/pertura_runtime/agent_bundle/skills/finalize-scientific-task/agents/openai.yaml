@@ -1,0 +1,4 @@
+interface:
+  display_name: "Finalize Scientific Task"
+  short_description: "Checkpoint and close scientific task outputs"
+  default_prompt: "Use $finalize-scientific-task to checkpoint artifacts and finish the required result contract."

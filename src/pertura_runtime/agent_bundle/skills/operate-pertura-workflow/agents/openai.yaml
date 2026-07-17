@@ -1,4 +1,4 @@
 interface:
   display_name: "Pertura Workflow"
   short_description: "Operate the five-tool Pertura workflow"
-  default_prompt: "Use -pertura-workflow to analyze this Perturb-seq project with Pertura."
+  default_prompt: "Use $operate-pertura-workflow to analyze this Perturb-seq project with Pertura."

@@ -1,11 +1,11 @@
 {
-  "bundle_hash": "sha256:59d1d4435f5297c37e28a52de2250f96b03692b99f8ee02df905542494cf71ea",
+  "bundle_hash": "sha256:963498f457d2f50ab7d182d8b88862bc3fe84b74e2aeb480dd2ab211dc0c6954",
   "bundle_id": "pertura",
-  "bundle_version": "0.1.0",
+  "bundle_version": "0.2.0",
   "schema_version": "pertura-agent-skill-bundle-v1",
   "skills": [
     {
-      "content_hash": "sha256:eff268ca3e902b4b9dbce2af1bafe5caae14c9761e294742bd797d6606839dea",
+      "content_hash": "sha256:22a8a0f0f7e5a1a6e404d9d5eebe3cf7dee5915153cf5b0fb362a6b2b2f12a76",
       "files": [
         "SKILL.md",
         "agents/openai.yaml"
@@ -54,6 +54,49 @@
         "references/virtual-evaluation.md"
       ],
       "name": "evaluate-virtual-perturb-seq-model",
+      "version": "0.1.0"
+    },
+    {
+      "content_hash": "sha256:8efd97c512eccdb850f0200c6cffb90eac72452f8e5f23ce86bee26e608eb131",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/route-semantics.md"
+      ],
+      "name": "execute-task-scoped-plan",
+      "version": "0.1.0"
+    },
+    {
+      "content_hash": "sha256:ba2adac25844f3730aba0603de6ad4d4aaaa89888ec980ba02151d7dc1f1f1fb",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/configuration.md",
+        "scripts/materialize_pseudobulk.py",
+        "scripts/run_edger_ql.R"
+      ],
+      "name": "run-replicate-aware-pseudobulk-de",
+      "version": "0.1.0"
+    },
+    {
+      "content_hash": "sha256:22e6abd0bcb91d4a796e2251bedd26c20b5623d71e94398778b897bb87a1b6ef",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/configuration.md",
+        "scripts/run_paired_label_null.R"
+      ],
+      "name": "run-design-preserving-null-calibration",
+      "version": "0.1.0"
+    },
+    {
+      "content_hash": "sha256:2c80a2308375fd898e06edf31335f8d805d59b3920f091a2bde379e99e6d74d6",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/result-checklist.md"
+      ],
+      "name": "finalize-scientific-task",
       "version": "0.1.0"
     }
   ]
