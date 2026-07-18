@@ -216,6 +216,12 @@ def test_r_templates_encode_answer_free_frozen_methods() -> None:
     assert "2^length(units) - 2L" in null
     assert "sort(unique" in null
     assert "full_gene_output" in edger
+    assert '"condition_column", "baseline", "robust"' in edger
+    assert '"condition_column", "baseline", "target", "robust"' in null
+    assert "robust <- isTRUE(cfg$robust)" in edger
+    assert "robust <- isTRUE(cfg$robust)" in null
+    assert "if (is.null(cfg$robust))" not in combined
+    assert "robust = robust" in edger
     for forbidden in ("papalexi", "kang18", "task_reference", "evaluator"):
         assert forbidden not in combined
 
@@ -226,6 +232,8 @@ def test_method_skills_consume_frozen_protocol_without_handoff() -> None:
 
     assert "frozen `codeact_protocol`" in pseudobulk
     assert "frozen `codeact_protocol`" in null
+    assert "Copy the explicit `robust` boolean" in pseudobulk
+    assert "explicit `robust` value" in null
     assert "Do not require an execution brief or CodeAct handoff" in pseudobulk
     assert "Do not require an execution brief or CodeAct handoff" in null
 

@@ -71,6 +71,47 @@ def test_papa02_binds_the_frozen_ref03_control_reference() -> None:
     )
 
 
+def test_papa01_freezes_proxy_row_scope_and_ambient_boundary() -> None:
+    catalog = load_paper_task_catalog(CATALOG)
+    task = next(task for task in catalog.tasks() if task["task_id"] == "PAPA-01")
+    semantics = task["output_contract"]["artifact_semantics"]
+
+    assert semantics["guide_assignment.tsv"] == {
+        "row_scope": "all_guide_matrix_cells",
+        "key_columns": ["cell_id"],
+        "proxy_class_values": [
+            "external_label_top_count_match",
+            "external_label_top_count_mismatch",
+            "no_external_label_no_count",
+            "no_external_label_with_count",
+        ],
+    }
+    assert semantics["ambient_qc.json"] == {
+        "status": "unresolved",
+        "evidence_class": "external_label_proxy_only",
+        "reason": "raw empty-droplet evidence is unavailable",
+    }
+    assert semantics["retained_cell_manifest.tsv"] == {
+        "row_scope": "registered_calibration_and_evaluation_selections",
+        "key_columns": ["dataset_id", "split", "cell_id"],
+        "expected_state_values": [
+            "retain_for_external_label_proxy",
+            "unresolved_without_assignment_truth",
+        ],
+    }
+
+    references = json.loads(REFERENCES.read_text(encoding="utf-8"))
+    binding = next(
+        item for item in references["bindings"] if item["task_id"] == "PAPA-01"
+    )
+    assert binding["protocol_evaluator"]["required_json_values"] == {
+        "ambient_qc.json": {
+            "status": "unresolved",
+            "evidence_class": "external_label_proxy_only",
+        }
+    }
+
+
 def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
     tmp_path: Path,
 ) -> None:
@@ -238,6 +279,11 @@ def test_v2_catalog_freezes_task_scoped_skill_bindings() -> None:
         == "calibration_split"
     )
     assert by_id["KANG-01"]["codeact_protocol"]["target"] == "stim"
+    assert by_id["KANG-01"]["codeact_protocol"]["robust"] is False
+    assert by_id["PAPA-06"]["codeact_protocol"]["robust"] is True
+    assert by_id["PAPA-06"]["codeact_protocol"]["analysis_unit"] == (
+        "target_by_replicate_pseudobulk"
+    )
     for task_id in ("KANG-01", "PAPA-06"):
         protocol = by_id[task_id]["codeact_protocol"]
         assert protocol["environment_profile"] == "edger-v1"

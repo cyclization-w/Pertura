@@ -1,5 +1,5 @@
 {
-  "bundle_hash": "sha256:a62fe3a8ca68d1279007ebc8f333947e2b17920e6c352285118ea43e4e2e1328",
+  "bundle_hash": "sha256:87c238c527fe1b88ef301ef5d1e49715affa6cab8298c169218b221d86aa350a",
   "bundle_id": "pertura",
   "bundle_version": "0.2.0",
   "schema_version": "pertura-agent-skill-bundle-v1",
@@ -57,7 +57,7 @@
       "version": "0.1.0"
     },
     {
-      "content_hash": "sha256:c96ab80bdbd1b8e0b0f90fdb0d83cb0662458919c26c1ff334ab0473cc932df0",
+      "content_hash": "sha256:17bb3af8243143a1a90e66150422d4b76bb29cbb95f412ad12a2ad619f0121f1",
       "files": [
         "SKILL.md",
         "agents/openai.yaml",
@@ -70,7 +70,7 @@
       "version": "0.1.0"
     },
     {
-      "content_hash": "sha256:d367d5f344864b27bbe8047f0e8fec7bd6d726c06f0bf5409c0a3c34dacfeee3",
+      "content_hash": "sha256:2412806c4b7eb1bb84ce749aab9ff96ce73e03830af9df91de50741de1a151a6",
       "files": [
         "SKILL.md",
         "agents/openai.yaml",

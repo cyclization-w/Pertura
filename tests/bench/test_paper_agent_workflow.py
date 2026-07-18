@@ -588,6 +588,9 @@ def test_static_contract_context_is_disclosed_only_to_pertura_full() -> None:
 
     assert "contract_fixture" in full
     assert "task/capability_contracts/PAPA-01.json" in full
+    assert "all_guide_matrix_cells" in full
+    assert "raw empty-droplet evidence is unavailable" in full
+    assert "registered_calibration_and_evaluation_selections" in full
     assert "do not call inspect_dataset again" in full
     assert (
         'exact SDK Skill tool names frozen for this task are '
@@ -636,6 +639,7 @@ def test_kang_full_prompt_requires_exact_frozen_skill_order() -> None:
     assert full.index(expected[0]) < full.index(expected[1]) < full.index(expected[2])
     assert "Before any task-scientific Read" in full
     assert "invoke each of those exact names once with the Skill tool" in full
+    assert '"robust": false' in full
     for skill in expected:
         assert full.count(skill) == 1
         assert skill not in prompt

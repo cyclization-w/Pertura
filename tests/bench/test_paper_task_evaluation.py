@@ -59,6 +59,7 @@ def _trans_de_fixture(tmp_path: Path):
             {
                 "formula": "~ replicate + condition",
                 "baseline": "NTC",
+                "robust": True,
                 "cell_is_replicate": False,
                 "guide_is_replicate": False,
                 "minimum_paired_replicates": 2,
@@ -123,6 +124,16 @@ def test_trans_de_reference_passes_and_rejects_analysis_unit_attacks(tmp_path: P
     )
     assert attacked["status"] == "failed"
 
+    result["analysis_unit"] = "target-by-replicate pseudobulk"
+    noncanonical = evaluate_paper_task(
+        task,
+        benchmark_result=result,
+        task_output_root=output,
+        paper_root=paper,
+        bindings=[binding],
+    )
+    assert noncanonical["status"] == "failed"
+
 
 def test_trans_de_rejects_wrong_baseline_forgery_and_reference_drift(tmp_path: Path) -> None:
     paper, output, task, result, binding, reference = _trans_de_fixture(tmp_path)
@@ -132,6 +143,17 @@ def test_trans_de_rejects_wrong_baseline_forgery_and_reference_drift(tmp_path: P
     assert evaluate_paper_task(task, benchmark_result=result, task_output_root=output, paper_root=paper, bindings=[binding])["status"] == "failed"
 
     design["baseline"] = "NTC"
+    design["robust"] = False
+    (output / "trans_de_design_manifest.json").write_text(json.dumps(design))
+    assert evaluate_paper_task(
+        task,
+        benchmark_result=result,
+        task_output_root=output,
+        paper_root=paper,
+        bindings=[binding],
+    )["status"] == "failed"
+
+    design["robust"] = True
     (output / "trans_de_design_manifest.json").write_text(json.dumps(design))
     observed = pd.read_csv(output / "trans_de_results.tsv", sep="\t")
     observed.loc[0, "logFC"] = 99

@@ -7,8 +7,14 @@ suppressPackageStartupMessages({
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) != 1L) stop("usage: run_edger_ql.R CONFIG.json")
 cfg <- fromJSON(args[[1]], simplifyVector = TRUE)
-required <- c("mode", "samples_tsv", "output_dir", "unit_column", "condition_column", "baseline")
+required <- c(
+  "mode", "samples_tsv", "output_dir", "unit_column",
+  "condition_column", "baseline", "robust"
+)
 if (!all(required %in% names(cfg))) stop("configuration is incomplete")
+if (!is.logical(cfg$robust) || length(cfg$robust) != 1L || is.na(cfg$robust)) {
+  stop("robust must be an explicit boolean from the frozen protocol")
+}
 dir.create(cfg$output_dir, recursive = TRUE, showWarnings = FALSE)
 
 read_counts <- function() {
@@ -45,7 +51,7 @@ if (ncol(counts) != nrow(samples)) stop("sample/count dimension mismatch")
 if (is.null(colnames(counts))) colnames(counts) <- samples$sample_id
 if (!setequal(colnames(counts), samples$sample_id)) stop("sample/count identity mismatch")
 samples <- samples[match(colnames(counts), samples$sample_id), , drop = FALSE]
-robust <- if (is.null(cfg$robust)) TRUE else isTRUE(cfg$robust)
+robust <- isTRUE(cfg$robust)
 
 fit_one <- function(selected_counts, selected_samples, target_label) {
   selected_samples$unit__ <- factor(selected_samples[[cfg$unit_column]])
@@ -157,6 +163,7 @@ manifest <- list(
   schema_version = "pertura-edger-ql-design-v1",
   formula = paste("~", cfg$unit_column, "+", cfg$condition_column),
   baseline = cfg$baseline,
+  robust = robust,
   cell_is_replicate = FALSE,
   guide_is_replicate = FALSE,
   minimum_paired_replicates = 2L,

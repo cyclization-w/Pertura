@@ -11,7 +11,7 @@ Use only the registered calibration split and the task's frozen `codeact_protoco
 
 1. Confirm that calibration and evaluation selections are distinct registered inputs.
 2. Require at least three paired independent units with one baseline and one target pseudobulk per unit.
-3. Confirm the same count preprocessing, design, contrast, and filtering used by the primary fit.
+3. Confirm the same count preprocessing, design, contrast, filtering, and explicit `robust` value used by the primary fit.
 4. Stop on missing pairs, rank deficiency, nonexchangeable labels, or ambiguous unit identity.
 
 ## Calibrate

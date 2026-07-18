@@ -8,9 +8,12 @@ if (length(args) != 1L) stop("usage: run_paired_label_null.R CONFIG.json")
 cfg <- fromJSON(args[[1]], simplifyVector = TRUE)
 required <- c(
   "counts_tsv", "samples_tsv", "output_path", "unit_column",
-  "condition_column", "baseline", "target"
+  "condition_column", "baseline", "target", "robust"
 )
 if (!all(required %in% names(cfg))) stop("configuration is incomplete")
+if (!is.logical(cfg$robust) || length(cfg$robust) != 1L || is.na(cfg$robust)) {
+  stop("robust must be an explicit boolean from the frozen protocol")
+}
 
 table <- read.delim(cfg$counts_tsv, check.names = FALSE, stringsAsFactors = FALSE)
 genes <- as.character(table[[1]])
@@ -35,7 +38,7 @@ expected <- c(cfg$baseline, cfg$target)
 if (!setequal(colnames(pairing), expected) || any(pairing[, expected, drop = FALSE] != 1L)) {
   stop("each independent unit must have exactly one sample per condition")
 }
-robust <- if (is.null(cfg$robust)) TRUE else isTRUE(cfg$robust)
+robust <- isTRUE(cfg$robust)
 
 fit_one <- function(condition) {
   design_data <- samples

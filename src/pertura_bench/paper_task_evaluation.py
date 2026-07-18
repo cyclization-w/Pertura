@@ -291,12 +291,10 @@ def _evaluate_trans_de(
         design_targets = set(str(item) for item in design.get("targets") or ())
         analysis_unit_correct = bool(
             benchmark_result.get("analysis_unit")
-            in {
-                "target_by_replicate_pseudobulk",
-                "target-by-replicate pseudobulk",
-            }
+            == "target_by_replicate_pseudobulk"
             and design.get("formula") == "~ replicate + condition"
             and design.get("baseline") == "NTC"
+            and design.get("robust") is True
             and design.get("cell_is_replicate") is False
             and design.get("guide_is_replicate") is False
             and design_targets == eligible_targets

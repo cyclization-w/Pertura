@@ -35,9 +35,9 @@ Pass one JSON file to `run_edger_ql.R` with:
 
 - `mode`: `single` or `per_target`;
 - `counts_tsv` or `counts_mtx` plus `genes_tsv`;
-- `samples_tsv`, `output_dir`, `unit_column`, `condition_column`, and `baseline`;
+- `samples_tsv`, `output_dir`, `unit_column`, `condition_column`, `baseline`, and the explicit boolean `robust` copied from the frozen protocol;
 - for `single`, `target`; for `per_target`, `target_column`, `control_label`, and optional `eligibility_tsv`;
-- optional `full_gene_output` and `robust`.
+- optional `full_gene_output`.
 
 The sample table must contain `sample_id`. Per-target mode requires at least two paired units for every eligible target. Output filenames come from the task output contract; rename only within the current task directory when the generic defaults differ.
 
@@ -59,3 +59,5 @@ Example for a registered per-target pseudobulk input:
   "robust": true
 }
 ```
+
+The example value matches the generic per-target reference protocol. Other frozen tasks may require `false`; never infer or substitute this value.

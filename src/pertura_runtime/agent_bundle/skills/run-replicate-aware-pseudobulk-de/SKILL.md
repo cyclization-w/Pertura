@@ -18,7 +18,7 @@ Use only the inputs, environment, analysis unit, baseline, design, column bindin
 ## Execute
 
 1. Set `SKILL_DIR` to the base directory reported by the Skill tool for this skill.
-2. Write only task-local JSON configuration files described in [configuration](references/configuration.md). Do not write a replacement Python or R analysis script.
+2. Write only task-local JSON configuration files described in [configuration](references/configuration.md). Copy the explicit `robust` boolean from the frozen protocol; do not choose a default. Do not write a replacement Python or R analysis script.
 3. For cell-level input, aggregate counts with:
 
    ```bash
