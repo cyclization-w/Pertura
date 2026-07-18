@@ -4,7 +4,7 @@ This document records pre-formal canary evidence. Canary outcomes validate the
 frozen execution and measurement path; they are not included in the formal
 benchmark aggregates.
 
-## Frozen checkpoint
+## Superseded diagnostic checkpoint
 
 - Git commit: `666cc99d21f7cb05ad215a44018ea04c94ac1b3b`
 - Provider condition: `pertura_full`
@@ -14,6 +14,11 @@ benchmark aggregates.
 
 Any code, prompt, skill, task contract, submission schema, reference, or scorer
 change invalidates the canaries recorded for this checkpoint.
+
+PB-053 subsequently changed the provider-visible analysis-unit contract and
+the disposition of lexical compliance. The checkpoint below is therefore
+retained as diagnostic evidence for the typed-submission and scientific-method
+paths, not as the final pre-formal canary checkpoint.
 
 ## KANG-01 supplemental scientific-fidelity canary
 
@@ -75,8 +80,27 @@ The authoritative evidence remains the server-side files and verdict under the
 execution root above; file sizes here are an audit index, not scientific
 measurements.
 
-## Remaining final canaries
+## PAPA-01 reporting-contract diagnostic
 
+- Slurm job: `34483532`
+- Analysis run: `run_931b39d87f104bde87a008cd50d9ce37`
+- Execution root: `/scratch/users/twang05/Project/PerturaBenchmark/paper-v1/canary/a19/WF-PAPA/pertura_full/repeat-1/2f70ed603a7541899070b526d3d65d6b`
+- Artifact evaluator: passed, comparisons `[true, true]`
+- Submitted analysis unit: `guide_assignment_and_qc`
+- Hidden evaluator unit: `cell`
+- Lexical miss: `multi-guide|multi guide`
+- Benchmark treatment: invalid canary under the superseded hidden reporting
+  contract; excluded from formal results
+
+The submitted findings did describe secondary-guide ambiguity relative to a
+transcriptomic doublet proxy. This run demonstrated that literal pattern
+matching could reject semantically equivalent reporting and motivated the
+structured/lexical route separation in PB-053. PAPA-02 was not selected in this
+job.
+
+## Required final canaries on the replacement checkpoint
+
+- [ ] `KANG-01 / pertura_full`
 - [ ] `PAPA-01 + PAPA-02 / pertura_full`
 - [ ] `PAPA-06 / prompt_only`
 - [ ] `REPL-01 / free_codeact`

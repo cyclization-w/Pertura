@@ -113,6 +113,37 @@ def test_submission_rejects_wrong_bound_identity(tmp_path: Path) -> None:
     assert {item["type"] for item in response["errors"]} == {"identity_mismatch"}
 
 
+def test_submission_rejects_analysis_unit_outside_bound_vocabulary(
+    tmp_path: Path,
+) -> None:
+    service = TaskSubmissionService(tmp_path)
+    service.bind_task(
+        task_id="T-01",
+        dataset_id="D-01",
+        allowed_analysis_units=("cell",),
+    )
+
+    for invalid_unit in ("guide_assignment_and_qc", "Cell"):
+        response = service.submit_task_bundle(
+            {
+                "benchmark_result": _result(analysis_unit=invalid_unit),
+                "turn_draft": _draft(),
+            }
+        )
+
+        assert response["accepted"] is False
+        assert response["errors"] == [
+            {
+                "field": "benchmark_result.analysis_unit",
+                "message": "must be one of the bound values ['cell']",
+                "type": "enum_mismatch",
+            }
+        ]
+    assert not (
+        tmp_path / "outputs/tasks/T-01/submission_receipt.json"
+    ).exists()
+
+
 def test_mcp_wrapper_returns_visible_rejection_and_acceptance(
     tmp_path: Path,
     monkeypatch,

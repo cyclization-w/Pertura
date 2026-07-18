@@ -64,6 +64,47 @@ def test_every_task_has_one_reference_binding_and_known_paper_anchor() -> None:
     assert validate_paper_anchor_catalog(anchors, catalog.tasks()) == []
 
 
+def test_provider_visible_analysis_units_match_evaluator_without_text_leakage() -> None:
+    catalog = load_paper_task_catalog(CATALOG)
+    references = json.loads(REFERENCES.read_text(encoding="utf-8"))
+    tasks = {str(task["task_id"]): task for task in catalog.tasks()}
+    observed_tasks = 0
+    observed_values = 0
+
+    for binding in references["bindings"]:
+        task = tasks[str(binding["task_id"])]
+        output_contract = task["output_contract"]
+        protocol = binding.get("protocol_evaluator") or {}
+        expected = list(protocol.get("allowed_analysis_units") or ())
+        observed = list(output_contract.get("allowed_analysis_units") or ())
+        assert observed == expected
+        assert "required_text_patterns" not in output_contract
+        assert "forbidden_text_patterns" not in output_contract
+        if observed:
+            observed_tasks += 1
+            observed_values += len(observed)
+
+    assert observed_tasks == 15
+    assert observed_values == 26
+
+    invalid = json.loads(CATALOG.read_text(encoding="utf-8"))
+    papa = next(
+        task
+        for workflow in invalid["workflows"]
+        for task in workflow["turns"]
+        if task["task_id"] == "PAPA-01"
+    )
+    papa["output_contract"]["allowed_analysis_units"] = ["cell_barcode"]
+    problems = validate_task_reference_catalog(
+        references,
+        [task for workflow in invalid["workflows"] for task in workflow["turns"]],
+    )
+    assert any(
+        "TREF-PAPA-01: provider-visible analysis units do not match" in problem
+        for problem in problems
+    )
+
+
 def test_task_reference_domains_separate_protocol_from_scientific_fidelity() -> None:
     catalog = load_paper_task_catalog(CATALOG)
     references = json.loads(REFERENCES.read_text(encoding="utf-8"))

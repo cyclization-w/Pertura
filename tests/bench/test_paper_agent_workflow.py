@@ -237,6 +237,11 @@ def test_task_prompt_separates_result_file_from_turn_draft() -> None:
         assert "runner initialized" in prompt
         assert "Leaving it unchanged is a scored task failure" in prompt
         assert '"analysis_unit": "donor"' in prompt
+        assert (
+            "For benchmark_result.analysis_unit, use exactly one value from the "
+            'task-scoped controlled vocabulary ["donor", "donor_pseudobulk"]'
+        ) in prompt
+        assert "required_text_patterns" not in prompt
 
 
 def test_formal_runner_excludes_experimental_control_layers() -> None:

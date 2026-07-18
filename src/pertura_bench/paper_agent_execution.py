@@ -314,6 +314,15 @@ def run_paper_agent_workflow(
             submission_service.bind_task(
                 task_id=task_id,
                 dataset_id=str(workflow["dataset_id"]),
+                allowed_analysis_units=tuple(
+                    str(item)
+                    for item in (
+                        (task.get("output_contract") or {}).get(
+                            "allowed_analysis_units"
+                        )
+                        or ()
+                    )
+                ),
             )
             task_root = execution_root / "tasks" / task_id
             task_root.mkdir(parents=True, exist_ok=True)
@@ -985,6 +994,20 @@ def _task_prompt(
         else "Use the available generic CodeAct tools under this benchmark condition."
     )
     task_output_root = f"outputs/tasks/{task['task_id']}"
+    allowed_analysis_units = tuple(
+        str(item)
+        for item in (
+            (task.get("output_contract") or {}).get("allowed_analysis_units") or ()
+        )
+    )
+    analysis_unit_policy = (
+        "For benchmark_result.analysis_unit, use exactly one value from the "
+        f"task-scoped controlled vocabulary {json.dumps(allowed_analysis_units)}. "
+        "This vocabulary constrains the output field; it is not an evaluation "
+        "answer or scientific result. "
+        if allowed_analysis_units
+        else ""
+    )
     artifact_destinations = {
         str(role): f"{task_output_root}/{relative}"
         for role, relative in (
@@ -1095,6 +1118,7 @@ def _task_prompt(
         "text, metric_ids, and artifact_roles. Do not put hypotheses, "
         "questions_for_user, next_steps, artifact_refs, declared_role, "
         "result_ids, or finding-level limitations in benchmark_result.json. "
+        f"{analysis_unit_policy}"
         "The metrics object is a self-reported index only and cannot replace "
         "the required scientific artifacts. "
         f"Submit the benchmark result and separate pertura-turn-draft-v1 object "

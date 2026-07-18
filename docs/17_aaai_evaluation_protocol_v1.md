@@ -231,6 +231,18 @@ benchmark_result.json
 
 Before each task, the runner writes the same schema-valid neutral blocked checkpoint for all conditions. The provider must update it from actual execution evidence. An unchanged, deleted, or invalid result fails the `provider_result_updated` and/or schema gate; the runner never derives findings, analysis units, artifact roles, or completion from the task protocol, TurnDraft, filenames, or references.
 
+The provider-visible task output contract publishes the complete controlled
+vocabulary accepted by `benchmark_result.analysis_unit`. The typed submission
+boundary rejects values outside that task-scoped enum, and checkpoint binding
+requires exact agreement between the visible enum and the post-provider
+evaluator. Evaluator text patterns are not provider-visible. They are emitted
+as a separate `text_pattern_compliance` route: this route is non-dispositive
+for scientific and supplemental scientific-fidelity tasks, while tasks already
+declared as protocol/claim compliance retain it as a lexical heuristic with an
+explicit semantic-equivalence limitation. Artifact comparisons, structured
+status/unit/limitation gates, required outputs, and required JSON values remain
+dispositive.
+
 For `pertura_full`, automatic hard gates include:
 
 - actual tool and capability DAG;

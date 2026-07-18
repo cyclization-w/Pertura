@@ -89,25 +89,43 @@ def evaluate_paper_task(
                             else "failed"
                         ),
                         "route": "artifact_evaluator",
+                        "affects_task_status": True,
                         **artifact,
                     }
                 )
             if protocol:
                 route_evaluations.append(
-                    _evaluate_protocol_hard_gate(
+                    _evaluate_structured_protocol_gate(
                         benchmark_result,
                         task_output_root=task_output_root,
                         spec=protocol,
                     )
                 )
+                text_compliance = _evaluate_text_pattern_compliance(
+                    benchmark_result,
+                    spec=protocol,
+                )
+                if text_compliance is not None:
+                    text_compliance["affects_task_status"] = str(
+                        binding.get("evaluation_domain") or ""
+                    ) not in {
+                        "scientific_fidelity",
+                        "supplemental_scientific_fidelity",
+                    }
+                    route_evaluations.append(text_compliance)
+            scored_routes = [
+                item
+                for item in route_evaluations
+                if item.get("affects_task_status") is not False
+            ]
             evaluations.append(
                 {
                     "status": (
                         "passed"
-                        if route_evaluations
+                        if scored_routes
                         and all(
                             item.get("status") == "passed"
-                            for item in route_evaluations
+                            for item in scored_routes
                         )
                         else "failed"
                     ),
@@ -476,7 +494,7 @@ def _claim_class(fdr: float) -> str:
     return "not_detected"
 
 
-def _evaluate_protocol_hard_gate(
+def _evaluate_structured_protocol_gate(
     benchmark_result: Mapping[str, Any],
     *,
     task_output_root: Path,
@@ -496,18 +514,6 @@ def _evaluate_protocol_hard_gate(
     limitations = tuple(str(item) for item in benchmark_result.get("limitations") or ())
     if len(limitations) < int(spec.get("minimum_limitation_count", 0)):
         problems.append("required limitations are missing")
-    text = "\n".join(
-        [
-            *(str(item.get("text") or "") for item in benchmark_result.get("findings") or ()),
-            *limitations,
-        ]
-    )
-    for pattern in spec.get("required_text_patterns") or ():
-        if re.search(str(pattern), text, flags=re.IGNORECASE) is None:
-            problems.append(f"required protocol language is missing: {pattern}")
-    for pattern in spec.get("forbidden_text_patterns") or ():
-        if re.search(str(pattern), text, flags=re.IGNORECASE) is not None:
-            problems.append(f"forbidden protocol language is present: {pattern}")
     output_hashes: dict[str, str] = {}
     for relative in spec.get("required_outputs") or ():
         try:
@@ -592,12 +598,55 @@ def _evaluate_protocol_hard_gate(
             problems.append(str(exc))
     return {
         "status": "passed" if not problems else "failed",
-        "route": "protocol_hard_gate",
+        "route": "structured_protocol_gate",
+        "affects_task_status": True,
         "problems": problems,
         "observed_output_hashes": output_hashes,
         "observed_table_row_counts": observed_row_counts,
         "observed_json_values": observed_json_values,
         "observed_json_balances": observed_json_balances,
+    }
+
+
+def _evaluate_text_pattern_compliance(
+    benchmark_result: Mapping[str, Any],
+    *,
+    spec: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    required = tuple(str(item) for item in spec.get("required_text_patterns") or ())
+    forbidden = tuple(str(item) for item in spec.get("forbidden_text_patterns") or ())
+    if not required and not forbidden:
+        return None
+    text = "\n".join(
+        [
+            *(
+                str(item.get("text") or "")
+                for item in benchmark_result.get("findings") or ()
+            ),
+            *(str(item) for item in benchmark_result.get("limitations") or ()),
+        ]
+    )
+    problems: list[str] = []
+    missing_required: list[str] = []
+    matched_forbidden: list[str] = []
+    for pattern in required:
+        if re.search(pattern, text, flags=re.IGNORECASE) is None:
+            missing_required.append(pattern)
+            problems.append(f"required protocol language is missing: {pattern}")
+    for pattern in forbidden:
+        if re.search(pattern, text, flags=re.IGNORECASE) is not None:
+            matched_forbidden.append(pattern)
+            problems.append(f"forbidden protocol language is present: {pattern}")
+    return {
+        "status": "passed" if not problems else "failed",
+        "route": "text_pattern_compliance",
+        "problems": problems,
+        "missing_required_patterns": missing_required,
+        "matched_forbidden_patterns": matched_forbidden,
+        "limitations": [
+            "Lexical pattern matching can undercount semantically equivalent "
+            "scientific reporting and is not a scientific-fidelity endpoint."
+        ],
     }
 
 

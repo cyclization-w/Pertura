@@ -270,6 +270,31 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
             output_path = str(
                 (task.get("output_contract") or {}).get("benchmark_result") or ""
             )
+            output_contract = dict(task.get("output_contract") or {})
+            allowed_units = output_contract.get("allowed_analysis_units")
+            if allowed_units is not None:
+                if (
+                    not isinstance(allowed_units, list)
+                    or not allowed_units
+                    or any(
+                        not isinstance(item, str)
+                        or not item
+                        or item != item.strip().lower()
+                        for item in allowed_units
+                    )
+                    or len(allowed_units) != len(set(allowed_units))
+                ):
+                    problems.append(
+                        f"{task_id}: allowed_analysis_units must be a unique "
+                        "non-empty lowercase string list"
+                    )
+            if {
+                "required_text_patterns",
+                "forbidden_text_patterns",
+            } & set(output_contract):
+                problems.append(
+                    f"{task_id}: evaluator text patterns cannot enter the task contract"
+                )
             if output_path:
                 output_paths.append(output_path)
                 expected_path = f"outputs/tasks/{task_id}/benchmark_result.json"
@@ -422,6 +447,24 @@ def validate_task_reference_catalog(
             for metric in evaluator.get("metric_ids") or ()
         }
         protocol = binding.get("protocol_evaluator") or {}
+        task_units = tuple(
+            str(item)
+            for item in (
+                (task_by_id[task_id].get("output_contract") or {}).get(
+                    "allowed_analysis_units"
+                )
+                or ()
+            )
+        )
+        evaluator_units = tuple(
+            str(item) for item in protocol.get("allowed_analysis_units") or ()
+        )
+        if task_units != evaluator_units:
+            problems.append(
+                f"{reference_id}: provider-visible analysis units do not match "
+                f"the evaluator expected={list(evaluator_units)} "
+                f"observed={list(task_units)}"
+            )
         covered_metrics.update(str(item) for item in protocol.get("metric_ids") or ())
         if route == "custom_artifact_evaluator":
             covered_metrics.update(

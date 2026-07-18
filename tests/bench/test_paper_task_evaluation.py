@@ -339,6 +339,14 @@ def test_protocol_hard_gate_requires_scoped_language_and_rejects_overclaim(
         bindings=[binding],
     )
     assert passed["status"] == "passed"
+    assert [route["route"] for route in passed["evaluations"][0]["routes"]] == [
+        "structured_protocol_gate",
+        "text_pattern_compliance",
+    ]
+    assert all(
+        route["affects_task_status"] is True
+        for route in passed["evaluations"][0]["routes"]
+    )
 
     result["findings"][0]["text"] += " A fallback completed."
     failed = evaluate_paper_task(
@@ -349,6 +357,90 @@ def test_protocol_hard_gate_requires_scoped_language_and_rejects_overclaim(
         bindings=[binding],
     )
     assert failed["status"] == "failed"
+
+
+def test_scientific_fidelity_records_lexical_miss_without_failing_science(
+    tmp_path: Path,
+) -> None:
+    binding = {
+        "task_reference_id": "TREF-PAPA-01",
+        "evaluator_id": "task.guide_qc.v1",
+        "evaluation_domain": "scientific_fidelity",
+        "protocol_evaluator": {
+            "allowed_status": ["completed"],
+            "allowed_analysis_units": ["cell"],
+            "minimum_limitation_count": 1,
+            "required_text_patterns": ["multi-guide"],
+        },
+    }
+    result = {
+        "status": "completed",
+        "analysis_unit": "cell",
+        "findings": [
+            {
+                "text": (
+                    "Secondary-guide ambiguity was compared with transcriptomic "
+                    "doublet proxies."
+                )
+            }
+        ],
+        "limitations": ["Raw empty-droplet evidence is unavailable."],
+    }
+
+    evaluation = evaluate_paper_task(
+        {"task_id": "PAPA-01"},
+        benchmark_result=result,
+        task_output_root=tmp_path,
+        paper_root=tmp_path,
+        bindings=[binding],
+    )
+
+    assert evaluation["status"] == "passed"
+    routes = evaluation["evaluations"][0]["routes"]
+    assert routes[0]["route"] == "structured_protocol_gate"
+    assert routes[0]["status"] == "passed"
+    assert routes[1]["route"] == "text_pattern_compliance"
+    assert routes[1]["status"] == "failed"
+    assert routes[1]["affects_task_status"] is False
+    assert routes[1]["missing_required_patterns"] == ["multi-guide"]
+
+
+def test_scientific_fidelity_still_fails_wrong_structured_analysis_unit(
+    tmp_path: Path,
+) -> None:
+    binding = {
+        "task_reference_id": "TREF-PAPA-01",
+        "evaluator_id": "task.guide_qc.v1",
+        "evaluation_domain": "scientific_fidelity",
+        "protocol_evaluator": {
+            "allowed_status": ["completed"],
+            "allowed_analysis_units": ["cell"],
+            "minimum_limitation_count": 1,
+            "required_text_patterns": ["multi-guide"],
+        },
+    }
+    result = {
+        "status": "completed",
+        "analysis_unit": "guide_assignment_and_qc",
+        "findings": [{"text": "Multi-guide ambiguity was evaluated."}],
+        "limitations": ["Raw empty-droplet evidence is unavailable."],
+    }
+
+    evaluation = evaluate_paper_task(
+        {"task_id": "PAPA-01"},
+        benchmark_result=result,
+        task_output_root=tmp_path,
+        paper_root=tmp_path,
+        bindings=[binding],
+    )
+
+    assert evaluation["status"] == "failed"
+    structured = evaluation["evaluations"][0]["routes"][0]
+    assert structured["route"] == "structured_protocol_gate"
+    assert structured["status"] == "failed"
+    assert structured["problems"] == [
+        "analysis unit violates the protocol gate"
+    ]
 
 
 def test_protocol_hard_gate_enforces_exact_table_row_count(tmp_path: Path) -> None:

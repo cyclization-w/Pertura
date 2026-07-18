@@ -99,6 +99,17 @@ There are 18 primary Perturb-seq tasks and two supplemental Kang tasks. Each con
 
 Evaluation is reported in frozen domains. Nine primary tasks with only a protocol hard gate are `protocol_claim_compliance`; the remaining nine primary tasks are `scientific_fidelity`. The two Kang tasks are `supplemental_scientific_fidelity`, and the optional virtual task is `optional_prediction_protocol`. Protocol compliance is not relabeled or pooled as scientific fidelity.
 
+Task-scoped allowed values for `benchmark_result.analysis_unit` are an
+answer-free controlled vocabulary in the provider-visible output contract.
+Checkpoint validation requires this vocabulary to match the post-provider
+evaluator binding exactly. Free-text regular expressions remain scoring-only
+lexical compliance diagnostics and are never exposed as provider keywords. For
+scientific and supplemental hybrid tasks, lexical compliance is reported but
+does not override artifact fidelity or the structured protocol gate. For tasks
+whose declared domain is protocol/claim compliance, lexical matching remains a
+domain-specific heuristic and is reported with its semantic-equivalence
+limitation.
+
 All conditions receive the same frozen `codeact_protocol`, input paths/hashes, split, output contract, hard gates, claim ceiling, and resource budget. Only `pertura_full` receives registered DatasetContract/asset identities, answer-free static capability-contract subsets, five Pertura tools, and its frozen 1-3 task skills. No formal run compiles a Planner active window, CodeAct handoff, or CompletionGuard.
 
 The runner initializes a neutral blocked `benchmark_result.json` before every turn and records its hash. The provider must update it. Unchanged, deleted, or invalid JSON fails closed; the runner never fabricates scientific content from task metadata or TurnDraft.

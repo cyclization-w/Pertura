@@ -25,9 +25,16 @@ class TaskSubmissionService:
         self._task_id: str | None = None
         self._dataset_id: str | None = None
         self._output_root: Path | None = None
+        self._allowed_analysis_units: tuple[str, ...] = ()
         self._submitted_turn_draft: str | None = None
 
-    def bind_task(self, *, task_id: str, dataset_id: str) -> None:
+    def bind_task(
+        self,
+        *,
+        task_id: str,
+        dataset_id: str,
+        allowed_analysis_units: tuple[str, ...] = (),
+    ) -> None:
         output_root = (self.workspace_root / "outputs" / "tasks" / task_id).resolve()
         expected_parent = (self.workspace_root / "outputs" / "tasks").resolve()
         if output_root.parent != expected_parent:
@@ -36,6 +43,9 @@ class TaskSubmissionService:
         self._task_id = task_id
         self._dataset_id = dataset_id
         self._output_root = output_root
+        self._allowed_analysis_units = tuple(
+            str(item).strip().lower() for item in allowed_analysis_units
+        )
         self._submitted_turn_draft = None
         for name in ("submitted_turn_draft.json", "submission_receipt.json"):
             (output_root / name).unlink(missing_ok=True)
@@ -70,6 +80,17 @@ class TaskSubmissionService:
             if result.dataset_id != self._dataset_id:
                 errors.append(
                     _field_error("benchmark_result.dataset_id", self._dataset_id)
+                )
+            observed_unit = result.analysis_unit
+            if (
+                self._allowed_analysis_units
+                and observed_unit not in self._allowed_analysis_units
+            ):
+                errors.append(
+                    _enum_error(
+                        "benchmark_result.analysis_unit",
+                        self._allowed_analysis_units,
+                    )
                 )
         if errors:
             return {
@@ -206,6 +227,14 @@ def _field_error(field: str, expected: str) -> dict[str, Any]:
         "field": field,
         "message": f"must equal the bound value {expected!r}",
         "type": "identity_mismatch",
+    }
+
+
+def _enum_error(field: str, allowed: tuple[str, ...]) -> dict[str, Any]:
+    return {
+        "field": field,
+        "message": f"must be one of the bound values {list(allowed)!r}",
+        "type": "enum_mismatch",
     }
 
 
