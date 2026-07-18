@@ -12,6 +12,8 @@
   },
   "intended_uses": ["intake", "crispri_qc", "target_reliability"],
   "license_review_url": "https://plus.figshare.com/articles/dataset/20029387",
-  "license_status": "required",
+  "license_review_basis": "Human review by twang05 on 2026-07-15 of the linked Figshare dataset record. The source was confirmed for use in this academic benchmark with source attribution. Pertura benchmark artifacts do not redistribute the original source dataset.",
+  "license_reviewed_by": "twang05",
+  "license_status": "reviewed",
   "download_tier": "nightly_or_manual"
 }

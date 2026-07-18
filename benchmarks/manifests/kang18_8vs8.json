@@ -7,7 +7,9 @@
   "intended_uses": ["replicated_pseudobulk", "edger_scientific_golden"],
   "perturb_seq_claim_allowed": false,
   "license_review_url": "https://bioconductor.org/packages/release/data/experiment/html/muscData.html",
-  "license_status": "required",
+  "license_review_basis": "Human review by twang05 on 2026-07-15 of the linked Bioconductor muscData package record and documentation. The source was confirmed for use in this academic benchmark with source attribution. This dataset is used only as a supplemental statistical benchmark and is not represented as Perturb-seq.",
+  "license_reviewed_by": "twang05",
+  "license_status": "reviewed",
   "output_sha256": null,
   "note": "This is an independent statistical golden set, not a Perturb-seq dataset. Release evaluation requires a frozen conversion lock."
 }

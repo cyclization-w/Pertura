@@ -22,7 +22,9 @@
   "conversion": "scripts/convert_papalexi_to_h5ad.R",
   "intended_uses": ["guide_assignment", "screen_qc", "target_reliability", "escape_responder", "state_reference", "mixscape_golden"],
   "license_review_url": "https://github.com/satijalab/seurat-data",
-  "license_status": "required",
+  "license_review_basis": "Human review by twang05 on 2026-07-15 of the linked SeuratData repository and source package information. The source was confirmed for use in this academic benchmark with source attribution. Pertura benchmark artifacts do not redistribute the original source package or data.",
+  "license_reviewed_by": "twang05",
+  "license_status": "reviewed",
   "output_sha256": null,
   "note": "The primary conversion freezes the RNA H5AD. scripts/export_papalexi_guide_assets.R separately exports the raw GDO matrix, RNA barcodes, guide map, and cell metadata from the same checksum-frozen source package; both lock chains are required for guide and target benchmarks."
 }
