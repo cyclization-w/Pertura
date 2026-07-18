@@ -165,3 +165,35 @@ def test_sdk_init_event_records_available_skills(tmp_path: Path) -> None:
         "pertura:inspect-perturb-seq-design",
         "pertura:operate-pertura-workflow",
     ]
+
+
+def test_provider_manifest_terminal_state_resets_between_tasks(tmp_path: Path) -> None:
+    from pertura_runtime.claude.manifest import ClaudeRunManifest
+    from pertura_runtime.claude.workspace import ClaudeRunWorkspace
+
+    class ResultMessage:
+        session_id = "session-1"
+        result = "first result"
+        subtype = "error_max_turns"
+        is_error = True
+        total_cost_usd = 1.5
+        num_turns = 48
+
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="reset")
+    manifest = ClaudeRunManifest(workspace)
+    manifest.capture(ResultMessage())
+
+    assert manifest.terminal_result_seen is True
+    assert manifest.is_error is True
+    assert manifest.result_text == "first result"
+    assert manifest.num_turns == 48
+
+    manifest.reset()
+
+    assert manifest.terminal_result_seen is False
+    assert manifest.is_error is False
+    assert manifest.result_text == ""
+    assert manifest.result_subtype is None
+    assert manifest.session_id is None
+    assert manifest.num_turns is None
+    assert manifest.message_count == 0

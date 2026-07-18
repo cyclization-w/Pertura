@@ -31,13 +31,32 @@ class ClaudeRunManifest:
     models: set[str] = field(default_factory=set)
     is_error: bool = False
     result_subtype: str | None = None
+    terminal_result_seen: bool = False
     init_seen: bool = False
     init_skills: tuple[str, ...] = ()
     init_plugins: tuple[str, ...] = ()
 
+    def reset(self) -> None:
+        """Clear provider-owned state before starting the next task turn."""
+
+        self.result_text = ""
+        self.session_id = None
+        self.total_cost_usd = None
+        self.num_turns = None
+        self.message_count = 0
+        self.models.clear()
+        self.is_error = False
+        self.result_subtype = None
+        self.terminal_result_seen = False
+        self.init_seen = False
+        self.init_skills = ()
+        self.init_plugins = ()
+
     def capture(self, message: Any) -> None:
         self.message_count += 1
         msg_type = type(message).__name__
+        if msg_type in {"ResultMessage", "SDKResultMessage"}:
+            self.terminal_result_seen = True
         if hasattr(message, "session_id") and getattr(message, "session_id"):
             self.session_id = str(getattr(message, "session_id"))
         if hasattr(message, "model") and getattr(message, "model"):
@@ -99,6 +118,7 @@ class ClaudeRunManifest:
                 "models": sorted(self.models),
                 "is_error": self.is_error,
                 "result_subtype": self.result_subtype,
+                "sdk_terminal_result_seen": self.terminal_result_seen,
                 "sdk_init_seen": self.init_seen,
                 "sdk_available_skills": list(self.init_skills),
                 "sdk_plugins": list(self.init_plugins),

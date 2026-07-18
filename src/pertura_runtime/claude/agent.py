@@ -108,6 +108,7 @@ class ClaudePerturaAgent:
         return self._last_completion_guard.to_dict()
 
     async def run(self, task: str | None = None) -> ClaudeRunResult:
+        self.manifest.reset()
         task_text = task or build_default_task(self.workspace.input_source)
         runtime_config = self._prepare_turn(task_text)
         try:
@@ -196,6 +197,10 @@ class ClaudePerturaAgent:
                         skills_validated = True
             if not skills_validated:
                 raise RuntimeError("Claude Agent SDK did not report the initialized skill surface")
+            if not self.manifest.terminal_result_seen:
+                raise RuntimeError(
+                    "Claude Agent SDK did not report a terminal ResultMessage"
+                )
             if self.turn_manager and self.manifest.session_id:
                 self.turn_manager.bind_provider_session(self.manifest.session_id)
             status = "failed" if self.manifest.is_error else "completed"

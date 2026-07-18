@@ -382,11 +382,14 @@ def run_paper_agent_workflow(
             )
             timeout_seconds = int(task["resources"]["timeout_seconds"])
             timed_out = False
+            provider_run_result = None
             started = time.monotonic()
             event_log = workspace.logs_dir / "events.jsonl"
             event_offset = event_log.stat().st_size if event_log.is_file() else 0
             try:
-                (turn_executor or _run_with_timeout)(agent, prompt, timeout_seconds)
+                provider_run_result = (turn_executor or _run_with_timeout)(
+                    agent, prompt, timeout_seconds
+                )
             except TimeoutError:
                 timed_out = True
                 if (
@@ -408,6 +411,13 @@ def run_paper_agent_workflow(
             )
             turns = project.store.list_turns(conversation.conversation_id)
             final = project.store.get_turn_final(turns[-1].turn_id) if turns else None
+            provider_status = (
+                "timeout"
+                if timed_out
+                else str(getattr(provider_run_result, "status", "completed"))
+            )
+            provider_error = getattr(provider_run_result, "error", None)
+            provider_manifest = getattr(agent, "manifest", None)
             (
                 benchmark_result,
                 result_problem,
@@ -432,6 +442,10 @@ def run_paper_agent_workflow(
             )
             hard_gates = {
                 "turn_checkpointed": final is not None,
+                "turn_output_schema_valid": bool(
+                    final is not None and final.structured
+                ),
+                "provider_execution_completed": provider_status == "completed",
                 **output_gates,
                 "prior_task_outputs_immutable": mutation_free,
                 "timeout_enforced": not timed_out,
@@ -458,6 +472,18 @@ def run_paper_agent_workflow(
                 "analysis_run_id": run.run_id,
                 "conversation_id": conversation.conversation_id,
                 "turn_id": final.turn_id if final else None,
+                "provider_status": provider_status,
+                "provider_error": provider_error,
+                "provider_result_subtype": getattr(
+                    provider_manifest, "result_subtype", None
+                ),
+                "provider_turns": getattr(provider_manifest, "num_turns", None),
+                "provider_message_count": getattr(
+                    provider_manifest, "message_count", None
+                ),
+                "provider_cost_usd": getattr(
+                    provider_manifest, "total_cost_usd", None
+                ),
                 "wall_seconds": wall_seconds,
                 "resource_evidence": resource_evidence,
                 "initial_benchmark_result_sha256": initial_result_sha256,

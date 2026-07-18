@@ -12,7 +12,7 @@ from pertura_runtime.agent_bundle import BUNDLED_SKILL_NAMES
 
 PAPER_CONDITIONS = ("free_codeact", "prompt_only", "pertura_full")
 PAPER_REPEATS = (1, 2)
-PAPER_AGENT_MAX_TURNS = 48
+PAPER_AGENT_MAX_TURNS = 64
 PAPER_CODEACT_PROTOCOL_IDS = (
     "composition.propeller.v1",
     "pseudobulk.edger_ql.v1",

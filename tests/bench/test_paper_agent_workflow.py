@@ -4,6 +4,7 @@ import json
 import inspect
 import re
 from pathlib import Path
+from types import SimpleNamespace
 
 from pertura_bench import paper_agent_execution as execution
 from pertura_bench.agent_models import AgentBenchmarkResult
@@ -447,6 +448,7 @@ def test_smoke_task_selection_runs_only_requested_turn(
     def execute(agent, prompt, timeout):
         invoked.append(re.search(r"task (REPL-\d+)", prompt).group(1))
         prompts.append(prompt)
+        return SimpleNamespace(status="failed", error="fixture provider failure")
 
     result = execution.run_paper_agent_workflow(
         "WF-REPL",
@@ -473,6 +475,15 @@ def test_smoke_task_selection_runs_only_requested_turn(
     assert "You may repair a missing upstream artifact" not in prompts[0]
     assert result["smoke_task_ids"] == ["REPL-03"]
     assert result["required_task_count"] == 1
+    verdict = json.loads(
+        (
+            Path(result["execution_root"])
+            / "tasks/REPL-03/verdict.json"
+        ).read_text()
+    )
+    assert verdict["provider_status"] == "failed"
+    assert verdict["provider_error"] == "fixture provider failure"
+    assert verdict["hard_gates"]["provider_execution_completed"] is False
     manifest = json.loads(
         (Path(result["execution_root"]) / "input_manifest.json").read_text()
     )
@@ -818,7 +829,7 @@ def test_workflow_reuses_one_session_and_isolates_task_outputs(
     assert result["execution_status"] == "completed"
     assert result["score_status"] == result["status"]
     assert result["smoke_task_ids"] is None
-    assert manifest["max_turns_per_task"] == 48
+    assert manifest["max_turns_per_task"] == 64
     assert len(result["task_records"]) == 4
     assert len({manifest["project_id"]}) == 1
     assert len({manifest["analysis_run_id"]}) == 1
