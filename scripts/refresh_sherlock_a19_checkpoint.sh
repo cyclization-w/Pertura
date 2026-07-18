@@ -122,6 +122,8 @@ PY
 
 if test -f "$CANARY_SCRIPT"; then
   sed -i "s/^COMMIT=.*/COMMIT=$COMMIT/" "$CANARY_SCRIPT"
+  sed -i "s#^export PERTURA_REPO=.*#export PERTURA_REPO=$PERTURA_REPO#" \
+    "$CANARY_SCRIPT"
   sed -i \
     's/task-reference-catalog\.a18\.bound\.json/task-reference-catalog.a19.bound.json/g' \
     "$CANARY_SCRIPT"
