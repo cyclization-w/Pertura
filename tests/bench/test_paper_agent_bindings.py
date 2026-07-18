@@ -4,7 +4,11 @@ import hashlib
 import json
 from pathlib import Path
 
-from scripts.bind_paper_agent_catalogs import bind_assets, bind_task_references
+from scripts.bind_paper_agent_catalogs import (
+    bind_assets,
+    bind_task_references,
+    resolve_previous_reference_index,
+)
 from pertura_bench.paper_tasks import (
     load_paper_task_catalog,
     validate_paper_asset_catalog,
@@ -16,6 +20,38 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def _sha256(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_previous_bound_resolves_exact_frozen_reference_index(
+    tmp_path: Path,
+) -> None:
+    index = tmp_path / "manifests" / "reference-pack-index.json"
+    index.parent.mkdir(parents=True)
+    index.write_text(
+        json.dumps(
+            {
+                "schema_version": "pertura-paper-reference-pack-index-v1",
+                "passed": True,
+                "reference_pack_count": 10,
+            }
+        ),
+        encoding="utf-8",
+    )
+    previous = tmp_path / "manifests" / "task-reference-catalog.a18.bound.json"
+    previous.write_text(
+        json.dumps(
+            {
+                "schema_version": "pertura-paper-task-reference-catalog-bound-v1",
+                "source_hashes": {"reference_pack_index": _sha256(index)},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert resolve_previous_reference_index(
+        previous_bound_path=previous,
+        paper_root=tmp_path,
+    ) == index.resolve()
 
 
 def test_task_reference_binding_freezes_every_reference_source(

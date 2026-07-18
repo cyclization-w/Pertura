@@ -56,11 +56,22 @@ export RESOURCE_LOCK_SET
 sha256sum "$RESOURCE_LOCK_SET" | tee "$PAPER_MANIFESTS/resource-lock-set.a19.sherlock.sha256"
 
 TASKS="$PERTURA_REPO/benchmarks/paper_v1/agent_tasks.v2.json"
-TASK_REFS="$PAPER_MANIFESTS/task-reference-catalog.a18.bound.json"
+LEGACY_TASK_REFS="$PAPER_MANIFESTS/task-reference-catalog.a18.bound.json"
+TASK_REFS="$PAPER_MANIFESTS/task-reference-catalog.a19.bound.json"
 ANCHORS="$PERTURA_REPO/benchmarks/paper_v1/paper_anchors.v1.json"
 ASSETS="$PAPER_MANIFESTS/paper-agent-assets.a18.sherlock.bound.json"
 PLAN_TEMPLATE="$CHECKPOINT_ROOT/server-plan.a19.sherlock.template.json"
 BOUND_PLAN="$CHECKPOINT_ROOT/server-plan.a19.sherlock.bound.json"
+
+"$MAIN_ENV/bin/python" "$PERTURA_REPO/scripts/bind_paper_agent_catalogs.py" \
+  references \
+  --candidate "$PERTURA_REPO/benchmarks/paper_v1/task_references.v1.json" \
+  --previous-bound "$LEGACY_TASK_REFS" \
+  --task-reference-root "$PAPER_ROOT/task_references" \
+  --paper-root "$PAPER_ROOT" \
+  --output "$TASK_REFS"
+sha256sum "$TASK_REFS" | \
+  tee "$PAPER_MANIFESTS/task-reference-catalog.a19.bound.sha256"
 
 "$MAIN_ENV/bin/python" -m pertura_bench export-server-plan \
   --repo "$PERTURA_REPO" \
@@ -111,6 +122,9 @@ PY
 
 if test -f "$CANARY_SCRIPT"; then
   sed -i "s/^COMMIT=.*/COMMIT=$COMMIT/" "$CANARY_SCRIPT"
+  sed -i \
+    's/task-reference-catalog\.a18\.bound\.json/task-reference-catalog.a19.bound.json/g' \
+    "$CANARY_SCRIPT"
   bash -n "$CANARY_SCRIPT"
 fi
 

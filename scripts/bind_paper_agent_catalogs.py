@@ -47,6 +47,35 @@ def _read(path: Path) -> dict[str, Any]:
     return payload
 
 
+def resolve_previous_reference_index(
+    *, previous_bound_path: Path, paper_root: Path
+) -> Path:
+    """Resolve the exact frozen reference index used by an earlier binding."""
+
+    previous = _read(previous_bound_path)
+    expected = str(
+        (previous.get("source_hashes") or {}).get("reference_pack_index") or ""
+    )
+    if not expected.startswith("sha256:"):
+        raise ValueError("previous task-reference binding lacks an index hash")
+    matches: list[Path] = []
+    for candidate in sorted(Path(paper_root).resolve().rglob("*.json")):
+        try:
+            if _sha256(candidate) != expected:
+                continue
+            payload = _read(candidate)
+        except (OSError, ValueError, json.JSONDecodeError):
+            continue
+        if payload.get("schema_version") == "pertura-paper-reference-pack-index-v1":
+            matches.append(candidate.resolve())
+    if len(matches) != 1:
+        raise ValueError(
+            "could not resolve exactly one frozen reference-pack index from "
+            f"the previous binding: matches={[str(path) for path in matches]}"
+        )
+    return matches[0]
+
+
 def _relative(root: Path, path: Path) -> str:
     try:
         return path.resolve().relative_to(root.resolve()).as_posix()
@@ -431,7 +460,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     references = sub.add_parser("references")
     references.add_argument("--candidate", type=Path, required=True)
-    references.add_argument("--reference-index", type=Path, required=True)
+    reference_source = references.add_mutually_exclusive_group(required=True)
+    reference_source.add_argument("--reference-index", type=Path)
+    reference_source.add_argument("--previous-bound", type=Path)
     references.add_argument("--task-reference-root", type=Path, required=True)
     references.add_argument("--paper-root", type=Path, required=True)
     references.add_argument("--output", type=Path, required=True)
@@ -443,9 +474,17 @@ def main(argv: list[str] | None = None) -> int:
     assets.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.command == "references":
+        reference_index = (
+            args.reference_index.resolve()
+            if args.reference_index is not None
+            else resolve_previous_reference_index(
+                previous_bound_path=args.previous_bound.resolve(),
+                paper_root=args.paper_root.resolve(),
+            )
+        )
         result = bind_task_references(
             candidate_path=args.candidate.resolve(),
-            reference_index_path=args.reference_index.resolve(),
+            reference_index_path=reference_index,
             task_reference_root=args.task_reference_root.resolve(),
             paper_root=args.paper_root.resolve(),
             output_path=args.output.resolve(),
