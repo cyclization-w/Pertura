@@ -17,6 +17,29 @@ PAPER_CODEACT_PROTOCOL_IDS = (
     "composition.propeller.v1",
     "pseudobulk.edger_ql.v1",
 )
+PAPER_TASK_EVALUATION_DOMAINS = {
+    "REPL-01": "protocol_claim_compliance",
+    "REPL-02": "scientific_fidelity",
+    "REPL-03": "protocol_claim_compliance",
+    "REPL-04": "protocol_claim_compliance",
+    "PAPA-01": "scientific_fidelity",
+    "PAPA-02": "scientific_fidelity",
+    "PAPA-03": "scientific_fidelity",
+    "PAPA-04": "scientific_fidelity",
+    "PAPA-05": "scientific_fidelity",
+    "PAPA-06": "scientific_fidelity",
+    "PAPA-07": "scientific_fidelity",
+    "PAPA-08": "protocol_claim_compliance",
+    "NORM-01": "protocol_claim_compliance",
+    "NORM-02": "scientific_fidelity",
+    "NORM-03": "protocol_claim_compliance",
+    "NORM-04": "protocol_claim_compliance",
+    "NORM-05": "protocol_claim_compliance",
+    "NORM-06": "protocol_claim_compliance",
+    "KANG-01": "supplemental_scientific_fidelity",
+    "KANG-02": "supplemental_scientific_fidelity",
+    "VIRT-01": "optional_prediction_protocol",
+}
 PAPER_TASK_SKILLS = {
     "REPL-01": ("operate-pertura-workflow", "inspect-perturb-seq-design"),
     "REPL-02": ("operate-pertura-workflow", "diagnose-perturb-seq-screen"),
@@ -373,6 +396,26 @@ def validate_task_reference_catalog(
             "custom_artifact_evaluator",
         }:
             problems.append(f"{reference_id}: invalid scoring_route")
+        evaluation_domain = str(binding.get("evaluation_domain") or "")
+        expected_domain = PAPER_TASK_EVALUATION_DOMAINS.get(task_id)
+        if evaluation_domain != expected_domain:
+            problems.append(
+                f"{reference_id}: evaluation_domain must equal {expected_domain}"
+            )
+        if (
+            evaluation_domain == "protocol_claim_compliance"
+            and route != "protocol_hard_gate"
+        ):
+            problems.append(
+                f"{reference_id}: protocol compliance requires protocol_hard_gate"
+            )
+        if (
+            evaluation_domain == "scientific_fidelity"
+            and route == "protocol_hard_gate"
+        ):
+            problems.append(
+                f"{reference_id}: scientific fidelity requires an artifact evaluator"
+            )
         covered_metrics = {
             str(metric)
             for evaluator in binding.get("evaluator_templates") or ()

@@ -294,6 +294,7 @@ def run_paper_agent_workflow(
         for task in workflow_turns:
             task = dict(task)
             task_id = str(task["task_id"])
+            evaluation_domain = _task_evaluation_domain(task, references_by_id)
             if task.get("role") == "optional" and not _optional_configured(
                 task, asset_paths
             ):
@@ -303,6 +304,7 @@ def run_paper_agent_workflow(
                     workflow=workflow,
                     condition=condition,
                     repeat_index=repeat_index,
+                    evaluation_domain=evaluation_domain,
                 )
                 task_records.append(record)
                 continue
@@ -467,6 +469,8 @@ def run_paper_agent_workflow(
                 "status": status,
                 "hard_gates": hard_gates,
                 "result_problem": result_problem,
+                "evaluation_domain": evaluation_domain,
+                "task_evaluation": evaluation,
                 "scientific_evaluation": evaluation,
                 "project_id": project.project.project_id,
                 "analysis_run_id": run.run_id,
@@ -539,6 +543,7 @@ def run_paper_agent_workflow(
                 {
                     "task_id": task_id,
                     "status": status,
+                    "evaluation_domain": evaluation_domain,
                     "verdict": str(task_root / "verdict.json"),
                 }
             )
@@ -694,6 +699,7 @@ def _refresh_workflow_task_verdicts(
     for raw_task in workflow.get("turns") or ():
         task = dict(raw_task)
         task_id = str(task["task_id"])
+        evaluation_domain = _task_evaluation_domain(task, references_by_id)
         task_root = execution_root / "tasks" / task_id
         verdict_path = task_root / "verdict.json"
         if not verdict_path.is_file():
@@ -704,6 +710,7 @@ def _refresh_workflow_task_verdicts(
                 {
                     "task_id": task_id,
                     "status": "not_configured",
+                    "evaluation_domain": evaluation_domain,
                     "verdict": str(verdict_path),
                 }
             )
@@ -724,6 +731,7 @@ def _refresh_workflow_task_verdicts(
                 {
                     "task_id": task_id,
                     "status": str(verdict.get("status") or "failed"),
+                    "evaluation_domain": evaluation_domain,
                     "verdict": str(verdict_path),
                 }
             )
@@ -756,6 +764,8 @@ def _refresh_workflow_task_verdicts(
                 "status": status,
                 "hard_gates": hard_gates,
                 "result_problem": result_problem,
+                "evaluation_domain": evaluation_domain,
+                "task_evaluation": evaluation,
                 "scientific_evaluation": evaluation,
                 "post_workflow_regraded": True,
                 "repaired_after_turn": (
@@ -785,6 +795,7 @@ def _refresh_workflow_task_verdicts(
             {
                 "task_id": task_id,
                 "status": status,
+                "evaluation_domain": evaluation_domain,
                 "verdict": str(verdict_path),
             }
         )
@@ -1246,6 +1257,7 @@ def _not_configured_task(
     workflow: Mapping[str, Any],
     condition: str,
     repeat_index: int,
+    evaluation_domain: str,
 ) -> dict[str, Any]:
     task_root = execution_root / "tasks" / str(task["task_id"])
     verdict = {
@@ -1256,6 +1268,7 @@ def _not_configured_task(
         "condition": condition,
         "repeat_index": repeat_index,
         "status": "not_configured",
+        "evaluation_domain": evaluation_domain,
         "reason": "optional prediction manifest is absent",
         "hard_gates": {},
     }
@@ -1263,8 +1276,23 @@ def _not_configured_task(
     return {
         "task_id": task["task_id"],
         "status": "not_configured",
+        "evaluation_domain": evaluation_domain,
         "verdict": str(task_root / "verdict.json"),
     }
+
+
+def _task_evaluation_domain(
+    task: Mapping[str, Any],
+    references_by_id: Mapping[str, Mapping[str, Any]],
+) -> str:
+    domains = {
+        str(references_by_id[reference_id].get("evaluation_domain") or "")
+        for reference_id in task.get("task_reference_ids") or ()
+        if reference_id in references_by_id
+    }
+    if len(domains) != 1 or "" in domains:
+        raise ValueError(f"{task.get('task_id')}: evaluation domain is not bound")
+    return domains.pop()
 
 
 def _load_task_result(

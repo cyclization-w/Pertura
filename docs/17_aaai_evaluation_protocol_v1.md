@@ -175,6 +175,8 @@ The claim surface is reported in three strata:
 2. contract-conditioned scientific execution, including `PAPA-06`, `KANG-01`, and `KANG-02`;
 3. claim authority and scope enforcement across split discipline, frozen-reference use, dependency consumption, staleness, source classes, receipts, and promotion.
 
+The task-reference catalog freezes one `evaluation_domain` for every task. The nine primary tasks backed only by a protocol hard gate are reported as `protocol_claim_compliance`, not scientific fidelity: `REPL-01`, `REPL-03`, `REPL-04`, `PAPA-08`, `NORM-01`, `NORM-03`, `NORM-04`, `NORM-05`, and `NORM-06`. The other nine primary tasks are `scientific_fidelity`; `KANG-01` and `KANG-02` are `supplemental_scientific_fidelity`; and `VIRT-01` is `optional_prediction_protocol`. These domains are reported separately and are never pooled into one scientific pass rate.
+
 These mappings follow the frozen artifacts actually available to the benchmark. The processed Replogle artifact contains perturbation labels but not a cell-by-guide count matrix, so it cannot evaluate guide assignment or ambient-guide estimation. Norman contains predefined dual-sgRNA constructs rather than random high-MOI guide exposure, so the primary Norman task must not invoke SCEPTRE. Papalexi's raw GDO assay is exported as a separately hash-bound auxiliary asset bundle for guide-level tasks.
 
 The server configuration must bind the following observed fields rather than guess from names:

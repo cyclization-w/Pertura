@@ -750,6 +750,9 @@ def test_pertura_full_runner_writes_answer_free_static_contract_subset(
     assert "invoke each of those exact names once with the Skill tool" in prompts[0]
     assert "execution brief" not in prompts[0]
     assert "CodeAct handoff" not in prompts[0]
+    verdict = json.loads((root / "tasks/PAPA-01/verdict.json").read_text())
+    assert verdict["evaluation_domain"] == "scientific_fidelity"
+    assert verdict["task_evaluation"] == verdict["scientific_evaluation"]
 
 
 def test_workflow_reuses_one_session_and_isolates_task_outputs(
@@ -1012,6 +1015,8 @@ def test_workflow_rejects_unreceipted_later_upstream_repair(
     second = json.loads((root / "tasks/KANG-02/verdict.json").read_text())
 
     assert first["post_workflow_regraded"] is True
+    assert first["evaluation_domain"] == "supplemental_scientific_fidelity"
+    assert first["task_evaluation"] == first["scientific_evaluation"]
     assert first["repaired_after_turn"] is False
     assert first["result_problem"] == "typed submission receipt is missing"
     assert first["hard_gates"]["typed_submission"] is False

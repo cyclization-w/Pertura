@@ -7,6 +7,7 @@ import pytest
 
 from pertura_bench.capability_bench import server_benchmark_plan
 from pertura_bench.paper_tasks import (
+    PAPER_TASK_EVALUATION_DOMAINS,
     load_paper_task_catalog,
     validate_paper_anchor_catalog,
     validate_task_reference_catalog,
@@ -61,6 +62,35 @@ def test_every_task_has_one_reference_binding_and_known_paper_anchor() -> None:
     anchors = json.loads(ANCHORS.read_text(encoding="utf-8"))
     assert validate_task_reference_catalog(references, catalog.tasks()) == []
     assert validate_paper_anchor_catalog(anchors, catalog.tasks()) == []
+
+
+def test_task_reference_domains_separate_protocol_from_scientific_fidelity() -> None:
+    catalog = load_paper_task_catalog(CATALOG)
+    references = json.loads(REFERENCES.read_text(encoding="utf-8"))
+    observed = {
+        str(binding["task_id"]): str(binding["evaluation_domain"])
+        for binding in references["bindings"]
+    }
+
+    assert observed == PAPER_TASK_EVALUATION_DOMAINS
+    assert sum(value == "scientific_fidelity" for value in observed.values()) == 9
+    assert (
+        sum(value == "protocol_claim_compliance" for value in observed.values())
+        == 9
+    )
+    assert {
+        task_id
+        for task_id, domain in observed.items()
+        if domain == "supplemental_scientific_fidelity"
+    } == {"KANG-01", "KANG-02"}
+
+    invalid = json.loads(json.dumps(references))
+    repl01 = next(
+        item for item in invalid["bindings"] if item["task_id"] == "REPL-01"
+    )
+    repl01["evaluation_domain"] = "scientific_fidelity"
+    problems = validate_task_reference_catalog(invalid, catalog.tasks())
+    assert any("TREF-REPL-01: evaluation_domain" in problem for problem in problems)
 
 
 def test_papa02_binds_the_frozen_ref03_control_reference() -> None:

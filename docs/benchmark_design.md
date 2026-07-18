@@ -97,6 +97,8 @@ The controlled comparison uses the same dataset split, objective, Claude model, 
 
 There are 18 primary Perturb-seq tasks and two supplemental Kang tasks. Each condition is repeated twice, producing 120 required scored turns inside 24 workflow sessions. The optional prediction task does not affect required gates. Every workflow/condition/repeat receives a fresh project, analysis run, conversation, provider session, authority namespace, and output directory; turns within that workflow share the session.
 
+Evaluation is reported in frozen domains. Nine primary tasks with only a protocol hard gate are `protocol_claim_compliance`; the remaining nine primary tasks are `scientific_fidelity`. The two Kang tasks are `supplemental_scientific_fidelity`, and the optional virtual task is `optional_prediction_protocol`. Protocol compliance is not relabeled or pooled as scientific fidelity.
+
 All conditions receive the same frozen `codeact_protocol`, input paths/hashes, split, output contract, hard gates, claim ceiling, and resource budget. Only `pertura_full` receives registered DatasetContract/asset identities, answer-free static capability-contract subsets, five Pertura tools, and its frozen 1-3 task skills. No formal run compiles a Planner active window, CodeAct handoff, or CompletionGuard.
 
 The runner initializes a neutral blocked `benchmark_result.json` before every turn and records its hash. The provider must update it. Unchanged, deleted, or invalid JSON fails closed; the runner never fabricates scientific content from task metadata or TurnDraft.
@@ -113,7 +115,7 @@ For `pertura_full`, hard gates check:
 - `TurnDraft` schema and result/report references;
 - candidate, prediction, prior, and hypothesis claim ceilings.
 
-Every condition must also emit the same provider-neutral `outputs/benchmark_result.json`. Its schema, result type, analysis unit, required artifacts, and case-specific frozen scientific metrics are scored identically across conditions. Missing or merely well-formed output cannot pass without its configured reference comparison.
+Every condition must also submit the same provider-neutral `outputs/tasks/<task_id>/benchmark_result.json`. Its schema, result type, analysis unit, required artifacts, and case-specific frozen scientific metrics are scored identically across conditions. Missing or merely well-formed output cannot pass without its configured reference comparison.
 
 Baseline conditions are not failed for lacking Pertura tools. Their hard gates instead check analysis artifacts, statistical unit, output completeness, and overclaim. Their provider findings are preserved with an `unscored_provider_claim` ceiling for evaluation rather than being rewritten by Pertura's claim renderer. This makes overclaim observable while granting the baseline no Pertura authority.
 
