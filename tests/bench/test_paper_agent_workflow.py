@@ -729,13 +729,22 @@ def test_workflow_reuses_one_session_and_isolates_task_outputs(
     )
     catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
     repl_tasks = {task["task_id"]: task for task in catalog["workflows"][0]["turns"]}
+    canonical_result_paths: dict[str, Path] = {}
+    agent_workspace_roots: set[Path] = set()
 
     def execute(agent, prompt, timeout):
         task_id = re.search(r"task (REPL-\d+)", prompt).group(1)
         task = repl_tasks[task_id]
-        task_root = agent.workspace.root / "outputs" / "tasks" / task_id
+        workspace_root = agent.workspace.root.resolve()
+        task_root = workspace_root / "outputs" / "tasks" / task_id
+        result_path = task_root / "benchmark_result.json"
+        assert result_path.is_file()
+        assert json.loads(result_path.read_text())["status"] == "blocked"
+        assert result_path.resolve().is_relative_to(workspace_root)
+        canonical_result_paths[task_id] = result_path.resolve()
+        agent_workspace_roots.add(workspace_root)
         task_root.mkdir(parents=True, exist_ok=True)
-        (task_root / "benchmark_result.json").write_text(
+        result_path.write_text(
             json.dumps(
                 {
                     "schema_version": "pertura-agent-benchmark-result-v1",
@@ -787,9 +796,23 @@ def test_workflow_reuses_one_session_and_isolates_task_outputs(
     assert len({manifest["project_id"]}) == 1
     assert len({manifest["analysis_run_id"]}) == 1
     assert len({manifest["conversation_id"]}) == 1
+    assert len(agent_workspace_roots) == 1
+    workspace_root = next(iter(agent_workspace_roots))
+    assert canonical_result_paths == {
+        task_id: workspace_root
+        / "outputs"
+        / "tasks"
+        / task_id
+        / "benchmark_result.json"
+        for task_id in repl_tasks
+    }
     assert {
         path.parent.name for path in (root / "tasks").glob("*/benchmark_result.json")
     } == set(repl_tasks)
+    for task_id, canonical_path in canonical_result_paths.items():
+        scorer_copy = root / "tasks" / task_id / "benchmark_result.json"
+        assert scorer_copy.resolve() != canonical_path
+        assert scorer_copy.read_bytes() == canonical_path.read_bytes()
     assert all(
         (root / "tasks" / task_id / "verdict.json").is_file() for task_id in repl_tasks
     )
