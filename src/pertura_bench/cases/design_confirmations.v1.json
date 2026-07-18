@@ -1,62 +1,150 @@
 {
-    "schema_version":  "pertura-design-confirmation-catalog-v1",
-    "catalog_version":  "v1",
-    "datasets":  {
-                     "replogle_k562_essential_2022":  {
-                                                          "confirmations":  {
-
-                                                                            },
-                                                          "provenance":  {
-
-                                                                         },
-                                                          "staged_confirmations":  {
-
-                                                                                   },
-                                                          "staged_provenance":  {
-
-                                                                                }
-                                                      },
-                     "papalexi_thp1_eccite":  {
-                                                  "confirmations":  {
-
-                                                                    },
-                                                  "provenance":  {
-
-                                                                 },
-                                                  "staged_confirmations":  {
-
-                                                                           },
-                                                  "staged_provenance":  {
-
-                                                                        }
-                                              },
-                     "norman_k562_crispra_2019":  {
-                                                      "confirmations":  {
-
-                                                                        },
-                                                      "provenance":  {
-
-                                                                     },
-                                                      "staged_confirmations":  {
-
-                                                                               },
-                                                      "staged_provenance":  {
-
-                                                                            }
-                                                  },
-                     "kang18_8vs8_pbmc":  {
-                                              "confirmations":  {
-
-                                                                },
-                                              "provenance":  {
-
-                                                             },
-                                              "staged_confirmations":  {
-
-                                                                       },
-                                              "staged_provenance":  {
-
-                                                                    }
-                                          }
-                 }
+  "schema_version": "pertura-design-confirmation-catalog-v1",
+  "catalog_version": "a19-partial-contract-v1",
+  "datasets": {
+    "replogle_k562_essential_2022": {
+      "confirmations": {},
+      "provenance": {},
+      "staged_confirmations": {},
+      "staged_provenance": {},
+      "paper_contract": {
+        "input_format": "h5ad",
+        "expression_matrix": {
+          "asset_role": "primary_h5ad",
+          "representation": "registered_h5ad_primary_matrix",
+          "layer_status": "unresolved"
+        },
+        "guide_matrix": {
+          "status": "unavailable",
+          "reason": "no registered cell-by-guide count asset"
+        },
+        "identity_fields": {
+          "control": {"status": "confirmed", "value": {"binding": "split_catalog.is_control"}, "source": "frozen_split_catalog"},
+          "target": {"status": "confirmed", "value": {"binding": "split_catalog.group_id", "scope": "target"}, "source": "frozen_split_catalog"},
+          "guide_design": {"status": "confirmed", "value": "same_target_dual_sgrna_vector", "source": "curator_reviewed_study_design"}
+        },
+        "unresolved_fields": ["batch", "donor", "expression_layer", "guide", "guide_matrix", "replicate"],
+        "asset_availability": {
+          "primary_h5ad": "registered",
+          "split_catalog": "registered",
+          "cell_metadata": "registered",
+          "guide_matrix": "unavailable"
+        },
+        "provenance": {
+          "basis": "curator-reviewed study design, frozen source manifest, and split catalog",
+          "confirmed_by": "paper_protocol"
+        }
+      }
+    },
+    "papalexi_thp1_eccite": {
+      "confirmations": {},
+      "provenance": {},
+      "staged_confirmations": {},
+      "staged_provenance": {},
+      "paper_contract": {
+        "input_format": "h5ad",
+        "expression_matrix": {
+          "asset_role": "primary_h5ad",
+          "representation": "raw_integer_rna_counts",
+          "layer_status": "confirmed",
+          "normalized_layer": "data"
+        },
+        "guide_matrix": {
+          "asset_role": "guide_matrix",
+          "representation": "raw_integer_gdo_counts",
+          "status": "confirmed"
+        },
+        "identity_fields": {
+          "control": {"status": "confirmed", "value": {"binding": "split_catalog.is_control", "label": "NTC"}, "source": "frozen_split_catalog"},
+          "guide": {"status": "confirmed", "value": {"column": "guide_ID", "asset_role": "cell_metadata"}, "source": "checksum_frozen_source_export"},
+          "target": {"status": "confirmed", "value": {"column": "gene", "asset_role": "cell_metadata"}, "source": "checksum_frozen_source_export"},
+          "replicate": {"status": "confirmed", "value": {"column": "replicate", "asset_role": "cell_metadata"}, "source": "checksum_frozen_source_export"}
+        },
+        "unresolved_fields": ["ambient_empty_droplet_evidence", "batch", "donor"],
+        "asset_availability": {
+          "primary_h5ad": "registered",
+          "guide_matrix": "registered_raw_counts",
+          "guide_map": "registered",
+          "cell_metadata": "registered",
+          "replicate_evidence": "registered",
+          "empty_droplet_counts": "unavailable"
+        },
+        "provenance": {
+          "basis": "checksum-frozen SeuratData conversion and guide-asset export",
+          "confirmed_by": "paper_protocol"
+        }
+      }
+    },
+    "norman_k562_crispra_2019": {
+      "confirmations": {},
+      "provenance": {},
+      "staged_confirmations": {},
+      "staged_provenance": {},
+      "paper_contract": {
+        "input_format": "h5ad",
+        "expression_matrix": {
+          "asset_role": "primary_h5ad",
+          "representation": "registered_h5ad_primary_matrix",
+          "layer_status": "unresolved"
+        },
+        "guide_matrix": {
+          "status": "unavailable",
+          "reason": "no registered cell-by-guide count asset"
+        },
+        "identity_fields": {
+          "control": {"status": "confirmed", "value": {"binding": "split_catalog.is_control"}, "source": "frozen_split_catalog"},
+          "target": {"status": "confirmed", "value": {"binding": "split_catalog.group_id", "scope": "construct"}, "source": "frozen_split_catalog"},
+          "guide_design": {"status": "confirmed", "value": "combinatorial", "source": "curator_reviewed_study_design"}
+        },
+        "unresolved_fields": ["batch", "donor", "expression_layer", "guide", "guide_matrix", "replicate"],
+        "asset_availability": {
+          "primary_h5ad": "registered",
+          "split_catalog": "registered",
+          "construct_metadata": "registered",
+          "guide_matrix": "unavailable"
+        },
+        "provenance": {
+          "basis": "curator-reviewed study design, frozen source manifest, and split catalog",
+          "confirmed_by": "paper_protocol"
+        }
+      }
+    },
+    "kang18_8vs8_pbmc": {
+      "confirmations": {},
+      "provenance": {},
+      "staged_confirmations": {},
+      "staged_provenance": {},
+      "paper_contract": {
+        "input_format": "h5ad",
+        "expression_matrix": {
+          "asset_role": "raw_counts",
+          "representation": "raw_integer_rna_counts",
+          "layer_status": "confirmed"
+        },
+        "guide_matrix": {
+          "status": "not_applicable",
+          "reason": "Kang is a supplemental stimulation dataset, not Perturb-seq"
+        },
+        "identity_fields": {
+          "control": {"status": "confirmed", "value": {"column": "stim", "label": "ctrl"}, "source": "frozen_conversion_and_protocol"},
+          "target": {"status": "confirmed", "value": {"column": "stim", "label": "stim"}, "source": "frozen_conversion_and_protocol"},
+          "donor": {"status": "confirmed", "value": {"column": "ind"}, "source": "frozen_conversion_and_protocol"},
+          "replicate": {"status": "confirmed", "value": {"column": "ind", "analysis_role": "independent_unit"}, "source": "frozen_conversion_and_protocol"},
+          "state_label": {"status": "confirmed", "value": {"column": "cell"}, "source": "frozen_conversion_and_protocol"}
+        },
+        "unresolved_fields": ["batch"],
+        "asset_availability": {
+          "raw_counts": "registered",
+          "donor_metadata": "registered",
+          "cell_state_metadata": "registered",
+          "calibration_split": "registered",
+          "evaluation_split": "registered"
+        },
+        "provenance": {
+          "basis": "checksum-frozen muscData conversion and curator-confirmed paired protocol",
+          "confirmed_by": "paper_protocol"
+        }
+      }
+    }
+  }
 }

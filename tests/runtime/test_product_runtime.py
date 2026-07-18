@@ -40,6 +40,49 @@ def test_product_runtime_inspect_diagnostic_receipt_and_report(monkeypatch, tmp_
         runtime.close()
 
 
+def test_product_runtime_registers_a_prevalidated_contract_without_inspection(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv(
+        "PERTURA_AUTHORITY_ROOT", str(tmp_path / "authority-outside-workspace")
+    )
+    workspace = ClaudeRunWorkspace.create(root=tmp_path / "runs", run_id="registered")
+    runtime = PerturaProductRuntime(workspace)
+    contract = DatasetContract(
+        dataset_id="curator-confirmed-dataset",
+        input_format="h5ad",
+        expression_matrix={
+            "representation": "raw_integer_counts",
+            "asset_binding": {
+                "role": "primary_h5ad",
+                "asset_id": "asset_fixture",
+                "content_sha256": "sha256:" + "a" * 64,
+            },
+        },
+        identity_fields={
+            "control": {
+                "status": "confirmed",
+                "value": {"column": "condition", "baseline": "ctrl"},
+            },
+            "replicate": {
+                "status": "confirmed",
+                "value": {"column": "donor"},
+            },
+            "expression_layer": {"status": "unresolved"},
+        },
+    )
+    try:
+        summary = runtime.register_dataset_contract(contract)
+        registered, committed = runtime.planning_material(contract.contract_id)
+
+        assert summary["contract_id"] == contract.contract_id
+        assert summary["contract_hash"] == contract.canonical_hash
+        assert registered == contract
+        assert committed == ()
+    finally:
+        runtime.close()
+
+
 def test_diagnostic_planner_blocks_without_auto_executing_dependencies(
     monkeypatch, tmp_path: Path
 ) -> None:

@@ -53,6 +53,51 @@ def test_codeact_task_prompt_freezes_environment_for_all_conditions() -> None:
         assert "load an alternative module or runtime" in prompt
 
 
+def test_task_asset_manifest_is_task_scoped_and_baseline_hides_asset_ids(
+    tmp_path: Path,
+) -> None:
+    primary = tmp_path / "primary.h5ad"
+    unrelated = tmp_path / "global_effect_reference_lock.json"
+    primary.write_bytes(b"primary")
+    unrelated.write_bytes(b"reference")
+    paths = {
+        "primary_h5ad": str(primary),
+        "global_effect_reference_lock": str(unrelated),
+    }
+    registered = {
+        role: {
+            "asset_id": f"asset_{role}",
+            "path": path,
+            "content_sha256": file_sha256(Path(path)),
+        }
+        for role, path in paths.items()
+    }
+
+    full = execution._task_asset_manifest(
+        workflow_id="WF-PAPA",
+        dataset_id="papalexi_thp1_eccite",
+        condition="pertura_full",
+        roles=("primary_h5ad",),
+        asset_paths=paths,
+        registered_assets=registered,
+    )
+    baseline = execution._task_asset_manifest(
+        workflow_id="WF-PAPA",
+        dataset_id="papalexi_thp1_eccite",
+        condition="prompt_only",
+        roles=("primary_h5ad",),
+        asset_paths=paths,
+        registered_assets=registered,
+    )
+
+    assert [item["role"] for item in full["assets"]] == ["primary_h5ad"]
+    assert full["assets"][0]["asset_id"] == "asset_primary_h5ad"
+    assert [item["role"] for item in baseline["assets"]] == ["primary_h5ad"]
+    assert "asset_id" not in baseline["assets"][0]
+    assert "global_effect_reference_lock" not in json.dumps(full)
+    assert "global_effect_reference_lock" not in json.dumps(baseline)
+
+
 class _Runtime:
     def __init__(self):
         self.registry = CapabilityRegistry.load_default(include_external=False)
@@ -70,7 +115,17 @@ class _Runtime:
         )
 
     def inspect_dataset(self, *args, **kwargs):
-        return {"contract_id": self.contract.contract_id}
+        raise AssertionError(
+            "paper workflow must register the frozen partial contract instead of "
+            "performing shallow dataset inspection"
+        )
+
+    def register_dataset_contract(self, contract):
+        self.contract = DatasetContract.model_validate(contract)
+        return {
+            "contract_id": self.contract.contract_id,
+            "contract_hash": self.contract.canonical_hash,
+        }
 
     def planning_material(self, contract_id=None):
         assert contract_id == self.contract.contract_id
@@ -560,7 +615,7 @@ def test_evidence_interpretation_prompt_forbids_recomputation() -> None:
     assert "Do not write them directly under outputs/." in prompt
 
 
-def test_static_contract_context_is_disclosed_only_to_pertura_full() -> None:
+def test_scientific_facts_are_shared_but_authority_context_is_pertura_only() -> None:
     catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
     workflow = next(
         item for item in catalog["workflows"] if item["workflow_id"] == "WF-PAPA"
@@ -575,6 +630,18 @@ def test_static_contract_context_is_disclosed_only_to_pertura_full() -> None:
             for anchor_id in task["paper_anchor_ids"]
         },
         "dependency_contracts": {},
+        "scientific_contract_context": {
+            "dataset_id": "papalexi_thp1_eccite",
+            "design_facts": {
+                "replicate": {
+                    "status": "confirmed",
+                    "value": {"column": "replicate"},
+                }
+            },
+            "unresolved_facts": ["ambient_empty_droplet_evidence"],
+            "asset_availability": {"empty_droplet_counts": "unavailable"},
+            "task_design_protocol": {},
+        },
         "contract_context": {
             "contract_id": "contract_fixture",
             "contract_hash": "sha256:" + "2" * 64,
@@ -616,6 +683,9 @@ def test_static_contract_context_is_disclosed_only_to_pertura_full() -> None:
     assert "exact SDK Skill tool names" not in prompt
     assert "exact SDK Skill tool names" not in free
     for text in (full, prompt, free):
+        assert '"column": "replicate"' in text
+        assert '"ambient_empty_droplet_evidence"' in text
+        assert '"empty_droplet_counts": "unavailable"' in text
         assert "execution brief" not in text
         assert "CodeAct handoff" not in text
         assert "completion guard" not in text

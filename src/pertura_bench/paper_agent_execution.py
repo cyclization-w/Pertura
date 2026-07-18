@@ -22,6 +22,7 @@ from pertura_bench.paper_tasks import (
     validate_task_reference_catalog,
 )
 from pertura_bench.paper_task_evaluation import evaluate_paper_task
+from pertura_bench.real_execution import load_design_confirmation_catalog
 from pertura_bench.task_submission import (
     SUBMISSION_ALLOWED_TOOL,
     SUBMISSION_SERVER_NAME,
@@ -29,6 +30,7 @@ from pertura_bench.task_submission import (
     create_task_submission_mcp_server,
     validate_submission_receipt,
 )
+from pertura_core import DatasetContract
 from pertura_core.hashing import canonical_hash, file_sha256
 from pertura_runtime.agent_bundle import (
     BUNDLED_SKILL_NAMES,
@@ -125,6 +127,16 @@ def run_paper_agent_workflow(
     task_references = _load_json(task_reference_catalog_path)
     paper_anchors = _load_json(paper_anchor_catalog_path)
     asset_catalog = load_paper_asset_catalog(asset_catalog_path)
+    design_catalog, design_catalog_sha256 = load_design_confirmation_catalog()
+    dataset_design = dict(
+        (design_catalog.get("datasets") or {}).get(str(workflow["dataset_id"]))
+        or {}
+    )
+    partial_contract_template = dict(dataset_design.get("paper_contract") or {})
+    if not partial_contract_template:
+        raise ValueError(
+            f"paper partial contract is unavailable for {workflow['dataset_id']}"
+        )
     skill_manifest = bundled_skill_manifest() if condition == "pertura_full" else None
     if capability_contract_catalog_path is not None:
         contract_catalog = _load_json(capability_contract_catalog_path)
@@ -174,6 +186,11 @@ def run_paper_agent_workflow(
         if verify_checkpoint
         else {"test_only": "checkpoint_verification_disabled"}
     )
+    if verify_checkpoint and (
+        checkpoint.get("design_confirmation_catalog_hash")
+        != design_catalog_sha256
+    ):
+        raise ValueError("paper checkpoint catalog drift: design confirmations")
     workflow_assets = dict(
         (asset_catalog.get("workflows") or {}).get(workflow_id) or {}
     )
@@ -209,26 +226,19 @@ def run_paper_agent_workflow(
         cache=cache,
         paper_root=paper_root,
     )
+    registered_assets = {
+        asset.role: {
+            "asset_id": asset.asset_id,
+            "path": asset_paths[asset.role],
+            "content_sha256": asset.content_sha256,
+            "kind": str(asset.kind),
+            "source_class": str(asset.source_class),
+        }
+        for asset in registered
+    }
     primary_path = _primary_asset_path(asset_paths)
     workspace = project.run_workspace(run.run_id, input_source=primary_path)
     submission_service = TaskSubmissionService(workspace.root)
-    workspace.write_json(
-        workspace.task_dir / "paper_benchmark_assets.json",
-        {
-            "schema_version": "pertura-paper-agent-registered-assets-v1",
-            "workflow_id": workflow_id,
-            "dataset_id": workflow["dataset_id"],
-            "assets": [
-                {
-                    "asset_id": asset.asset_id,
-                    "role": asset.role,
-                    "content_sha256": asset.content_sha256,
-                    "path": asset_paths[asset.role],
-                }
-                for asset in registered
-            ],
-        },
-    )
 
     model = os.environ.get("PERTURA_CLAUDE_MODEL")
     if not model and turn_executor is None:
@@ -261,14 +271,14 @@ def run_paper_agent_workflow(
         conversation_id=conversation.conversation_id,
         verbose=False,
     )
-    inspected_contract: dict[str, Any] | None = None
-    if condition == "pertura_full":
-        confirmations = dict(workflow_assets.get("design_confirmations") or {})
-        inspected_contract = agent.product_runtime.inspect_dataset(
-            primary_path,
-            dataset_id=str(workflow["dataset_id"]),
-            confirmations=confirmations or None,
-        )
+    paper_contract = _paper_dataset_contract(
+        dataset_id=str(workflow["dataset_id"]),
+        template=partial_contract_template,
+        registered_assets=registered_assets,
+    )
+    registered_contract = agent.product_runtime.register_dataset_contract(
+        paper_contract
+    )
 
     anchors_by_id = {
         str(item["anchor_id"]): item for item in paper_anchors.get("anchors") or ()
@@ -280,16 +290,6 @@ def run_paper_agent_workflow(
     tasks_by_id = {str(item["task_id"]): item for item in workflow.get("turns") or ()}
     task_records: list[dict[str, Any]] = []
     contract_subsets: list[dict[str, Any]] = []
-    registered_assets = {
-        asset.role: {
-            "asset_id": asset.asset_id,
-            "path": asset_paths[asset.role],
-            "content_sha256": asset.content_sha256,
-            "kind": str(asset.kind),
-            "source_class": str(asset.source_class),
-        }
-        for asset in registered
-    }
     try:
         for task in workflow_turns:
             task = dict(task)
@@ -349,18 +349,40 @@ def run_paper_agent_workflow(
                     tasks_by_id=tasks_by_id,
                 )
             )
+            task_input_roles = tuple(
+                str(item) for item in task.get("required_input_roles") or ()
+            )
+            task_registered_assets = {
+                role: registered_assets[role]
+                for role in task_input_roles
+                if role in registered_assets
+            }
+            task_asset_manifest = _task_asset_manifest(
+                workflow_id=workflow_id,
+                dataset_id=str(workflow["dataset_id"]),
+                condition=condition,
+                roles=task_input_roles,
+                asset_paths=turn_asset_paths,
+                registered_assets=task_registered_assets,
+            )
+            workspace.write_json(
+                workspace.task_dir / "paper_benchmark_assets.json",
+                task_asset_manifest,
+            )
+            scientific_contract_context = _shared_scientific_contract_context(
+                contract=paper_contract,
+                task=task,
+            )
             contract_context = None
             contract_subset_record = None
             if condition == "pertura_full":
-                if inspected_contract is None:
-                    raise RuntimeError("pertura_full lacks a pre-inspected contract")
                 contract, committed = agent.product_runtime.planning_material(
-                    str(inspected_contract["contract_id"])
+                    str(registered_contract["contract_id"])
                 )
                 contract_context = _dataset_contract_context(
                     contract=contract,
                     committed_results=committed,
-                    registered_assets=registered_assets,
+                    registered_assets=task_registered_assets,
                 )
                 subset = _task_capability_contract_subset(
                     task=task,
@@ -388,6 +410,7 @@ def run_paper_agent_workflow(
                     for dependency in ancestor_ids
                 },
                 isolated_smoke=smoke_task_ids is not None,
+                scientific_contract_context=scientific_contract_context,
                 contract_context=contract_context,
                 contract_subset_record=contract_subset_record,
             )
@@ -636,6 +659,11 @@ def run_paper_agent_workflow(
         "task_catalog_sha256": task_catalog.sha256,
         "task_reference_catalog_sha256": file_sha256(Path(task_reference_catalog_path)),
         "paper_anchor_catalog_sha256": file_sha256(Path(paper_anchor_catalog_path)),
+        "design_confirmation_catalog_sha256": design_catalog_sha256,
+        "partial_scientific_contract": _shared_scientific_contract_context(
+            contract=paper_contract,
+            task={},
+        ),
         "asset_catalog_sha256": asset_catalog["_catalog_sha256"],
         "capability_contract_catalog_hash": contract_catalog["catalog_hash"],
         "capability_contract_catalog_sha256": (
@@ -890,6 +918,128 @@ def _neutral_benchmark_result(
     }
 
 
+def _paper_dataset_contract(
+    *,
+    dataset_id: str,
+    template: Mapping[str, Any],
+    registered_assets: Mapping[str, Mapping[str, Any]],
+) -> DatasetContract:
+    """Bind a curator-frozen partial contract to current registered assets."""
+
+    def bind_matrix(raw: Any) -> dict[str, Any]:
+        record = dict(raw or {})
+        role = str(record.get("asset_role") or "")
+        binding = registered_assets.get(role)
+        if binding is not None:
+            record["asset_binding"] = {
+                "asset_id": binding["asset_id"],
+                "path": binding["path"],
+                "content_sha256": binding["content_sha256"],
+            }
+        return record
+
+    availability = dict(template.get("asset_availability") or {})
+    bound_assets = {
+        role: {
+            "asset_id": registered_assets[role]["asset_id"],
+            "path": registered_assets[role]["path"],
+            "content_sha256": registered_assets[role]["content_sha256"],
+        }
+        for role in sorted(availability)
+        if role in registered_assets
+    }
+    return DatasetContract(
+        dataset_id=dataset_id,
+        source_paths=tuple(
+            sorted({str(item["path"]) for item in bound_assets.values()})
+        ),
+        input_format=str(template["input_format"]),
+        expression_matrix=bind_matrix(template.get("expression_matrix")),
+        guide_matrix=bind_matrix(template.get("guide_matrix")),
+        identity_fields={
+            str(name): dict(value)
+            for name, value in (template.get("identity_fields") or {}).items()
+        },
+        unresolved_fields=tuple(
+            sorted(str(item) for item in template.get("unresolved_fields") or ())
+        ),
+        metadata={
+            "paper_partial_contract": True,
+            "asset_availability": availability,
+            "asset_bindings": bound_assets,
+            "provenance": dict(template.get("provenance") or {}),
+        },
+    )
+
+
+def _shared_scientific_contract_context(
+    *, contract: DatasetContract, task: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Return answer-free scientific facts shared by all three conditions."""
+
+    return {
+        "dataset_id": contract.dataset_id,
+        "expression_matrix": {
+            key: value
+            for key, value in contract.expression_matrix.items()
+            if key != "asset_binding"
+        },
+        "guide_matrix": {
+            key: value
+            for key, value in contract.guide_matrix.items()
+            if key != "asset_binding"
+        },
+        "design_facts": {
+            name: {
+                key: value
+                for key, value in fact.items()
+                if key in {"status", "value"}
+            }
+            for name, fact in sorted(contract.identity_fields.items())
+        },
+        "unresolved_facts": list(contract.unresolved_fields),
+        "asset_availability": dict(
+            contract.metadata.get("asset_availability") or {}
+        ),
+        "task_design_protocol": dict(task.get("codeact_protocol") or {}),
+    }
+
+
+def _task_asset_manifest(
+    *,
+    workflow_id: str,
+    dataset_id: str,
+    condition: str,
+    roles: tuple[str, ...],
+    asset_paths: Mapping[str, str],
+    registered_assets: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Render only the current task's legal provider-visible asset surface."""
+
+    records: list[dict[str, Any]] = []
+    for role in roles:
+        raw_path = asset_paths.get(role)
+        if raw_path is None:
+            continue
+        path = Path(raw_path)
+        record: dict[str, Any] = {"role": role, "path": str(path)}
+        registered = registered_assets.get(role)
+        if registered is not None:
+            record["content_sha256"] = registered["content_sha256"]
+            if condition == "pertura_full":
+                record["asset_id"] = registered["asset_id"]
+        elif path.is_file():
+            record["content_sha256"] = file_sha256(path)
+        records.append(record)
+    return {
+        "schema_version": "pertura-paper-agent-task-assets-v1",
+        "workflow_id": workflow_id,
+        "dataset_id": dataset_id,
+        "condition": condition,
+        "assets": records,
+    }
+
+
 def _dataset_contract_context(
     *,
     contract: Any,
@@ -910,9 +1060,16 @@ def _dataset_contract_context(
     return {
         "contract_id": contract.contract_id,
         "contract_hash": contract.canonical_hash,
+        "contract_version": contract.contract_version,
+        "expression_matrix": dict(contract.expression_matrix),
+        "guide_matrix": dict(contract.guide_matrix),
         "confirmed_design_facts": confirmed,
         "conflicting_design_facts": conflicting,
         "unresolved_design_facts": list(contract.unresolved_fields),
+        "asset_availability": dict(
+            contract.metadata.get("asset_availability") or {}
+        ),
+        "provenance": dict(contract.metadata.get("provenance") or {}),
         "registered_assets": {
             role: {
                 "asset_id": record["asset_id"],
@@ -972,6 +1129,7 @@ def _task_prompt(
     anchors_by_id: Mapping[str, Mapping[str, Any]],
     dependency_contracts: Mapping[str, Mapping[str, Any]],
     isolated_smoke: bool = False,
+    scientific_contract_context: Mapping[str, Any] | None = None,
     contract_context: Mapping[str, Any] | None = None,
     contract_subset_record: Mapping[str, Any] | None = None,
 ) -> str:
@@ -1091,6 +1249,8 @@ def _task_prompt(
         f"{json.dumps(dependency_payload, sort_keys=True)}. "
         f"Paper anchors (framing only, never measurements): "
         f"{json.dumps(anchors, sort_keys=True)}. "
+        "Frozen partial scientific contract facts shared by every condition: "
+        f"{json.dumps(scientific_contract_context or {}, sort_keys=True)}. "
         f"Required artifact roles: {json.dumps(task['required_artifact_roles'])}. "
         f"Output contract: {json.dumps(task['output_contract'], sort_keys=True)}. "
         "Every artifact_path in that contract is relative to the current task "

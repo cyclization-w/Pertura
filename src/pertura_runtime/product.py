@@ -136,6 +136,19 @@ class PerturaProductRuntime:
             summary["primary_asset_id"] = asset.asset_id
         return summary
 
+    def register_dataset_contract(self, contract: DatasetContract) -> dict[str, Any]:
+        """Register a prevalidated contract without rediscovering dataset facts.
+
+        This is the product boundary used after a curator or resumed user session
+        has already resolved the available design identity.  Registration records
+        the supplied canonical contract; it does not infer or promote any fact.
+        """
+
+        validated = DatasetContract.model_validate(contract)
+        self._persist_contract(validated)
+        self.broker.register_contract(validated)
+        return _contract_summary(validated, self.workspace)
+
     def confirm_design(self, contract_id: str, confirmations: dict[str, Any]) -> dict[str, Any]:
         contract = self._get_contract(contract_id)
         revised = contract_with_confirmations(contract, confirmations)

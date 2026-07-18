@@ -566,6 +566,47 @@ def load_design_confirmation_catalog(
                 raise ValueError(
                     f"staged design confirmation lacks values/provenance: {dataset_id}/{name}"
                 )
+        paper_contract = dataset.get("paper_contract")
+        if not isinstance(paper_contract, dict):
+            raise ValueError(f"paper partial contract is missing: {dataset_id}")
+        for field in (
+            "input_format",
+            "expression_matrix",
+            "guide_matrix",
+            "identity_fields",
+            "unresolved_fields",
+            "asset_availability",
+            "provenance",
+        ):
+            if field not in paper_contract:
+                raise ValueError(
+                    f"paper partial contract lacks {field}: {dataset_id}"
+                )
+        if not isinstance(paper_contract["identity_fields"], dict):
+            raise ValueError(f"paper identity fields are invalid: {dataset_id}")
+        for name, fact in paper_contract["identity_fields"].items():
+            if (
+                not isinstance(fact, dict)
+                or fact.get("status") not in {"confirmed", "unresolved"}
+                or (fact.get("status") == "confirmed" and not fact.get("source"))
+            ):
+                raise ValueError(
+                    f"paper identity fact is invalid: {dataset_id}/{name}"
+                )
+        unresolved = paper_contract["unresolved_fields"]
+        if (
+            not isinstance(unresolved, list)
+            or len(unresolved) != len(set(unresolved))
+            or any(not isinstance(item, str) or not item for item in unresolved)
+        ):
+            raise ValueError(f"paper unresolved facts are invalid: {dataset_id}")
+        provenance_record = paper_contract["provenance"]
+        if (
+            not isinstance(provenance_record, dict)
+            or not provenance_record.get("basis")
+            or not provenance_record.get("confirmed_by")
+        ):
+            raise ValueError(f"paper contract provenance is invalid: {dataset_id}")
     return payload, digest
 
 

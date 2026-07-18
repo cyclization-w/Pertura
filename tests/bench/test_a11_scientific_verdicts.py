@@ -86,6 +86,32 @@ def test_frozen_and_reported_only_metrics_are_distinct() -> None:
     assert indexed["metric_bindings"] == ()
 
 
+def test_paper_partial_contracts_are_provenance_backed_and_not_shallow() -> None:
+    catalog, digest = load_design_confirmation_catalog()
+
+    assert digest.startswith("sha256:")
+    assert catalog["catalog_version"] == "a19-partial-contract-v1"
+    assert set(catalog["datasets"]) == {
+        "replogle_k562_essential_2022",
+        "papalexi_thp1_eccite",
+        "norman_k562_crispra_2019",
+        "kang18_8vs8_pbmc",
+    }
+    for dataset_id, record in catalog["datasets"].items():
+        contract = record["paper_contract"]
+        assert contract["provenance"]["basis"]
+        assert contract["provenance"]["confirmed_by"] == "paper_protocol"
+        assert contract["asset_availability"]
+        assert len(contract["unresolved_fields"]) == len(
+            set(contract["unresolved_fields"])
+        )
+        for fact in contract["identity_fields"].values():
+            if fact["status"] == "confirmed":
+                assert fact["source"]
+        assert "reference" not in json.dumps(contract).lower(), dataset_id
+        assert "threshold" not in json.dumps(contract).lower(), dataset_id
+
+
 def test_external_catalog_hashes_bind_server_plan(tmp_path: Path) -> None:
     parameters, _ = load_real_parameter_catalog()
     parameters["datasets"]["norman_k562_crispra_2019"]["agent_assets"] = [
