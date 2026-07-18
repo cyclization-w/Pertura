@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from pertura_bench.capability_models import CapabilityBenchmarkSpec, ServerBenchmarkPlan
-from pertura_bench.paper_tasks import PAPER_AGENT_MAX_TURNS
+from pertura_bench.paper_tasks import (
+    PAPER_AGENT_MAX_TURNS,
+    PAPER_WORKFLOW_MEMORY_GB,
+)
 from pertura_bench.real_run_policy import real_runs_for_spec, validate_real_run_policy
 from pertura_core.hashing import canonical_hash, file_sha256
 from pertura_workflow.capabilities import CapabilityRegistry
@@ -812,16 +815,27 @@ def build_server_plan(
                 for task in workflow.get("turns") or ()
                 if task.get("role") != "optional"
             ]
-            maximum_memory = max(
-                [32.0]
-                + [float(task["resources"]["max_memory_gb"]) for task in required_tasks]
+            workflow_id = str(workflow["workflow_id"])
+            try:
+                maximum_memory = PAPER_WORKFLOW_MEMORY_GB[workflow_id]
+            except KeyError as exc:
+                raise ValueError(
+                    f"paper workflow lacks a frozen memory allocation: {workflow_id}"
+                ) from exc
+            largest_task_memory = max(
+                float(task["resources"]["max_memory_gb"])
+                for task in required_tasks
             )
+            if largest_task_memory > maximum_memory:
+                raise ValueError(
+                    f"paper workflow allocation is below a task requirement: "
+                    f"{workflow_id} requires {largest_task_memory} GB"
+                )
             total_timeout = sum(
                 int(task["resources"]["timeout_seconds"]) for task in required_tasks
             )
             for condition in paper_catalog.payload["execution_protocol"]["conditions"]:
                 for repeat_index in (1, 2):
-                    workflow_id = str(workflow["workflow_id"])
                     jobs.append(
                         {
                             "job_id": f"paper-agent:{workflow_id}:{condition}:repeat-{repeat_index}",
@@ -908,6 +922,9 @@ def build_server_plan(
                                 "missing_reference": "failed_not_available",
                                 "judge_unavailable": "failed_no_fallback",
                                 "timeout": "failed_no_fallback",
+                                "scheduler_oom": "scored_resource_failure",
+                                "scheduler_preemption": "invalid_infrastructure",
+                                "scheduler_node_failure": "invalid_infrastructure",
                             },
                         }
                     )

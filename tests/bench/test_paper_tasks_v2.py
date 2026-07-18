@@ -336,7 +336,15 @@ def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
     assert all(job["max_turns_per_task"] == 64 for job in jobs)
     assert all(job["session_scope"]["shared_provider_session"] for job in jobs)
     assert all(job["session_scope"]["condition_repeat_isolated"] for job in jobs)
-    assert all(float(job["resources"]["memory_gb"]) >= 32 for job in jobs)
+    for job in jobs:
+        expected_memory = 48.0 if job["workflow_id"] == "WF-REPL" else 32.0
+        assert float(job["resources"]["memory_gb"]) == expected_memory
+        assert job["failure_policy"]["scheduler_oom"] == (
+            "scored_resource_failure"
+        )
+        assert job["failure_policy"]["scheduler_preemption"] == (
+            "invalid_infrastructure"
+        )
     for job in jobs:
         workflow = task_catalog.workflow(str(job["workflow_id"]))
         required_timeout = sum(

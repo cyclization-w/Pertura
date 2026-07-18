@@ -561,11 +561,13 @@ def test_smoke_task_selection_runs_only_requested_turn(
         lambda path: {
             "mode": "scheduler",
             "scheduler_job_id": "fixture-job",
-            "requested_memory_gb": 8,
-            "actual_memory_gb": 8,
+            "requested_memory_gb": 48,
+            "actual_memory_gb": 48,
+            "cpu_count": 1,
             "n_jobs": 1,
             "timeout_seconds": 7200,
             "peak_rss_mb": 100,
+            "thread_environment": {"OMP_NUM_THREADS": "1"},
         },
     )
     invoked = []
@@ -636,9 +638,16 @@ def test_accepted_submission_survives_later_max_turn_termination(
             "scheduler_job_id": "fixture-job",
             "requested_memory_gb": 32,
             "actual_memory_gb": 32,
+            "cpu_count": 1,
             "n_jobs": 1,
             "timeout_seconds": 9000,
             "peak_rss_mb": 100,
+            "thread_environment": {
+                "OMP_NUM_THREADS": "1",
+                "OPENBLAS_NUM_THREADS": "1",
+                "MKL_NUM_THREADS": "1",
+                "NUMEXPR_NUM_THREADS": "1",
+            },
         },
     )
     monkeypatch.setattr(
@@ -1045,11 +1054,13 @@ def test_workflow_reuses_one_session_and_isolates_task_outputs(
         lambda path: {
             "mode": "scheduler",
             "scheduler_job_id": "fixture-job",
-            "requested_memory_gb": 8,
-            "actual_memory_gb": 8,
+            "requested_memory_gb": 48,
+            "actual_memory_gb": 48,
+            "cpu_count": 1,
             "n_jobs": 1,
             "timeout_seconds": 7200,
             "peak_rss_mb": 100,
+            "thread_environment": {"OMP_NUM_THREADS": "1"},
         },
     )
     catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
@@ -1205,6 +1216,86 @@ def test_workflow_resource_gate_accepts_maximum_turn_allocation() -> None:
         )
         is False
     )
+
+
+def test_frozen_workflow_allocations_and_failure_classification() -> None:
+    evidence = {
+        "mode": "scheduler",
+        "scheduler_job_id": "job-1",
+        "requested_memory_gb": 48,
+        "actual_memory_gb": 48,
+        "cpu_count": 1,
+        "n_jobs": 1,
+        "thread_environment": {
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "NUMEXPR_NUM_THREADS": "1",
+        },
+    }
+    assert execution._workflow_resource_gate("WF-REPL", evidence) is True
+    assert execution._workflow_resource_gate("WF-PAPA", evidence) is False
+    assert execution._workflow_resource_gate(
+        "WF-PAPA",
+        evidence | {"requested_memory_gb": 32, "actual_memory_gb": 32},
+    ) is True
+
+    valid_oom = execution._classify_task_validity(
+        workflow_id="WF-REPL",
+        task_status="failed",
+        termination_reason="provider_error",
+        provider_error="MemoryError: out of memory",
+        skill_leakage_audit={"status": "passed"},
+        resource_evidence=evidence | {"oom_kill_events": 1},
+    )
+    assert valid_oom == ("valid", "scored_resource_failure")
+
+    preempted = execution._classify_task_validity(
+        workflow_id="WF-REPL",
+        task_status="failed",
+        termination_reason="provider_error",
+        provider_error=None,
+        skill_leakage_audit={"status": "passed"},
+        resource_evidence=evidence | {"scheduler_state": "PREEMPTED"},
+    )
+    assert preempted == (
+        "invalid_infrastructure",
+        "invalid_infrastructure",
+    )
+
+    network = execution._classify_task_validity(
+        workflow_id="WF-REPL",
+        task_status="failed",
+        termination_reason="provider_error",
+        provider_error="Connection reset by provider API",
+        skill_leakage_audit={"status": "passed"},
+        resource_evidence=evidence,
+    )
+    assert network == ("invalid_infrastructure", "invalid_infrastructure")
+
+    for error in (
+        "Authentication failed: invalid API key",
+        "RuntimeError: SDK did not report the initialized skill surface",
+        "Python environment preflight failed: environment is corrupt",
+    ):
+        assert execution._classify_task_validity(
+            workflow_id="WF-REPL",
+            task_status="failed",
+            termination_reason="provider_error",
+            provider_error=error,
+            skill_leakage_audit={"status": "passed"},
+            resource_evidence=evidence,
+        ) == ("invalid_infrastructure", "invalid_infrastructure")
+
+    timeout = execution._classify_task_validity(
+        workflow_id="WF-REPL",
+        task_status="failed",
+        termination_reason="task_timeout",
+        provider_error=None,
+        skill_leakage_audit={"status": "passed"},
+        resource_evidence=evidence,
+    )
+    assert timeout == ("valid", "scored_timeout")
 
 
 def test_workflow_rejects_unreceipted_later_upstream_repair(

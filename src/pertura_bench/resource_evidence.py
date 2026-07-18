@@ -26,6 +26,8 @@ def load_resource_evidence(path: str | Path | None) -> dict[str, Any]:
         raise ValueError(
             "resource evidence mode must be scheduler, cgroup, or rlimit"
         )
+    if mode == "scheduler":
+        payload = _bind_scheduler_allocation(payload)
     for name in (
         "requested_memory_gb",
         "actual_memory_gb",
@@ -65,6 +67,48 @@ def load_resource_evidence(path: str | Path | None) -> dict[str, Any]:
     if not isinstance(payload.get("thread_environment"), dict):
         raise ValueError("resource evidence lacks thread_environment")
     return payload
+
+
+def _bind_scheduler_allocation(payload: dict[str, Any]) -> dict[str, Any]:
+    """Bind scheduler evidence to the allocation exported by Slurm itself."""
+
+    observed = dict(payload)
+    slurm_job_id = str(os.environ.get("SLURM_JOB_ID") or "")
+    if not slurm_job_id:
+        observed["allocation_source"] = "resource_evidence_file"
+        return observed
+    recorded_job_id = str(observed.get("scheduler_job_id") or "")
+    if recorded_job_id and recorded_job_id != slurm_job_id:
+        raise ValueError("resource evidence scheduler job identity disagrees with Slurm")
+
+    cpus = int(
+        os.environ.get("SLURM_CPUS_PER_TASK")
+        or os.environ.get("SLURM_CPUS_ON_NODE")
+        or observed.get("cpu_count")
+        or 0
+    )
+    memory_mb: float | None = None
+    memory_source = ""
+    if os.environ.get("SLURM_MEM_PER_NODE"):
+        memory_mb = float(os.environ["SLURM_MEM_PER_NODE"])
+        memory_source = "SLURM_MEM_PER_NODE"
+    elif os.environ.get("SLURM_MEM_PER_CPU"):
+        memory_mb = float(os.environ["SLURM_MEM_PER_CPU"]) * cpus
+        memory_source = "SLURM_MEM_PER_CPU"
+    if memory_mb is None or memory_mb <= 0 or cpus <= 0:
+        raise ValueError("Slurm allocation lacks positive memory or CPU evidence")
+
+    observed.update(
+        {
+            "scheduler_job_id": slurm_job_id,
+            "actual_memory_gb": memory_mb / 1024.0,
+            "cpu_count": cpus,
+            "allocation_source": "slurm_environment",
+            "slurm_memory_source": memory_source,
+            "slurm_memory_mb": memory_mb,
+        }
+    )
+    return observed
 
 
 def enforce_runtime_resource_budget(evidence: dict[str, Any]) -> dict[str, Any]:

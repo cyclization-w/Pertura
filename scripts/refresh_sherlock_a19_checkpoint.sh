@@ -115,9 +115,14 @@ assert plan["executable"] is True
 assert plan["checkpoint_binding"]["git_commit"] == commit
 assert len(jobs) == 24 and turns == 120
 assert len(skills["skills"]) == 7
+for job in jobs:
+    expected_memory = 48.0 if job["workflow_id"] == "WF-REPL" else 32.0
+    assert float(job["resources"]["memory_gb"]) == expected_memory
+    assert int(job["resources"]["cpus"]) == 1
 print("paper_workflow_jobs:", len(jobs))
 print("required_scored_turns:", turns)
 print("skill_count:", len(skills["skills"]))
+print("workflow_memory_gb: WF-REPL=48, WF-PAPA/WF-NORM/WF-KANG=32")
 PY
 
 if test -f "$CANARY_SCRIPT"; then

@@ -16,6 +16,7 @@ from pertura_bench.paper_tasks import (
     PAPER_AGENT_MAX_TURNS,
     PAPER_CONDITIONS,
     PAPER_REPEATS,
+    PAPER_WORKFLOW_MEMORY_GB,
     load_paper_task_catalog,
     validate_paper_anchor_catalog,
     validate_paper_asset_catalog,
@@ -477,6 +478,10 @@ def run_paper_agent_workflow(
                 tasks_by_id=tasks_by_id,
                 initial_result_sha256=initial_result_sha256,
             )
+            dependency_gate_status = "evaluated"
+            if smoke_task_ids is not None and task.get("depends_on_tasks"):
+                output_gates["dependencies_present"] = True
+                dependency_gate_status = "not_applicable_smoke"
             mutation_free = all(
                 _existing_files_unchanged(
                     previous,
@@ -491,10 +496,21 @@ def run_paper_agent_workflow(
                 **output_gates,
                 "provider_scientific_completion": provider_scientific_completion,
                 "prior_task_outputs_immutable": mutation_free,
-                "resource_evidence": _task_resource_gate(task, resource_evidence),
+                "resource_evidence": (
+                    _task_resource_gate(task, resource_evidence)
+                    and _workflow_resource_gate(workflow_id, resource_evidence)
+                ),
                 "no_skill_leakage": skill_leakage_audit["status"] != "failed",
             }
             status = "passed" if all(hard_gates.values()) else "failed"
+            validity_status, failure_class = _classify_task_validity(
+                workflow_id=workflow_id,
+                task_status=status,
+                termination_reason=termination_reason,
+                provider_error=provider_error,
+                skill_leakage_audit=skill_leakage_audit,
+                resource_evidence=resource_evidence,
+            )
             if result_path.is_file():
                 (task_root / "benchmark_result.json").write_bytes(
                     result_path.read_bytes()
@@ -507,6 +523,9 @@ def run_paper_agent_workflow(
                 "condition": condition,
                 "repeat_index": repeat_index,
                 "status": status,
+                "validity_status": validity_status,
+                "failure_class": failure_class,
+                "dependency_gate_status": dependency_gate_status,
                 "hard_gates": hard_gates,
                 "result_problem": result_problem,
                 "evaluation_domain": evaluation_domain,
@@ -584,6 +603,8 @@ def run_paper_agent_workflow(
                 {
                     "task_id": task_id,
                     "status": status,
+                    "validity_status": validity_status,
+                    "failure_class": failure_class,
                     "evaluation_domain": evaluation_domain,
                     "verdict": str(task_root / "verdict.json"),
                 }
@@ -623,6 +644,10 @@ def run_paper_agent_workflow(
             "status"
         )
         == "failed"
+        for item in required_records
+    )
+    invalid_infrastructure_detected = skill_leakage_detected or any(
+        item.get("validity_status") == "invalid_infrastructure"
         for item in required_records
     )
     resource_evidence = observe_runtime_resources(
@@ -705,11 +730,22 @@ def run_paper_agent_workflow(
             list(smoke_task_ids) if smoke_task_ids is not None else None
         ),
         "execution_status": (
-            "invalid_infrastructure" if skill_leakage_detected else "completed"
+            "invalid_infrastructure"
+            if invalid_infrastructure_detected
+            else "completed"
         ),
-        "score_status": "not_scored" if skill_leakage_detected else workflow_status,
+        "validity_status": (
+            "invalid_infrastructure"
+            if invalid_infrastructure_detected
+            else "valid"
+        ),
+        "score_status": (
+            "not_scored" if invalid_infrastructure_detected else workflow_status
+        ),
         "status": (
-            "invalid_infrastructure" if skill_leakage_detected else workflow_status
+            "invalid_infrastructure"
+            if invalid_infrastructure_detected
+            else workflow_status
         ),
         "skill_leakage_detected": skill_leakage_detected,
         "task_records": task_records,
@@ -756,6 +792,8 @@ def _refresh_workflow_task_verdicts(
                 {
                     "task_id": task_id,
                     "status": "not_configured",
+                    "validity_status": "valid",
+                    "failure_class": "not_applicable",
                     "evaluation_domain": evaluation_domain,
                     "verdict": str(verdict_path),
                 }
@@ -777,6 +815,12 @@ def _refresh_workflow_task_verdicts(
                 {
                     "task_id": task_id,
                     "status": str(verdict.get("status") or "failed"),
+                    "validity_status": str(
+                        verdict.get("validity_status") or "valid"
+                    ),
+                    "failure_class": str(
+                        verdict.get("failure_class") or "scored_agent_failure"
+                    ),
                     "evaluation_domain": evaluation_domain,
                     "verdict": str(verdict_path),
                 }
@@ -801,6 +845,8 @@ def _refresh_workflow_task_verdicts(
                 verdict.get("initial_benchmark_result_sha256") or ""
             ),
         )
+        if verdict.get("dependency_gate_status") == "not_applicable_smoke":
+            output_gates["dependencies_present"] = True
         hard_gates = dict(verdict.get("hard_gates") or {})
         original_result_updated = bool(hard_gates.get("provider_result_updated"))
         hard_gates.update(output_gates)
@@ -811,9 +857,15 @@ def _refresh_workflow_task_verdicts(
             provider_scientific_completion
         )
         status = "passed" if all(hard_gates.values()) else "failed"
+        validity_status = str(verdict.get("validity_status") or "valid")
+        failure_class = str(verdict.get("failure_class") or "none")
+        if validity_status == "valid":
+            failure_class = "none" if status == "passed" else failure_class
         verdict.update(
             {
                 "status": status,
+                "validity_status": validity_status,
+                "failure_class": failure_class,
                 "hard_gates": hard_gates,
                 "result_problem": result_problem,
                 "evaluation_domain": evaluation_domain,
@@ -848,6 +900,8 @@ def _refresh_workflow_task_verdicts(
             {
                 "task_id": task_id,
                 "status": status,
+                "validity_status": validity_status,
+                "failure_class": failure_class,
                 "evaluation_domain": evaluation_domain,
                 "verdict": str(verdict_path),
             }
@@ -1476,6 +1530,8 @@ def _not_configured_task(
         "condition": condition,
         "repeat_index": repeat_index,
         "status": "not_configured",
+        "validity_status": "valid",
+        "failure_class": "not_applicable",
         "evaluation_domain": evaluation_domain,
         "reason": "optional prediction manifest is absent",
         "hard_gates": {},
@@ -1484,6 +1540,8 @@ def _not_configured_task(
     return {
         "task_id": task["task_id"],
         "status": "not_configured",
+        "validity_status": "valid",
+        "failure_class": "not_applicable",
         "evaluation_domain": evaluation_domain,
         "verdict": str(task_root / "verdict.json"),
     }
@@ -1564,6 +1622,66 @@ def _provider_termination_reason(
     if provider_status == "completed":
         return "completed"
     return "provider_error"
+
+
+def _classify_task_validity(
+    *,
+    workflow_id: str,
+    task_status: str,
+    termination_reason: str,
+    provider_error: Any,
+    skill_leakage_audit: Mapping[str, Any],
+    resource_evidence: Mapping[str, Any],
+) -> tuple[str, str]:
+    """Separate benchmark validity from a scored agent/task failure."""
+
+    if skill_leakage_audit.get("status") == "failed":
+        return "invalid_infrastructure", "invalid_infrastructure"
+    if not _workflow_resource_gate(workflow_id, resource_evidence):
+        return "invalid_infrastructure", "invalid_infrastructure"
+
+    scheduler_state = str(resource_evidence.get("scheduler_state") or "").lower()
+    if scheduler_state in {
+        "preempted",
+        "node_fail",
+        "node_failure",
+        "boot_fail",
+    }:
+        return "invalid_infrastructure", "invalid_infrastructure"
+
+    error = str(provider_error or "").lower()
+    infrastructure_markers = (
+        "authenticationerror",
+        "authentication failed",
+        "invalid api key",
+        "unauthorized",
+        "sdk init",
+        "sdk did not report the initialized",
+        "python environment preflight failed",
+        "environment is missing",
+        "environment is corrupt",
+        "connection reset",
+        "network unavailable",
+        "api outage",
+        "service unavailable",
+    )
+    if any(marker in error for marker in infrastructure_markers):
+        return "invalid_infrastructure", "invalid_infrastructure"
+
+    oom_detected = (
+        float(resource_evidence.get("oom_kill_events") or 0) > 0
+        or scheduler_state in {"out_of_memory", "oom"}
+        or "out of memory" in error
+        or "memoryerror" in error
+        or "oom_kill" in error
+    )
+    if oom_detected:
+        return "valid", "scored_resource_failure"
+    if task_status == "passed":
+        return "valid", "none"
+    if termination_reason == "task_timeout":
+        return "valid", "scored_timeout"
+    return "valid", "scored_agent_failure"
 
 
 def _evaluate_task_outputs(
@@ -1710,6 +1828,36 @@ def _task_resource_gate(task: Mapping[str, Any], evidence: Mapping[str, Any]) ->
         >= int(resources.get("timeout_seconds", 0))
         and float(evidence.get("peak_rss_mb", 0)) > 0
         and float(evidence.get("peak_rss_mb", 0)) <= actual_memory_gb * 1024.0
+    )
+
+
+def _workflow_resource_gate(
+    workflow_id: str, evidence: Mapping[str, Any]
+) -> bool:
+    """Require the checkpoint-frozen workflow allocation for every condition."""
+
+    expected_memory = PAPER_WORKFLOW_MEMORY_GB.get(workflow_id)
+    if expected_memory is None:
+        return False
+    try:
+        requested_memory = float(evidence.get("requested_memory_gb", 0))
+        actual_memory = float(evidence.get("actual_memory_gb", 0))
+        cpu_count = int(evidence.get("cpu_count", 0))
+        n_jobs = int(evidence.get("n_jobs", 0))
+    except (TypeError, ValueError):
+        return False
+    threads = evidence.get("thread_environment") or {}
+    controlled_threads = (
+        all(str(value) == "1" for value in threads.values())
+        if isinstance(threads, Mapping) and threads
+        else False
+    )
+    return bool(
+        requested_memory == expected_memory
+        and actual_memory >= expected_memory
+        and cpu_count == 1
+        and n_jobs == 1
+        and controlled_threads
     )
 
 
