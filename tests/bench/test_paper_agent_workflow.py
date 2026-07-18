@@ -8,6 +8,7 @@ from pathlib import Path
 from pertura_bench import paper_agent_execution as execution
 from pertura_bench.agent_models import AgentBenchmarkResult
 from pertura_bench.cli import _exit_code
+from pertura_bench.task_submission import TaskSubmissionService
 from pertura_core import DatasetContract
 from pertura_core.hashing import file_sha256
 from pertura_workflow.capabilities import CapabilityRegistry
@@ -223,7 +224,8 @@ def test_task_prompt_separates_result_file_from_turn_draft() -> None:
             dependency_contracts={},
         )
         assert "standalone pertura-agent-benchmark-result-v1 JSON file" in prompt
-        assert "separate provider response" in prompt
+        assert "separate pertura-turn-draft-v1 object" in prompt
+        assert "mcp__benchmark_io__submit_task_bundle" in prompt
         assert "pertura-turn-draft-v1" in prompt
         assert "Never copy the TurnDraft object" in prompt
         assert "artifact_roles must be a JSON array" in prompt
@@ -297,7 +299,8 @@ def test_neutral_checkpoint_update_gate_is_fail_closed(
     _, problem, _, gates = evaluate()
     assert gates["provider_result_updated"] is False
     assert gates["benchmark_result_schema_valid"] is True
-    assert problem == "provider did not update runner-initialized benchmark result"
+    assert gates["typed_submission"] is False
+    assert problem == "typed submission receipt is missing"
 
     execution._write(
         result_path,
@@ -309,13 +312,37 @@ def test_neutral_checkpoint_update_gate_is_fail_closed(
         },
     )
     _, problem, _, gates = evaluate()
+    assert gates["provider_result_updated"] is False
+    assert gates["benchmark_result_schema_valid"] is True
+    assert problem == "typed submission receipt is missing"
+
+    service = TaskSubmissionService(root)
+    service.bind_task(task_id="T-01", dataset_id="D-01")
+    accepted = service.submit_task_bundle(
+        {
+            "benchmark_result": neutral
+            | {
+                "analysis_unit": "donor",
+                "status": "completed",
+                "limitations": ["provider-updated scientific result"],
+            },
+            "turn_draft": {
+                "schema_version": "pertura-turn-draft-v1",
+                "headline": "Fixture completed",
+                "limitations": ["fixture"],
+            },
+        }
+    )
+    assert accepted["accepted"] is True
+    _, problem, _, gates = evaluate()
+    assert gates["typed_submission"] is True
     assert gates["provider_result_updated"] is True
     assert gates["benchmark_result_schema_valid"] is True
     assert problem is None
 
     result_path.write_text("{invalid", encoding="utf-8")
     _, problem, _, gates = evaluate()
-    assert gates["provider_result_updated"] is True
+    assert gates["provider_result_updated"] is False
     assert gates["benchmark_result_schema_valid"] is False
     assert problem
 
@@ -882,7 +909,7 @@ def test_workflow_resource_gate_accepts_maximum_turn_allocation() -> None:
     )
 
 
-def test_workflow_regrades_later_additive_upstream_repair(
+def test_workflow_rejects_unreceipted_later_upstream_repair(
     tmp_path: Path, monkeypatch
 ) -> None:
     monkeypatch.setattr(execution, "ClaudePerturaAgent", _Agent)
@@ -970,8 +997,9 @@ def test_workflow_regrades_later_additive_upstream_repair(
     second = json.loads((root / "tasks/KANG-02/verdict.json").read_text())
 
     assert first["post_workflow_regraded"] is True
-    assert first["repaired_after_turn"] is True
-    assert first["result_problem"] is None
+    assert first["repaired_after_turn"] is False
+    assert first["result_problem"] == "typed submission receipt is missing"
+    assert first["hard_gates"]["typed_submission"] is False
     assert first["hard_gates"]["benchmark_result_schema_valid"] is True
     assert first["hard_gates"]["required_artifact_paths"] is True
     assert (root / "tasks/KANG-01/benchmark_result.json").is_file()

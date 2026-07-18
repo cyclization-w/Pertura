@@ -81,3 +81,30 @@ def test_project_turn_checkpoint_does_not_implicitly_finalize_report(tmp_path: P
     assert project.store.list_report_revisions(run.run_id) == ()
     turn = project.store.list_turns(conversation.conversation_id)[0]
     assert project.store.get_turn_final(turn.turn_id).structured is True
+
+
+def test_typed_submission_can_supply_the_checkpointed_turn_draft(tmp_path: Path) -> None:
+    project = ProjectWorkspace.initialize(tmp_path / "study")
+    run = project.create_run()
+    conversation = project.create_conversation(run.run_id)
+    workspace = project.run_workspace(run.run_id)
+    agent = ClaudePerturaAgent(
+        workspace=workspace,
+        config=ClaudeRuntimeOptions(
+            enable_bundled_skills=False,
+            final_output_provider=lambda: _draft("Typed submission"),
+        ),
+        project_workspace=project,
+        run_id=run.run_id,
+        conversation_id=conversation.conversation_id,
+    )
+    agent._prepare_turn("ordinary turn")
+    agent.manifest.result_text = "provider prose that is not a TurnDraft"
+
+    rendered = asyncio.run(agent._checkpoint(status="completed"))
+
+    assert "Typed submission" in rendered
+    turn = project.store.list_turns(conversation.conversation_id)[0]
+    final = project.store.get_turn_final(turn.turn_id)
+    assert final.structured is True
+    assert final.headline == "Typed submission"

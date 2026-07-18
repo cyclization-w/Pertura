@@ -294,6 +294,10 @@ class ClaudePerturaAgent:
 
     async def _checkpoint(self, *, status: str, error: str | None = None) -> str:
         raw_output = self.manifest.result_text or error or ""
+        if self.config.final_output_provider is not None:
+            submitted_output = self.config.final_output_provider()
+            if submitted_output is not None:
+                raw_output = submitted_output
         try:
             self.product_runtime.close(graceful=True)
         except Exception:

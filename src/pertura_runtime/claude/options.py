@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from pertura_core import PromotionPolicy
 from pertura_runtime.agent_bundle import resolve_skill_configuration
@@ -58,6 +58,17 @@ class ClaudeRuntimeOptions:
     tool_surface: str = "capability"
     domain_tools_enabled: bool = True
     benchmark_condition: str = "pertura_full"
+    additional_mcp_server_factories: dict[str, Callable[[], Any]] = field(
+        default_factory=dict,
+        repr=False,
+        compare=False,
+    )
+    additional_allowed_tools: tuple[str, ...] = ()
+    final_output_provider: Callable[[], str | None] | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
     completion_guard_enabled: bool = False
     completion_guard_exploration_limit: int = 24
     completion_guard_read_limit: int = 2
@@ -117,6 +128,10 @@ def build_agent_options(
         if config.domain_tools_enabled
         else {}
     )
+    for name, factory in config.additional_mcp_server_factories.items():
+        if name in mcp_servers:
+            raise ValueError(f"duplicate MCP server name: {name}")
+        mcp_servers[name] = factory()
     skill_config = resolve_skill_configuration(
         enable_bundled=config.enable_bundled_skills,
         additional_plugin_paths=config.additional_skill_plugins,
@@ -131,7 +146,7 @@ def build_agent_options(
         "allowed_tools": [
             item for item in config.allowed_tools
             if config.domain_tools_enabled or not item.startswith("mcp__pertura__")
-        ],
+        ] + list(config.additional_allowed_tools),
         "disallowed_tools": list(config.disallowed_tools),
         "mcp_servers": mcp_servers,
         "strict_mcp_config": True,
@@ -225,6 +240,8 @@ def describe_options(config: ClaudeRuntimeOptions) -> dict[str, Any]:
         "tool_surface": config.tool_surface,
         "domain_tools_enabled": config.domain_tools_enabled,
         "benchmark_condition": config.benchmark_condition,
+        "additional_mcp_servers": sorted(config.additional_mcp_server_factories),
+        "additional_allowed_tools": list(config.additional_allowed_tools),
         "completion_guard_enabled": config.completion_guard_enabled,
         "completion_guard_exploration_limit": (
             config.completion_guard_exploration_limit

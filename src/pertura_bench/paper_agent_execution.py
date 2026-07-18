@@ -22,6 +22,13 @@ from pertura_bench.paper_tasks import (
     validate_task_reference_catalog,
 )
 from pertura_bench.paper_task_evaluation import evaluate_paper_task
+from pertura_bench.task_submission import (
+    SUBMISSION_ALLOWED_TOOL,
+    SUBMISSION_SERVER_NAME,
+    TaskSubmissionService,
+    create_task_submission_mcp_server,
+    validate_submission_receipt,
+)
 from pertura_core.hashing import canonical_hash, file_sha256
 from pertura_runtime.agent_bundle import (
     BUNDLED_SKILL_NAMES,
@@ -204,6 +211,7 @@ def run_paper_agent_workflow(
     )
     primary_path = _primary_asset_path(asset_paths)
     workspace = project.run_workspace(run.run_id, input_source=primary_path)
+    submission_service = TaskSubmissionService(workspace.root)
     workspace.write_json(
         workspace.task_dir / "paper_benchmark_assets.json",
         {
@@ -236,6 +244,13 @@ def run_paper_agent_workflow(
         benchmark_condition=condition,
         python_exe=(_paper_science_python() if turn_executor is None else None),
         python_preflight_packages=list(PAPER_CODEACT_PACKAGES),
+        additional_mcp_server_factories={
+            SUBMISSION_SERVER_NAME: lambda: create_task_submission_mcp_server(
+                submission_service
+            )
+        },
+        additional_allowed_tools=(SUBMISSION_ALLOWED_TOOL,),
+        final_output_provider=submission_service.submitted_turn_draft,
     )
     provider_config_hash = canonical_hash(describe_options(runtime_options))
     agent = ClaudePerturaAgent(
@@ -294,6 +309,10 @@ def run_paper_agent_workflow(
 
             task_output = workspace.root / "outputs" / "tasks" / task_id
             task_output.mkdir(parents=True, exist_ok=True)
+            submission_service.bind_task(
+                task_id=task_id,
+                dataset_id=str(workflow["dataset_id"]),
+            )
             task_root = execution_root / "tasks" / task_id
             task_root.mkdir(parents=True, exist_ok=True)
             result_path = task_output / "benchmark_result.json"
@@ -1041,9 +1060,15 @@ def _task_prompt(
         "result_ids, or finding-level limitations in benchmark_result.json. "
         "The metrics object is a self-reported index only and cannot replace "
         "the required scientific artifacts. "
-        "After writing that file, return the separate provider response using "
-        "the existing pertura-turn-draft-v1 contract. Never copy the TurnDraft "
-        "object into benchmark_result.json. Independent evaluators, not "
+        f"Submit the benchmark result and separate pertura-turn-draft-v1 object "
+        f"together with {SUBMISSION_ALLOWED_TOOL}. Direct Write/Edit of "
+        "benchmark_result.json is not an accepted submission. The tool validates "
+        "scalar-only metrics, artifact role strings, finding fields, TurnDraft "
+        "role enums, and task/dataset identity before atomically writing the "
+        "canonical files and receipt. If rejected, correct the reported fields "
+        "and resubmit. After acceptance, return no additional scientific prose. "
+        "Never copy the TurnDraft object into benchmark_result.json. Independent "
+        "evaluators, not "
         "self-reported metrics, determine scientific correctness."
     )
 
@@ -1258,7 +1283,15 @@ def _evaluate_task_outputs(
         and initial_result_sha256
         and file_sha256(result_path) != initial_result_sha256
     )
-    if not provider_result_updated and result_problem is None:
+    submission_receipt, submission_problem = validate_submission_receipt(
+        task_output,
+        task_id=task_id,
+        dataset_id=dataset_id,
+    )
+    provider_result_updated = bool(provider_result_updated and submission_receipt)
+    if submission_problem is not None and result_problem is None:
+        result_problem = submission_problem
+    elif not provider_result_updated and result_problem is None:
         result_problem = "provider did not update runner-initialized benchmark result"
     bindings = [
         references_by_id[reference_id]
@@ -1287,6 +1320,7 @@ def _evaluate_task_outputs(
     required_roles = set(task.get("required_artifact_roles") or ())
     observed_roles = set(benchmark_result.artifact_roles if benchmark_result else ())
     gates = {
+        "typed_submission": submission_receipt is not None,
         "provider_result_updated": provider_result_updated,
         "output_contract_present": result_path.is_file(),
         "benchmark_result_schema_valid": benchmark_result is not None,
