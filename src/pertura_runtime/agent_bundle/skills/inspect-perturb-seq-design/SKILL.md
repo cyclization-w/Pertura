@@ -9,13 +9,13 @@ Establish what was measured, what varies independently, and which comparison the
 
 ## Procedure
 
-1. Read the DatasetContract and the dataset-integrity and design-balance results.
+1. Read the registered DatasetContract and any task-bound dataset-integrity or design-balance results. In registered-contract mode these are the starting evidence; do not call `inspect_dataset` again.
 2. Separate observed, inferred, confirmed, and unresolved fields. Do not collapse these states.
 3. Identify perturbation modality, guide capture source, negative controls, guide-to-target mapping, and whether guides represent single or combinatorial interventions.
 4. Identify the independent experimental unit. Distinguish cells, guides, samples, donors, and biological replicates.
 5. Examine condition overlap across replicate, donor, batch, state, dose, and time. Surface complete or partial confounding.
 6. State the estimand before selecting an analysis: expression, association, composition, state mapping, module response, target efficacy, or combination effect.
-7. Use `inspect_dataset` for identity confirmations and diagnostics for design checks. A confirmation cannot create an effect.
+7. If a registered contract names an unresolved fact, inspect only the bound asset and fields needed for that fact. Use diagnostics for design checks. In ordinary interactive use where no contract exists, `inspect_dataset` may create the initial contract. A confirmation can resolve identity but cannot create an effect.
 
 Read [design-facts.md](references/design-facts.md) when resolving design fields. Read [estimands.md](references/estimands.md) when translating a biological question into an analysis objective.
 

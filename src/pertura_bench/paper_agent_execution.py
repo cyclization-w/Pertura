@@ -1219,8 +1219,8 @@ def _task_prompt(
             for skill in (task.get("pertura_skills") or ())
         ]
         contract_policy = (
-            "Pertura already inspected and registered this dataset; do not call "
-            "inspect_dataset again. The frozen DatasetContract and committed-result "
+            "Pertura already registered the curator-frozen partial DatasetContract; "
+            "do not call inspect_dataset again. The contract and committed-result "
             f"summary are {json.dumps(contract_context or {}, sort_keys=True)}. "
             "The answer-free static capability contracts for this task are at "
             f"{(contract_subset_record or {}).get('path', '')}; their bound IDs are "

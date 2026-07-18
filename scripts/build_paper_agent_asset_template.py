@@ -80,7 +80,6 @@ def build(
             _asset(edger_rscript, role="edgeR_rscript", cache=cache, paper_root=paper_root, kind="executable"),
             _asset(paper_root / "task_references" / "PAPA-07" / "global_effect_evidence.tsv", role="global_effect_evidence", cache=cache, paper_root=paper_root, kind="derived"),
             _asset(paper_root / "task_references" / "PAPA-07" / "global_effect_protocol.json", role="global_effect_protocol", cache=cache, paper_root=paper_root, kind="protocol"),
-            _asset(paper_root / "task_references" / "manifest.json", role="global_effect_reference_lock", cache=cache, paper_root=paper_root, kind="reference_lock"),
             _asset(paper_root / "references" / "REF-07" / "gmt_reference.json", role="frozen_gene_sets", cache=cache, paper_root=paper_root, kind="prior"),
             _asset(paper_root / "references" / "REF-09" / "europepmc_snapshot.json", role="literature_snapshot", cache=cache, paper_root=paper_root, kind="prior"),
         ]
