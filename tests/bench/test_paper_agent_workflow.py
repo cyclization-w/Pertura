@@ -363,6 +363,7 @@ def test_neutral_checkpoint_update_gate_is_fail_closed(
     _, problem, _, gates = evaluate()
     assert gates["provider_result_updated"] is False
     assert gates["benchmark_result_schema_valid"] is True
+    assert gates["turn_output_schema_valid"] is False
     assert gates["typed_submission"] is False
     assert problem == "typed submission receipt is missing"
 
@@ -402,6 +403,8 @@ def test_neutral_checkpoint_update_gate_is_fail_closed(
     assert gates["typed_submission"] is True
     assert gates["provider_result_updated"] is True
     assert gates["benchmark_result_schema_valid"] is True
+    assert gates["turn_output_schema_valid"] is True
+    assert execution._provider_scientific_completion(gates) is True
     assert problem is None
 
     result_path.write_text("{invalid", encoding="utf-8")
@@ -433,6 +436,66 @@ def test_scientific_failure_does_not_fail_completed_scheduler_job() -> None:
         == 1
     )
     assert _exit_code("agent", {"status": "failed"}) == 1
+
+
+def test_failed_benchmark_result_is_schema_valid_but_not_pass_eligible(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        execution,
+        "evaluate_paper_task",
+        lambda *args, **kwargs: {"status": "passed", "problems": []},
+    )
+    root = tmp_path / "workspace"
+    service = TaskSubmissionService(root)
+    service.bind_task(task_id="T-01", dataset_id="D-01")
+    accepted = service.submit_task_bundle(
+        {
+            "benchmark_result": {
+                "schema_version": "pertura-agent-benchmark-result-v1",
+                "case_id": "T-01",
+                "dataset_id": "D-01",
+                "result_type": "fixture",
+                "analysis_unit": "unresolved",
+                "status": "failed",
+                "findings": [],
+                "metrics": {},
+                "limitations": ["provider reported failure"],
+                "artifact_roles": [],
+            },
+            "turn_draft": {
+                "schema_version": "pertura-turn-draft-v1",
+                "headline": "Task failed",
+                "limitations": ["provider reported failure"],
+            },
+        }
+    )
+    assert accepted["accepted"] is True
+    path = root / "outputs/tasks/T-01/benchmark_result.json"
+    _, problem, _, gates = execution._evaluate_task_outputs(
+        {
+            "task_id": "T-01",
+            "required_artifact_roles": [],
+            "required_input_roles": [],
+            "task_reference_ids": [],
+            "depends_on_tasks": [],
+            "output_contract": {"artifact_roles": [], "artifact_paths": {}},
+        },
+        workspace_root=root,
+        dataset_id="D-01",
+        paper_root=tmp_path,
+        asset_paths={},
+        references_by_id={},
+        tasks_by_id={},
+        initial_result_sha256="sha256:" + "0" * 64,
+    )
+
+    assert path.is_file()
+    assert problem is None
+    assert gates["benchmark_result_schema_valid"] is True
+    assert gates["turn_output_schema_valid"] is True
+    assert gates["benchmark_result_status_eligible"] is False
+    assert execution._provider_scientific_completion(gates) is True
 
 
 def test_paper_asset_kinds_adapt_to_product_registry() -> None:
@@ -546,7 +609,9 @@ def test_smoke_task_selection_runs_only_requested_turn(
     )
     assert verdict["provider_status"] == "failed"
     assert verdict["provider_error"] == "fixture provider failure"
-    assert verdict["hard_gates"]["provider_execution_completed"] is False
+    assert verdict["provider_clean_termination"] is False
+    assert verdict["termination_reason"] == "provider_error"
+    assert "provider_execution_completed" not in verdict["hard_gates"]
     manifest = json.loads(
         (Path(result["execution_root"]) / "input_manifest.json").read_text()
     )
@@ -557,6 +622,143 @@ def test_smoke_task_selection_runs_only_requested_turn(
     serialized_manifest = json.dumps(manifest)
     assert "pertura_skills" not in serialized_manifest
     assert "execute-task-scoped-plan" not in serialized_manifest
+
+
+def test_accepted_submission_survives_later_max_turn_termination(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(execution, "ClaudePerturaAgent", _Agent)
+    monkeypatch.setattr(
+        execution,
+        "_resource_evidence",
+        lambda path: {
+            "mode": "scheduler",
+            "scheduler_job_id": "fixture-job",
+            "requested_memory_gb": 32,
+            "actual_memory_gb": 32,
+            "n_jobs": 1,
+            "timeout_seconds": 9000,
+            "peak_rss_mb": 100,
+        },
+    )
+    monkeypatch.setattr(
+        execution,
+        "evaluate_paper_task",
+        lambda *args, **kwargs: {"status": "passed", "problems": []},
+    )
+
+    def execute(agent, prompt, timeout):
+        del prompt, timeout
+        output = agent.workspace.root / "outputs/tasks/KANG-01"
+        output.mkdir(parents=True, exist_ok=True)
+        (output / "pseudobulk_counts.tsv").write_text(
+            "gene\td1_ctrl\td1_stim\nG1\t10\t20\n", encoding="utf-8"
+        )
+        (output / "design_matrix.tsv").write_text(
+            "sample\tind\tstim\nd1_ctrl\td1\tctrl\nd1_stim\td1\tstim\n",
+            encoding="utf-8",
+        )
+        (output / "de_results.tsv").write_text(
+            "gene\tlogFC\tF\tPValue\tFDR\nG1\t1\t2\t0.01\t0.02\n",
+            encoding="utf-8",
+        )
+        (output / "null_calibration.tsv").write_text(
+            "permutation_id\ttype1_rate\tnull_effect_bias\t"
+            "exchangeability_violation_count\nswap_0001\t0.05\t0\t0\n",
+            encoding="utf-8",
+        )
+        service = TaskSubmissionService(agent.workspace.root)
+        service.bind_task(
+            task_id="KANG-01",
+            dataset_id="kang18_8vs8_pbmc",
+            allowed_analysis_units=("donor", "donor_pseudobulk"),
+        )
+        accepted = service.submit_task_bundle(
+            {
+                "benchmark_result": {
+                    "schema_version": "pertura-agent-benchmark-result-v1",
+                    "case_id": "KANG-01",
+                    "dataset_id": "kang18_8vs8_pbmc",
+                    "result_type": "fixture",
+                    "analysis_unit": "donor",
+                    "status": "completed",
+                    "findings": [],
+                    "metrics": {},
+                    "limitations": ["fixture"],
+                    "artifact_roles": [
+                        "pseudobulk_counts",
+                        "design_matrix",
+                        "de_results",
+                        "null_calibration",
+                    ],
+                },
+                "turn_draft": {
+                    "schema_version": "pertura-turn-draft-v1",
+                    "headline": "Scientific submission accepted",
+                    "limitations": ["fixture"],
+                },
+            }
+        )
+        assert accepted["accepted"] is True
+        agent.manifest = SimpleNamespace(
+            result_subtype="error_max_turns",
+            num_turns=64,
+            message_count=120,
+            total_cost_usd=1.0,
+        )
+        return SimpleNamespace(
+            status="failed",
+            error="Claude SDK result error: error_max_turns",
+            result_subtype="error_max_turns",
+        )
+
+    result = execution.run_paper_agent_workflow(
+        "WF-KANG",
+        repo_root=ROOT,
+        cache=tmp_path / "cache",
+        paper_root=tmp_path / "paper",
+        output=tmp_path / "runs",
+        condition="pertura_full",
+        repeat_index=1,
+        task_catalog_path=ROOT / "benchmarks/paper_v1/agent_tasks.v2.json",
+        task_reference_catalog_path=_bound_task_references(tmp_path),
+        paper_anchor_catalog_path=ROOT / "benchmarks/paper_v1/paper_anchors.v1.json",
+        asset_catalog_path=_asset_catalog(tmp_path),
+        resource_evidence_path=tmp_path / "resource.json",
+        smoke_task_ids=("KANG-01",),
+        turn_executor=execute,
+        verify_checkpoint=False,
+    )
+
+    verdict = json.loads(Path(result["task_records"][0]["verdict"]).read_text())
+    assert result["status"] == "passed"
+    assert verdict["status"] == "passed"
+    assert verdict["provider_scientific_completion"] is True
+    assert verdict["provider_clean_termination"] is False
+    assert verdict["termination_reason"] == "max_turns"
+    assert verdict["hard_gates"]["provider_scientific_completion"] is True
+    assert verdict["hard_gates"]["independent_evaluation"] is True
+
+
+def test_provider_termination_reason_is_separate_from_submission_state() -> None:
+    assert execution._provider_termination_reason(
+        provider_status="timeout",
+        provider_error=None,
+        provider_result_subtype=None,
+        timed_out=True,
+    ) == "task_timeout"
+    assert execution._provider_termination_reason(
+        provider_status="failed",
+        provider_error="Claude SDK result error: error_max_turns",
+        provider_result_subtype="error_max_turns",
+        timed_out=False,
+    ) == "max_turns"
+    assert execution._provider_termination_reason(
+        provider_status="completed",
+        provider_error=None,
+        provider_result_subtype="success",
+        timed_out=False,
+    ) == "completed"
 
 
 def test_smoke_task_selection_rejects_unknown_task(tmp_path: Path) -> None:

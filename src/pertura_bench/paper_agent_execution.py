@@ -39,7 +39,7 @@ from pertura_runtime.agent_bundle import (
 from pertura_runtime.claude.agent import ClaudePerturaAgent
 from pertura_runtime.claude.options import ClaudeRuntimeOptions, describe_options
 from pertura_runtime.project.assets import DataAssetRegistry
-from pertura_runtime.project.models import AssetBinding
+from pertura_runtime.project.models import AssetBinding, TurnDraft
 from pertura_runtime.project.workspace import ProjectWorkspace
 from pertura_workflow.capability_contracts import build_capability_contract_catalog
 
@@ -452,6 +452,16 @@ def run_paper_agent_workflow(
             )
             provider_error = getattr(provider_run_result, "error", None)
             provider_manifest = getattr(agent, "manifest", None)
+            provider_result_subtype = getattr(
+                provider_manifest, "result_subtype", None
+            ) or getattr(provider_run_result, "result_subtype", None)
+            termination_reason = _provider_termination_reason(
+                provider_status=provider_status,
+                provider_error=provider_error,
+                provider_result_subtype=provider_result_subtype,
+                timed_out=timed_out,
+            )
+            provider_clean_termination = termination_reason == "completed"
             (
                 benchmark_result,
                 result_problem,
@@ -474,15 +484,13 @@ def run_paper_agent_workflow(
                 )
                 for dependency, previous in existing_prior_hashes.items()
             )
+            provider_scientific_completion = _provider_scientific_completion(
+                output_gates
+            )
             hard_gates = {
-                "turn_checkpointed": final is not None,
-                "turn_output_schema_valid": bool(
-                    final is not None and final.structured
-                ),
-                "provider_execution_completed": provider_status == "completed",
                 **output_gates,
+                "provider_scientific_completion": provider_scientific_completion,
                 "prior_task_outputs_immutable": mutation_free,
-                "timeout_enforced": not timed_out,
                 "resource_evidence": _task_resource_gate(task, resource_evidence),
                 "no_skill_leakage": skill_leakage_audit["status"] != "failed",
             }
@@ -510,9 +518,10 @@ def run_paper_agent_workflow(
                 "turn_id": final.turn_id if final else None,
                 "provider_status": provider_status,
                 "provider_error": provider_error,
-                "provider_result_subtype": getattr(
-                    provider_manifest, "result_subtype", None
-                ),
+                "provider_result_subtype": provider_result_subtype,
+                "provider_scientific_completion": provider_scientific_completion,
+                "provider_clean_termination": provider_clean_termination,
+                "termination_reason": termination_reason,
                 "provider_turns": getattr(provider_manifest, "num_turns", None),
                 "provider_message_count": getattr(
                     provider_manifest, "message_count", None
@@ -795,6 +804,12 @@ def _refresh_workflow_task_verdicts(
         hard_gates = dict(verdict.get("hard_gates") or {})
         original_result_updated = bool(hard_gates.get("provider_result_updated"))
         hard_gates.update(output_gates)
+        provider_scientific_completion = _provider_scientific_completion(
+            output_gates
+        )
+        hard_gates["provider_scientific_completion"] = (
+            provider_scientific_completion
+        )
         status = "passed" if all(hard_gates.values()) else "failed"
         verdict.update(
             {
@@ -804,6 +819,7 @@ def _refresh_workflow_task_verdicts(
                 "evaluation_domain": evaluation_domain,
                 "task_evaluation": evaluation,
                 "scientific_evaluation": evaluation,
+                "provider_scientific_completion": provider_scientific_completion,
                 "post_workflow_regraded": True,
                 "repaired_after_turn": (
                     not original_result_updated
@@ -1500,9 +1516,54 @@ def _load_task_result(
         return None, str(exc)
     if result.case_id != task_id or result.dataset_id != dataset_id:
         return None, "benchmark result task or dataset identity mismatch"
-    if result.status not in {"completed", "blocked"}:
-        return None, f"benchmark result status is {result.status}"
     return result, None
+
+
+def _load_submitted_turn_draft(
+    path: Path,
+) -> tuple[TurnDraft | None, str | None]:
+    if not path.is_file():
+        return None, "submitted TurnDraft is missing"
+    try:
+        return TurnDraft.model_validate_json(path.read_text(encoding="utf-8")), None
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return None, f"submitted TurnDraft is invalid: {exc}"
+
+
+def _provider_scientific_completion(output_gates: Mapping[str, bool]) -> bool:
+    """Return whether the provider crossed the typed scientific boundary."""
+
+    return all(
+        bool(output_gates.get(name))
+        for name in (
+            "typed_submission",
+            "provider_result_updated",
+            "benchmark_result_schema_valid",
+            "turn_output_schema_valid",
+        )
+    )
+
+
+def _provider_termination_reason(
+    *,
+    provider_status: str,
+    provider_error: Any,
+    provider_result_subtype: Any,
+    timed_out: bool,
+) -> str:
+    """Normalize provider termination without changing scientific completion."""
+
+    if timed_out:
+        return "task_timeout"
+    detail = " ".join(
+        str(item or "").lower()
+        for item in (provider_result_subtype, provider_error, provider_status)
+    )
+    if "max_turn" in detail or "max turns" in detail:
+        return "max_turns"
+    if provider_status == "completed":
+        return "completed"
+    return "provider_error"
 
 
 def _evaluate_task_outputs(
@@ -1534,9 +1595,14 @@ def _evaluate_task_outputs(
         task_id=task_id,
         dataset_id=dataset_id,
     )
+    submitted_turn_draft, turn_draft_problem = _load_submitted_turn_draft(
+        task_output / "submitted_turn_draft.json"
+    )
     provider_result_updated = bool(provider_result_updated and submission_receipt)
     if submission_problem is not None and result_problem is None:
         result_problem = submission_problem
+    elif turn_draft_problem is not None and result_problem is None:
+        result_problem = turn_draft_problem
     elif not provider_result_updated and result_problem is None:
         result_problem = "provider did not update runner-initialized benchmark result"
     bindings = [
@@ -1570,6 +1636,10 @@ def _evaluate_task_outputs(
         "provider_result_updated": provider_result_updated,
         "output_contract_present": result_path.is_file(),
         "benchmark_result_schema_valid": benchmark_result is not None,
+        "benchmark_result_status_eligible": bool(
+            benchmark_result is not None and benchmark_result.status != "failed"
+        ),
+        "turn_output_schema_valid": submitted_turn_draft is not None,
         "required_artifact_roles": required_roles.issubset(observed_roles),
         "required_artifact_paths": _artifact_paths_present(
             task_output, task.get("output_contract") or {}
