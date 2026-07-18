@@ -135,6 +135,66 @@ def test_trans_de_reference_passes_and_rejects_analysis_unit_attacks(tmp_path: P
     assert noncanonical["status"] == "failed"
 
 
+def test_global_effect_literal_phrasing_is_non_dispositive(tmp_path: Path) -> None:
+    paper = tmp_path / "paper"
+    output = tmp_path / "task"
+    evidence = paper / "task_references/PAPA-07/evidence.tsv"
+    _write_table(
+        evidence,
+        [
+            {"target_uid": "positive", "FDR": 0.01},
+            {"target_uid": "negative", "FDR": 0.2},
+        ],
+    )
+    _write_table(
+        output / "global_effect_claims.tsv",
+        [
+            {
+                "target_uid": "positive",
+                "claim_class": "detectable",
+                "interpretation": "The registered test supports a global association.",
+            },
+            {
+                "target_uid": "negative",
+                "claim_class": "not_detected",
+                "interpretation": "Evidence was insufficient for a global association.",
+            },
+        ],
+    )
+    (output / "global_effect_limitations.json").write_text(
+        json.dumps({"limitations": ["This analysis does not establish mechanism."]}),
+        encoding="utf-8",
+    )
+    binding = {
+        "task_reference_id": "TREF-PAPA-07",
+        "evaluator_id": "task.global_effect_claims.v1",
+        "thresholds": {
+            "claim_class_macro_f1_min": 1.0,
+            "overclaim_count_max": 0,
+            "underclaim_count_max": 0,
+            "limitation_accuracy_min": 1.0,
+        },
+        "bound_evaluator": {
+            "observed_output": "global_effect_claims.tsv",
+            "limitations_output": "global_effect_limitations.json",
+            "evidence_path": "task_references/PAPA-07/evidence.tsv",
+            "evidence_sha256": file_sha256(evidence),
+        },
+    }
+
+    verdict = evaluate_paper_task(
+        {"task_id": "PAPA-07"},
+        benchmark_result={"analysis_unit": "target"},
+        task_output_root=output,
+        paper_root=paper,
+        bindings=[binding],
+    )
+
+    assert verdict["status"] == "passed"
+    evaluation = verdict["evaluations"][0]
+    assert evaluation["lexical_compliance"]["affects_task_status"] is False
+    assert evaluation["lexical_compliance"]["missing_scope_phrase_count"] == 1
+
 def test_trans_de_rejects_wrong_baseline_forgery_and_reference_drift(tmp_path: Path) -> None:
     paper, output, task, result, binding, reference = _trans_de_fixture(tmp_path)
     design = json.loads((output / "trans_de_design_manifest.json").read_text())

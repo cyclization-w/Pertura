@@ -149,7 +149,9 @@ def test_papa01_freezes_proxy_row_scope_and_ambient_boundary() -> None:
 
     assert semantics["guide_assignment.tsv"] == {
         "row_scope": "all_guide_matrix_cells",
+        "row_universe_source_roles": ["guide_matrix"],
         "key_columns": ["cell_id"],
+        "row_policy": "exactly_once",
         "proxy_class_values": [
             "external_label_top_count_match",
             "external_label_top_count_mismatch",
@@ -164,7 +166,9 @@ def test_papa01_freezes_proxy_row_scope_and_ambient_boundary() -> None:
     }
     assert semantics["retained_cell_manifest.tsv"] == {
         "row_scope": "registered_calibration_and_evaluation_selections",
+        "row_universe_source_roles": ["split_catalog"],
         "key_columns": ["dataset_id", "split", "cell_id"],
+        "row_policy": "exactly_once",
         "expected_state_values": [
             "retain_for_external_label_proxy",
             "unresolved_without_assignment_truth",
@@ -181,6 +185,44 @@ def test_papa01_freezes_proxy_row_scope_and_ambient_boundary() -> None:
             "evidence_class": "external_label_proxy_only",
         }
     }
+
+
+def test_all_scientific_evaluator_keys_have_provider_visible_row_contracts() -> None:
+    catalog = load_paper_task_catalog(CATALOG)
+    references = json.loads(REFERENCES.read_text(encoding="utf-8"))
+
+    assert validate_task_reference_catalog(references, catalog.tasks()) == []
+
+    tasks = {str(task["task_id"]): task for task in catalog.tasks()}
+    scientific = {
+        task_id
+        for task_id, domain in PAPER_TASK_EVALUATION_DOMAINS.items()
+        if domain in {"scientific_fidelity", "supplemental_scientific_fidelity"}
+    }
+    assert len(scientific) == 11
+    for task_id in scientific:
+        semantics = tasks[task_id]["output_contract"].get("artifact_semantics") or {}
+        assert semantics, task_id
+        assert any(
+            item.get("key_columns") and item.get("row_policy") == "exactly_once"
+            for item in semantics.values()
+        ), task_id
+
+
+def test_scientific_key_contract_drift_fails_reference_validation() -> None:
+    catalog = load_paper_task_catalog(CATALOG)
+    references = json.loads(REFERENCES.read_text(encoding="utf-8"))
+    tasks = json.loads(json.dumps(catalog.tasks()))
+    papa06 = next(task for task in tasks if task["task_id"] == "PAPA-06")
+    papa06["output_contract"]["artifact_semantics"]["trans_de_results.tsv"][
+        "key_columns"
+    ] = ["target_uid"]
+
+    problems = validate_task_reference_catalog(references, tasks)
+    assert any(
+        "TREF-PAPA-06: provider-visible keys do not match" in problem
+        for problem in problems
+    )
 
 
 def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(

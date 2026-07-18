@@ -40,6 +40,20 @@ PAPER_TASK_EVALUATION_DOMAINS = {
     "KANG-02": "supplemental_scientific_fidelity",
     "VIRT-01": "optional_prediction_protocol",
 }
+PAPER_SCIENTIFIC_EVALUATOR_TASKS = frozenset(
+    task_id
+    for task_id, domain in PAPER_TASK_EVALUATION_DOMAINS.items()
+    if domain in {"scientific_fidelity", "supplemental_scientific_fidelity"}
+)
+PAPER_CUSTOM_EVALUATOR_KEY_CONTRACTS = {
+    "PAPA-06": {
+        "trans_de_results.tsv": ("target_uid", "gene"),
+        "trans_de_design_matrices.tsv": ("target_uid", "sample_id"),
+    },
+    "PAPA-07": {
+        "global_effect_claims.tsv": ("target_uid",),
+    },
+}
 PAPER_TASK_SKILLS = {
     "REPL-01": ("operate-pertura-workflow", "inspect-perturb-seq-design"),
     "REPL-02": ("operate-pertura-workflow", "diagnose-perturb-seq-screen"),
@@ -308,6 +322,9 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
             artifact_schemas = dict(
                 (task.get("output_contract") or {}).get("artifact_schemas") or {}
             )
+            artifact_semantics = dict(
+                (task.get("output_contract") or {}).get("artifact_semantics") or {}
+            )
             if set(artifact_paths) != set(task.get("required_artifact_roles") or ()):
                 problems.append(
                     f"{task_id}: every required artifact role needs one path"
@@ -332,6 +349,44 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
                 for columns in artifact_schemas.values()
             ):
                 problems.append(f"{task_id}: artifact schema columns are invalid")
+            if not set(artifact_semantics).issubset(set(artifact_paths.values())):
+                problems.append(
+                    f"{task_id}: artifact_semantics contains an undeclared path"
+                )
+            known_input_roles = set(task.get("required_input_roles") or ())
+            for relative_name, semantic in artifact_semantics.items():
+                if not isinstance(semantic, Mapping):
+                    problems.append(
+                        f"{task_id}: artifact semantic is invalid for {relative_name}"
+                    )
+                    continue
+                key_columns = tuple(semantic.get("key_columns") or ())
+                if not key_columns:
+                    continue
+                schema_columns = set(artifact_schemas.get(relative_name) or ())
+                if not set(key_columns).issubset(schema_columns):
+                    problems.append(
+                        f"{task_id}: semantic keys are absent from the public schema "
+                        f"for {relative_name}"
+                    )
+                if not str(semantic.get("row_scope") or ""):
+                    problems.append(
+                        f"{task_id}: row scope is missing for {relative_name}"
+                    )
+                if semantic.get("row_policy") != "exactly_once":
+                    problems.append(
+                        f"{task_id}: row policy must be exactly_once for {relative_name}"
+                    )
+                source_roles = set(semantic.get("row_universe_source_roles") or ())
+                if not source_roles:
+                    problems.append(
+                        f"{task_id}: row-universe sources are missing for {relative_name}"
+                    )
+                elif not source_roles.issubset(known_input_roles):
+                    problems.append(
+                        f"{task_id}: unknown row-universe source roles for "
+                        f"{relative_name}: {sorted(source_roles - known_input_roles)}"
+                    )
             if task.get("role") == "optional":
                 optional.append(task)
             elif role == "supplemental":
@@ -395,6 +450,7 @@ def validate_task_reference_catalog(
     bindings = tuple(payload.get("bindings") or ())
     by_task: dict[str, list[Mapping[str, Any]]] = {}
     reference_ids: list[str] = []
+    scientific_contract_tasks: set[str] = set()
     for binding in bindings:
         task_id = str(binding.get("task_id") or "")
         reference_id = str(binding.get("task_reference_id") or "")
@@ -478,6 +534,70 @@ def validate_task_reference_catalog(
                 or {}
             ).values()
         )
+        artifact_semantics = dict(
+            (task_by_id[task_id].get("output_contract") or {}).get(
+                "artifact_semantics"
+            )
+            or {}
+        )
+        if task_id in PAPER_SCIENTIFIC_EVALUATOR_TASKS:
+            scientific_contract_tasks.add(task_id)
+            expected_key_contracts: dict[str, tuple[str, ...]] = {}
+            evaluator_specs = tuple(
+                binding.get("evaluator_templates")
+                or binding.get("evaluators")
+                or ()
+            )
+            for evaluator in evaluator_specs:
+                observed_output = str(evaluator.get("observed_output") or "")
+                key_columns = tuple(
+                    str(item) for item in evaluator.get("key_columns") or ()
+                )
+                if observed_output and key_columns:
+                    prior_keys = expected_key_contracts.setdefault(
+                        observed_output, key_columns
+                    )
+                    if prior_keys != key_columns:
+                        problems.append(
+                            f"{reference_id}: evaluator key contracts disagree for "
+                            f"{observed_output}"
+                        )
+            expected_key_contracts.update(
+                PAPER_CUSTOM_EVALUATOR_KEY_CONTRACTS.get(task_id, {})
+            )
+            if not expected_key_contracts:
+                problems.append(
+                    f"{reference_id}: scientific evaluator has no public key contract"
+                )
+            for observed_output, expected_keys in expected_key_contracts.items():
+                semantic = artifact_semantics.get(observed_output)
+                if not isinstance(semantic, Mapping):
+                    problems.append(
+                        f"{reference_id}: provider-visible row-universe contract is "
+                        f"missing for {observed_output}"
+                    )
+                    continue
+                observed_keys = tuple(
+                    str(item) for item in semantic.get("key_columns") or ()
+                )
+                if observed_keys != tuple(expected_keys):
+                    problems.append(
+                        f"{reference_id}: provider-visible keys do not match the "
+                        f"evaluator for {observed_output} expected={list(expected_keys)} "
+                        f"observed={list(observed_keys)}"
+                    )
+                if semantic.get("row_policy") != "exactly_once":
+                    problems.append(
+                        f"{reference_id}: provider-visible row policy must be "
+                        f"exactly_once for {observed_output}"
+                    )
+                if not semantic.get("row_scope") or not semantic.get(
+                    "row_universe_source_roles"
+                ):
+                    problems.append(
+                        f"{reference_id}: provider-visible row universe is incomplete "
+                        f"for {observed_output}"
+                    )
         for evaluator in binding.get("evaluator_templates") or ():
             if evaluator.get("observed_output") not in artifact_paths:
                 problems.append(
@@ -538,6 +658,12 @@ def validate_task_reference_catalog(
                 problems.append(f"{reference_id}: custom evaluator is not bound")
     if len(reference_ids) != len(set(reference_ids)):
         problems.append("task reference ids must be unique")
+    if scientific_contract_tasks != PAPER_SCIENTIFIC_EVALUATOR_TASKS:
+        problems.append(
+            "scientific evaluator contract coverage mismatch "
+            f"expected={sorted(PAPER_SCIENTIFIC_EVALUATOR_TASKS)} "
+            f"observed={sorted(scientific_contract_tasks)}"
+        )
     for task_id, task in task_by_id.items():
         expected = set(task.get("task_reference_ids") or ())
         observed = {

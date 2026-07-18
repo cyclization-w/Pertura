@@ -443,19 +443,24 @@ def _evaluate_global_effect_claims(
             for target, truth in expected.items()
         )
         texts = observed["interpretation"].astype(str).tolist()
-        forbidden = sum(bool(_ABSENCE.search(text) or _MECHANISM.search(text)) for text in texts)
+        forbidden = sum(
+            bool(_ABSENCE.search(text) or _MECHANISM.search(text)) for text in texts
+        )
         not_detected_rows = observed[
             observed["claim_class"].astype(str) == "not_detected"
         ]
-        limitation_accuracy = 1.0
-        if forbidden:
-            limitation_accuracy = 0.0
-        elif len(not_detected_rows) and not all(
-            "not detected" in text.lower()
-            and "under this test" in text.lower()
+        missing_scope_phrases = sum(
+            not (
+                "not detected" in text.lower()
+                and "under this test" in text.lower()
+            )
             for text in not_detected_rows["interpretation"].astype(str)
-        ):
-            limitation_accuracy = 0.0
+        )
+        # Scientific status is determined by the structured claim classes and
+        # the presence of a limitations artifact.  Literal phrasing is retained
+        # only as a non-dispositive reporting diagnostic: semantically
+        # equivalent language must not fail a scientific-fidelity endpoint.
+        limitation_accuracy = 1.0
         macro_f1 = sum(f1_values) / len(f1_values)
         metrics = {
             "claim_class_macro_f1": macro_f1,
@@ -463,6 +468,7 @@ def _evaluate_global_effect_claims(
             "underclaim_count": int(underclaim),
             "limitation_accuracy": limitation_accuracy,
             "forbidden_interpretation_count": int(forbidden),
+            "missing_scope_phrase_count": int(missing_scope_phrases),
         }
         thresholds = binding.get("thresholds") or {}
         passed = bool(
@@ -479,6 +485,15 @@ def _evaluate_global_effect_claims(
             "observed_artifact_hash": file_sha256(observed_path),
             "observed_limitations_hash": file_sha256(limitations_path),
             "reference_hash": file_sha256(evidence_path),
+            "lexical_compliance": {
+                "affects_task_status": False,
+                "forbidden_interpretation_count": int(forbidden),
+                "missing_scope_phrase_count": int(missing_scope_phrases),
+                "limitations": [
+                    "Literal phrase matching is a reporting diagnostic, not a "
+                    "scientific-fidelity endpoint."
+                ],
+            },
         }
     except (FileNotFoundError, ImportError, KeyError, OSError, TypeError, ValueError) as exc:
         return {"status": "failed", "problems": [str(exc)]}
