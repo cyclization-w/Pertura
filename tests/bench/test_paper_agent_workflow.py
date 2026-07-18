@@ -228,6 +228,9 @@ def test_task_prompt_separates_result_file_from_turn_draft() -> None:
         assert "separate pertura-turn-draft-v1 object" in prompt
         assert "mcp__benchmark_io__submit_task_bundle" in prompt
         assert "pertura-turn-draft-v1" in prompt
+        assert "headline is required" in prompt
+        assert "Do not put turn_index, case_id, dataset_id" in prompt
+        assert "accepted=true with a non-null submission_id" in prompt
         assert "Never copy the TurnDraft object" in prompt
         assert "artifact_roles must be a JSON array" in prompt
         assert "hypotheses, questions_for_user, next_steps" in prompt

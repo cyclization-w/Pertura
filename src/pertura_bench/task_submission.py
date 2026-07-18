@@ -122,7 +122,19 @@ def create_task_submission_mcp_server(service: TaskSubmissionService):
     )
 
     async def submit(args: dict[str, Any]) -> dict[str, Any]:
-        return service.submit_task_bundle(args)
+        response = service.submit_task_bundle(args)
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        response,
+                        sort_keys=True,
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
+        }
 
     return create_sdk_mcp_server(
         name=SUBMISSION_SERVER_NAME,
