@@ -1318,6 +1318,18 @@ def _task_prompt(
             skill if ":" in str(skill) else f"pertura:{skill}"
             for skill in (task.get("pertura_skills") or ())
         ]
+        explicit_nonexecutions = [
+            str(capability_id)
+            for capability_id in (task.get("expected_nonexecutions") or ())
+        ]
+        nonexecution_policy = (
+            "The following capability IDs are explicit nonexecutions for this "
+            "endpoint because their required evidence or scored output is outside "
+            f"the frozen task contract: {json.dumps(explicit_nonexecutions)}. "
+            "Do not invoke them or recreate their methods with CodeAct. "
+            if explicit_nonexecutions
+            else ""
+        )
         contract_policy = (
             "Pertura already registered the curator-frozen partial DatasetContract; "
             "do not call inspect_dataset again. The contract and committed-result "
@@ -1325,6 +1337,7 @@ def _task_prompt(
             "The answer-free static capability contracts for this task are at "
             f"{(contract_subset_record or {}).get('path', '')}; their bound IDs are "
             f"{json.dumps((contract_subset_record or {}).get('capability_ids', []))}. "
+            f"{nonexecution_policy}"
             "Use registered asset IDs for asset-valued capability parameters. The "
             "exact SDK Skill tool names frozen for this task are "
             f"{json.dumps(qualified_task_skills)}. Before any task-scientific Read, "

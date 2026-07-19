@@ -509,6 +509,35 @@ Status values:
   require a checkpoint containing this fix.
 - Status: `fixed_unverified`
 
+### PB-063 -- Stale capability candidates contradicted narrowed task endpoints
+
+- Date: 2026-07-19
+- Phase: final a19 canary
+- Affected checkpoint/job/run: checkpoint `59b6b49`, PAPA-01 pertura-full job
+  `34576257`, run `run_cdef35e176104407a4f0e210dd1de151`
+- Symptom: PAPA-01 loaded its frozen skills and output contract, but then spent its
+  full task budget exploring and planning negative-binomial guide assignment,
+  ambient, MOI, and retained-cell methods. It timed out before writing any
+  scientific artifact or typed submission. PAPA-01 is the root dependency of all
+  later WF-PAPA turns.
+- Root cause: the real-data endpoint had been narrowed to external-label/top-count
+  proxy concordance, unresolved ambient status, and split-based retention, while
+  its task-scoped capability subset still advertised the older full
+  NB-mixture/ambient/MOI pipeline. REPL-02 and NORM-02 retained analogous
+  guide-count capability candidates without the required guide-count evidence;
+  KANG-02 advertised null-calibration methods absent from its composition output
+  contract. The provider-visible context and scored endpoints were therefore not
+  method-aligned.
+- Resolution: prune those four task-scoped capability subsets to endpoint-relevant
+  capabilities, publish explicit nonexecutions only to `pertura_full`, and reject
+  catalogs where an expected capability depends directly on an explicit
+  nonexecution. Keep REPL-01, methods, skills, references, thresholds, evaluators,
+  and authority code unchanged.
+- Benchmark treatment: job `34576257` is diagnostic evidence for the superseded
+  task context and is excluded. Refresh the checkpoint and rerun all five final
+  canaries.
+- Status: `fixed_unverified`
+
 ## Incident index
 
 ### Repository, build, and checkpoint
@@ -597,6 +626,7 @@ Status values:
 | PB-060 | Relative `outputs/tasks/<task>` destinations admitted both project-level and canonical run-level interpretations. | Publish one absolute canonical task root and absolute destinations to all tasks and conditions. | Job `34562384` is measurement-path-invalid; rerun all five final canaries. | `fixed_unverified` |
 | PB-061 | The 1,800-second REPL-01 budget cancelled both conditions before typed submission. | Freeze REPL-01 at 3,600 seconds for every condition. | Earlier 30-minute REPL-01 runs remain diagnostic only. | `fixed_unverified` |
 | PB-062 | Hash-bound answer-free provider inputs lived under a path token forbidden by the reference audit. | Exempt only exact task-registered assets and complete registered-only directories while retaining all unregistered reference prohibitions. | Job `34562178` is infrastructure-invalid; rerun all five final canaries. | `fixed_unverified` |
+| PB-063 | Narrowed real-data and composition endpoints retained stale full-pipeline capability candidates. | Prune four task-scoped capability subsets, expose explicit nonexecutions only to `pertura_full`, and validate direct dependency conflicts. | Job `34576257` is diagnostic evidence for superseded context; rerun all five final canaries. | `fixed_unverified` |
 
 ## Successful retained milestones
 

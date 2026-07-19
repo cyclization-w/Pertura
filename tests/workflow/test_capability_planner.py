@@ -596,7 +596,16 @@ def test_a19_contract_catalog_and_frozen_task_gaps_are_stable() -> None:
                         )
             earlier_candidates.update(current)
 
-    assert len(gaps) == 23
+    # The paper task catalog deliberately exposes endpoint-scoped candidates,
+    # not a cross-turn executable Planner closure.  Keep the remaining gaps
+    # visible while requiring KANG-02's retained Propeller path to include its
+    # direct design-balance dependency.
+    assert len(gaps) == 26
+    assert (
+        "WF-KANG",
+        "composition.propeller.v1",
+        "diagnostic.design_balance.v1",
+    ) not in gaps
 
 def test_trusted_effect_resolution_flattens_scientific_dependencies() -> None:
     registry = CapabilityRegistry.load_default(include_external=False)

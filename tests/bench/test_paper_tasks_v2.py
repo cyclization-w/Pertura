@@ -10,6 +10,7 @@ from pertura_bench.paper_tasks import (
     PAPER_TASK_EVALUATION_DOMAINS,
     load_paper_task_catalog,
     validate_paper_anchor_catalog,
+    validate_paper_task_catalog,
     validate_task_reference_catalog,
 )
 from pertura_workflow.capabilities import CapabilityRegistry
@@ -56,6 +57,88 @@ def test_v2_catalog_freezes_required_shape_without_capability_growth() -> None:
     assert len(CapabilityRegistry.load_default(include_external=False).specs()) == 44
     by_id = {task["task_id"]: task for task in tasks}
     assert by_id["REPL-01"]["resources"]["timeout_seconds"] == 3600
+
+
+def test_task_capability_context_matches_frozen_scientific_endpoints() -> None:
+    catalog = load_paper_task_catalog(CATALOG)
+    by_id = {task["task_id"]: task for task in catalog.tasks()}
+
+    assert by_id["REPL-01"]["expected_capability_dag"] == [
+        "intake.materialize.v1",
+        "diagnostic.contract_integrity.v1",
+        "diagnostic.dataset_integrity.v1",
+        "diagnostic.design_balance.v1",
+    ]
+    assert by_id["PAPA-01"]["expected_capability_dag"] == [
+        "diagnostic.guide_assignment.v1"
+    ]
+    assert by_id["REPL-02"]["expected_capability_dag"] == []
+    assert by_id["NORM-02"]["expected_capability_dag"] == []
+    assert by_id["KANG-02"]["expected_capability_dag"] == [
+        "diagnostic.design_balance.v1",
+        "composition.propeller.v1",
+    ]
+
+    expected_nonexecutions = {
+        "PAPA-01": {
+            "intake.materialize.v1",
+            "guide.integrity.v1",
+            "guide.ambient.v1",
+            "guide.assignment.nb_mixture.v1",
+            "screen.moi_doublet.v1",
+            "screen.retained_cells.v1",
+        },
+        "REPL-02": {
+            "diagnostic.guide_assignment.v1",
+            "guide.integrity.v1",
+            "guide.ambient.v1",
+            "guide.assignment.nb_mixture.v1",
+            "screen.moi_doublet.v1",
+            "screen.retained_cells.v1",
+        },
+        "NORM-02": {
+            "diagnostic.guide_assignment.v1",
+            "guide.integrity.v1",
+            "guide.ambient.v1",
+            "guide.assignment.nb_mixture.v1",
+            "screen.moi_doublet.v1",
+            "screen.retained_cells.v1",
+        },
+        "KANG-02": {
+            "calibration.replicate_null.v1",
+            "calibration.method_null.v1",
+        },
+    }
+    for task_id, nonexecutions in expected_nonexecutions.items():
+        task = by_id[task_id]
+        assert set(task["expected_nonexecutions"]) == nonexecutions
+        assert not set(task["expected_capability_dag"]) & nonexecutions
+
+    assert "external-label/top-count proxy" in by_id["PAPA-01"]["objective"]
+    assert "do not run those methods" in by_id["REPL-02"]["objective"]
+    assert "do not run those methods" in by_id["NORM-02"]["objective"]
+
+
+def test_task_catalog_rejects_expected_capabilities_with_nonexecuted_dependencies() -> None:
+    payload = json.loads(CATALOG.read_text(encoding="utf-8"))
+    repl02 = next(
+        task
+        for workflow in payload["workflows"]
+        for task in workflow["turns"]
+        if task["task_id"] == "REPL-02"
+    )
+    repl02["expected_capability_dag"] = ["screen.retained_cells.v1"]
+    repl02["expected_nonexecutions"] = [
+        "guide.assignment.nb_mixture.v1",
+        "guide.ambient.v1",
+    ]
+
+    problems = validate_paper_task_catalog(payload)
+    assert any(
+        "REPL-02: expected capabilities depend on explicit nonexecutions"
+        in problem
+        for problem in problems
+    )
 
 
 def test_every_task_has_one_reference_binding_and_known_paper_anchor() -> None:

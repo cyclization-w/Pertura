@@ -179,10 +179,11 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
     if protocol.get("repeats") != 2:
         problems.append("repeats must equal 2")
 
-    known_capabilities = {
-        item.capability_id
+    capability_specs = {
+        item.capability_id: item
         for item in CapabilityRegistry.load_default(include_external=False).specs()
     }
+    known_capabilities = set(capability_specs)
     known_codeact_protocols = set(PAPER_CODEACT_PROTOCOL_IDS)
     workflows = tuple(payload.get("workflows") or ())
     if len(workflows) != 4:
@@ -219,6 +220,35 @@ def validate_paper_task_catalog(payload: Mapping[str, Any]) -> list[str]:
             if unknown_capabilities:
                 problems.append(
                     f"{task_id}: unknown capabilities: {sorted(unknown_capabilities)}"
+                )
+            expected_capabilities = set(task.get("expected_capability_dag") or ())
+            explicit_nonexecutions = set(
+                task.get("expected_nonexecutions") or ()
+            )
+            unknown_nonexecutions = explicit_nonexecutions - known_capabilities
+            if unknown_nonexecutions:
+                problems.append(
+                    f"{task_id}: unknown explicit nonexecutions: "
+                    f"{sorted(unknown_nonexecutions)}"
+                )
+            conflicting_capabilities = (
+                expected_capabilities & explicit_nonexecutions
+            )
+            if conflicting_capabilities:
+                problems.append(
+                    f"{task_id}: capabilities cannot be both expected and explicit "
+                    f"nonexecutions: {sorted(conflicting_capabilities)}"
+                )
+            blocked_dependencies = {
+                dependency
+                for capability_id in expected_capabilities - unknown_capabilities
+                for dependency in capability_specs[capability_id].depends_on
+                if dependency in explicit_nonexecutions
+            }
+            if blocked_dependencies:
+                problems.append(
+                    f"{task_id}: expected capabilities depend on explicit "
+                    f"nonexecutions: {sorted(blocked_dependencies)}"
                 )
             if task.get("execution_mode") in {
                 "codeact_scientific",

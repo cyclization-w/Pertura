@@ -934,8 +934,12 @@ def test_scientific_facts_are_shared_but_authority_context_is_pertura_only() -> 
     assert "in the listed order" in full
     assert "Do not repeat a successful Skill invocation" in full
     assert "do not probe rpy2" in full.lower()
+    assert "explicit nonexecutions for this endpoint" in full
+    assert "guide.assignment.nb_mixture.v1" in full
     assert "contract_fixture" not in prompt
     assert "contract_fixture" not in free
+    assert "guide.assignment.nb_mixture.v1" not in prompt
+    assert "guide.assignment.nb_mixture.v1" not in free
     assert "pertura:diagnose-perturb-seq-screen" not in prompt
     assert "pertura:diagnose-perturb-seq-screen" not in free
     assert "exact SDK Skill tool names" not in prompt
