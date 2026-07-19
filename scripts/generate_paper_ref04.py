@@ -267,11 +267,41 @@ def _reliability_rows(
     return output
 
 
+def _canonical_mixscape_label(label: Any) -> str:
+    normalized = str(label).strip().casefold()
+    aliases = {
+        "control": {"control", "nt"},
+        "responder": {"responder", "ko", "perturbed"},
+        "escape": {"escape", "np", "non.perturbed", "non-perturbed"},
+    }
+    matches = [
+        canonical
+        for canonical, values in aliases.items()
+        if normalized in values
+    ]
+    if len(matches) != 1:
+        raise ValueError(f"unsupported Pertpy Mixscape class label: {label}")
+    return matches[0]
+
+
 def _class_flags(label: str) -> tuple[bool, bool]:
-    lower = label.lower()
-    responder = any(token in lower for token in ("ko", "responder", "perturbed"))
-    escape = any(token in lower for token in ("np", "escape", "non.perturbed"))
-    return responder, escape
+    canonical = _canonical_mixscape_label(label)
+    return canonical == "responder", canonical == "escape"
+
+
+def _mixscape_class_column(columns: Iterable[Any], *, expected: str) -> Any:
+    """Return the categorical Mixscape output, never a prefixed score column."""
+
+    exact = [name for name in columns if str(name) == expected]
+    if len(exact) != 1:
+        available = sorted(
+            str(name) for name in columns if str(name).startswith(expected)
+        )
+        raise ValueError(
+            "Pertpy Mixscape must produce exactly one categorical "
+            f"{expected!r} column; found exact={len(exact)}, candidates={available}"
+        )
+    return exact[0]
 
 
 def _validate_mixscape_abi(method: Any) -> None:
@@ -519,14 +549,10 @@ def _run_mixscape(
         perturbation_type="KO",
         random_state=SEED,
     )
-    class_columns = [
-        name
-        for name in data.obs.columns
-        if str(name) == "mixscape_class" or str(name).startswith("mixscape_class")
-    ]
-    if not class_columns:
-        raise ValueError("Pertpy Mixscape did not produce a class column")
-    class_column = class_columns[0]
+    class_column = _mixscape_class_column(
+        data.obs.columns,
+        expected="mixscape_class",
+    )
     labels = [str(value) for value in data.obs[class_column]]
     score_columns = [
         name
@@ -548,7 +574,13 @@ def _run_mixscape(
         labels,
         scores,
     ):
-        responder, escape = _class_flags(label)
+        canonical_label = _canonical_mixscape_label(label)
+        responder, escape = _class_flags(canonical_label)
+        if is_control != (canonical_label == "control"):
+            raise ValueError(
+                "Pertpy Mixscape control identity disagrees with the frozen "
+                f"evaluation design for cell {cell}: class={label!r}"
+            )
         cell_rows.append(
             {
                 "cell_id": cell,
@@ -556,7 +588,7 @@ def _run_mixscape(
                 "guide": guide,
                 "replicate": replicate,
                 "is_control": str(is_control).lower(),
-                "mixscape_class": label,
+                "mixscape_class": canonical_label,
                 "reference_responder": str(responder and not is_control).lower(),
                 "reference_escape": str(escape and not is_control).lower(),
                 "perturbation_score": score,

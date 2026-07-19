@@ -116,6 +116,33 @@ def test_ref04_mixscape_stratifies_only_when_each_replicate_has_controls() -> No
     assert policy["mode"] == "replicate_stratified"
 
 
+def test_ref04_selects_exact_mixscape_class_not_probability_column() -> None:
+    module = _module()
+
+    selected = module._mixscape_class_column(
+        ["mixscape_class_p_ko", "mixscape_class", "mixscape_class_p_np"],
+        expected="mixscape_class",
+    )
+
+    assert selected == "mixscape_class"
+    with pytest.raises(ValueError, match="exactly one categorical"):
+        module._mixscape_class_column(
+            ["mixscape_class_p_ko", "mixscape_class_p_np"],
+            expected="mixscape_class",
+        )
+
+
+def test_ref04_canonicalizes_only_supported_mixscape_classes() -> None:
+    module = _module()
+
+    assert module._canonical_mixscape_label("NT") == "control"
+    assert module._canonical_mixscape_label("KO") == "responder"
+    assert module._canonical_mixscape_label("non.perturbed") == "escape"
+    assert module._class_flags("non.perturbed") == (False, True)
+    with pytest.raises(ValueError, match="unsupported Pertpy Mixscape class"):
+        module._canonical_mixscape_label(0.979956429656431)
+
+
 def test_ref04_rejects_incompatible_mixscape_abi_before_execution() -> None:
     module = _module()
 
