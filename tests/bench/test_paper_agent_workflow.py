@@ -1652,6 +1652,128 @@ def test_reference_truth_access_audit_detects_scoring_inputs(tmp_path: Path) -> 
     )
 
 
+def test_reference_audit_allows_only_registered_provider_assets(
+    tmp_path: Path,
+) -> None:
+    neutral = tmp_path / "paper/task_references/PAPA-06/neutral_inputs"
+    neutral.mkdir(parents=True)
+    genes = neutral / "genes.tsv"
+    eligibility = neutral / "target_eligibility.tsv"
+    genes.write_text("gene\nG1\n", encoding="utf-8")
+    eligibility.write_text("target_uid\teligible\nT1\ttrue\n", encoding="utf-8")
+    truth = tmp_path / "paper/task_references/PAPA-06/reference/trans_de.tsv"
+    truth.parent.mkdir(parents=True)
+    truth.write_text("answer\n", encoding="utf-8")
+    assets = tuple(
+        {
+            "role": path.stem,
+            "path": str(path),
+            "content_sha256": file_sha256(path),
+        }
+        for path in (genes, eligibility)
+    )
+
+    safe_events = tmp_path / "safe-events.jsonl"
+    safe_events.write_text(
+        "\n".join(
+            json.dumps(
+                {
+                    "message_type": "AssistantMessage",
+                    "payload": {
+                        "content": [
+                            "ToolUseBlock(name='Bash', input={'command': "
+                            f"'ls {neutral}; cat {path}'}})"
+                        ]
+                    },
+                }
+            )
+            for path in (genes, eligibility)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    safe = execution._audit_reference_truth_access(
+        safe_events,
+        start_offset=0,
+        allowed_provider_assets=assets,
+    )
+    assert safe["status"] == "passed"
+    assert safe["scanned_tool_events"] == 2
+    assert safe["hits"] == []
+
+    mixed_events = tmp_path / "mixed-events.jsonl"
+    mixed_events.write_text(
+        json.dumps(
+            {
+                "message_type": "AssistantMessage",
+                "payload": {
+                    "content": [
+                        "ToolUseBlock(name='Bash', input={'command': "
+                        f"'cat {genes} {truth}'}})"
+                    ]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    mixed = execution._audit_reference_truth_access(
+        mixed_events,
+        start_offset=0,
+        allowed_provider_assets=assets,
+    )
+    assert mixed["status"] == "failed"
+    assert {
+        token.replace("\\", "/")
+        for token in mixed["hits"][0]["matched_tokens"]
+    } == {"task_references/"}
+
+
+def test_reference_audit_does_not_allow_unregistered_neutral_sibling(
+    tmp_path: Path,
+) -> None:
+    neutral = tmp_path / "paper/task_references/PAPA-06/neutral_inputs"
+    neutral.mkdir(parents=True)
+    registered = neutral / "genes.tsv"
+    unregistered = neutral / "hidden.tsv"
+    registered.write_text("gene\nG1\n", encoding="utf-8")
+    unregistered.write_text("hidden\n", encoding="utf-8")
+    assets = (
+        {
+            "role": "genes",
+            "path": str(registered),
+            "content_sha256": file_sha256(registered),
+        },
+    )
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        json.dumps(
+            {
+                "message_type": "AssistantMessage",
+                "payload": {
+                    "content": [
+                        "ToolUseBlock(name='Bash', input={'command': "
+                        f"'cat {registered}; ls {neutral}; cat {unregistered}'}})"
+                    ]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    audit = execution._audit_reference_truth_access(
+        events,
+        start_offset=0,
+        allowed_provider_assets=assets,
+    )
+    assert audit["status"] == "failed"
+    assert {
+        token.replace("\\", "/")
+        for token in audit["hits"][0]["matched_tokens"]
+    } == {"task_references/"}
+
+
 def test_reference_truth_leakage_is_invalid_infrastructure() -> None:
     status = execution._classify_task_validity(
         workflow_id="WF-KANG",

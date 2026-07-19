@@ -5,6 +5,7 @@ import csv
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -445,6 +446,7 @@ def run_paper_agent_workflow(
             reference_leakage_audit = _audit_reference_truth_access(
                 event_log,
                 start_offset=event_offset,
+                allowed_provider_assets=tuple(task_asset_manifest["assets"]),
             )
             resource_evidence = observe_runtime_resources(
                 resource_evidence, started_monotonic=resource_started
@@ -2112,8 +2114,15 @@ def _audit_reference_truth_access(
     event_log: Path,
     *,
     start_offset: int,
+    allowed_provider_assets: tuple[Mapping[str, Any], ...] = (),
 ) -> dict[str, Any]:
-    """Reject provider tool access to post-provider scoring truth."""
+    """Reject provider tool access to post-provider scoring truth.
+
+    Provider-visible assets are selected before the turn from the bound asset
+    catalog and carry content hashes.  Their exact paths are legal even when a
+    historical storage directory contains a forbidden reference token.  Any
+    other path in that namespace remains forbidden.
+    """
 
     if not event_log.is_file():
         return {
@@ -2138,6 +2147,7 @@ def _audit_reference_truth_access(
     with event_log.open("rb") as handle:
         handle.seek(max(0, start_offset))
         text = handle.read().decode("utf-8", errors="replace")
+    allowed_paths = _registered_provider_audit_paths(allowed_provider_assets)
     hits: list[dict[str, Any]] = []
     scanned = 0
     for line_number, line in enumerate(text.splitlines(), start=1):
@@ -2150,7 +2160,8 @@ def _audit_reference_truth_access(
         content = (event.get("payload") or {}).get("content") or []
         for item in content if isinstance(content, list) else [content]:
             serialized = json.dumps(item, sort_keys=True, default=str)
-            lowered = serialized.lower()
+            searchable = item if isinstance(item, str) else serialized
+            lowered = str(searchable).lower()
             if not (
                 "tooluseblock" in lowered
                 or '"type": "tool_use"' in lowered
@@ -2158,7 +2169,8 @@ def _audit_reference_truth_access(
             ):
                 continue
             scanned += 1
-            matched = sorted({token for token in forbidden if token in lowered})
+            redacted = _redact_registered_provider_paths(lowered, allowed_paths)
+            matched = sorted({token for token in forbidden if token in redacted})
             if matched:
                 hits.append(
                     {
@@ -2173,6 +2185,68 @@ def _audit_reference_truth_access(
         "scanned_tool_events": scanned,
         "hits": hits[:20],
     }
+
+
+def _registered_provider_audit_paths(
+    assets: tuple[Mapping[str, Any], ...],
+) -> tuple[tuple[str, bool], ...]:
+    """Return exact hash-bound provider paths and safe complete directories."""
+
+    records: dict[Path, str] = {}
+    for asset in assets:
+        raw_path = str(asset.get("path") or "")
+        content_sha256 = str(asset.get("content_sha256") or "")
+        if not raw_path or not content_sha256.startswith("sha256:"):
+            continue
+        path = Path(raw_path).expanduser().resolve()
+        records[path] = raw_path
+
+    allowed: dict[str, bool] = {}
+    for path, raw_path in records.items():
+        allowed[raw_path] = path.is_dir()
+        allowed[str(path)] = path.is_dir()
+
+    files_by_parent: dict[Path, set[Path]] = {}
+    for path in records:
+        if path.is_file():
+            files_by_parent.setdefault(path.parent, set()).add(path)
+    for parent, registered_children in files_by_parent.items():
+        try:
+            visible_children = {child.resolve() for child in parent.iterdir()}
+        except OSError:
+            continue
+        if visible_children == registered_children:
+            allowed[str(parent)] = True
+
+    return tuple(
+        sorted(allowed.items(), key=lambda item: (-len(item[0]), item[0]))
+    )
+
+
+def _redact_registered_provider_paths(
+    text: str,
+    allowed_paths: tuple[tuple[str, bool], ...],
+) -> str:
+    """Redact exact registered paths without hiding sibling/traversal access."""
+
+    redacted = text
+    boundary = r"(?=$|[\s\"'`,;:)\]}]|\\[nrt\"'])"
+    for raw_path, is_directory in allowed_paths:
+        variants = {
+            raw_path.lower(),
+            raw_path.replace("\\", "/").lower(),
+            raw_path.replace("/", "\\").lower(),
+        }
+        for variant in sorted(variants, key=len, reverse=True):
+            if not variant:
+                continue
+            separator = r"[\\/]*" if is_directory else ""
+            redacted = re.sub(
+                re.escape(variant) + separator + boundary,
+                "<registered-provider-asset>",
+                redacted,
+            )
+    return redacted
 
 
 def _load_json(path: str | Path) -> dict[str, Any]:

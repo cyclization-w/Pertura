@@ -484,6 +484,31 @@ Status values:
   conditions.
 - Status: `fixed_unverified`
 
+### PB-062 -- Registered answer-free assets triggered the reference-path audit
+
+- Date: 2026-07-19
+- Phase: final a19 canary
+- Affected checkpoint/job/run: checkpoint `db734fe`, PAPA-06 prompt-only job
+  `34562178`, run `run_88f6883151eb4189ac0c2487004a2cec`
+- Symptom: PAPA-06 produced and typed-submitted the complete 167,841-row
+  target-by-gene result, but `no_reference_leakage` failed because the four
+  registered answer-free inputs were stored under
+  `task_references/PAPA-06/neutral_inputs`.
+- Root cause: the leakage audit matched forbidden directory-name substrings
+  without distinguishing the current task's hash-bound provider asset surface
+  from post-provider evaluator truth. The asset catalog and audit therefore
+  disagreed about paths the provider was explicitly required to read.
+- Resolution: pass the task-scoped asset manifest into the audit and redact only
+  exact hash-bound asset paths. Permit listing a parent directory only when all
+  of its visible children are registered for the current task. Unregistered
+  siblings, traversal, catalogs, graders, evaluator source, and true reference
+  paths remain forbidden; a command containing both legal and illegal paths
+  still fails.
+- Benchmark treatment: job `34562178` is infrastructure-invalid and excluded,
+  despite its retained diagnostic scientific artifacts. All five final canaries
+  require a checkpoint containing this fix.
+- Status: `fixed_unverified`
+
 ## Incident index
 
 ### Repository, build, and checkpoint
@@ -571,6 +596,7 @@ Status values:
 | PB-059 | Slurm allocated extra billing CPUs for the frozen memory request while the launcher retained an 8 GB placeholder. | Bind authoritative Slurm memory, separate requested task concurrency from allocated CPUs, and retain one-job/thread execution. | Jobs launched with the stale template are infrastructure-invalid; rerun after refresh. | `fixed_unverified` |
 | PB-060 | Relative `outputs/tasks/<task>` destinations admitted both project-level and canonical run-level interpretations. | Publish one absolute canonical task root and absolute destinations to all tasks and conditions. | Job `34562384` is measurement-path-invalid; rerun all five final canaries. | `fixed_unverified` |
 | PB-061 | The 1,800-second REPL-01 budget cancelled both conditions before typed submission. | Freeze REPL-01 at 3,600 seconds for every condition. | Earlier 30-minute REPL-01 runs remain diagnostic only. | `fixed_unverified` |
+| PB-062 | Hash-bound answer-free provider inputs lived under a path token forbidden by the reference audit. | Exempt only exact task-registered assets and complete registered-only directories while retaining all unregistered reference prohibitions. | Job `34562178` is infrastructure-invalid; rerun all five final canaries. | `fixed_unverified` |
 
 ## Successful retained milestones
 
