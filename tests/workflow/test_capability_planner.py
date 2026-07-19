@@ -14,6 +14,9 @@ from pertura_core import (
     SourceClass,
 )
 from pertura_core.hashing import canonical_hash
+from pertura_bench.capability_availability import (
+    build_task_capability_availability,
+)
 from pertura_workflow.capabilities import CapabilityRegistry
 from pertura_workflow.capabilities.registry import capability_scientific_hash
 from pertura_workflow.planner import (
@@ -568,7 +571,7 @@ def test_a19_codeact_handoff_blocks_an_unready_environment() -> None:
     ]
 
 
-def test_a19_contract_catalog_and_frozen_task_gaps_are_stable() -> None:
+def test_a19_contract_catalog_and_executable_surfaces_are_stable() -> None:
     registry = CapabilityRegistry.load_default(include_external=False)
     catalog = build_capability_contract_catalog(registry)
 
@@ -579,33 +582,21 @@ def test_a19_contract_catalog_and_frozen_task_gaps_are_stable() -> None:
     tasks = json.loads(
         (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
     )
-    gaps = set()
-    for workflow in tasks["workflows"]:
-        earlier_candidates: set[str] = set()
-        for task in workflow["turns"]:
-            current = set(task.get("expected_capability_dag") or ())
-            for capability_id in current:
-                for dependency in registry.get(capability_id).depends_on:
-                    if dependency not in current | earlier_candidates:
-                        gaps.add(
-                            (
-                                workflow["workflow_id"],
-                                capability_id,
-                                dependency,
-                            )
-                        )
-            earlier_candidates.update(current)
+    availability = build_task_capability_availability(tasks, catalog)
+    advertised = sum(
+        len(record["advertised_capability_ids"])
+        for record in availability["records"]
+    )
+    excluded = sum(
+        len(record["structurally_excluded_capabilities"])
+        for record in availability["records"]
+    )
 
-    # The paper task catalog deliberately exposes endpoint-scoped candidates,
-    # not a cross-turn executable Planner closure.  Keep the remaining gaps
-    # visible while requiring KANG-02's retained Propeller path to include its
-    # direct design-balance dependency.
-    assert len(gaps) == 26
-    assert (
-        "WF-KANG",
-        "composition.propeller.v1",
-        "diagnostic.design_balance.v1",
-    ) not in gaps
+    # The benchmark exposes only executable or receipt-conditional contracts;
+    # missing raw DAG edges are retained solely as hidden audit reasons.
+    assert advertised == 13
+    assert excluded == 46
+    assert availability["canonical_hash"].startswith("sha256:")
 
 def test_trusted_effect_resolution_flattens_scientific_dependencies() -> None:
     registry = CapabilityRegistry.load_default(include_external=False)

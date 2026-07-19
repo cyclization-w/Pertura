@@ -27,7 +27,7 @@ REFERENCES = ROOT / "benchmarks" / "paper_v1" / "task_references.v1.json"
 ANCHORS = ROOT / "benchmarks" / "paper_v1" / "paper_anchors.v1.json"
 
 
-def test_a19_contract_catalog_generator_accepts_frozen_dependency_gaps(
+def test_a19_contract_catalog_generator_freezes_executable_surfaces(
     tmp_path: Path,
 ) -> None:
     output = tmp_path / "capability-contract-catalog.a19.json"
@@ -51,7 +51,9 @@ def test_a19_contract_catalog_generator_accepts_frozen_dependency_gaps(
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
     summary = json.loads(completed.stdout)
-    assert summary["task_dependency_gap_count"] == 26
+    assert summary["advertised_capability_count"] == 13
+    assert summary["structurally_excluded_capability_count"] == 46
+    assert summary["task_capability_availability_hash"].startswith("sha256:")
     assert output.is_file()
 
 
@@ -450,6 +452,7 @@ def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
     assert sum(int(job["required_task_count"]) for job in jobs) == 120
     assert not [job for job in plan.jobs if job.get("kind") == "agent_workflow"]
     assert all(job["max_turns_per_task"] == 64 for job in jobs)
+    assert len({job["capability_availability_hash"] for job in jobs}) == 1
     assert all(job["session_scope"]["shared_provider_session"] for job in jobs)
     assert all(job["session_scope"]["condition_repeat_isolated"] for job in jobs)
     for job in jobs:
@@ -487,6 +490,8 @@ def test_trans_de_and_global_effect_are_not_new_capabilities() -> None:
     assert by_id["PAPA-06"]["expected_capability_dag"] == []
     assert by_id["PAPA-07"]["execution_mode"] == "evidence_interpretation"
     assert by_id["PAPA-07"]["expected_capability_dag"] == []
+    assert by_id["KANG-01"]["execution_mode"] == "codeact_scientific"
+    assert by_id["KANG-01"]["expected_capability_dag"] == []
 
 
 def test_v2_catalog_freezes_task_scoped_skill_bindings() -> None:

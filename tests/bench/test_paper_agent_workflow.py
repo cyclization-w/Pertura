@@ -1137,7 +1137,17 @@ def test_pertura_full_runner_writes_answer_free_static_contract_subset(
         for task in workflow["turns"]
         if task["task_id"] == "PAPA-01"
     )
-    assert subset["capability_ids"] == expected_task["expected_capability_dag"]
+    assert subset["schema_version"] == (
+        "pertura-paper-capability-contract-subset-v2"
+    )
+    assert subset["candidate_capability_ids"] == (
+        expected_task["expected_capability_dag"]
+    )
+    assert subset["advertised_capability_ids"] == (
+        expected_task["expected_capability_dag"]
+    )
+    assert subset["conditional_capability_ids"] == []
+    assert subset["structurally_excluded_capabilities"] == []
     assert [item["capability_id"] for item in subset["capabilities"]] == (
         expected_task["expected_capability_dag"]
     )

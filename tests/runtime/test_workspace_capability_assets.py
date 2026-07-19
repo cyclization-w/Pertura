@@ -141,3 +141,32 @@ def test_workspace_asset_registration_rejects_external_paths_and_wrong_roles(
             },
         )
     runtime.close()
+
+
+def test_workspace_asset_cannot_replace_required_upstream_result_receipt(
+    tmp_path: Path, monkeypatch
+) -> None:
+    runtime, _, _, _, contract = _runtime(tmp_path, monkeypatch)
+    h5ad = runtime.workspace.root / "outputs" / "tasks" / "PAPA-02" / "controls.h5ad"
+    h5ad.parent.mkdir(parents=True)
+    h5ad.write_bytes(b"not-read-before-dependency-resolution")
+
+    response = runtime._run(
+        "reference.state.control_pca_leiden.v1",
+        kind="analysis",
+        contract_id=contract.contract_id,
+        scope={"dataset_id": contract.dataset_id},
+        parameters={"h5ad_path": str(h5ad)},
+    )
+
+    assert response["status"] == "blocked"
+    assert response["result_id"] is None
+    assert response["required_upstream"] == [
+        "diagnostic.guide_assignment.v1"
+    ]
+    assert any(
+        "required dependency is missing" in blocker
+        for blocker in response["blockers"]
+    )
+    assert runtime.planning_material(contract.contract_id)[1] == ()
+    runtime.close()

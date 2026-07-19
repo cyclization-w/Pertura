@@ -47,15 +47,20 @@ source "$PAPER_MANIFESTS/sherlock-environment-paths.env"
 set +a
 
 CONTRACT_CATALOG="$PAPER_MANIFESTS/capability-contract-catalog.a19.json"
+TASKS="$PERTURA_REPO/benchmarks/paper_v1/agent_tasks.v2.json"
+CAPABILITY_AVAILABILITY="$CHECKPOINT_ROOT/task-capability-availability.a19.json"
 "$MAIN_ENV/bin/python" "$PERTURA_REPO/scripts/generate_a19_capability_contract_catalog.py" \
-  --output "$CONTRACT_CATALOG"
+  --output "$CONTRACT_CATALOG" \
+  --task-catalog "$TASKS" \
+  --availability-output "$CAPABILITY_AVAILABILITY"
+sha256sum "$CAPABILITY_AVAILABILITY" | \
+  tee "$CHECKPOINT_ROOT/task-capability-availability-sha256.txt"
 
 RESOURCE_LOCK_SET="$PAPER_MANIFESTS/resource-lock-set.a19.sherlock.json"
 export RESOURCE_LOCK_SET
 "$MAIN_ENV/bin/python" "$RESOURCE_BUILDER"
 sha256sum "$RESOURCE_LOCK_SET" | tee "$PAPER_MANIFESTS/resource-lock-set.a19.sherlock.sha256"
 
-TASKS="$PERTURA_REPO/benchmarks/paper_v1/agent_tasks.v2.json"
 LEGACY_TASK_REFS="$PAPER_MANIFESTS/task-reference-catalog.a18.bound.json"
 TASK_REFS="$PAPER_MANIFESTS/task-reference-catalog.a19.bound.json"
 ANCHORS="$PERTURA_REPO/benchmarks/paper_v1/paper_anchors.v1.json"
@@ -125,15 +130,16 @@ PY
 sha256sum "$PLAN_TEMPLATE" "$BOUND_PLAN" | \
   tee "$CHECKPOINT_ROOT/server-plan-sha256.txt"
 
-"$MAIN_ENV/bin/python" - "$BOUND_PLAN" "$COMMIT" <<'PY'
+"$MAIN_ENV/bin/python" - "$BOUND_PLAN" "$COMMIT" "$CAPABILITY_AVAILABILITY" <<'PY'
 import json
 import sys
 from importlib.metadata import version
 
 from pertura_runtime.agent_bundle import bundled_skill_manifest
 
-path, commit = sys.argv[1:]
+path, commit, availability_path = sys.argv[1:]
 plan = json.load(open(path, encoding="utf-8"))
+availability = json.load(open(availability_path, encoding="utf-8"))
 jobs = [job for job in plan["jobs"] if job["kind"] == "paper_agent_workflow"]
 turns = sum(int(job["required_task_count"]) for job in jobs)
 skills = bundled_skill_manifest()
@@ -142,6 +148,11 @@ assert plan["executable"] is True
 assert plan["checkpoint_binding"]["git_commit"] == commit
 assert len(jobs) == 24 and turns == 120
 assert len(skills["skills"]) == 7
+assert availability["task_count"] == 21
+assert all(
+    job["capability_availability_hash"] == availability["canonical_hash"]
+    for job in jobs
+)
 for job in jobs:
     expected_memory = 48.0 if job["workflow_id"] == "WF-REPL" else 32.0
     assert float(job["resources"]["memory_gb"]) == expected_memory
@@ -149,6 +160,7 @@ for job in jobs:
 print("paper_workflow_jobs:", len(jobs))
 print("required_scored_turns:", turns)
 print("skill_count:", len(skills["skills"]))
+print("capability_availability_hash:", availability["canonical_hash"])
 print("workflow_memory_gb: WF-REPL=48, WF-PAPA/WF-NORM/WF-KANG=32")
 PY
 

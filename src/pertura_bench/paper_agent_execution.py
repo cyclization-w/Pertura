@@ -13,6 +13,10 @@ from uuid import uuid4
 
 from pertura_bench.agent_judge import grade_turn_final, project_judge_answer
 from pertura_bench.agent_models import AgentBenchmarkResult
+from pertura_bench.capability_availability import (
+    availability_by_task,
+    build_task_capability_availability,
+)
 from pertura_bench.paper_tasks import (
     PAPER_AGENT_MAX_TURNS,
     PAPER_CONDITIONS,
@@ -164,6 +168,13 @@ def run_paper_agent_workflow(
         )
     else:
         contract_catalog = build_capability_contract_catalog()
+    capability_availability = build_task_capability_availability(
+        task_catalog.payload,
+        contract_catalog,
+    )
+    capability_availability_by_task = availability_by_task(
+        capability_availability
+    )
     tasks = task_catalog.tasks()
     catalog_problems = [
         *validate_task_reference_catalog(task_references, tasks),
@@ -192,6 +203,9 @@ def run_paper_agent_workflow(
             paper_anchor_catalog_path=paper_anchor_catalog_path,
             asset_catalog_path=asset_catalog_path,
             capability_contract_catalog_path=Path(capability_contract_catalog_path),
+            capability_availability_hash=capability_availability[
+                "canonical_hash"
+            ],
         )
         if verify_checkpoint
         else {"test_only": "checkpoint_verification_disabled"}
@@ -408,6 +422,7 @@ def run_paper_agent_workflow(
                 subset = _task_capability_contract_subset(
                     task=task,
                     contract_catalog=contract_catalog,
+                    availability=capability_availability_by_task[task_id],
                 )
                 subset_path = (
                     workspace.task_dir / "capability_contracts" / f"{task_id}.json"
@@ -416,7 +431,22 @@ def run_paper_agent_workflow(
                 contract_subset_record = {
                     "task_id": task_id,
                     "subset_hash": subset["subset_hash"],
-                    "capability_ids": subset["capability_ids"],
+                    "candidate_capability_ids": list(
+                        capability_availability_by_task[task_id][
+                            "candidate_capability_ids"
+                        ]
+                    ),
+                    "advertised_capability_ids": list(
+                        subset["advertised_capability_ids"]
+                    ),
+                    "conditional_capability_ids": list(
+                        subset["conditional_capability_ids"]
+                    ),
+                    "structurally_excluded_capabilities": list(
+                        capability_availability_by_task[task_id][
+                            "structurally_excluded_capabilities"
+                        ]
+                    ),
                     "path": subset_path.relative_to(workspace.root).as_posix(),
                 }
                 contract_subsets.append(contract_subset_record)
@@ -467,6 +497,19 @@ def run_paper_agent_workflow(
                 start_offset=event_offset,
                 allowed_provider_assets=tuple(task_asset_manifest["assets"]),
             )
+            capability_treatment_uptake = _audit_capability_treatment_uptake(
+                event_log,
+                start_offset=event_offset,
+                advertised_capability_ids=(
+                    tuple(contract_subset_record["advertised_capability_ids"])
+                    if contract_subset_record is not None
+                    else ()
+                ),
+            )
+            if contract_subset_record is not None:
+                contract_subset_record["actual_mcp_capability_calls"] = list(
+                    capability_treatment_uptake["calls"]
+                )
             resource_evidence = observe_runtime_resources(
                 resource_evidence, started_monotonic=resource_started
             )
@@ -599,6 +642,7 @@ def run_paper_agent_workflow(
                 "skill_leakage_audit": skill_leakage_audit,
                 "reference_leakage_audit": reference_leakage_audit,
                 "capability_contract_subset": contract_subset_record,
+                "capability_treatment_uptake": capability_treatment_uptake,
                 "post_turn_output_hashes": _tree_hashes(task_output),
                 "post_turn_ancestor_hashes": {
                     dependency: _tree_hashes(
@@ -742,6 +786,9 @@ def run_paper_agent_workflow(
         ),
         "asset_catalog_sha256": asset_catalog["_catalog_sha256"],
         "capability_contract_catalog_hash": contract_catalog["catalog_hash"],
+        "capability_availability_hash": capability_availability[
+            "canonical_hash"
+        ],
         "capability_contract_catalog_sha256": (
             file_sha256(Path(capability_contract_catalog_path))
             if capability_contract_catalog_path is not None
@@ -1210,25 +1257,36 @@ def _task_capability_contract_subset(
     *,
     task: Mapping[str, Any],
     contract_catalog: Mapping[str, Any],
+    availability: Mapping[str, Any],
 ) -> dict[str, Any]:
-    requested = [str(item) for item in task.get("expected_capability_dag") or ()]
+    advertised = [
+        str(item) for item in availability.get("advertised_capability_ids") or ()
+    ]
     catalog = {
         str(item["capability_id"]): dict(item)
         for item in contract_catalog.get("capabilities") or ()
     }
     missing = [
-        capability_id for capability_id in requested if capability_id not in catalog
+        capability_id for capability_id in advertised if capability_id not in catalog
     ]
     if missing:
         raise ValueError(
             f"{task['task_id']}: capability contract subset is unbound: {missing}"
         )
     payload = {
-        "schema_version": "pertura-paper-capability-contract-subset-v1",
+        "schema_version": "pertura-paper-capability-contract-subset-v2",
         "task_id": str(task["task_id"]),
         "catalog_hash": str(contract_catalog["catalog_hash"]),
-        "capability_ids": requested,
-        "capabilities": [catalog[capability_id] for capability_id in requested],
+        # This is the provider-visible candidate surface. Excluded IDs and
+        # reasons remain only in the checkpoint/verdict audit record.
+        "candidate_capability_ids": advertised,
+        "advertised_capability_ids": advertised,
+        "conditional_capability_ids": [
+            str(item)
+            for item in availability.get("conditional_capability_ids") or ()
+        ],
+        "structurally_excluded_capabilities": [],
+        "capabilities": [catalog[capability_id] for capability_id in advertised],
     }
     return payload | {"subset_hash": canonical_hash(payload)}
 
@@ -1355,7 +1413,7 @@ def _task_prompt(
             f"summary are {json.dumps(contract_context or {}, sort_keys=True)}. "
             "The answer-free static capability contracts for this task are at "
             f"{(contract_subset_record or {}).get('path', '')}; their bound IDs are "
-            f"{json.dumps((contract_subset_record or {}).get('capability_ids', []))}. "
+            f"{json.dumps((contract_subset_record or {}).get('advertised_capability_ids', []))}. "
             f"{nonexecution_policy}"
             "Use registered asset IDs for asset-valued capability parameters. The "
             "exact SDK Skill tool names frozen for this task are "
@@ -2020,6 +2078,7 @@ def _verify_paper_checkpoint(
     paper_anchor_catalog_path: Path,
     asset_catalog_path: Path,
     capability_contract_catalog_path: Path,
+    capability_availability_hash: str,
 ) -> dict[str, str]:
     import subprocess
 
@@ -2053,6 +2112,8 @@ def _verify_paper_checkpoint(
     matching = [job for job in plan.jobs if job.get("job_id") == expected_job_id]
     if len(matching) != 1:
         raise ValueError(f"bound plan lacks paper workflow job: {expected_job_id}")
+    if matching[0].get("capability_availability_hash") != capability_availability_hash:
+        raise ValueError("paper checkpoint capability availability drift")
     completed = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=repo_root,
@@ -2088,6 +2149,58 @@ def _tree_hashes(root: Path) -> dict[str, str]:
         path.relative_to(root).as_posix(): file_sha256(path)
         for path in sorted(root.rglob("*"))
         if path.is_file()
+    }
+
+
+def _audit_capability_treatment_uptake(
+    event_log: Path,
+    *,
+    start_offset: int,
+    advertised_capability_ids: tuple[str, ...],
+) -> dict[str, Any]:
+    """Record task capability calls without turning uptake into a route gate."""
+
+    calls: list[dict[str, Any]] = []
+    if event_log.is_file():
+        with event_log.open("rb") as handle:
+            handle.seek(max(0, start_offset))
+            text = handle.read().decode("utf-8", errors="replace")
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event.get("message_type") != "AssistantMessage":
+                continue
+            content = (event.get("payload") or {}).get("content") or []
+            for item in content if isinstance(content, list) else [content]:
+                serialized = str(item)
+                tool = re.search(
+                    r"name=['\"]mcp__pertura__(run_analysis|run_diagnostic|evaluate_virtual_model)['\"]",
+                    serialized,
+                )
+                capability = re.search(
+                    r"['\"]capability_id['\"]\s*:\s*['\"]([^'\"]+)['\"]",
+                    serialized,
+                )
+                if not tool or not capability:
+                    continue
+                capability_id = capability.group(1)
+                calls.append(
+                    {
+                        "event_line": line_number,
+                        "tool_name": tool.group(1),
+                        "capability_id": capability_id,
+                        "advertised": capability_id in advertised_capability_ids,
+                    }
+                )
+    return {
+        "schema_version": "pertura-paper-capability-treatment-uptake-v1",
+        "advertised_capability_ids": list(advertised_capability_ids),
+        "actual_mcp_capability_ids": list(
+            dict.fromkeys(item["capability_id"] for item in calls)
+        ),
+        "calls": calls,
     }
 
 

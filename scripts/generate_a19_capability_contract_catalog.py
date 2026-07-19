@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from pertura_bench.capability_availability import build_task_capability_availability
 from pertura_runtime.claude.tools.product_tools import PRODUCT_TOOL_NAMES
 from pertura_workflow.capabilities import CapabilityRegistry
 from pertura_workflow.planner import build_capability_contract_catalog
@@ -14,6 +15,7 @@ def main() -> int:
         description="Generate the answer-free a19 capability contract catalog."
     )
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--availability-output", type=Path)
     parser.add_argument(
         "--task-catalog",
         type=Path,
@@ -26,19 +28,30 @@ def main() -> int:
 
     registry = CapabilityRegistry.load_default(include_external=False)
     catalog = build_capability_contract_catalog(registry)
-    task_dependency_gaps = _task_dependency_gaps(args.task_catalog, registry)
+    task_catalog = json.loads(args.task_catalog.read_text(encoding="utf-8"))
+    availability = build_task_capability_availability(task_catalog, catalog)
     if len(PRODUCT_TOOL_NAMES) != 5:
         raise RuntimeError("a19 P0 changed the five-tool public surface")
-    if len(task_dependency_gaps) != 26:
-        raise RuntimeError(
-            "a19 frozen task dependency gaps drifted: expected 26, observed "
-            f"{len(task_dependency_gaps)}"
-        )
+    if any(
+        set(record["advertised_capability_ids"])
+        & {
+            item["capability_id"]
+            for item in record["structurally_excluded_capabilities"]
+        }
+        for record in availability["records"]
+    ):
+        raise RuntimeError("structurally excluded capabilities were advertised")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         json.dumps(catalog, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    if args.availability_output is not None:
+        args.availability_output.parent.mkdir(parents=True, exist_ok=True)
+        args.availability_output.write_text(
+            json.dumps(availability, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     print(
         json.dumps(
             {
@@ -49,7 +62,20 @@ def main() -> int:
                 ],
                 "catalog_hash": catalog["catalog_hash"],
                 "mcp_tool_count": len(PRODUCT_TOOL_NAMES),
-                "task_dependency_gap_count": len(task_dependency_gaps),
+                "task_capability_availability_hash": availability["canonical_hash"],
+                "advertised_capability_count": sum(
+                    len(item["advertised_capability_ids"])
+                    for item in availability["records"]
+                ),
+                "structurally_excluded_capability_count": sum(
+                    len(item["structurally_excluded_capabilities"])
+                    for item in availability["records"]
+                ),
+                "availability_output": (
+                    str(args.availability_output.resolve())
+                    if args.availability_output is not None
+                    else None
+                ),
                 "output": str(args.output.resolve()),
                 "passed": True,
             },
@@ -58,29 +84,6 @@ def main() -> int:
         )
     )
     return 0
-
-
-def _task_dependency_gaps(
-    path: Path, registry: CapabilityRegistry
-) -> set[tuple[str, str, str]]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    gaps: set[tuple[str, str, str]] = set()
-    for workflow in payload["workflows"]:
-        earlier_candidates: set[str] = set()
-        for task in workflow["turns"]:
-            current = set(task.get("expected_capability_dag") or ())
-            for capability_id in current:
-                for dependency in registry.get(capability_id).depends_on:
-                    if dependency not in current | earlier_candidates:
-                        gaps.add(
-                            (
-                                str(workflow["workflow_id"]),
-                                capability_id,
-                                dependency,
-                            )
-                        )
-            earlier_candidates.update(current)
-    return gaps
 
 
 if __name__ == "__main__":

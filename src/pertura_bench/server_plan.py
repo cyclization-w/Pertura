@@ -805,6 +805,18 @@ def build_server_plan(
             raise ValueError(
                 "invalid bound paper asset catalog: " + "; ".join(asset_problems)
             )
+        if capability_contract_catalog_path is None:
+            raise ValueError(
+                "paper capability availability requires a contract catalog"
+            )
+        from pertura_bench.capability_availability import (
+            build_task_capability_availability,
+        )
+
+        capability_availability = build_task_capability_availability(
+            paper_catalog.payload,
+            contract_catalog,
+        )
         jobs = [item for item in jobs if item.get("kind") != "agent_workflow"]
         for workflow in paper_catalog.workflows:
             dataset_id = str(workflow["dataset_id"])
@@ -848,6 +860,9 @@ def build_server_plan(
                             "provider": "claude-agent-sdk",
                             "model_source": "PERTURA_CLAUDE_MODEL",
                             "max_turns_per_task": PAPER_AGENT_MAX_TURNS,
+                            "capability_availability_hash": capability_availability[
+                                "canonical_hash"
+                            ],
                             "task_ids": [
                                 task["task_id"] for task in workflow.get("turns") or ()
                             ],

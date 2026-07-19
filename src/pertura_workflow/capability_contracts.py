@@ -30,6 +30,9 @@ def build_capability_contract_catalog(
                 "depends_on": list(spec.depends_on),
                 "dependency_kinds": list(spec.dependency_kinds),
                 "dependency_policy": dict(spec.metadata.get("dependency_policy") or {}),
+                "dependency_sets": [
+                    dict(item) for item in spec.metadata.get("dependency_sets") or ()
+                ],
                 "environment_profile": spec.metadata.get("environment_profile"),
                 "output_kind": spec.output_kind,
                 "source_class": spec.source_class.value,
