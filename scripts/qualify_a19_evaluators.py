@@ -71,6 +71,28 @@ def _materialize_generic_positive(
                             f"cannot construct observed column {observed_name}: {relative}"
                         )
                     frame[str(observed_name)] = frame[str(reference_name)]
+            if spec.get("type") == "posterior_calibration":
+                probability_column = str(spec.get("probability_column") or "")
+                label_column = str(spec.get("reference_label_column") or "")
+                if probability_column and probability_column not in frame.columns:
+                    if not label_column or label_column not in frame.columns:
+                        raise ValueError(
+                            "cannot construct posterior-calibration positive "
+                            f"column {probability_column}: {relative}"
+                        )
+                    labels = pd.to_numeric(frame[label_column], errors="coerce")
+                    if labels.isna().any() or not set(labels.unique()).issubset(
+                        {0.0, 1.0}
+                    ):
+                        raise ValueError(
+                            "posterior-calibration reference labels must be binary: "
+                            f"{relative}"
+                        )
+                    # The qualification positive is deliberately perfect: its
+                    # probability is the frozen binary reference label. This
+                    # tests that the evaluator can accept a valid artifact
+                    # without changing the reference or formal thresholds.
+                    frame[probability_column] = labels.astype(float)
         destination = output / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         frame.to_csv(destination, sep="\t", index=False)

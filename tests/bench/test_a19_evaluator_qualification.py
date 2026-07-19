@@ -168,3 +168,60 @@ def test_qualification_materializes_protocol_balances(tmp_path: Path) -> None:
         "evaluation_cells": 6.0,
         "excluded": 6,
     }
+
+
+def test_qualification_constructs_posterior_calibration_positive(
+    tmp_path: Path,
+) -> None:
+    paper = tmp_path / "paper"
+    output = tmp_path / "positive"
+    paper.mkdir()
+    output.mkdir()
+    reference = paper / "reference.tsv"
+    pd.DataFrame(
+        [
+            {"id": "a", "reference_responder": 1},
+            {"id": "b", "reference_responder": 0},
+        ]
+    ).to_csv(reference, sep="\t", index=False)
+    evaluator = {
+        "evaluator_id": "posterior",
+        "type": "posterior_calibration",
+        "observed_output": "observed.tsv",
+        "reference_path": "reference.tsv",
+        "reference_sha256": file_sha256(reference),
+        "key_columns": ["id"],
+        "probability_column": "responder_probability",
+        "reference_label_column": "reference_responder",
+        "maximum_brier": 0.0,
+        "maximum_ece": 0.0,
+        "bins": 2,
+    }
+    binding = {
+        "task_reference_id": "fixture",
+        "evaluator_id": "task.fixture.v1",
+        "evaluation_domain": "scientific_fidelity",
+        "evaluators": [evaluator],
+        "protocol_evaluator": {
+            "allowed_status": ["completed"],
+            "allowed_analysis_units": ["cell"],
+        },
+    }
+
+    qualification._materialize_generic_positive(binding, output, paper)
+
+    observed = pd.read_csv(output / "observed.tsv", sep="\t")
+    assert observed["responder_probability"].tolist() == [1.0, 0.0]
+    verdict = evaluate_paper_task(
+        {"task_id": "FIXTURE"},
+        benchmark_result={
+            "status": "completed",
+            "analysis_unit": "cell",
+            "findings": [],
+            "limitations": [],
+        },
+        task_output_root=output,
+        paper_root=paper,
+        bindings=[binding],
+    )
+    assert verdict["status"] == "passed"
