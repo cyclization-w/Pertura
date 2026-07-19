@@ -81,28 +81,40 @@ def _bind_scheduler_allocation(payload: dict[str, Any]) -> dict[str, Any]:
     if recorded_job_id and recorded_job_id != slurm_job_id:
         raise ValueError("resource evidence scheduler job identity disagrees with Slurm")
 
+    # ``SLURM_CPUS_ON_NODE`` is the scheduler allocation, not necessarily the
+    # requested task parallelism.  Sherlock may allocate extra billing CPUs to
+    # satisfy a large per-node memory request even when ``--cpus-per-task=1``.
+    # Preserve the requested/effective task concurrency and record the larger
+    # scheduler allocation separately.
     cpus = int(
         os.environ.get("SLURM_CPUS_PER_TASK")
-        or os.environ.get("SLURM_CPUS_ON_NODE")
         or observed.get("cpu_count")
         or 0
     )
+    allocated_cpus = int(os.environ.get("SLURM_CPUS_ON_NODE") or cpus or 0)
     memory_mb: float | None = None
     memory_source = ""
     if os.environ.get("SLURM_MEM_PER_NODE"):
         memory_mb = float(os.environ["SLURM_MEM_PER_NODE"])
         memory_source = "SLURM_MEM_PER_NODE"
     elif os.environ.get("SLURM_MEM_PER_CPU"):
-        memory_mb = float(os.environ["SLURM_MEM_PER_CPU"]) * cpus
+        memory_mb = float(os.environ["SLURM_MEM_PER_CPU"]) * allocated_cpus
         memory_source = "SLURM_MEM_PER_CPU"
-    if memory_mb is None or memory_mb <= 0 or cpus <= 0:
+    if memory_mb is None or memory_mb <= 0 or cpus <= 0 or allocated_cpus <= 0:
         raise ValueError("Slurm allocation lacks positive memory or CPU evidence")
 
+    memory_gb = memory_mb / 1024.0
     observed.update(
         {
             "scheduler_job_id": slurm_job_id,
-            "actual_memory_gb": memory_mb / 1024.0,
+            # The Slurm allocation is authoritative.  Do not retain stale
+            # launcher-template values such as the historical 8 GB canary
+            # placeholder after a 32/48 GB workflow was actually submitted.
+            "requested_memory_gb": memory_gb,
+            "actual_memory_gb": memory_gb,
             "cpu_count": cpus,
+            "requested_cpus_per_task": cpus,
+            "allocated_cpus_on_node": allocated_cpus,
             "allocation_source": "slurm_environment",
             "slurm_memory_source": memory_source,
             "slurm_memory_mb": memory_mb,

@@ -1234,6 +1234,9 @@ def test_frozen_workflow_allocations_and_failure_classification() -> None:
         },
     }
     assert execution._workflow_resource_gate("WF-REPL", evidence) is True
+    assert execution._workflow_resource_gate(
+        "WF-REPL", evidence | {"allocated_cpus_on_node": 7}
+    ) is True
     assert execution._workflow_resource_gate("WF-PAPA", evidence) is False
     assert execution._workflow_resource_gate(
         "WF-PAPA",
@@ -1249,6 +1252,19 @@ def test_frozen_workflow_allocations_and_failure_classification() -> None:
         resource_evidence=evidence | {"oom_kill_events": 1},
     )
     assert valid_oom == ("valid", "scored_resource_failure")
+
+    timed_out_after_scheduler_memory_binding = execution._classify_task_validity(
+        workflow_id="WF-REPL",
+        task_status="failed",
+        termination_reason="task_timeout",
+        provider_error=None,
+        skill_leakage_audit={"status": "passed"},
+        resource_evidence=evidence | {"allocated_cpus_on_node": 7},
+    )
+    assert timed_out_after_scheduler_memory_binding == (
+        "valid",
+        "scored_timeout",
+    )
 
     preempted = execution._classify_task_validity(
         workflow_id="WF-REPL",

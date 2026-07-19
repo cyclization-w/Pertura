@@ -412,6 +412,32 @@ Status values:
   benchmark implementation incident, never a model failure.
 - Status: `fixed_unverified`
 
+### PB-059 -- Slurm billing CPUs invalidated frozen resource evidence
+
+- Date: 2026-07-19
+- Phase: final a19 canary
+- Affected checkpoint/job/run: checkpoint `b4ab319`, job `34548605`, run
+  `run_7d8cea39ee30472c9796bc503322c328`
+- Symptom: REPL-01 reached its 1,800-second task timeout without submission,
+  but the verdict was marked `invalid_infrastructure` instead of the frozen
+  `scored_timeout` classification. The resource gate observed the launcher's
+  historical 8 GB placeholder and `cpu_count=7` despite a 48 GB, one-CPU task
+  request.
+- First failing gate: `resource_evidence`
+- Root cause: the external canary launcher retained stale requested-memory
+  fields, while the scheduler evidence adapter treated
+  `SLURM_CPUS_ON_NODE` as task parallelism. Sherlock requested `cpu=1,mem=48G`
+  but allocated seven billing CPUs to satisfy the memory request.
+- Resolution: treat the Slurm memory allocation as authoritative, retain the
+  requested/effective `cpus-per-task` value, and record scheduler-allocated
+  CPUs separately. Keep `n_jobs=1` and all scientific thread variables at one.
+- Verification evidence: regression fixture matching `ReqTRES cpu=1,mem=48G`
+  and `AllocTRES cpu=7,mem=48G`; final Sherlock rerun required.
+- Benchmark treatment: job `34548605` and the other canaries launched by the
+  same stale resource template are infrastructure-invalid and excluded. After
+  refresh, an unsubmitted task timeout is a scored agent failure.
+- Status: `fixed_unverified`
+
 ## Incident index
 
 ### Repository, build, and checkpoint
@@ -496,6 +522,7 @@ Status values:
 | PB-056 | A post-submission turn boundary overruled exact accepted KANG science. | Separate scientific receipt completion from clean SDK termination. | Old verdict is superseded; replacement checkpoint required. | `fixed_unverified` |
 | PB-057 | REPL free CodeAct exhausted the common 32 GB allocation. | Freeze WF-REPL at 48 GB and other workflows at 32 GB for every condition. | Job `34489012` is scheduler-OOM canary evidence; final REPL canaries use 48 GB. | `fixed_unverified` |
 | PB-058 | Checkpoint refresh did not qualify all bound scientific evaluators. | Gate refresh on 11 positive controls and executed negative controls with hash-bound manifest. | Qualification failure blocks canaries and is not model performance. | `fixed_unverified` |
+| PB-059 | Slurm allocated extra billing CPUs for the frozen memory request while the launcher retained an 8 GB placeholder. | Bind authoritative Slurm memory, separate requested task concurrency from allocated CPUs, and retain one-job/thread execution. | Jobs launched with the stale template are infrastructure-invalid; rerun after refresh. | `fixed_unverified` |
 
 ## Successful retained milestones
 

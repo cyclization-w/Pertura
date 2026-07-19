@@ -213,6 +213,41 @@ def test_scheduler_resource_evidence_uses_actual_slurm_allocation(
     validate_resource_request(evidence, memory_gb=48.0, n_jobs=1)
 
 
+def test_scheduler_resource_evidence_separates_requested_and_billing_cpus(
+    tmp_path: Path, monkeypatch
+) -> None:
+    path = tmp_path / "resource.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "pertura-resource-evidence-v1",
+                "mode": "scheduler",
+                "scheduler_job_id": "job-sherlock",
+                "requested_memory_gb": 8.0,
+                "actual_memory_gb": 32.0,
+                "cpu_count": 1,
+                "n_jobs": 1,
+                "timeout_seconds": 7200,
+                "thread_environment": {"OMP_NUM_THREADS": "1"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SLURM_JOB_ID", "job-sherlock")
+    monkeypatch.setenv("SLURM_MEM_PER_NODE", str(48 * 1024))
+    monkeypatch.delenv("SLURM_CPUS_PER_TASK", raising=False)
+    monkeypatch.setenv("SLURM_CPUS_ON_NODE", "7")
+
+    evidence = load_resource_evidence(path)
+
+    assert evidence["requested_memory_gb"] == 48.0
+    assert evidence["actual_memory_gb"] == 48.0
+    assert evidence["cpu_count"] == 1
+    assert evidence["requested_cpus_per_task"] == 1
+    assert evidence["allocated_cpus_on_node"] == 7
+    validate_resource_request(evidence, memory_gb=48.0, n_jobs=1)
+
+
 def test_rlimit_resource_template_is_enforced_then_observed(
     tmp_path: Path, monkeypatch
 ) -> None:
