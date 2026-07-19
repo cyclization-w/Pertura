@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -22,6 +25,34 @@ ROOT = Path(__file__).resolve().parents[2]
 CATALOG = ROOT / "benchmarks" / "paper_v1" / "agent_tasks.v2.json"
 REFERENCES = ROOT / "benchmarks" / "paper_v1" / "task_references.v1.json"
 ANCHORS = ROOT / "benchmarks" / "paper_v1" / "paper_anchors.v1.json"
+
+
+def test_a19_contract_catalog_generator_accepts_frozen_dependency_gaps(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "capability-contract-catalog.a19.json"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "generate_a19_capability_contract_catalog.py"),
+            "--output",
+            str(output),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                filter(None, (str(ROOT / "src"), os.environ.get("PYTHONPATH")))
+            ),
+        },
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    summary = json.loads(completed.stdout)
+    assert summary["task_dependency_gap_count"] == 26
+    assert output.is_file()
 
 
 def test_v2_catalog_freezes_required_shape_without_capability_growth() -> None:

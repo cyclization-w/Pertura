@@ -29,9 +29,9 @@ def main() -> int:
     task_dependency_gaps = _task_dependency_gaps(args.task_catalog, registry)
     if len(PRODUCT_TOOL_NAMES) != 5:
         raise RuntimeError("a19 P0 changed the five-tool public surface")
-    if len(task_dependency_gaps) != 23:
+    if len(task_dependency_gaps) != 26:
         raise RuntimeError(
-            "a19 frozen task dependency gaps drifted: expected 23, observed "
+            "a19 frozen task dependency gaps drifted: expected 26, observed "
             f"{len(task_dependency_gaps)}"
         )
     args.output.parent.mkdir(parents=True, exist_ok=True)
