@@ -9,6 +9,7 @@ from typing import Any
 
 from pertura_core import CapabilityRunRequest, CapabilitySpec, DatasetContract, DiagnosticStatus, ResultEnvelope
 from pertura_core.hashing import file_sha256
+from pertura_workflow.capabilities.execution_context import authoritative_input_roots
 
 
 _SUFFIX = re.compile(r"-\d+$")
@@ -182,7 +183,7 @@ def _resolve_input(contract: DatasetContract, value: Any, *, required: bool = Tr
             raise ValueError("guide assignment capability is missing a required input path")
         return None
     candidate = Path(str(value)).expanduser()
-    roots = [Path(item).expanduser().resolve() for item in contract.source_paths]
+    roots = authoritative_input_roots(contract)
     if not candidate.is_absolute():
         directory_roots = [root for root in roots if root.is_dir()]
         if not directory_roots:

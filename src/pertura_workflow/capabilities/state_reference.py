@@ -8,6 +8,7 @@ from typing import Any
 
 from pertura_core import AnalysisStatus, CapabilityRunRequest, CapabilitySpec, DatasetContract, ResultEnvelope
 from pertura_core.hashing import canonical_hash, file_sha256
+from pertura_workflow.capabilities.execution_context import authoritative_input_roots
 
 
 def run_state_reference(
@@ -183,7 +184,7 @@ def _resolve_input(contract: DatasetContract, value: Any) -> Path:
     if value in (None, ""):
         raise ValueError("state reference capability requires h5ad_path")
     candidate = Path(str(value)).expanduser()
-    roots = [Path(item).expanduser().resolve() for item in contract.source_paths]
+    roots = authoritative_input_roots(contract)
     if not candidate.is_absolute():
         directories = [item for item in roots if item.is_dir()]
         if not directories:

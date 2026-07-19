@@ -15,6 +15,7 @@ from pertura_workflow.capabilities.dependency_inputs import (
     dependency_grounding_metadata,
     retained_cells_for_request,
 )
+from pertura_workflow.capabilities.execution_context import authoritative_input_roots
 
 
 CALIBRATION_PROFILE = "replicate_null_v1"
@@ -217,7 +218,7 @@ def _resolve_input(contract: DatasetContract, value: Any) -> Path:
     if value in (None, ""):
         raise ValueError("calibration capability is missing a required input path")
     candidate = Path(str(value)).expanduser()
-    roots = [Path(item).expanduser().resolve() for item in contract.source_paths]
+    roots = authoritative_input_roots(contract)
     if not candidate.is_absolute():
         directories = [item for item in roots if item.is_dir()]
         if not directories:

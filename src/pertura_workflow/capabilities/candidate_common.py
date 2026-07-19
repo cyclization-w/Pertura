@@ -16,6 +16,7 @@ from pertura_core import (
     VirtualStatus,
 )
 from pertura_core.hashing import path_sha256
+from pertura_workflow.capabilities.execution_context import authoritative_input_roots
 
 
 def resolve_input(
@@ -30,12 +31,7 @@ def resolve_input(
             raise ValueError(f"{label} is required")
         return None
     candidate = Path(str(value)).expanduser()
-    roots = [Path(item).expanduser().resolve() for item in contract.source_paths]
-    from pertura_workflow.capabilities.execution_context import execution_context
-    roots.extend(
-        Path(item).expanduser().resolve()
-        for item in execution_context().get("authorized_asset_paths", ())
-    )
+    roots = authoritative_input_roots(contract)
     if not candidate.is_absolute():
         directories = [item for item in roots if item.is_dir()]
         if not directories:

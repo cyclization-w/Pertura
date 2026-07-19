@@ -8,10 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from pertura_core.hashing import canonical_hash
-from pertura_core import CapabilityRunRequest, DatasetContract, DependencyRef, DesignConfirmation, PromotionPolicy, ResultEnvelope, RunReceipt, ScientificStatement, ScopeKey, SourceClass, decide_promotion
+from pertura_core import CapabilityRunRequest, CapabilitySpec, DatasetContract, DependencyRef, DesignConfirmation, PromotionPolicy, ResultEnvelope, RunReceipt, ScientificStatement, ScopeKey, SourceClass, decide_promotion
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
 from pertura_runtime.network_policy import NetworkAccessPolicy
-from pertura_runtime.parameter_protocol import validate_and_resolve_parameters
+from pertura_runtime.parameter_protocol import (
+    CapabilityParameterError,
+    validate_and_resolve_parameters,
+)
 from pertura_runtime.project.assets import DataAssetRegistry
 from pertura_runtime.project.models import AssetBinding, ReportRevision
 from pertura_runtime.project.workspace import ProjectWorkspace
@@ -662,10 +665,12 @@ class PerturaProductRuntime:
     def _run(self, capability_id: str, *, kind: str, contract_id: str | None, scope: dict[str, Any] | None, parameters: dict[str, Any] | None, dependencies: list[dict[str, Any]] | None = None, objective: str | None = None) -> dict[str, Any]:
         self._refresh_asset_state()
         spec = self.registry.get(capability_id)
-        submitted_parameters = dict(parameters or {})
+        submitted_parameters = self._register_workspace_parameter_assets(
+            spec, dict(parameters or {})
+        )
         parameters = validate_and_resolve_parameters(
             spec,
-            parameters,
+            submitted_parameters,
             asset_registry=self.asset_registry,
             workspace_root=self.workspace.root,
         )
@@ -873,6 +878,71 @@ class PerturaProductRuntime:
                 item.capability_id for item in self.registry.list(kind="virtual") if not item.implemented
             ]
         return compact
+
+    def _register_workspace_parameter_assets(
+        self,
+        spec: CapabilitySpec,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Bind workspace-owned path parameters as hash-addressed data assets.
+
+        Registration attests only to the input identity used by a later
+        capability run.  It does not create a scientific result or satisfy a
+        receipt-backed capability-result dependency.
+        """
+
+        if self.asset_registry is None or self.project_workspace is None:
+            return parameters
+        normalized = dict(parameters)
+        properties = (spec.parameters_schema or {}).get("properties") or {}
+        workspace_root = self.workspace.root.resolve()
+        run_record = self.project_workspace.store.get_run(self.run_id)
+        active_turn_id = run_record.active_turn_id if run_record else None
+        for name, field_schema in properties.items():
+            if not isinstance(field_schema, dict):
+                continue
+            role = str(field_schema.get("x-pertura-asset-role") or "")
+            value = normalized.get(name)
+            if not role or not isinstance(value, str) or not value:
+                continue
+            if value.startswith("asset_"):
+                continue
+            candidate = Path(value).expanduser()
+            resolved = (
+                candidate.resolve()
+                if candidate.is_absolute()
+                else (workspace_root / candidate).resolve()
+            )
+            try:
+                resolved.relative_to(workspace_root)
+            except ValueError as exc:
+                raise CapabilityParameterError(
+                    f"external path for {name} is not registered: {resolved}"
+                ) from exc
+            if resolved == workspace_root:
+                raise CapabilityParameterError(
+                    f"asset parameter {name} must name a workspace artifact"
+                )
+            if not resolved.exists():
+                raise CapabilityParameterError(
+                    f"workspace asset parameter {name} is missing: {resolved}"
+                )
+            asset = self.asset_registry.register(
+                resolved,
+                role=role,
+                kind="derived",
+                source_class="observed_metadata",
+                created_by_turn=active_turn_id,
+            )
+            self.project_workspace.store.put_asset_binding(
+                AssetBinding(
+                    run_id=self.run_id,
+                    asset_id=asset.asset_id,
+                    role=asset.role,
+                )
+            )
+            normalized[name] = asset.asset_id
+        return normalized
 
     def resolve_result_for_turn(self, result_id: str) -> dict[str, Any] | None:
         """Return policy-derived rendering metadata for one committed result."""

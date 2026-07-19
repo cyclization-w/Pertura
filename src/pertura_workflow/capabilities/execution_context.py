@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar
+from pathlib import Path
 from typing import Any, Iterator
+
+from pertura_core import DatasetContract
 
 
 _CONTEXT: ContextVar[dict[str, Any]] = ContextVar(
@@ -12,6 +15,13 @@ _CONTEXT: ContextVar[dict[str, Any]] = ContextVar(
 
 def execution_context() -> dict[str, Any]:
     return dict(_CONTEXT.get())
+
+
+def authoritative_input_roots(contract: DatasetContract) -> tuple[Path, ...]:
+    """Return contract sources plus broker-authorized registered asset paths."""
+
+    values = (*contract.source_paths, *execution_context().get("authorized_asset_paths", ()))
+    return tuple(Path(item).expanduser().resolve() for item in values)
 
 
 def mark_dependency_consumed(*dependency_hashes: str) -> None:

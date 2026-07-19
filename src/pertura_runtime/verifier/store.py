@@ -199,7 +199,11 @@ class AuthorityStore:
                         issues.append(f"dependency does not exist in authority store: {dependency.object_id}")
                     elif row["contract_hash"] != dependency.object_hash:
                         issues.append(f"dependency hash mismatch: {dependency.object_id}")
-                elif dependency.kind in {"environment", "knowledge_resource"}:
+                elif dependency.kind in {
+                    "environment",
+                    "knowledge_resource",
+                    "data_asset",
+                }:
                     row = db.execute(
                         "SELECT object_hash FROM runtime_objects WHERE object_id = ?", (dependency.object_id,)
                     ).fetchone()
