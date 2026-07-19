@@ -1,6 +1,6 @@
 # Pertura Paper Benchmark Incident Log
 
-Last updated: 2026-07-17
+Last updated: 2026-07-19
 
 This is the durable incident record for the `0.2.0a17`/`0.2.0a18`/`0.2.0a19` paper
 benchmark. It records failures that can affect correctness, reproducibility,
@@ -300,16 +300,116 @@ Status values:
   loading, input validation, configuration, and one recoverable launcher
   retry. The trace no longer showed method discovery or an infrastructure
   stall; the remaining failure boundary was the frozen provider-turn cap.
-- Resolution: raise the paper-only provider budget uniformly from 32 to 48
-  turns for all three conditions. Keep every per-task scientific wall-time,
-  input, protocol, skill mapping, evaluator, and result gate unchanged.
+- Resolution: the intermediate RC raised the paper-only provider budget from
+  32 to 48 turns. The final pre-formal RC freezes 64 turns uniformly for all
+  three conditions after adding typed submission and resetting provider state
+  between tasks. Keep every per-task scientific wall-time, input, protocol,
+  skill mapping, evaluator, and result gate unchanged.
 - Required verification: rebuild and bind one checkpoint, confirm all 24
   server-plan jobs and every workflow input manifest report
-  `max_turns_per_task = 48`, then rerun all four final canaries from that same
+  `max_turns_per_task = 64`, then rerun all four final canaries from that same
   checkpoint.
 - Benchmark treatment: job `34369647` is pre-freeze canary evidence and is not
-  scored. The 48-turn value must be frozen before formal condition results are
+  scored. The 64-turn value must be frozen before formal condition results are
   generated and may not be adjusted based on condition-specific scores.
+- Status: `fixed_unverified`
+
+### PB-054 -- Scientific row universes were hidden from providers
+
+- Date: 2026-07-18/19
+- Phase: final a19 RC canary audit
+- Affected job/run: PAPA-06 prompt-only job `34496379`, analysis run
+  `run_b9bf6ae8106046d08534306519371dbf`
+- Symptom: the provider produced typed submissions and a 6.5 MB trans-DE
+  table, but the evaluator rejected its 117,707 target-gene keys against the
+  frozen 167,841-key universe. The provider-visible contract did not state
+  that every eligible target crossed with every registered gene was required.
+- Root cause: evaluator key and row-domain requirements existed only in the
+  scoring catalog. Similar answer-independent row-universe requirements were
+  absent or incomplete across the 11 scientific evaluator tasks.
+- Resolution: publish task-scoped artifact semantics for row-universe source,
+  keys, exactly-once policy, finite/probability constraints, enums, and legal
+  untested encodings. Validate build-time parity between all bound evaluator
+  keys/outputs and the public contract without exposing values or thresholds.
+- Benchmark treatment: affected runs are diagnostic canaries and excluded
+  from formal aggregates. All four canaries require the replacement checkpoint.
+- Status: `fixed_unverified`
+
+### PB-055 -- Empty generated contracts conflicted with registered-contract skills
+
+- Date: 2026-07-18/19
+- Phase: final a19 RC canary audit
+- Affected job/run: REPL-01 pertura-full job `34499010`, analysis run
+  `run_35c060c546444bcdafe4d5b3c4aa8106`
+- Symptom: the run ended with only the neutral result. Its prompt prohibited a
+  repeated dataset inspection, while the shallow generated DatasetContract had
+  no confirmed design facts and the skills suggested both diagnostics-first
+  operation and Bash exploration.
+- Root cause: the benchmark described its design catalog as a completed
+  curator-confirmation boundary but did not register those provenance-backed
+  partial facts as the actual runtime DatasetContract.
+- Resolution: register a frozen partial contract per dataset, share identical
+  scientific facts and unresolved facts across conditions, expose only extra
+  identity/provenance/capability surfaces to pertura-full, and make registered-
+  contract skills consume diagnostics before narrow unresolved-fact CodeAct.
+- Benchmark treatment: job `34499010` is pre-fix canary evidence, not formal
+  performance. Actual capability/skill use remains ITT trace data; no route lock
+  is introduced.
+- Status: `fixed_unverified`
+
+### PB-056 -- Clean SDK termination incorrectly overruled accepted science
+
+- Date: 2026-07-18/19
+- Phase: final a19 RC canary audit
+- Affected job/run: KANG-01 pertura-full job `34496367`
+- Symptom: the typed result and both required artifacts were present; edgeR and
+  null evaluators passed exactly and structured/lexical routes passed. The task
+  still failed only because the provider later reached its turn boundary and
+  `provider_execution_completed` was false.
+- Root cause: accepted scientific submission and SDK lifecycle termination
+  were competing owners of completion.
+- Resolution: the atomic typed receipt owns scientific completion. Record
+  `provider_scientific_completion`, `provider_clean_termination`, and
+  `termination_reason` separately. A later max-turn/timeout remains efficiency
+  telemetry and does not invalidate an already accepted, evaluable submission.
+- Benchmark treatment: the old verdict is superseded canary evidence; the
+  scientific artifacts remain evidence that the evaluator path was exact.
+- Status: `fixed_unverified`
+
+### PB-057 -- REPL requires a larger frozen allocation
+
+- Date: 2026-07-18/19
+- Phase: final a19 RC resource canary
+- Affected job/run: REPL-01 free-CodeAct job `34489012`
+- Symptom: Slurm reported `OUT_OF_MEMORY`, one OOM kill, and 32.00 GB MaxRSS
+  under a 32 GB request.
+- Root cause: unrestricted CodeAct can materialize the large Replogle matrix in
+  memory; the common 32 GB allocation did not cover that frozen workflow.
+- Resolution: freeze 48 GB for all three WF-REPL conditions and 32 GB for all
+  three conditions of the other workflows. Read actual Slurm allocation into
+  resource evidence; correctly allocated agent-caused OOM is a scored resource
+  failure, while preemption/node failure remains invalid infrastructure.
+- Benchmark treatment: job `34489012` is scheduler-OOM canary evidence and is
+  excluded from formal aggregates; final REPL canaries use 48 GB.
+- Status: `fixed_unverified`
+
+### PB-058 -- Evaluator qualification was not a checkpoint prerequisite
+
+- Date: 2026-07-19
+- Phase: final a19 checkpoint construction
+- Symptom: provider canaries could be launched before demonstrating that every
+  scientific evaluator accepts its positive control and rejects structural,
+  numerical, analysis-unit, cells-as-replicates, and overclaim attacks.
+- Root cause: evaluator regression tests existed but no checkpoint-local,
+  hash-bound qualification manifest gated Sherlock refresh.
+- Resolution: run all 11 bound scientific evaluators during checkpoint refresh,
+  require every positive to pass, execute per-artifact missing/key/duplicate/
+  row-domain and applicable numeric negatives, execute analysis-unit,
+  PAPA-06 cells-as-replicates, and PAPA-07 overclaim negatives, and record all
+  artifact/verdict/reference/environment hashes. Separately audit provider tool
+  access to references, task-reference catalogs, graders, and evaluator source.
+- Benchmark treatment: qualification failure blocks canary submission and is a
+  benchmark implementation incident, never a model failure.
 - Status: `fixed_unverified`
 
 ## Incident index
@@ -391,6 +491,11 @@ Status values:
 | PB-051 | KANG-01 invoked its bound skills and started the locked method pipeline but exhausted the 32-turn provider budget before edgeR and final submission. | Freeze 48 paper turns uniformly across all three conditions while leaving task wall-time, scientific protocol, skills, and scoring unchanged. | Job `34369647` is pre-freeze canary evidence and is not scored; all four final canaries must use the refreshed checkpoint. | `fixed_unverified` |
 | PB-052 | KANG-01 completed edgeR and null calibration, but the condition-neutral submission MCP handler returned its business dictionary outside the Claude Agent SDK content envelope. The provider saw a completed tool call with no validation output, treated an obsolete TurnDraft-shaped payload as accepted, and left the neutral result without a submission receipt. | Return submission responses as SDK text content, state the exact TurnDraft fields and acceptance condition in the task prompt, and regression-test rejection of the observed obsolete payload followed by a corrected atomic submission. | The pre-fix job `34474969` is canary measurement-path evidence and is excluded from formal results. Checkpoint `666cc99d21f7cb05ad215a44018ea04c94ac1b3b`, job `34479586`, and run `run_3d15461d63524058ac7971b0b9765423` completed KANG-01 with score `passed`, 1/1 required tasks passed, no skill leakage, and retained `benchmark_result.json`, `submitted_turn_draft.json`, and `submission_receipt.json`. See `A19_CANARY_EVIDENCE.md`. | `verified` |
 | PB-053 | PAPA-01 job `34483532` produced contract-valid guide-QC artifacts and passed both frozen artifact comparisons, but the hybrid evaluator failed the task because `analysis_unit='guide_assignment_and_qc'` did not match the hidden canonical value `cell` and semantically equivalent secondary-guide/doublet language did not contain the literal regex token `multi-guide`. An audit found hidden analysis-unit vocabularies and lexical patterns in 15 of 21 tasks. | Publish only task-scoped analysis-unit enums in the condition-neutral output contract and enforce them at typed submission and checkpoint binding. Split the evaluator into a dispositive structured protocol gate and a separately reported lexical compliance route; lexical matching cannot override scientific or supplemental artifact fidelity and its patterns remain hidden from providers. | Job `34483532`, run `run_931b39d87f104bde87a008cd50d9ce37`, is invalid canary evidence for the superseded reporting contract and is excluded from formal results. All four canaries require a new checkpoint; no artifact, reference value, metric threshold, method, capability, or skill was changed. | `fixed_unverified` |
+| PB-054 | Scientific evaluator row universes and key-completeness rules were hidden from providers. | Publish answer-independent artifact semantics and validate contract/evaluator parity. | PAPA-06 job `34496379` and prior canaries are diagnostic only; rerun all four canaries. | `fixed_unverified` |
+| PB-055 | Empty shallow DatasetContracts conflicted with the registered-contract skill path. | Register provenance-backed partial contracts and limit CodeAct to named unresolved facts. | REPL-01 job `34499010` is pre-fix canary evidence; no route lock is added. | `fixed_unverified` |
+| PB-056 | A post-submission turn boundary overruled exact accepted KANG science. | Separate scientific receipt completion from clean SDK termination. | Old verdict is superseded; replacement checkpoint required. | `fixed_unverified` |
+| PB-057 | REPL free CodeAct exhausted the common 32 GB allocation. | Freeze WF-REPL at 48 GB and other workflows at 32 GB for every condition. | Job `34489012` is scheduler-OOM canary evidence; final REPL canaries use 48 GB. | `fixed_unverified` |
+| PB-058 | Checkpoint refresh did not qualify all bound scientific evaluators. | Gate refresh on 11 positive controls and executed negative controls with hash-bound manifest. | Qualification failure blocks canaries and is not model performance. | `fixed_unverified` |
 
 ## Successful retained milestones
 

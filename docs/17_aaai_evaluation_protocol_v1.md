@@ -231,6 +231,26 @@ benchmark_result.json
 
 Before each task, the runner writes the same schema-valid neutral blocked checkpoint for all conditions. The provider must update it from actual execution evidence. An unchanged, deleted, or invalid result fails the `provider_result_updated` and/or schema gate; the runner never derives findings, analysis units, artifact roles, or completion from the task protocol, TurnDraft, filenames, or references.
 
+The final RC uses one condition-neutral atomic `submit_task_bundle` boundary.
+The accepted receipt and matching result/TurnDraft hashes define scientific
+completion. Clean SDK termination is reported independently. If max-turn or
+task timeout occurs after acceptance, the submitted science is still evaluated
+and the termination remains efficiency telemetry; without a prior accepted
+submission it is a scored agent failure. Cancellation never triggers a
+schema-repair attempt.
+
+Provider-visible artifact contracts state answer-independent row universes,
+key and exactly-once rules, finite/probability/enum constraints, and legal
+untested encodings. They never reveal reference values, labels, thresholds, or
+grader logic. A build-time validator requires exact evaluator/contract parity.
+
+The design-confirmation catalog is registered as a provenance-backed partial
+DatasetContract. All conditions receive the same scientific facts and
+unresolved facts; only `pertura_full` receives its identity/provenance and
+static capability surfaces. Provider tool access to task-reference catalogs,
+REF artifacts, graders, or evaluator implementations invalidates the run as
+reference contamination.
+
 The provider-visible task output contract publishes the complete controlled
 vocabulary accepted by `benchmark_result.analysis_unit`. The typed submission
 boundary rejects values outside that task-scoped enum, and checkpoint binding
@@ -345,6 +365,8 @@ Failure to meet a criterion is a study result, not permission to alter the proto
 - [ ] calibration and evaluation splits are disjoint;
 - [ ] design, parameter, and metric-reference catalogs are frozen;
 - [ ] required scientific reference verdicts and continuous metrics exist;
+- [ ] all 11 scientific evaluators pass checkpoint-local positive
+      qualification and reject every applicable negative control;
 - [ ] all three conditions run through one condition-aware harness;
 - [ ] all 120 required turns have a terminal verdict, including failures;
 - [ ] judge-unavailable runs are not silently regraded by another model;

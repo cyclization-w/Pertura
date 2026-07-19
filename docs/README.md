@@ -14,6 +14,7 @@ architecture.
 5. [MCP tool surface](06_mcp_tool_surface.md) - five high-level tools and retained CodeAct access.
 6. [Multi-node Capability Planner V2](18_multi_node_capability_planner_v2.md) - future planner protocols and the narrower a19 P0 execution brief.
 7. [Benchmark data boundary](../benchmarks/README.md) - committed manifests versus external caches.
+8. [a19 canary evidence](../benchmarks/paper_v1/A19_CANARY_EVIDENCE.md) and [incident log](../benchmarks/paper_v1/INCIDENT_LOG.md) - pre-formal recovery evidence, superseded runs, and final checkpoint blockers.
 
 The frozen machine-readable compatibility surface lives in `compatibility/v0.2/`
 and its packaged mirror `src/pertura_core/compatibility/v0.2/`. Both are

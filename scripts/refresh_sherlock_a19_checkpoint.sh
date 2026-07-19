@@ -3,7 +3,7 @@ set -euo pipefail
 
 BENCHMARK_ROOT=${BENCHMARK_ROOT:-/scratch/users/twang05/Project/PerturaBenchmark}
 PERTURA_REPO=${PERTURA_REPO:-/scratch/users/twang05/Project/Pertura}
-BRANCH=${1:-codex/a17-prebench-final}
+BRANCH=${1:-codex/a19-minimal-rc}
 PAPER_ROOT="$BENCHMARK_ROOT/paper-v1"
 PAPER_MANIFESTS="$PAPER_ROOT/manifests"
 MAIN_ENV="$BENCHMARK_ROOT/environments/pertura-aaai-py311-a19"
@@ -73,6 +73,33 @@ BOUND_PLAN="$CHECKPOINT_ROOT/server-plan.a19.sherlock.bound.json"
 sha256sum "$TASK_REFS" | \
   tee "$PAPER_MANIFESTS/task-reference-catalog.a19.bound.sha256"
 
+EVALUATOR_QUALIFICATION="$CHECKPOINT_ROOT/evaluator-qualification.a19.json"
+"$MAIN_ENV/bin/python" "$PERTURA_REPO/scripts/qualify_a19_evaluators.py" \
+  --repo "$PERTURA_REPO" \
+  --wheel "$WHEEL" \
+  --task-catalog "$TASKS" \
+  --task-reference-catalog "$TASK_REFS" \
+  --paper-root "$PAPER_ROOT" \
+  --resource-lock "$RESOURCE_LOCK_SET" \
+  --output "$EVALUATOR_QUALIFICATION"
+sha256sum "$EVALUATOR_QUALIFICATION" | \
+  tee "$CHECKPOINT_ROOT/evaluator-qualification-sha256.txt"
+
+"$MAIN_ENV/bin/python" - "$EVALUATOR_QUALIFICATION" <<'PY'
+import json
+import sys
+
+qualification = json.load(open(sys.argv[1], encoding="utf-8"))
+assert qualification["schema_version"] == "pertura-evaluator-qualification-v1"
+assert qualification["passed"] is True
+assert qualification["status"] == "passed"
+assert qualification["task_count"] == 11
+assert len(qualification["records"]) == 11
+assert all(record["positive_status"] == "passed" for record in qualification["records"])
+print("qualified_scientific_evaluators:", qualification["task_count"])
+print("evaluator_qualification_hash:", qualification["canonical_hash"])
+PY
+
 "$MAIN_ENV/bin/python" -m pertura_bench export-server-plan \
   --repo "$PERTURA_REPO" \
   --paper-task-catalog "$TASKS" \
@@ -140,3 +167,4 @@ echo "a19 checkpoint refresh passed"
 echo "commit=$COMMIT"
 echo "wheel=$WHEEL"
 echo "plan=$BOUND_PLAN"
+echo "evaluator_qualification=$EVALUATOR_QUALIFICATION"

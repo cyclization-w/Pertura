@@ -80,6 +80,15 @@ The authoritative evidence remains the server-side files and verdict under the
 execution root above; file sizes here are an audit index, not scientific
 measurements.
 
+### Accepted science followed by non-clean termination
+
+KANG-01 job `34496367` provided a second diagnostic: both artifact comparisons
+passed, including 7,720 edgeR rows and 14 null permutations, and the structured
+and lexical reporting routes passed. The only false gate was the superseded
+`provider_execution_completed` gate after the SDK reached its turn boundary.
+This run is not a final canary, but it demonstrates why the final RC records
+accepted scientific submission separately from clean provider termination.
+
 ## PAPA-01 reporting-contract diagnostic
 
 - Slurm job: `34483532`
@@ -108,3 +117,7 @@ job.
 All remaining canaries must use the same checkpoint. Scientific pass or failure
 is retained as observed; infrastructure or measurement-path incidents must be
 classified before any rerun.
+
+The replacement checkpoint must also contain a passing
+`pertura-evaluator-qualification-v1` manifest for all 11 scientific tasks. Its
+hash is a readiness artifact, not a provider input.

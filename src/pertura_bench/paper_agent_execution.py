@@ -441,6 +441,10 @@ def run_paper_agent_workflow(
                 start_offset=event_offset,
                 condition=condition,
             )
+            reference_leakage_audit = _audit_reference_truth_access(
+                event_log,
+                start_offset=event_offset,
+            )
             resource_evidence = observe_runtime_resources(
                 resource_evidence, started_monotonic=resource_started
             )
@@ -501,6 +505,9 @@ def run_paper_agent_workflow(
                     and _workflow_resource_gate(workflow_id, resource_evidence)
                 ),
                 "no_skill_leakage": skill_leakage_audit["status"] != "failed",
+                "no_reference_leakage": (
+                    reference_leakage_audit["status"] != "failed"
+                ),
             }
             status = "passed" if all(hard_gates.values()) else "failed"
             validity_status, failure_class = _classify_task_validity(
@@ -509,6 +516,7 @@ def run_paper_agent_workflow(
                 termination_reason=termination_reason,
                 provider_error=provider_error,
                 skill_leakage_audit=skill_leakage_audit,
+                reference_leakage_audit=reference_leakage_audit,
                 resource_evidence=resource_evidence,
             )
             if result_path.is_file():
@@ -567,6 +575,7 @@ def run_paper_agent_workflow(
                     else []
                 ),
                 "skill_leakage_audit": skill_leakage_audit,
+                "reference_leakage_audit": reference_leakage_audit,
                 "capability_contract_subset": contract_subset_record,
                 "post_turn_output_hashes": _tree_hashes(task_output),
                 "post_turn_ancestor_hashes": {
@@ -646,9 +655,20 @@ def run_paper_agent_workflow(
         == "failed"
         for item in required_records
     )
-    invalid_infrastructure_detected = skill_leakage_detected or any(
-        item.get("validity_status") == "invalid_infrastructure"
+    reference_leakage_detected = any(
+        (_load_json(Path(item["verdict"])).get("reference_leakage_audit") or {}).get(
+            "status"
+        )
+        == "failed"
         for item in required_records
+    )
+    invalid_infrastructure_detected = (
+        skill_leakage_detected
+        or reference_leakage_detected
+        or any(
+            item.get("validity_status") == "invalid_infrastructure"
+            for item in required_records
+        )
     )
     resource_evidence = observe_runtime_resources(
         resource_evidence, started_monotonic=resource_started
@@ -748,6 +768,7 @@ def run_paper_agent_workflow(
             else workflow_status
         ),
         "skill_leakage_detected": skill_leakage_detected,
+        "reference_leakage_detected": reference_leakage_detected,
         "task_records": task_records,
         "required_task_count": len(required_records),
         "passed_required_task_count": sum(
@@ -1632,10 +1653,14 @@ def _classify_task_validity(
     provider_error: Any,
     skill_leakage_audit: Mapping[str, Any],
     resource_evidence: Mapping[str, Any],
+    reference_leakage_audit: Mapping[str, Any] | None = None,
 ) -> tuple[str, str]:
     """Separate benchmark validity from a scored agent/task failure."""
 
-    if skill_leakage_audit.get("status") == "failed":
+    if (
+        skill_leakage_audit.get("status") == "failed"
+        or (reference_leakage_audit or {}).get("status") == "failed"
+    ):
         return "invalid_infrastructure", "invalid_infrastructure"
     if not _workflow_resource_gate(workflow_id, resource_evidence):
         return "invalid_infrastructure", "invalid_infrastructure"
@@ -2069,6 +2094,73 @@ def _audit_baseline_skill_access(
                 )
     return {
         "schema_version": "pertura-benchmark-skill-leakage-audit-v1",
+        "status": "failed" if hits else "passed",
+        "scanned_tool_events": scanned,
+        "hits": hits[:20],
+    }
+
+
+def _audit_reference_truth_access(
+    event_log: Path,
+    *,
+    start_offset: int,
+) -> dict[str, Any]:
+    """Reject provider tool access to post-provider scoring truth."""
+
+    if not event_log.is_file():
+        return {
+            "schema_version": "pertura-benchmark-reference-leakage-audit-v1",
+            "status": "passed",
+            "scanned_tool_events": 0,
+            "hits": [],
+        }
+    forbidden = (
+        "task-reference-catalog",
+        "task_reference_catalog",
+        "task_references/",
+        "task_references\\",
+        "/references/ref-",
+        "\\references\\ref-",
+        "metric_reference",
+        "paper_task_evaluation.py",
+        "metric_evaluators.py",
+        "/grader",
+        "\\grader",
+    )
+    with event_log.open("rb") as handle:
+        handle.seek(max(0, start_offset))
+        text = handle.read().decode("utf-8", errors="replace")
+    hits: list[dict[str, Any]] = []
+    scanned = 0
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("message_type") != "AssistantMessage":
+            continue
+        content = (event.get("payload") or {}).get("content") or []
+        for item in content if isinstance(content, list) else [content]:
+            serialized = json.dumps(item, sort_keys=True, default=str)
+            lowered = serialized.lower()
+            if not (
+                "tooluseblock" in lowered
+                or '"type": "tool_use"' in lowered
+                or '"type":"tool_use"' in lowered
+            ):
+                continue
+            scanned += 1
+            matched = sorted({token for token in forbidden if token in lowered})
+            if matched:
+                hits.append(
+                    {
+                        "event_line": line_number,
+                        "matched_tokens": matched,
+                        "tool_use_excerpt": serialized[:500],
+                    }
+                )
+    return {
+        "schema_version": "pertura-benchmark-reference-leakage-audit-v1",
         "status": "failed" if hits else "passed",
         "scanned_tool_events": scanned,
         "hits": hits[:20],

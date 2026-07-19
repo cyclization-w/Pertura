@@ -1510,6 +1510,77 @@ def test_baseline_skill_access_audit_detects_tool_input(tmp_path: Path) -> None:
     )
 
 
+def test_reference_truth_access_audit_detects_scoring_inputs(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "message_type": "AssistantMessage",
+                        "payload": {
+                            "content": [
+                                "ToolUseBlock(name='Read', input={'file_path': "
+                                "'/paper/task_references/PAPA-06/reference.tsv'})"
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "message_type": "AssistantMessage",
+                        "payload": {
+                            "content": [
+                                "ToolUseBlock(name='Read', input={'file_path': "
+                                "'/workspace/outputs/tasks/PAPA-06/result.tsv'})"
+                            ]
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    audit = execution._audit_reference_truth_access(events, start_offset=0)
+
+    assert audit["status"] == "failed"
+    assert audit["scanned_tool_events"] == 2
+    assert audit["hits"][0]["matched_tokens"] == ["task_references/"]
+    assert (
+        execution._audit_reference_truth_access(
+            events, start_offset=events.stat().st_size
+        )["status"]
+        == "passed"
+    )
+
+
+def test_reference_truth_leakage_is_invalid_infrastructure() -> None:
+    status = execution._classify_task_validity(
+        workflow_id="WF-KANG",
+        task_status="failed",
+        termination_reason="provider_error",
+        provider_error=None,
+        skill_leakage_audit={"status": "passed"},
+        reference_leakage_audit={"status": "failed"},
+        resource_evidence={
+            "mode": "scheduler",
+            "requested_memory_gb": 32,
+            "actual_memory_gb": 32,
+            "cpu_count": 1,
+            "n_jobs": 1,
+            "thread_environment": {
+                "OMP_NUM_THREADS": "1",
+                "OPENBLAS_NUM_THREADS": "1",
+                "MKL_NUM_THREADS": "1",
+                "NUMEXPR_NUM_THREADS": "1",
+            },
+        },
+    )
+    assert status == ("invalid_infrastructure", "invalid_infrastructure")
+
+
 def test_baseline_skill_leakage_invalidates_workflow_infrastructure(
     tmp_path: Path, monkeypatch
 ) -> None:
