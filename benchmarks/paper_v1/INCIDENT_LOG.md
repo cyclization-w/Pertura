@@ -425,9 +425,10 @@ Status values:
   request.
 - First failing gate: `resource_evidence`
 - Root cause: the external canary launcher retained stale requested-memory
-  fields, while the scheduler evidence adapter treated
-  `SLURM_CPUS_ON_NODE` as task parallelism. Sherlock requested `cpu=1,mem=48G`
-  but allocated seven billing CPUs to satisfy the memory request.
+  fields, while Sherlock exposed the seven memory-derived billing CPUs through
+  the Slurm CPU environment. The scheduler evidence adapter treated that
+  allocation as requested task parallelism even though the launcher requested
+  `cpu=1,mem=48G`.
 - Resolution: treat the Slurm memory allocation as authoritative, retain the
   requested/effective `cpus-per-task` value, and record scheduler-allocated
   CPUs separately. Keep `n_jobs=1` and all scientific thread variables at one.
@@ -436,6 +437,51 @@ Status values:
 - Benchmark treatment: job `34548605` and the other canaries launched by the
   same stale resource template are infrastructure-invalid and excluded. After
   refresh, an unsubmitted task timeout is a scored agent failure.
+- Status: `fixed_unverified`
+
+### PB-060 -- Relative task output root was ambiguous across workspace layers
+
+- Date: 2026-07-19
+- Phase: final a19 canary
+- Affected checkpoint/job/run: checkpoint `db734fe`, REPL-01 pertura-full job
+  `34562384`, run `run_974d645b4ddd413f9e2785669499d577`
+- Symptom: the provider produced `dataset_profile.json`, `design_audit.json`,
+  and `supported_analysis_plan.json` under the Git project-level
+  `project/outputs/tasks/REPL-01` directory, while the runner and submission
+  service owned the canonical
+  `project/.pertura/runs/<run>/outputs/tasks/REPL-01` directory. The provider
+  therefore reached the wall-clock boundary without a canonical typed
+  submission even though its scientific files existed elsewhere.
+- Root cause: the condition-neutral prompt described artifact destinations as
+  workspace-relative `outputs/tasks/<task>` paths. The SDK working directory
+  was the run workspace, but the visible Git project was also naturally called
+  the workspace, so the interface admitted two plausible path resolutions.
+- Resolution: publish one absolute canonical task output root and absolute
+  artifact destinations in every task prompt for all three conditions. Explicitly
+  reject reinterpretation relative to the repository/project root and retain the
+  runner's existing canonical-path artifact gate.
+- Benchmark treatment: the affected run is measurement-path-invalid and is
+  excluded. All five final canaries require the refreshed checkpoint.
+- Status: `fixed_unverified`
+
+### PB-061 -- REPL-01's design-audit budget ended during valid submission work
+
+- Date: 2026-07-19
+- Phase: final a19 canary
+- Affected checkpoint/jobs: REPL-01 free-CodeAct and pertura-full canaries using
+  the 1,800-second task budget, including job `34562384`
+- Symptom: the pertura-full trace produced all three required design-audit JSON
+  artifacts and was preparing final submission when the exact 1,800-second task
+  wall-clock boundary cancelled the provider. The paired baseline canary also
+  reached the same task boundary without submission.
+- Root cause: REPL-01 combines registered-contract audit, dataset-scale evidence
+  inspection, three structured artifacts, and typed submission; the historical
+  30-minute smoke budget was below the observed completion envelope.
+- Resolution: freeze REPL-01 at 3,600 seconds for every condition without changing
+  its objective, tools, scientific contract, evaluator, reference, or turn budget.
+- Benchmark treatment: prior 1,800-second runs remain diagnostic only. Final
+  REPL-01 canaries use identical 48 GB and 3,600-second task budgets across
+  conditions.
 - Status: `fixed_unverified`
 
 ## Incident index
@@ -523,6 +569,8 @@ Status values:
 | PB-057 | REPL free CodeAct exhausted the common 32 GB allocation. | Freeze WF-REPL at 48 GB and other workflows at 32 GB for every condition. | Job `34489012` is scheduler-OOM canary evidence; final REPL canaries use 48 GB. | `fixed_unverified` |
 | PB-058 | Checkpoint refresh did not qualify all bound scientific evaluators. | Gate refresh on 11 positive controls and executed negative controls with hash-bound manifest. | Qualification failure blocks canaries and is not model performance. | `fixed_unverified` |
 | PB-059 | Slurm allocated extra billing CPUs for the frozen memory request while the launcher retained an 8 GB placeholder. | Bind authoritative Slurm memory, separate requested task concurrency from allocated CPUs, and retain one-job/thread execution. | Jobs launched with the stale template are infrastructure-invalid; rerun after refresh. | `fixed_unverified` |
+| PB-060 | Relative `outputs/tasks/<task>` destinations admitted both project-level and canonical run-level interpretations. | Publish one absolute canonical task root and absolute destinations to all tasks and conditions. | Job `34562384` is measurement-path-invalid; rerun all five final canaries. | `fixed_unverified` |
+| PB-061 | The 1,800-second REPL-01 budget cancelled both conditions before typed submission. | Freeze REPL-01 at 3,600 seconds for every condition. | Earlier 30-minute REPL-01 runs remain diagnostic only. | `fixed_unverified` |
 
 ## Successful retained milestones
 

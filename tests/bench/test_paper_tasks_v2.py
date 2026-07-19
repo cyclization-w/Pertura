@@ -54,6 +54,8 @@ def test_v2_catalog_freezes_required_shape_without_capability_growth() -> None:
     assert catalog.payload["execution_protocol"]["required_scored_turns"] == 120
     assert catalog.payload["execution_protocol"]["required_agent_sessions"] == 24
     assert len(CapabilityRegistry.load_default(include_external=False).specs()) == 44
+    by_id = {task["task_id"]: task for task in tasks}
+    assert by_id["REPL-01"]["resources"]["timeout_seconds"] == 3600
 
 
 def test_every_task_has_one_reference_binding_and_known_paper_anchor() -> None:

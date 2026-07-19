@@ -87,11 +87,21 @@ def _bind_scheduler_allocation(payload: dict[str, Any]) -> dict[str, Any]:
     # Preserve the requested/effective task concurrency and record the larger
     # scheduler allocation separately.
     cpus = int(
-        os.environ.get("SLURM_CPUS_PER_TASK")
+        observed.get("requested_cpus_per_task")
         or observed.get("cpu_count")
         or 0
     )
-    allocated_cpus = int(os.environ.get("SLURM_CPUS_ON_NODE") or cpus or 0)
+    # Sherlock can expose its memory-derived billing allocation through both
+    # SLURM_CPUS_ON_NODE and SLURM_CPUS_PER_TASK even when the submitted paper
+    # job requested one task CPU.  The signed launcher evidence is authoritative
+    # for requested task concurrency; Slurm's larger value is retained only as
+    # allocation evidence.
+    allocated_cpus = int(
+        os.environ.get("SLURM_CPUS_ON_NODE")
+        or os.environ.get("SLURM_CPUS_PER_TASK")
+        or cpus
+        or 0
+    )
     memory_mb: float | None = None
     memory_source = ""
     if os.environ.get("SLURM_MEM_PER_NODE"):

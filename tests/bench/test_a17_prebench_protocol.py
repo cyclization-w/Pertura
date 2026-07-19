@@ -191,7 +191,7 @@ def test_scheduler_resource_evidence_uses_actual_slurm_allocation(
                 "scheduler_job_id": "job-48",
                 "requested_memory_gb": 48.0,
                 "actual_memory_gb": 32.0,
-                "cpu_count": 99,
+                "cpu_count": 1,
                 "n_jobs": 1,
                 "timeout_seconds": 3600,
                 "thread_environment": {"OMP_NUM_THREADS": "1"},
@@ -235,7 +235,7 @@ def test_scheduler_resource_evidence_separates_requested_and_billing_cpus(
     )
     monkeypatch.setenv("SLURM_JOB_ID", "job-sherlock")
     monkeypatch.setenv("SLURM_MEM_PER_NODE", str(48 * 1024))
-    monkeypatch.delenv("SLURM_CPUS_PER_TASK", raising=False)
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", "7")
     monkeypatch.setenv("SLURM_CPUS_ON_NODE", "7")
 
     evidence = load_resource_evidence(path)

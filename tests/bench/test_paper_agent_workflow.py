@@ -16,6 +16,9 @@ from pertura_workflow.capabilities import CapabilityRegistry
 
 
 ROOT = Path(__file__).resolve().parents[2]
+PROMPT_WORKSPACE = (
+    ROOT / ".test-paper-workspace" / ".pertura" / "runs" / "run-fixture"
+).resolve()
 
 
 def test_codeact_task_prompt_freezes_environment_for_all_conditions() -> None:
@@ -36,6 +39,7 @@ def test_codeact_task_prompt_freezes_environment_for_all_conditions() -> None:
             workflow=workflow,
             task=task,
             condition=condition,
+            workspace_root=PROMPT_WORKSPACE,
             asset_paths={},
             anchors_by_id=anchors,
             dependency_contracts={},
@@ -51,6 +55,44 @@ def test_codeact_task_prompt_freezes_environment_for_all_conditions() -> None:
         assert "$PERTURA_EDGER_ENV/bin/Rscript" in prompt
         assert "Do not install scientific packages" in prompt
         assert "load an alternative module or runtime" in prompt
+
+
+def test_task_prompt_publishes_one_absolute_canonical_output_root() -> None:
+    catalog = json.loads(
+        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
+    )
+
+    for workflow in catalog["workflows"]:
+        for task in workflow["turns"]:
+            task_root = (
+                PROMPT_WORKSPACE / "outputs" / "tasks" / task["task_id"]
+            ).as_posix()
+            anchors = {
+                anchor_id: {"anchor_id": anchor_id}
+                for anchor_id in task["paper_anchor_ids"]
+            }
+            for condition in ("pertura_full", "prompt_only", "free_codeact"):
+                prompt = execution._task_prompt(
+                    workflow=workflow,
+                    task=task,
+                    condition=condition,
+                    workspace_root=PROMPT_WORKSPACE,
+                    asset_paths={},
+                    anchors_by_id=anchors,
+                    dependency_contracts={},
+                )
+
+                assert (
+                    f"Canonical task output root (absolute): {task_root}"
+                    in prompt
+                )
+                assert "exact workspace-relative destinations" not in prompt
+                assert (
+                    "do not write to a similarly named project-level "
+                    "outputs/tasks path"
+                ) in prompt
+                for relative in task["output_contract"]["artifact_paths"].values():
+                    assert f"{task_root}/{relative}" in prompt
 
 
 def test_task_asset_manifest_is_task_scoped_and_baseline_hides_asset_ids(
@@ -272,6 +314,7 @@ def test_task_prompt_separates_result_file_from_turn_draft() -> None:
             workflow=workflow,
             task=task,
             condition=condition,
+            workspace_root=PROMPT_WORKSPACE,
             asset_paths={},
             anchors_by_id={
                 anchor_id: {"anchor_id": anchor_id}
@@ -804,6 +847,7 @@ def test_evidence_interpretation_prompt_forbids_recomputation() -> None:
         workflow=workflow,
         task=task,
         condition="pertura_full",
+        workspace_root=PROMPT_WORKSPACE,
         asset_paths={},
         anchors_by_id={
             anchor_id: {"anchor_id": anchor_id}
@@ -816,14 +860,16 @@ def test_evidence_interpretation_prompt_forbids_recomputation() -> None:
     assert "evidence-interpretation task" in prompt
     assert "do not recompute or refit the frozen evidence" in prompt
     assert "Upstream repair contracts: {}" in prompt
+    task_root = (PROMPT_WORKSPACE / "outputs/tasks/PAPA-07").as_posix()
     assert (
-        '"global_effect_claims": ' '"outputs/tasks/PAPA-07/global_effect_claims.tsv"'
+        '"global_effect_claims": '
+        f'"{task_root}/global_effect_claims.tsv"'
     ) in prompt
     assert (
         '"global_effect_limitations": '
-        '"outputs/tasks/PAPA-07/global_effect_limitations.json"'
+        f'"{task_root}/global_effect_limitations.json"'
     ) in prompt
-    assert "Do not write them directly under outputs/." in prompt
+    assert "exact absolute destinations" in prompt
 
 
 def test_scientific_facts_are_shared_but_authority_context_is_pertura_only() -> None:
@@ -835,6 +881,7 @@ def test_scientific_facts_are_shared_but_authority_context_is_pertura_only() -> 
     common = {
         "workflow": workflow,
         "task": task,
+        "workspace_root": PROMPT_WORKSPACE,
         "asset_paths": {},
         "anchors_by_id": {
             anchor_id: {"anchor_id": anchor_id}
@@ -911,6 +958,7 @@ def test_kang_full_prompt_requires_exact_frozen_skill_order() -> None:
     common = {
         "workflow": workflow,
         "task": task,
+        "workspace_root": PROMPT_WORKSPACE,
         "asset_paths": {},
         "anchors_by_id": {
             anchor_id: {"anchor_id": anchor_id}
@@ -1473,6 +1521,38 @@ def test_artifact_contract_checks_table_headers_and_json_fields(
     assert execution._artifact_paths_present(tmp_path, contract) is True
     contract["artifact_schemas"]["result.tsv"].append("missing")
     assert execution._artifact_paths_present(tmp_path, contract) is False
+
+
+def test_project_level_output_cannot_satisfy_canonical_run_output(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "project"
+    canonical_root = (
+        project_root
+        / ".pertura"
+        / "runs"
+        / "run-fixture"
+        / "outputs"
+        / "tasks"
+        / "REPL-01"
+    )
+    shallow_root = project_root / "outputs" / "tasks" / "REPL-01"
+    shallow_root.mkdir(parents=True)
+    (shallow_root / "dataset_profile.json").write_text(
+        json.dumps({"status": "completed"}), encoding="utf-8"
+    )
+    contract = {
+        "artifact_roles": ["dataset_profile"],
+        "artifact_paths": {"dataset_profile": "dataset_profile.json"},
+        "artifact_schemas": {"dataset_profile.json": ["status"]},
+    }
+
+    assert execution._artifact_paths_present(canonical_root, contract) is False
+    canonical_root.mkdir(parents=True)
+    (canonical_root / "dataset_profile.json").write_text(
+        json.dumps({"status": "completed"}), encoding="utf-8"
+    )
+    assert execution._artifact_paths_present(canonical_root, contract) is True
 
 
 def test_baseline_skill_access_audit_detects_tool_input(tmp_path: Path) -> None:

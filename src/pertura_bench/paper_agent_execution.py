@@ -404,6 +404,7 @@ def run_paper_agent_workflow(
                 workflow=workflow,
                 task=task,
                 condition=condition,
+                workspace_root=workspace.root,
                 asset_paths=turn_asset_paths,
                 anchors_by_id=anchors_by_id,
                 dependency_contracts={
@@ -1216,6 +1217,7 @@ def _task_prompt(
     workflow: Mapping[str, Any],
     task: Mapping[str, Any],
     condition: str,
+    workspace_root: Path,
     asset_paths: Mapping[str, str],
     anchors_by_id: Mapping[str, Mapping[str, Any]],
     dependency_contracts: Mapping[str, Mapping[str, Any]],
@@ -1242,7 +1244,12 @@ def _task_prompt(
         if condition == "pertura_full"
         else "Use the available generic CodeAct tools under this benchmark condition."
     )
-    task_output_root = f"outputs/tasks/{task['task_id']}"
+    task_output_root = (
+        Path(workspace_root).expanduser().resolve()
+        / "outputs"
+        / "tasks"
+        / str(task["task_id"])
+    ).as_posix()
     allowed_analysis_units = tuple(
         str(item)
         for item in (
@@ -1344,11 +1351,12 @@ def _task_prompt(
         f"{json.dumps(scientific_contract_context or {}, sort_keys=True)}. "
         f"Required artifact roles: {json.dumps(task['required_artifact_roles'])}. "
         f"Output contract: {json.dumps(task['output_contract'], sort_keys=True)}. "
-        "Every artifact_path in that contract is relative to the current task "
-        f"output root {task_output_root}. Write the required artifacts at these "
-        "exact workspace-relative destinations: "
+        "Every artifact_path in that contract is relative to the canonical task "
+        f"output root. Canonical task output root (absolute): {task_output_root}. "
+        "Write the required artifacts at these exact absolute destinations: "
         f"{json.dumps(artifact_destinations, sort_keys=True)}. "
-        "Do not write them directly under outputs/. "
+        "Do not reinterpret that root relative to the repository or project root, "
+        "and do not write to a similarly named project-level outputs/tasks path. "
         f"Hard gates: {json.dumps(task['task_hard_gates'])}. "
         f"Claim ceiling: {task['claim_ceiling']}. "
         "The following CodeAct protocol is a precommitted curator/user-confirmed "
@@ -1358,7 +1366,7 @@ def _task_prompt(
         f"{repair_policy}"
         f"{interpretation_policy}"
         f"{contract_policy}"
-        f"The runner initialized {task['output_contract']['benchmark_result']} "
+        f"The runner initialized {task_output_root}/benchmark_result.json "
         "with a schema-valid neutral blocked checkpoint. Before completing, update "
         "that standalone pertura-agent-benchmark-result-v1 JSON file from actual "
         "execution evidence. Leaving it unchanged is a scored task failure. "

@@ -43,7 +43,7 @@
           "output_contract": {"benchmark_result": "outputs/tasks/REPL-01/benchmark_result.json", "allowed_analysis_units": ["dataset", "screen"], "reporting_topics": ["expression representation", "perturbation and control identity", "independent experimental units", "guide-count evidence availability"], "artifact_roles": ["dataset_profile", "design_audit", "supported_analysis_plan"], "artifact_paths": {"dataset_profile": "dataset_profile.json", "design_audit": "design_audit.json", "supported_analysis_plan": "supported_analysis_plan.json"}},
           "task_hard_gates": ["counts_not_conflated_with_transformed_expression", "independent_units_not_invented", "unsupported_guide_count_methods_not_claimed_ready"],
           "metric_ids": ["design_field_accuracy", "analysis_unit_accuracy", "supported_method_precision"], "task_reference_ids": ["TREF-REPL-01"],
-          "claim_ceiling": "observed dataset and design facts; unresolved provenance remains unresolved", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 1800}
+          "claim_ceiling": "observed dataset and design facts; unresolved provenance remains unresolved", "resources": {"max_memory_gb": 4, "n_jobs": 1, "timeout_seconds": 3600}
         },
         {
           "task_id": "REPL-02", "turn_index": 2, "tier": "basic", "execution_mode": "capability_or_codeact",
