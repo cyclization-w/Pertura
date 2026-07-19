@@ -281,13 +281,19 @@ def _evaluate_trans_de(
         if not left_design.index.equals(right_design.index):
             raise ValueError("observed/reference design-matrix key sets differ")
         label_columns = ["replicate_label", "condition_label"]
-        if any(
-            not left_design[column].astype(str).equals(
-                right_design[column].astype(str)
-            )
-            for column in label_columns
+        if not left_design["replicate_label"].astype(str).equals(
+            right_design["replicate_label"].astype(str)
         ):
-            raise ValueError("observed/reference design labels differ")
+            raise ValueError("observed/reference replicate labels differ")
+        baseline = str((binding.get("protocol") or {}).get("baseline") or "NTC")
+        left_conditions = _canonical_design_condition_roles(
+            left_design, baseline=baseline, label="observed"
+        )
+        right_conditions = _canonical_design_condition_roles(
+            right_design, baseline=baseline, label="reference"
+        )
+        if not left_conditions.equals(right_conditions):
+            raise ValueError("observed/reference design condition roles differ")
         numeric_design_columns = [
             column for column in left_design.columns if column not in label_columns
         ]
@@ -355,6 +361,25 @@ def _evaluate_trans_de(
         }
     except (FileNotFoundError, ImportError, KeyError, OSError, TypeError, ValueError) as exc:
         return {"status": "failed", "problems": [str(exc)]}
+
+
+def _canonical_design_condition_roles(table, *, baseline: str, label: str):
+    values = table["condition_label"].copy()
+    for position, (index, value) in enumerate(values.items()):
+        target_uid = str(index[0])
+        raw = str(value).strip()
+        folded = raw.casefold()
+        if folded in {"control", baseline.casefold()}:
+            canonical = "control"
+        elif folded in {"target", target_uid.casefold()}:
+            canonical = "target"
+        else:
+            raise ValueError(
+                f"{label} condition label {raw!r} is neither a frozen control "
+                "nor target role"
+            )
+        values.iloc[position] = canonical
+    return values.astype(str)
 
 
 def _evaluate_global_effect_claims(

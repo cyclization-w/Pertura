@@ -165,6 +165,37 @@ def validate_artifact_evaluator(raw: Mapping[str, Any], *, context: str) -> None
             raise ValueError(
                 f"classification evaluator requires label columns: {context}"
             )
+        label_type = str(raw.get("label_type") or "categorical")
+        if label_type not in {"categorical", "boolean"}:
+            raise ValueError(
+                f"classification evaluator label_type is invalid: {context}"
+            )
+        aliases = raw.get("label_aliases") or {}
+        if not isinstance(aliases, Mapping) or any(
+            not str(canonical)
+            or not isinstance(values, list)
+            or not values
+            or any(not str(value) for value in values)
+            for canonical, values in aliases.items()
+        ):
+            raise ValueError(
+                f"classification evaluator label_aliases is invalid: {context}"
+            )
+        allowed = raw.get("allowed_labels") or []
+        if not isinstance(allowed, list) or any(not str(item) for item in allowed):
+            raise ValueError(
+                f"classification evaluator allowed_labels is invalid: {context}"
+            )
+        if aliases and set(str(item) for item in aliases) != set(
+            str(item) for item in allowed
+        ):
+            raise ValueError(
+                f"classification aliases must cover allowed_labels exactly: {context}"
+            )
+        if label_type == "boolean" and (aliases or allowed):
+            raise ValueError(
+                f"boolean classification must not declare categorical labels: {context}"
+            )
     elif evaluator_type == "rank_concordance":
         if not str(raw.get("observed_value_column") or "") or not str(
             raw.get("reference_value_column") or ""
@@ -331,8 +362,23 @@ def _compare_classification(observed, reference, spec: Mapping[str, Any]):
         reference_column
     ].isna().any():
         raise ValueError("classification labels contain missing values")
-    predictions = observed[observed_column].astype(str)
-    truth = reference[reference_column].astype(str)
+    label_type = str(spec.get("label_type") or "categorical")
+    if label_type == "boolean":
+        predictions = _strict_boolean_series(
+            observed[observed_column], label=f"observed {observed_column}"
+        ).astype(str)
+        truth = _strict_boolean_series(
+            reference[reference_column], label=f"reference {reference_column}"
+        ).astype(str)
+    elif label_type == "categorical":
+        predictions = _canonical_label_series(
+            observed[observed_column], spec=spec, label=f"observed {observed_column}"
+        )
+        truth = _canonical_label_series(
+            reference[reference_column], spec=spec, label=f"reference {reference_column}"
+        )
+    else:
+        raise ValueError(f"unsupported classification label type: {label_type}")
     labels = sorted(set(predictions) | set(truth))
     recalls: dict[str, float] = {}
     precisions: dict[str, float] = {}
@@ -458,14 +504,77 @@ def _compare_cluster_agreement(observed, reference, spec: Mapping[str, Any]):
     if rejection_column and reference_rejection_column:
         if rejection_column not in observed or reference_rejection_column not in reference:
             raise ValueError("mapping rejection columns are missing")
-        rejection = observed[rejection_column].astype(bool)
-        expected = reference[reference_rejection_column].astype(bool)
+        rejection = _strict_boolean_series(
+            observed[rejection_column], label=f"observed {rejection_column}"
+        )
+        expected = _strict_boolean_series(
+            reference[reference_rejection_column],
+            label=f"reference {reference_rejection_column}",
+        )
         rejection_accuracy = float((rejection == expected).mean())
         metrics["mapping_rejection_accuracy"] = rejection_accuracy
         passed = passed and rejection_accuracy >= float(
             spec.get("minimum_rejection_accuracy", 0.0)
         )
     return passed, metrics
+
+
+def _canonical_label_series(series, *, spec: Mapping[str, Any], label: str):
+    aliases = spec.get("label_aliases") or {}
+    allowed = tuple(str(item) for item in spec.get("allowed_labels") or ())
+    if aliases and not isinstance(aliases, Mapping):
+        raise ValueError("classification label aliases must be an object")
+    lookup: dict[str, str] = {}
+    for canonical, raw_aliases in aliases.items():
+        canonical_label = str(canonical)
+        if not isinstance(raw_aliases, list) or not raw_aliases:
+            raise ValueError(
+                f"classification aliases for {canonical_label} must be a non-empty list"
+            )
+        for alias in (canonical_label, *raw_aliases):
+            normalized = str(alias).strip().casefold()
+            prior = lookup.setdefault(normalized, canonical_label)
+            if prior != canonical_label:
+                raise ValueError(f"classification alias is ambiguous: {alias}")
+    allowed_lookup = {item.strip().casefold(): item for item in allowed}
+
+    def normalize(value: Any) -> str:
+        text = str(value).strip()
+        normalized = text.casefold()
+        if lookup:
+            if normalized not in lookup:
+                raise ValueError(
+                    f"{label} contains an unknown classification label: {text}"
+                )
+            return lookup[normalized]
+        if allowed:
+            if normalized not in allowed_lookup:
+                raise ValueError(
+                    f"{label} contains an unknown classification label: {text}"
+                )
+            return allowed_lookup[normalized]
+        return text
+
+    return series.map(normalize)
+
+
+def _strict_boolean_series(series, *, label: str):
+    def parse(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if value == 1:
+                return True
+            if value == 0:
+                return False
+        text = str(value).strip().casefold()
+        if text in {"true", "1"}:
+            return True
+        if text in {"false", "0"}:
+            return False
+        raise ValueError(f"{label} contains an invalid boolean value: {value}")
+
+    return series.map(parse)
 
 
 def _adjusted_rand_index(left: Sequence[str], right: Sequence[str]) -> float:

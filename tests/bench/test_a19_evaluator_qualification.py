@@ -104,6 +104,7 @@ def test_qualification_executes_structural_negative_controls(tmp_path: Path) -> 
         "missing_key",
         "duplicate_key",
         "wrong_row_universe",
+        "wrong_categorical_label",
     }
     assert controls["result_controls"]["wrong_analysis_unit"]["status"] == "failed"
     assert all(

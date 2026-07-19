@@ -634,6 +634,56 @@ def validate_task_reference_catalog(
                         f"{reference_id}: provider-visible row universe is incomplete "
                         f"for {observed_output}"
                     )
+            for evaluator in evaluator_specs:
+                if str(evaluator.get("type") or "") != "classification":
+                    continue
+                observed_output = str(evaluator.get("observed_output") or "")
+                observed_label = str(
+                    evaluator.get("observed_label_column") or ""
+                )
+                semantic = artifact_semantics.get(observed_output) or {}
+                label_type = str(evaluator.get("label_type") or "categorical")
+                if label_type == "boolean":
+                    constraint = (
+                        (semantic.get("column_constraints") or {}).get(
+                            observed_label
+                        )
+                        or {}
+                    )
+                    if constraint.get("type") != "boolean":
+                        problems.append(
+                            f"{reference_id}: provider-visible boolean contract is "
+                            f"missing for {observed_output}.{observed_label}"
+                        )
+                    continue
+                allowed_labels = tuple(
+                    str(item) for item in evaluator.get("allowed_labels") or ()
+                )
+                if not allowed_labels:
+                    continue
+                visible_labels = tuple(
+                    str(item)
+                    for item in semantic.get(f"{observed_label}_values") or ()
+                )
+                if visible_labels != allowed_labels:
+                    problems.append(
+                        f"{reference_id}: provider-visible labels do not match the "
+                        f"evaluator for {observed_output}.{observed_label} "
+                        f"expected={list(allowed_labels)} "
+                        f"observed={list(visible_labels)}"
+                    )
+            if task_id == "PAPA-06":
+                design_semantics = artifact_semantics.get(
+                    "trans_de_design_matrices.tsv"
+                ) or {}
+                if design_semantics.get("condition_label_roles") != {
+                    "control": ["control", "frozen baseline value NTC"],
+                    "target": ["target", "current row target_uid"],
+                }:
+                    problems.append(
+                        f"{reference_id}: provider-visible condition-label roles "
+                        "do not match the trans-DE evaluator"
+                    )
         for evaluator in binding.get("evaluator_templates") or ():
             if evaluator.get("observed_output") not in artifact_paths:
                 problems.append(

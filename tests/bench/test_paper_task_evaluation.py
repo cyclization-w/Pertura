@@ -81,6 +81,7 @@ def _trans_de_fixture(tmp_path: Path):
             "top_k_overlap_min": 0.95,
             "fdr_agreement_min": 0.99,
         },
+        "protocol": {"baseline": "NTC"},
         "bound_evaluator": {
             "observed_output": "trans_de_results.tsv",
             "design_matrices_output": "trans_de_design_matrices.tsv",
@@ -133,6 +134,44 @@ def test_trans_de_reference_passes_and_rejects_analysis_unit_attacks(tmp_path: P
         bindings=[binding],
     )
     assert noncanonical["status"] == "failed"
+
+
+def test_trans_de_accepts_semantic_condition_roles_and_rejects_unknowns(
+    tmp_path: Path,
+) -> None:
+    paper, output, task, result, binding, _ = _trans_de_fixture(tmp_path)
+    design_path = output / "trans_de_design_matrices.tsv"
+    design = pd.read_csv(design_path, sep="\t")
+    design["condition_label"] = design.apply(
+        lambda row: (
+            "NTC"
+            if str(row["condition_label"]) == "control"
+            else str(row["target_uid"])
+        ),
+        axis=1,
+    )
+    design.to_csv(design_path, sep="\t", index=False)
+
+    equivalent = evaluate_paper_task(
+        task,
+        benchmark_result=result,
+        task_output_root=output,
+        paper_root=paper,
+        bindings=[binding],
+    )
+    assert equivalent["status"] == "passed"
+
+    design.loc[design.index[0], "condition_label"] = "unknown-arm"
+    design.to_csv(design_path, sep="\t", index=False)
+    attacked = evaluate_paper_task(
+        task,
+        benchmark_result=result,
+        task_output_root=output,
+        paper_root=paper,
+        bindings=[binding],
+    )
+    assert attacked["status"] == "failed"
+    assert "neither a frozen control nor target role" in str(attacked)
 
 
 def test_global_effect_literal_phrasing_is_non_dispositive(tmp_path: Path) -> None:

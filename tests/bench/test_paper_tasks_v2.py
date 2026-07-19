@@ -327,6 +327,56 @@ def test_all_scientific_evaluator_keys_have_provider_visible_row_contracts() -> 
         ), task_id
 
 
+def test_scientific_categorical_semantics_are_provider_visible() -> None:
+    catalog = load_paper_task_catalog(CATALOG)
+    tasks = {str(task["task_id"]): task for task in catalog.tasks()}
+
+    for task_id in ("REPL-02", "NORM-02"):
+        semantics = tasks[task_id]["output_contract"]["artifact_semantics"]
+        assert semantics["retained_cell_manifest.tsv"]["expected_state_values"] == [
+            "retain_by_design"
+        ]
+
+    papa04 = tasks["PAPA-04"]["output_contract"]["artifact_semantics"]
+    assert papa04["target_efficacy.tsv"]["column_constraints"] == {
+        "direction_supported": {"type": "boolean"}
+    }
+
+    papa05 = tasks["PAPA-05"]["output_contract"]["artifact_semantics"]
+    assert papa05["mixscape_cells.tsv"]["mixscape_class_values"] == [
+        "control",
+        "responder",
+        "escape",
+    ]
+    assert papa05["target_reliability.tsv"]["status_values"] == [
+        "resolved",
+        "unresolved",
+    ]
+
+    papa06 = tasks["PAPA-06"]["output_contract"]["artifact_semantics"]
+    assert papa06["trans_de_design_matrices.tsv"]["condition_label_roles"] == {
+        "control": ["control", "frozen baseline value NTC"],
+        "target": ["target", "current row target_uid"],
+    }
+
+
+def test_scientific_categorical_contract_drift_fails_reference_validation() -> None:
+    catalog = load_paper_task_catalog(CATALOG)
+    references = json.loads(REFERENCES.read_text(encoding="utf-8"))
+    tasks = json.loads(json.dumps(catalog.tasks()))
+    repl02 = next(task for task in tasks if task["task_id"] == "REPL-02")
+    repl02["output_contract"]["artifact_semantics"][
+        "retained_cell_manifest.tsv"
+    ]["expected_state_values"] = ["retained"]
+
+    problems = validate_task_reference_catalog(references, tasks)
+
+    assert any(
+        "TREF-REPL-02: provider-visible labels do not match" in problem
+        for problem in problems
+    )
+
+
 def test_scientific_key_contract_drift_fails_reference_validation() -> None:
     catalog = load_paper_task_catalog(CATALOG)
     references = json.loads(REFERENCES.read_text(encoding="utf-8"))

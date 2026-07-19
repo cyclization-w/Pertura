@@ -122,6 +122,16 @@ def _materialize_trans_de_positive(
         ),
         design,
     )
+    design_frame = pd.read_csv(design, sep="\t")
+    design_frame["condition_label"] = design_frame.apply(
+        lambda row: (
+            "NTC"
+            if str(row["condition_label"]).casefold() == "control"
+            else str(row["target_uid"])
+        ),
+        axis=1,
+    )
+    design_frame.to_csv(design, sep="\t", index=False)
     eligibility = pd.read_csv(
         _reference(
             str(spec["eligibility_path"]),
@@ -397,6 +407,65 @@ def _negative_controls(
             for spec in binding.get("evaluators") or (primary_spec,)
             if str(spec.get("observed_output") or "") == artifact_name
         ]
+        classification_spec = next(
+            (
+                spec
+                for spec in matching_specs
+                if str(spec.get("type") or "") == "classification"
+            ),
+            None,
+        )
+        if classification_spec is not None:
+            label_column = str(
+                classification_spec.get("observed_label_column") or ""
+            )
+            if label_column in frame.columns:
+                label_root = control_root / f"artifact-{artifact_index}-wrong-label"
+                shutil.copytree(positive_root, label_root)
+                label_path = label_root / relative
+                attacked = frame.copy()
+                if classification_spec.get("label_type") == "boolean":
+                    attacked[label_column] = attacked[label_column].map(
+                        lambda value: not _strict_fixture_boolean(value)
+                    )
+                    control_name = "wrong_boolean_label"
+                else:
+                    attacked[label_column] = "__invalid_evaluator_label__"
+                    control_name = "wrong_categorical_label"
+                attacked.to_csv(label_path, sep="\t", index=False)
+                artifact_controls[control_name] = _require_failed(
+                    f"{artifact_name}:{control_name}",
+                    _evaluate(task, result, label_root, paper_root, binding),
+                    task_id=task_id,
+                )
+
+        rejection_spec = next(
+            (
+                spec
+                for spec in matching_specs
+                if str(spec.get("type") or "") == "cluster_agreement"
+                and spec.get("rejection_column")
+            ),
+            None,
+        )
+        if rejection_spec is not None:
+            rejection_column = str(rejection_spec["rejection_column"])
+            if rejection_column in frame.columns:
+                rejection_root = (
+                    control_root / f"artifact-{artifact_index}-wrong-rejection"
+                )
+                shutil.copytree(positive_root, rejection_root)
+                rejection_path = rejection_root / relative
+                attacked = frame.copy()
+                attacked[rejection_column] = attacked[rejection_column].map(
+                    lambda value: not _strict_fixture_boolean(value)
+                )
+                attacked.to_csv(rejection_path, sep="\t", index=False)
+                artifact_controls["wrong_boolean_rejection"] = _require_failed(
+                    f"{artifact_name}:wrong_boolean_rejection",
+                    _evaluate(task, result, rejection_root, paper_root, binding),
+                    task_id=task_id,
+                )
         numeric_column = (
             "logFC"
             if task_id == "PAPA-06"
@@ -457,6 +526,18 @@ def _negative_controls(
             _evaluate(task, result, cell_root, paper_root, binding),
             task_id=task_id,
         )
+        role_root = control_root / "unknown-condition-role"
+        shutil.copytree(positive_root, role_root)
+        role_spec = dict(binding["bound_evaluator"])
+        role_path = role_root / str(role_spec["design_matrices_output"])
+        role_frame = pd.read_csv(role_path, sep="\t")
+        role_frame.loc[role_frame.index[0], "condition_label"] = "unknown-arm"
+        role_frame.to_csv(role_path, sep="\t", index=False)
+        controls["result_controls"]["unknown_condition_role"] = _require_failed(
+            "unknown_condition_role",
+            _evaluate(task, result, role_root, paper_root, binding),
+            task_id=task_id,
+        )
 
     if task_id == "PAPA-07":
         overclaim_root = control_root / "overclaim"
@@ -478,6 +559,15 @@ def _negative_controls(
             task_id=task_id,
         )
     return controls
+
+
+def _strict_fixture_boolean(value: Any) -> bool:
+    text = str(value).strip().casefold()
+    if text in {"true", "1"}:
+        return True
+    if text in {"false", "0"}:
+        return False
+    raise ValueError(f"qualification fixture contains invalid boolean: {value}")
 
 
 def qualify(
@@ -579,6 +669,9 @@ def qualify(
             "nonfinite_value_where_numeric",
             "wrong_analysis_unit",
             "wrong_effect_or_fdr",
+            "wrong_categorical_label",
+            "wrong_boolean_label_or_rejection",
+            "unknown_condition_role",
             "cells_as_replicates",
             "overclaim",
         ],
