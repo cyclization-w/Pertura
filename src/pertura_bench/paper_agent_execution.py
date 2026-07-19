@@ -70,6 +70,14 @@ PAPER_ASSET_KIND_ADAPTER = {
     "prior": ("external_resource", "curated_prior"),
 }
 
+# The paper protocol names the shared H5AD by its representation while the
+# product capability protocol names the same object by its canonical role.
+# Keep this adapter deliberately narrow: unlike a general role-alias layer, it
+# cannot make semantically different inputs interchangeable.
+PAPER_CAPABILITY_ASSET_ALIASES = {
+    "primary_h5ad": "primary_dataset",
+}
+
 
 def load_paper_asset_catalog(path: str | Path) -> dict[str, Any]:
     resolved = Path(path).resolve()
@@ -359,6 +367,17 @@ def run_paper_agent_workflow(
                 for role in task_input_roles
                 if role in registered_assets
             }
+            if condition == "pertura_full":
+                for paper_role, capability_role in (
+                    PAPER_CAPABILITY_ASSET_ALIASES.items()
+                ):
+                    if (
+                        paper_role in task_input_roles
+                        and capability_role in registered_assets
+                    ):
+                        task_registered_assets[capability_role] = (
+                            registered_assets[capability_role]
+                        )
             task_asset_manifest = _task_asset_manifest(
                 workflow_id=workflow_id,
                 dataset_id=str(workflow["dataset_id"]),
@@ -1487,6 +1506,26 @@ def _register_workflow_assets(
         )
         registered.append(asset)
         paths[role] = str(path)
+    for paper_role, capability_role in PAPER_CAPABILITY_ASSET_ALIASES.items():
+        if paper_role not in paths or capability_role in paths:
+            continue
+        source = next(item for item in registered if item.role == paper_role)
+        path = Path(paths[paper_role])
+        alias = registry.register(
+            path,
+            role=capability_role,
+            kind=source.kind,
+            source_class=source.source_class,
+        )
+        if alias.content_sha256 != source.content_sha256:
+            raise ValueError(
+                f"paper capability asset alias checksum mismatch: {capability_role}"
+            )
+        project.store.put_asset_binding(
+            AssetBinding(run_id=run_id, asset_id=alias.asset_id, role=alias.role)
+        )
+        registered.append(alias)
+        paths[capability_role] = str(path)
     if len(paths) != len(registered):
         raise ValueError("paper agent asset roles must be unique")
     return registered, paths

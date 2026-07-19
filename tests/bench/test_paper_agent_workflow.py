@@ -594,6 +594,74 @@ def test_environment_lock_registers_as_external_resource(tmp_path: Path) -> None
     assert paths == {"edgeR_environment_lock": str(lock.resolve())}
 
 
+def test_primary_h5ad_registers_a_strict_capability_alias(tmp_path: Path) -> None:
+    project = execution.ProjectWorkspace.initialize(
+        tmp_path / "project",
+        logical_name="primary-alias",
+    )
+    run = project.create_run(logical_name="primary alias")
+    registry = execution.DataAssetRegistry(
+        project_id=project.project.project_id,
+        store=project.store,
+        object_root=project.objects_dir,
+    )
+    h5ad = tmp_path / "cache" / "screen.h5ad"
+    h5ad.parent.mkdir(parents=True)
+    h5ad.write_bytes(b"frozen-h5ad-fixture")
+
+    registered, paths = execution._register_workflow_assets(
+        registry,
+        project=project,
+        run_id=run.run_id,
+        raw_assets=(
+            {
+                "role": "primary_h5ad",
+                "root": "cache",
+                "relative_path": h5ad.name,
+                "content_sha256": file_sha256(h5ad),
+                "kind": "observed",
+            },
+        ),
+        cache=h5ad.parent,
+        paper_root=tmp_path / "paper",
+    )
+
+    by_role = {asset.role: asset for asset in registered}
+    assert set(by_role) == {"primary_h5ad", "primary_dataset"}
+    assert by_role["primary_h5ad"].asset_id != by_role["primary_dataset"].asset_id
+    assert (
+        by_role["primary_h5ad"].content_sha256
+        == by_role["primary_dataset"].content_sha256
+    )
+    assert paths == {
+        "primary_h5ad": str(h5ad.resolve()),
+        "primary_dataset": str(h5ad.resolve()),
+    }
+    assert registry.resolve(
+        by_role["primary_dataset"].asset_id,
+        expected_role="primary_dataset",
+    ) == h5ad.resolve()
+
+    shared_manifest = execution._task_asset_manifest(
+        workflow_id="WF-PAPA",
+        dataset_id="papalexi_thp1_eccite",
+        condition="prompt_only",
+        roles=("primary_h5ad",),
+        asset_paths=paths,
+        registered_assets={
+            role: {
+                "asset_id": asset.asset_id,
+                "content_sha256": asset.content_sha256,
+            }
+            for role, asset in by_role.items()
+        },
+    )
+    assert [item["role"] for item in shared_manifest["assets"]] == [
+        "primary_h5ad"
+    ]
+    assert "asset_id" not in shared_manifest["assets"][0]
+
+
 def test_smoke_task_selection_runs_only_requested_turn(
     tmp_path: Path, monkeypatch
 ) -> None:
