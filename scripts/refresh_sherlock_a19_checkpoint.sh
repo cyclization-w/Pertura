@@ -10,6 +10,7 @@ MAIN_ENV="$BENCHMARK_ROOT/environments/pertura-aaai-py311-a19"
 SUBSET_CATALOG="$BENCHMARK_ROOT/checkpoints/1e3406f6d259ea565333dab8f4421ddf53a61649/subset-catalog.json"
 CANARY_SCRIPT="$BENCHMARK_ROOT/scripts/run-a19-canary.sbatch"
 RESOURCE_BUILDER="$BENCHMARK_ROOT/scripts/build-sherlock-resource-lock-a19.py"
+REFERENCE_INDEX=${REFERENCE_INDEX:-}
 
 export BENCHMARK_ROOT PERTURA_REPO PAPER_ROOT PAPER_MANIFESTS MAIN_ENV
 export PERTURA_BENCH_CACHE="$BENCHMARK_ROOT/cache"
@@ -68,10 +69,19 @@ ASSETS="$PAPER_MANIFESTS/paper-agent-assets.a18.sherlock.bound.json"
 PLAN_TEMPLATE="$CHECKPOINT_ROOT/server-plan.a19.sherlock.template.json"
 BOUND_PLAN="$CHECKPOINT_ROOT/server-plan.a19.sherlock.bound.json"
 
+REFERENCE_BINDING_ARGS=(--previous-bound "$LEGACY_TASK_REFS")
+if [[ -n "$REFERENCE_INDEX" ]]; then
+  test -f "$REFERENCE_INDEX" || {
+    echo "missing: $REFERENCE_INDEX" >&2
+    exit 1
+  }
+  REFERENCE_BINDING_ARGS=(--reference-index "$REFERENCE_INDEX")
+fi
+
 "$MAIN_ENV/bin/python" "$PERTURA_REPO/scripts/bind_paper_agent_catalogs.py" \
   references \
   --candidate "$PERTURA_REPO/benchmarks/paper_v1/task_references.v1.json" \
-  --previous-bound "$LEGACY_TASK_REFS" \
+  "${REFERENCE_BINDING_ARGS[@]}" \
   --task-reference-root "$PAPER_ROOT/task_references" \
   --paper-root "$PAPER_ROOT" \
   --output "$TASK_REFS"
@@ -180,3 +190,4 @@ echo "commit=$COMMIT"
 echo "wheel=$WHEEL"
 echo "plan=$BOUND_PLAN"
 echo "evaluator_qualification=$EVALUATOR_QUALIFICATION"
+echo "reference_index=${REFERENCE_INDEX:-resolved-from-previous-binding}"
