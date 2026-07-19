@@ -269,6 +269,7 @@ def _reliability_rows(
 
 def _canonical_mixscape_label(label: Any) -> str:
     normalized = str(label).strip().casefold()
+    terminal = normalized.rsplit(maxsplit=1)[-1] if normalized else ""
     aliases = {
         "control": {"control", "nt"},
         "responder": {"responder", "ko", "perturbed"},
@@ -277,7 +278,7 @@ def _canonical_mixscape_label(label: Any) -> str:
     matches = [
         canonical
         for canonical, values in aliases.items()
-        if normalized in values
+        if terminal in values
     ]
     if len(matches) != 1:
         raise ValueError(f"unsupported Pertpy Mixscape class label: {label}")

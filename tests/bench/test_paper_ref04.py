@@ -137,6 +137,8 @@ def test_ref04_canonicalizes_only_supported_mixscape_classes() -> None:
 
     assert module._canonical_mixscape_label("NT") == "control"
     assert module._canonical_mixscape_label("KO") == "responder"
+    assert module._canonical_mixscape_label("CAV1 KO") == "responder"
+    assert module._canonical_mixscape_label("CAV1 NP") == "escape"
     assert module._canonical_mixscape_label("non.perturbed") == "escape"
     assert module._class_flags("non.perturbed") == (False, True)
     with pytest.raises(ValueError, match="unsupported Pertpy Mixscape class"):
