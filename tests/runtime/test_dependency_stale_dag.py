@@ -5,6 +5,7 @@ from pathlib import Path
 from pertura_core import AnalysisStatus, CapabilityRunRequest, DatasetContract, DependencyRef, ResultEnvelope, ScopeKey
 from pertura_runtime.verifier.receipts import ReceiptSigner
 from pertura_runtime.verifier.store import AuthorityStore
+from pertura_runtime.product import _normalize_dependencies
 
 
 def _result(request: CapabilityRunRequest, dependencies: tuple[DependencyRef, ...]) -> ResultEnvelope:
@@ -70,3 +71,59 @@ def test_environment_lock_change_marks_dependent_results_stale(tmp_path: Path) -
         kind="environment", object_id="environment:edger-v1", object_hash="sha256:new", payload={}
     ) == 1
     assert store.get_result(result.result_id).stale is True
+
+
+def test_runtime_dependency_normalization_deduplicates_transitive_environment(
+    tmp_path: Path,
+) -> None:
+    environment = DependencyRef(
+        kind="environment",
+        object_id="environment:perturbseq-python-v1",
+        object_hash="sha256:locked",
+        role="scientific_execution_environment",
+    )
+    dependencies = _normalize_dependencies([environment, environment])
+
+    assert dependencies == (environment,)
+
+    store = AuthorityStore(tmp_path / "normalized-authority.sqlite3")
+    contract = DatasetContract(dataset_id="d", input_format="csv")
+    store.put_contract(contract)
+    store.put_runtime_object(
+        kind="environment",
+        object_id=environment.object_id,
+        object_hash=environment.object_hash,
+        payload={},
+    )
+    request = CapabilityRunRequest(
+        run_id="run",
+        capability_id="state.reference.map_knn.v1",
+        capability_version="1.0.0",
+        contract_id=contract.contract_id,
+        contract_hash=contract.canonical_hash,
+        scope=ScopeKey(dataset_id="d"),
+        dependencies=dependencies,
+    )
+    result = _result(request, request.dependencies)
+
+    store.commit_result(result)
+
+    assert store.get_result(result.result_id).dependencies == dependencies
+
+
+def test_runtime_dependency_normalization_rejects_hash_conflict() -> None:
+    first = DependencyRef(
+        kind="environment",
+        object_id="environment:perturbseq-python-v1",
+        object_hash="sha256:first",
+    )
+    second = DependencyRef(
+        kind="environment",
+        object_id="environment:perturbseq-python-v1",
+        object_hash="sha256:second",
+    )
+
+    import pytest
+
+    with pytest.raises(ValueError, match="conflicting duplicate dependency"):
+        _normalize_dependencies([first, second])

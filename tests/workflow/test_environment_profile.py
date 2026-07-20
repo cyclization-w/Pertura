@@ -147,6 +147,8 @@ def test_candidate_environment_profiles_are_explicit_and_hash_bound(monkeypatch,
             "interpretation-v1", "virtual-eval-v1",
         }:
             assert any(key.startswith("python_runner:") for key in hashes)
+        if profile in {"python-science-v1", "perturbseq-python-v1"}:
+            assert "python_runner:backed_selection.py" in hashes
 
 
 def test_perturbseq_profile_uses_only_pinned_conda_binary_packages() -> None:

@@ -119,6 +119,9 @@ def test_product_propeller_uses_speckle_110_field_names() -> None:
     assert "prop_list$Proportions" in runner
     assert "prop_list$proportions" not in runner
     assert "contrast <- numeric(ncol(design))" in runner
+    assert 'reformulate(c("condition", "subject_id"), intercept = FALSE)' in runner
+    assert 'match(paste0("condition", contrast_levels), colnames(design))' in runner
+    assert "model.matrix(~ subject_id + condition" not in runner
     assert "makeContrasts(" not in runner
     assert 'metadata_suffix %in% c("tsv", "txt")' in runner
     assert "metadata <- read.table(" in runner

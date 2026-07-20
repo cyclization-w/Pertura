@@ -52,25 +52,24 @@ sample_table$condition <- factor(sample_table$condition, levels = contrast_level
 if (any(is.na(sample_table$condition))) stop("unknown Propeller condition label")
 if (paired) {
   sample_table$subject_id <- factor(sample_table$subject_id)
-  design <- model.matrix(~ subject_id + condition, data = sample_table)
+  # propeller.ttest expects a no-intercept design whose two group-specific
+  # columns are selected by the non-zero contrast entries. Donor columns are
+  # retained as zero-weight confounders for the paired analysis.
+  design <- model.matrix(
+    reformulate(c("condition", "subject_id"), intercept = FALSE),
+    data = sample_table
+  )
 } else {
   design <- model.matrix(~0 + condition, data = sample_table)
-  colnames(design) <- sub("^condition", "", colnames(design))
 }
 rownames(design) <- sample_table$sample_id
 if (qr(design)$rank < ncol(design)) stop("Propeller design is rank deficient")
 contrast <- numeric(ncol(design))
 names(contrast) <- colnames(design)
-if (paired) {
-  target_column <- paste0("condition", contrast_levels[[2]])
-  if (!target_column %in% colnames(design)) stop("paired Propeller contrast is not estimable")
-  contrast[[target_column]] <- 1
-} else {
-  group_columns <- match(contrast_levels, colnames(design))
-  if (any(is.na(group_columns))) stop("Propeller contrast columns are not estimable")
-  contrast[group_columns[[1]]] <- -1
-  contrast[group_columns[[2]]] <- 1
-}
+group_columns <- match(paste0("condition", contrast_levels), colnames(design))
+if (any(is.na(group_columns))) stop("Propeller contrast columns are not estimable")
+contrast[group_columns[[1]]] <- -1
+contrast[group_columns[[2]]] <- 1
 result <- propeller.ttest(
   prop_list,
   design = design,

@@ -41,6 +41,39 @@ from pertura_workflow.planner import (
 )
 
 
+def _normalize_dependencies(
+    dependencies: list[DependencyRef],
+) -> tuple[DependencyRef, ...]:
+    """Return one current dependency per runtime object identity.
+
+    Dependency resolution deliberately carries transitive environment and
+    knowledge-resource provenance forward.  The runtime also resolves those
+    same locks for the capability being invoked.  Normalize the union before
+    constructing the request so a shared upstream/current environment is not
+    inserted twice into the authority store.
+    """
+
+    normalized: list[DependencyRef] = []
+    by_identity: dict[tuple[str, str], DependencyRef] = {}
+    for dependency in dependencies:
+        identity = (dependency.kind, dependency.object_id)
+        existing = by_identity.get(identity)
+        if existing is None:
+            by_identity[identity] = dependency
+            normalized.append(dependency)
+            continue
+        if (
+            existing.object_hash != dependency.object_hash
+            or existing.state != dependency.state
+            or existing.required != dependency.required
+        ):
+            raise ValueError(
+                "conflicting duplicate dependency for "
+                f"{dependency.kind}:{dependency.object_id}"
+            )
+    return tuple(normalized)
+
+
 class PerturaProductRuntime:
     """One run's capability registry, verifier lifecycle and compact product API."""
 
@@ -1255,7 +1288,7 @@ class PerturaProductRuntime:
             scope=scope_key,
             objective=objective,
             parameters=parameters or {},
-            dependencies=tuple(explicit_dependencies),
+            dependencies=_normalize_dependencies(explicit_dependencies),
         )
         response = self.broker.run(request)
         result = response["result"]

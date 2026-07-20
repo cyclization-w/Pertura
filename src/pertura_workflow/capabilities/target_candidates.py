@@ -22,6 +22,7 @@ from pertura_workflow.capabilities.candidate_common import (
 from pertura_workflow.environment import doctor_environment
 from pertura_workflow.capabilities.dependency_inputs import retained_cells_for_request
 from pertura_workflow.capabilities.candidate_common import resource_budget
+from pertura_workflow.capabilities.backed_selection import materialize_backed_selection
 from pertura_workflow.capabilities.target_reliability import (
     _axis_overlap,
     _bootstrap_effect,
@@ -54,6 +55,7 @@ def run_mixscape_responder(
         )
     try:
         import anndata as ad
+        import numpy as np
         import pandas as pd
         import pertpy as pt
     except ModuleNotFoundError as exc:
@@ -110,9 +112,10 @@ def run_mixscape_responder(
         retained_mask = (
             inspection.obs_names.astype(str).isin(retained)
             if retained is not None
-            else [True] * int(inspection.n_obs)
+            else np.ones(int(inspection.n_obs), dtype=bool)
         )
-        retained_count = int(retained_mask.sum())
+        selected_rows = np.flatnonzero(retained_mask)
+        retained_count = int(len(selected_rows))
         gene_index = {str(gene): index for index, gene in enumerate(inspection.var_names)}
         missing_hvg = [gene for gene in hvg_names if gene not in gene_index]
         if missing_hvg:
@@ -135,24 +138,21 @@ def run_mixscape_responder(
                 contract,
                 f"Mixscape working-set estimate {estimated / 1024**3:.3f} GB exceeds max_memory_gb={budget.max_memory_gb}",
             )
-    finally:
-        if getattr(inspection, "file", None):
-            inspection.file.close()
-    inspection = ad.read_h5ad(h5ad_path, backed="r")
-    try:
-        selected = (
-            inspection.obs_names.astype(str).isin(retained)
-            if retained is not None
-            else [True] * int(inspection.n_obs)
-        )
-        gene_index = {str(gene): index for index, gene in enumerate(inspection.var_names)}
         selected_genes = [gene_index[gene] for gene in hvg_names]
-        data = inspection[selected, selected_genes].to_memory()
+        matrix, selection_stats = materialize_backed_selection(
+            inspection.X,
+            selected_rows,
+            column_indices=selected_genes,
+            chunk_rows=budget.chunk_rows,
+        )
+        selected_obs = inspection.obs.iloc[selected_rows].copy()
+        selected_var = inspection.var.iloc[selected_genes].copy()
     finally:
         if getattr(inspection, "file", None):
             inspection.file.close()
-    if data.n_obs == 0:
+    if retained_count == 0:
         return blocked(spec, request, contract, "retained-cell manifest has no overlap with Mixscape input")
+    data = ad.AnnData(X=matrix, obs=selected_obs, var=selected_var)
     if pert_key not in data.obs.columns:
         return blocked(spec, request, contract, f"perturbation column is missing: {pert_key}")
     mapping_index = mapping_table.set_index("cell_id")
@@ -293,7 +293,15 @@ def run_mixscape_responder(
             "escape_fraction": summary["escape_fraction"],
         },
         outputs=(cells_path, summary_path),
-        metadata={"method": "pertpy_mixscape", "seed": 1729},
+        metadata={
+            "method": "pertpy_mixscape",
+            "seed": 1729,
+            "backed_selection": {
+                "block_reads": selection_stats.block_reads,
+                "source_rows_read": selection_stats.source_rows_read,
+                "selected_rows": selection_stats.selected_rows,
+            },
+        },
     )
 
 

@@ -473,9 +473,13 @@ def _resource_hashes(profile_name: str) -> dict[str, str]:
         )
         hashes["runner"] = file_sha256(Path(str(runner)))
     python_runner_sets = {
-        PYTHON_PROFILE: ("executors.py", "state_candidates.py", "runners/environment_worker.py"),
+        PYTHON_PROFILE: (
+            "executors.py", "state_candidates.py", "backed_selection.py",
+            "runners/environment_worker.py",
+        ),
         PERTURBSEQ_PYTHON_PROFILE: (
             "executors.py", "state_candidates.py", "target_candidates.py",
+            "backed_selection.py",
             "runners/environment_worker.py",
         ),
         INTERPRETATION_PROFILE: (

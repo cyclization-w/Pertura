@@ -19,6 +19,11 @@ from pertura_workflow.capabilities.candidate_common import (
     write_json,
     consume_dependency_output,
 )
+from pertura_workflow.capabilities.backed_selection import (
+    BackedSelectionStats,
+    iter_backed_row_selection,
+    materialize_backed_selection,
+)
 from pertura_workflow.capabilities.dependency_inputs import retained_cells_for_request
 from pertura_workflow.capabilities.modules import run_nmf_modules
 from pertura_workflow.environment import doctor_environment
@@ -95,8 +100,11 @@ def run_state_reference_fit(
                 spec, request, contract,
                 f"dense control slice requires {control_dense_bytes / 1024**3:.3f} GB, exceeding max_memory_gb={max_memory_gb}",
             )
-        matrix = data.X[control_indices, :]
-        matrix = matrix.to_memory() if hasattr(matrix, "to_memory") else matrix
+        matrix, selection_stats = materialize_backed_selection(
+            data.X,
+            control_indices,
+            chunk_rows=budget.chunk_rows,
+        )
     finally:
         if getattr(data, "file", None):
             data.file.close()
@@ -245,6 +253,11 @@ def run_state_reference_fit(
         metadata={
             "fit_population": "confirmed_controls_only",
             "retained_manifest_applied": True,
+            "backed_selection": {
+                "block_reads": selection_stats.block_reads,
+                "source_rows_read": selection_stats.source_rows_read,
+                "selected_rows": selection_stats.selected_rows,
+            },
         },
     )
 
@@ -327,15 +340,18 @@ def run_state_reference_map(
     threshold = float(request.parameters.get("mapping_probability_threshold", 0.60))
     output = staging / "state_mapping.parquet"
     writer = None
+    selection_stats = BackedSelectionStats()
     unresolved = 0
     mapped_count = 0
     try:
         import pyarrow as pa
         import pyarrow.parquet as pq
-        for start in range(0, len(retained_indices), budget.chunk_rows):
-            chunk_indices = retained_indices[start : start + budget.chunk_rows]
-            raw = data.X[chunk_indices, :]
-            raw = raw.to_memory() if hasattr(raw, "to_memory") else raw
+        for chunk_indices, raw in iter_backed_row_selection(
+            data.X,
+            retained_indices,
+            chunk_rows=budget.chunk_rows,
+            stats=selection_stats,
+        ):
             if sparse.issparse(raw):
                 raw = raw.tocsr()
                 library = np.asarray(raw.sum(axis=1)).ravel()
@@ -414,7 +430,15 @@ def run_state_reference_map(
             "unresolved_state_count": unresolved,
         },
         outputs=(output, manifest),
-        metadata={"reference_refit": False, "mapping_probability_threshold": threshold},
+        metadata={
+            "reference_refit": False,
+            "mapping_probability_threshold": threshold,
+            "backed_selection": {
+                "block_reads": selection_stats.block_reads,
+                "source_rows_read": selection_stats.source_rows_read,
+                "selected_rows": selection_stats.selected_rows,
+            },
+        },
     )
 
 
