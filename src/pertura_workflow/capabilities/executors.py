@@ -27,6 +27,18 @@ Executor = Callable[[CapabilitySpec, CapabilityRunRequest, DatasetContract, Path
 Validator = Callable[[CapabilitySpec, CapabilityRunRequest, DatasetContract, ResultEnvelope], None]
 
 
+_PROFILE_PATH_ENVIRONMENT_KEYS = (
+    "PERTURA_CACHE_DIR",
+    "PERTURA_EDGER_ENV",
+    "PERTURA_PYTHON_SCIENCE_ENV",
+    "PERTURA_PERTURBSEQ_PYTHON_ENV",
+    "PERTURA_SCEPTRE_ENV",
+    "PERTURA_COMPOSITION_ENV",
+    "PERTURA_INTERPRETATION_ENV",
+    "PERTURA_VIRTUAL_EVAL_ENV",
+)
+
+
 def _base_envelope(
     spec: CapabilitySpec,
     request: CapabilityRunRequest,
@@ -320,16 +332,7 @@ def _execute_in_profile(
         },
     }
     config_path.write_text(json.dumps(config, sort_keys=True), encoding="utf-8")
-    env = {
-        key: os.environ[key]
-        for key in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP", "HOME", "USERPROFILE", "PATH")
-        if key in os.environ
-    }
-    # Expose only Pertura's pure-Python packages to the isolated interpreter.
-    # Pointing PYTHONPATH at the main environment's entire site-packages tree
-    # also exposes ABI-bound dependencies (for example a CPython 3.11
-    # pydantic-core extension) to the Python 3.12 scientific profiles.
-    env["PYTHONPATH"] = str(_isolated_package_overlay(staging))
+    env = _isolated_profile_environment(staging)
     try:
         completed = subprocess.run(
             [
@@ -359,6 +362,28 @@ def _execute_in_profile(
     metadata["environment_execution"] = "isolated_profile"
     metadata["environment_profile"] = profile
     return result.model_copy(update={"metadata": metadata})
+
+
+def _isolated_profile_environment(staging: Path) -> dict[str, str]:
+    """Return the explicit, answer-free environment visible to profile workers."""
+
+    allowed = (
+        "SYSTEMROOT",
+        "WINDIR",
+        "TEMP",
+        "TMP",
+        "HOME",
+        "USERPROFILE",
+        "PATH",
+        *_PROFILE_PATH_ENVIRONMENT_KEYS,
+    )
+    environment = {key: os.environ[key] for key in allowed if key in os.environ}
+    # Expose only Pertura's pure-Python packages to the isolated interpreter.
+    # Pointing PYTHONPATH at the main environment's entire site-packages tree
+    # also exposes ABI-bound dependencies (for example a CPython 3.11
+    # pydantic-core extension) to the Python 3.12 scientific profiles.
+    environment["PYTHONPATH"] = str(_isolated_package_overlay(staging))
+    return environment
 
 
 def _isolated_package_overlay(staging: Path) -> Path:

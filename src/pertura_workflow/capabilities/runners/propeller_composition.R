@@ -9,7 +9,17 @@ suppressPackageStartupMessages({
 
 cfg <- fromJSON(args[[1]], simplifyVector = TRUE)
 dir.create(cfg$output_dir, recursive = TRUE, showWarnings = FALSE)
-metadata <- read.csv(cfg$metadata_path, check.names = FALSE, stringsAsFactors = FALSE)
+metadata_suffix <- tolower(tools::file_ext(cfg$metadata_path))
+metadata_separator <- if (metadata_suffix %in% c("tsv", "txt")) "\t" else ","
+metadata <- read.table(
+  cfg$metadata_path,
+  header = TRUE,
+  sep = metadata_separator,
+  quote = "\"",
+  comment.char = "",
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
 required <- c(cfg$sample_column, cfg$state_column, cfg$condition_column)
 if (!all(required %in% colnames(metadata))) {
   stop("metadata is missing sample, state, or condition columns")

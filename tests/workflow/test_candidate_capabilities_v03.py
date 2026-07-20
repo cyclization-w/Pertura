@@ -747,13 +747,13 @@ def test_candidate_r_adapters_accept_complete_protocol_outputs(monkeypatch, tmp_
     assert propeller.metrics["n_independent_units_per_arm"] == 3
     assert propeller.metrics["n_states"] == 2
 
-    paired_metadata = tmp_path / "paired_composition.csv"
+    paired_metadata = tmp_path / "paired_composition.tsv"
     paired_metadata.write_text(
-        "cell,state,stim,donor\n"
-        "a1,S1,ctrl,D1\n"
-        "a2,S2,stim,D1\n"
-        "b1,S1,ctrl,D2\n"
-        "b2,S2,stim,D2\n",
+        "cell\tstate\tstim\tdonor\n"
+        "a1\tS1\tctrl\tD1\n"
+        "a2\tS2\tstim\tD1\n"
+        "b1\tS1\tctrl\tD2\n"
+        "b2\tS2\tstim\tD2\n",
         encoding="utf-8",
     )
     paired = _run(

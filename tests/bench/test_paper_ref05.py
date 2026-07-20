@@ -120,6 +120,9 @@ def test_product_propeller_uses_speckle_110_field_names() -> None:
     assert "prop_list$proportions" not in runner
     assert "contrast <- numeric(ncol(design))" in runner
     assert "makeContrasts(" not in runner
+    assert 'metadata_suffix %in% c("tsv", "txt")' in runner
+    assert "metadata <- read.table(" in runner
+    assert "metadata <- read.csv(" not in runner
 
     reference_runner = (
         root

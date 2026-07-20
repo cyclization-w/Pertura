@@ -7,10 +7,16 @@ from types import SimpleNamespace
 
 import yaml
 
+from pertura_core import CapabilityRunRequest, DatasetContract, ScopeKey
 from pertura_core.hashing import canonical_hash, file_sha256
 import pertura_workflow.environment as environment_module
 from pertura_workflow.environment import doctor_environment, environment_prefix, micromamba_path
-from pertura_workflow.capabilities.executors import _isolated_package_overlay
+from pertura_workflow.capabilities import CapabilityRegistry
+from pertura_workflow.capabilities import executors as executors_module
+from pertura_workflow.capabilities.executors import (
+    _execute_in_profile,
+    _isolated_package_overlay,
+)
 
 
 def test_profile_worker_pythonpath_exposes_only_pertura_packages(tmp_path: Path) -> None:
@@ -20,6 +26,60 @@ def test_profile_worker_pythonpath_exposes_only_pertura_packages(tmp_path: Path)
     assert (overlay / "pertura_workflow").is_dir()
     assert not (overlay / "pydantic").exists()
     assert not (overlay / "pydantic_core").exists()
+
+
+def test_profile_worker_receives_only_frozen_environment_paths(
+    monkeypatch, tmp_path: Path
+) -> None:
+    cache = tmp_path / "cache"
+    binary = cache / "bin" / "micromamba"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"fixture")
+    prefix = tmp_path / "perturbseq"
+    prefix.mkdir()
+    monkeypatch.setenv("PERTURA_CACHE_DIR", str(cache))
+    monkeypatch.setenv("PERTURA_PERTURBSEQ_PYTHON_ENV", str(prefix))
+    monkeypatch.setenv("UNRELATED_PROVIDER_SECRET", "must-not-cross-boundary")
+    monkeypatch.setattr(environment_module, "micromamba_path", lambda: binary)
+    monkeypatch.setattr(
+        environment_module,
+        "environment_prefix",
+        lambda profile: prefix,
+    )
+    captured: dict[str, str] = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs["env"])
+        return SimpleNamespace(returncode=1, stdout="", stderr="fixture stop")
+
+    monkeypatch.setattr(executors_module.subprocess, "run", fake_run)
+    contract = DatasetContract(
+        dataset_id="fixture",
+        input_format="h5ad",
+        source_paths=(str(tmp_path),),
+    )
+    spec = CapabilityRegistry.load_default(include_external=False).get(
+        "state.reference.fit.v1",
+        "0.1.0",
+    )
+    request = CapabilityRunRequest(
+        run_id="run-fixture",
+        capability_id=spec.capability_id,
+        capability_version=spec.version,
+        contract_id=contract.contract_id,
+        contract_hash=contract.canonical_hash,
+        scope=ScopeKey(dataset_id=contract.dataset_id),
+    )
+    staging = tmp_path / "staging"
+    staging.mkdir()
+
+    result = _execute_in_profile(spec, request, contract, staging, {})
+
+    assert result.status.value == "blocked"
+    assert captured["PERTURA_CACHE_DIR"] == str(cache)
+    assert captured["PERTURA_PERTURBSEQ_PYTHON_ENV"] == str(prefix)
+    assert "UNRELATED_PROVIDER_SECRET" not in captured
+    assert captured["PYTHONPATH"] == str(staging / "_environment_pythonpath")
 
 
 def test_environment_doctor_is_offline_and_actionable(monkeypatch, tmp_path: Path) -> None:
