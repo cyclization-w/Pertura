@@ -816,6 +816,112 @@ def test_mixscape_rejects_state_mapping_outside_retained_or_input_cells() -> Non
         )
 
 
+def test_mixscape_uses_global_controls_when_any_requested_stratum_is_empty() -> None:
+    from pertura_workflow.capabilities.target_candidates import (
+        _mixscape_control_split_policy,
+    )
+
+    policy = _mixscape_control_split_policy(
+        ["rep1"] * 20 + ["rep2"] * 20,
+        [True] * 20 + [False] * 20,
+        requested_split_by="replicate",
+        n_neighbors=20,
+    )
+
+    assert policy["split_by"] is None
+    assert policy["mode"] == "evaluation_control_global"
+    assert policy["control_counts_by_stratum"] == {"rep1": 20, "rep2": 0}
+
+
+def test_mixscape_stratifies_only_when_every_stratum_has_enough_controls() -> None:
+    from pertura_workflow.capabilities.target_candidates import (
+        _mixscape_control_split_policy,
+    )
+
+    policy = _mixscape_control_split_policy(
+        ["rep1"] * 20 + ["rep2"] * 20,
+        [True] * 40,
+        requested_split_by="replicate",
+        n_neighbors=20,
+    )
+
+    assert policy["split_by"] == "replicate"
+    assert policy["mode"] == "stratified"
+
+    with pytest.raises(ValueError, match="at least 20 evaluation controls"):
+        _mixscape_control_split_policy(
+            ["rep1"] * 19,
+            [True] * 19,
+            requested_split_by="replicate",
+            n_neighbors=20,
+        )
+
+
+def test_propeller_applies_selection_and_excludes_missing_states(tmp_path: Path) -> None:
+    from pertura_workflow.capabilities.effect_candidates import (
+        _invalid_propeller_rows,
+        _propeller_analysis_rows,
+        _read_selection_cell_ids,
+    )
+
+    selection = tmp_path / "evaluation.cells.tsv.gz"
+    import gzip
+    with gzip.open(selection, "wt", encoding="utf-8", newline="") as handle:
+        handle.write("cell_id\ncell-3\ncell-1\ncell-2\n")
+    selection_ids = _read_selection_cell_ids(selection, "cell_id")
+    fields = ["cell_id", "cell", "ind", "stim"]
+    rows = [
+        {"cell_id": "outside", "cell": "T", "ind": "D0", "stim": "ctrl"},
+        {"cell_id": "cell-1", "cell": "B", "ind": "D1", "stim": "ctrl"},
+        {"cell_id": "cell-2", "cell": "NA", "ind": "D1", "stim": "stim"},
+        {"cell_id": "cell-3", "cell": "T", "ind": "D2", "stim": "ctrl"},
+    ]
+
+    analyzed, excluded, accounting = _propeller_analysis_rows(
+        fields,
+        rows,
+        selection_ids=selection_ids,
+        cell_id_column="cell_id",
+        state_column="cell",
+    )
+
+    assert [row["cell_id"] for row in analyzed] == ["cell-3", "cell-1"]
+    assert excluded == [{"cell_id": "cell-2", "reason": "missing_cell_state"}]
+    assert accounting == {
+        "selection_applied": True,
+        "evaluation_cells": 3,
+        "analyzed_cells": 2,
+        "excluded_missing_state_cells": 1,
+    }
+    assert _invalid_propeller_rows([
+        {
+            "cluster": "T",
+            "baseline_proportion": "0.2",
+            "target_proportion": "0.3",
+            "effect": "0.10000000000000003",
+            "PValue": "0.05",
+            "FDR": "0.1",
+        }
+    ]) == []
+
+
+def test_propeller_rejects_incomplete_or_duplicate_selection() -> None:
+    from pertura_workflow.capabilities.effect_candidates import (
+        _propeller_analysis_rows,
+    )
+
+    fields = ["cell_id", "cell"]
+    rows = [{"cell_id": "cell-1", "cell": "T"}]
+    with pytest.raises(ValueError, match="missing 1 selected cells"):
+        _propeller_analysis_rows(
+            fields,
+            rows,
+            selection_ids=["cell-1", "cell-2"],
+            cell_id_column="cell_id",
+            state_column="cell",
+        )
+
+
 def test_scrublet_plan_scans_only_selected_cells_and_detected_features() -> None:
     class Inspection:
         X = np.asarray(

@@ -475,6 +475,11 @@ def test_every_advertised_paper_surface_compiles_without_parameter_guessing(
             if task["task_id"] == "KANG-02":
                 propeller = by_capability["composition.propeller.v1"]
                 assert propeller.bound_parameters["pairing_column"] == "ind"
+                assert propeller.bound_parameters["selection_path"]
+                assert propeller.bound_parameters["cell_id_column"] == "cell_id"
+                assert any(
+                    item.role == "cell_selection" for item in propeller.input_assets
+                )
             for binding in bindings:
                 if binding.readiness != "blocked_probe":
                     assert binding.output_mapping

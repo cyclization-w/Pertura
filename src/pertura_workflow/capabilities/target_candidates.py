@@ -190,7 +190,29 @@ def run_mixscape_responder(
     data.obsm["X_pertura_reference"] = mapping_index.loc[
         data.obs_names.astype(str), pca_columns
     ].to_numpy(dtype=float)
-    split_by = request.parameters.get("split_by")
+    requested_split_by = str(request.parameters.get("split_by") or "").strip() or None
+    n_neighbors = int(request.parameters.get("n_neighbors", 20))
+    if requested_split_by and requested_split_by not in data.obs.columns:
+        return blocked(
+            spec,
+            request,
+            contract,
+            f"Mixscape split column is missing: {requested_split_by}",
+        )
+    try:
+        split_policy = _mixscape_control_split_policy(
+            (
+                data.obs[requested_split_by].astype(str).tolist()
+                if requested_split_by
+                else ["__global__"] * data.n_obs
+            ),
+            (data.obs[pert_key].astype(str) == control).tolist(),
+            requested_split_by=requested_split_by,
+            n_neighbors=n_neighbors,
+        )
+    except ValueError as exc:
+        return blocked(spec, request, contract, str(exc))
+    effective_split_by = split_policy["split_by"]
     new_class_name = str(request.parameters.get("new_class_name") or "mixscape_class")
     mixscape = pt.tl.Mixscape()
     mixscape.perturbation_signature(
@@ -198,8 +220,8 @@ def run_mixscape_responder(
         pert_key=pert_key,
         control=control,
         ref_selection_mode=str(request.parameters.get("ref_selection_mode") or "nn"),
-        split_by=str(split_by) if split_by else None,
-        n_neighbors=int(request.parameters.get("n_neighbors", 20)),
+        split_by=effective_split_by,
+        n_neighbors=n_neighbors,
         use_rep=str(request.parameters.get("use_rep") or "X_pertura_reference"),
         n_dims=int(request.parameters.get("n_dims", 15)),
         copy=False,
@@ -214,7 +236,7 @@ def run_mixscape_responder(
         logfc_threshold=float(request.parameters.get("logfc_threshold", 0.25)),
         iter_num=int(request.parameters.get("iter_num", 10)),
         scale=bool(request.parameters.get("scale", True)),
-        split_by=str(split_by) if split_by else None,
+        split_by=effective_split_by,
         pval_cutoff=float(request.parameters.get("pval_cutoff", 0.05)),
         perturbation_type=str(request.parameters.get("perturbation_type") or "KO"),
         random_state=1729,
@@ -284,7 +306,9 @@ def run_mixscape_responder(
         "parameters": {
             "pert_key": pert_key,
             "control": control,
-            "split_by": split_by,
+            "requested_split_by": requested_split_by,
+            "split_by": effective_split_by,
+            "control_split_policy": split_policy,
             "seed": 1729,
             "signature_layer": "X_pert",
             "use_rep": str(
@@ -324,6 +348,7 @@ def run_mixscape_responder(
                 "selected_rows": selection_stats.selected_rows,
             },
             "selection_scope": selection_scope,
+            "control_split_policy": split_policy,
         },
     )
 
@@ -388,6 +413,70 @@ def _mixscape_evaluation_rows(
         else 0,
         "mapped_evaluation_cell_count": len(mapping_set),
         "excluded_nonmapped_retained_cell_count": excluded_nonmapped,
+    }
+
+
+def _mixscape_control_split_policy(
+    strata: list[str],
+    controls: list[bool],
+    *,
+    requested_split_by: str | None,
+    n_neighbors: int,
+) -> dict[str, Any]:
+    """Choose only estimable Mixscape control strata.
+
+    This mirrors the frozen REF-04 policy: use replicate-stratified controls
+    only when every observed replicate contains enough evaluation controls for
+    the requested neighbour graph.  Otherwise all evaluation controls form a
+    single reference pool.  A global pool that is itself too small is a real
+    scientific blocker rather than an implementation exception.
+    """
+
+    if len(strata) != len(controls):
+        raise ValueError("Mixscape control strata and cell labels have different lengths")
+    if n_neighbors < 1:
+        raise ValueError("Mixscape n_neighbors must be positive")
+    normalized = [str(value).strip() for value in strata]
+    if any(not value for value in normalized):
+        raise ValueError("Mixscape split column contains an empty stratum label")
+    observed = sorted(set(normalized))
+    control_counts = {
+        stratum: sum(
+            candidate == stratum and bool(is_control)
+            for candidate, is_control in zip(normalized, controls)
+        )
+        for stratum in observed
+    }
+    total_controls = sum(bool(value) for value in controls)
+    if total_controls < n_neighbors:
+        raise ValueError(
+            f"Mixscape requires at least {n_neighbors} evaluation controls; "
+            f"found {total_controls}"
+        )
+    insufficient = {
+        stratum: count
+        for stratum, count in control_counts.items()
+        if count < n_neighbors
+    }
+    if requested_split_by and len(observed) > 1 and not insufficient:
+        return {
+            "requested_split_by": requested_split_by,
+            "split_by": requested_split_by,
+            "mode": "stratified",
+            "control_counts_by_stratum": control_counts,
+            "reason": "every observed stratum has enough evaluation controls",
+        }
+    return {
+        "requested_split_by": requested_split_by,
+        "split_by": None,
+        "mode": "evaluation_control_global",
+        "control_counts_by_stratum": control_counts,
+        "reason": (
+            "stratified controls are not estimable from the frozen evaluation "
+            f"cells: {insufficient}"
+            if requested_split_by
+            else "no split column was requested"
+        ),
     }
 
 

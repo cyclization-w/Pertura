@@ -432,6 +432,12 @@ def _recipe(
     if capability_id == "composition.propeller.v1":
         parameters.update(
             metadata_path=_asset_id(assets, "cell_metadata"),
+            selection_path=_task_alias(
+                assets, "evaluation_split", "cell_selection",
+                asset_registry, project, run_id,
+            ),
+            cell_id_column="cell_id",
+            selection_cell_id_column="cell_id",
             sample_column="ind",
             pairing_column="ind",
             state_column="cell",

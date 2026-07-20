@@ -28,6 +28,8 @@ parameters_schema:
       minimum: 1
     condition_column:
       type: string
+    cell_id_column:
+      type: string
     contrast:
       type: array
       items:
@@ -44,6 +46,12 @@ parameters_schema:
       type: string
       description: Registered asset ID with role cell_metadata.
       x-pertura-asset-role: cell_metadata
+    selection_path:
+      type: string
+      description: Registered evaluation-selection asset with exactly one row per selected cell.
+      x-pertura-asset-role: cell_selection
+    selection_cell_id_column:
+      type: string
     n_jobs:
       type: integer
       default: 1

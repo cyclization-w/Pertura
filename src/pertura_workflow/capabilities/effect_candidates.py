@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import json
 import math
 import os
@@ -201,12 +202,52 @@ def run_propeller_composition(
     state_column = str(request.parameters.get("state_column") or "state")
     condition_column = str(request.parameters.get("condition_column") or "condition")
     batch_column = str(request.parameters.get("batch_column") or "batch")
+    cell_id_column = str(request.parameters.get("cell_id_column") or "cell_id")
+    selection_cell_id_column = str(
+        request.parameters.get("selection_cell_id_column") or "cell_id"
+    )
     required_columns = [sample_column, state_column, condition_column]
     if pairing_column:
         required_columns.append(pairing_column)
     missing = [name for name in required_columns if name not in fields]
     if missing:
         return blocked(spec, request, contract, "composition metadata is missing: " + ", ".join(missing))
+    selection_ids: list[str] | None = None
+    selection_value = request.parameters.get("selection_path")
+    if selection_value:
+        selection_path = resolve_input(
+            contract,
+            selection_value,
+            label="selection_path",
+        )
+        try:
+            selection_ids = _read_selection_cell_ids(
+                selection_path,
+                selection_cell_id_column,
+            )
+        except ValueError as exc:
+            return blocked(spec, request, contract, str(exc))
+    try:
+        analysis_rows, excluded_rows, input_accounting = _propeller_analysis_rows(
+            fields,
+            rows,
+            selection_ids=selection_ids,
+            cell_id_column=cell_id_column,
+            state_column=state_column,
+        )
+    except ValueError as exc:
+        return blocked(spec, request, contract, str(exc))
+    filtered_metadata_path = staging / "propeller_input_metadata.tsv"
+    with filtered_metadata_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t")
+        writer.writeheader()
+        writer.writerows(analysis_rows)
+    exclusions_path = staging / "missing_state_exclusions.tsv"
+    with exclusions_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=("cell_id", "reason"), delimiter="\t")
+        writer.writeheader()
+        writer.writerows(excluded_rows)
+    rows = analysis_rows
     units_by_arm: dict[str, set[str]] = defaultdict(set)
     batches_by_arm: dict[str, set[str]] = defaultdict(set)
     sample_arm: dict[str, str] = {}
@@ -227,6 +268,22 @@ def run_propeller_composition(
         units_by_arm[arm].add(sample)
         if batch_column in fields and row.get(batch_column):
             batches_by_arm[arm].add(row[batch_column])
+    independent_unit_column = pairing_column or sample_column
+    input_accounting["donor_count"] = len(
+        {
+            str(row.get(independent_unit_column) or "").strip()
+            for row in rows
+            if str(row.get(independent_unit_column) or "").strip()
+        }
+    )
+    accounting_path = write_json(
+        staging,
+        "composition_input_accounting.json",
+        {
+            "schema_version": "pertura-composition-input-accounting-v1",
+            **input_accounting,
+        },
+    )
     if len(units_by_arm) != 2:
         return blocked(spec, request, contract, "Propeller v1 requires exactly two contrast arms")
     minimum_units = min(len(values) for values in units_by_arm.values())
@@ -239,7 +296,7 @@ def run_propeller_composition(
         return blocked(spec, request, contract, "contrast must name the two observed condition levels")
     config = {
         "schema_version": "pertura-propeller-run-config-v1",
-        "metadata_path": str(metadata_path),
+        "metadata_path": str(filtered_metadata_path),
         "output_dir": str(staging),
         "sample_column": sample_column,
         "pairing_column": pairing_column or None,
@@ -295,29 +352,25 @@ def run_propeller_composition(
             contract,
             "Propeller result is missing columns: " + ", ".join(sorted(required_columns - set(result_fields))),
         )
-    invalid = any(
-        not str(row["cluster"]).strip()
-        or not _finite_probability(row["baseline_proportion"])
-        or not _finite_probability(row["target_proportion"])
-        or not _finite_number(row["effect"])
-        or not _finite_probability(row["PValue"])
-        or not _finite_probability(row["FDR"])
-        or abs(
-            float(row["effect"])
-            - (
-                float(row["target_proportion"])
-                - float(row["baseline_proportion"])
-            )
-        )
-        > 1e-12
-        for row in result_rows
+    invalid_rows = _invalid_propeller_rows(result_rows)
+    duplicate_states = sorted(
+        state for state, count in Counter(
+            str(row.get("cluster") or "").strip() for row in result_rows
+        ).items() if state and count > 1
     )
-    if invalid or len({row["cluster"] for row in result_rows}) != len(result_rows):
+    if invalid_rows or duplicate_states:
+        details = []
+        if invalid_rows:
+            details.append("invalid rows: " + ", ".join(invalid_rows[:10]))
+        if duplicate_states:
+            details.append("duplicate states: " + ", ".join(duplicate_states[:10]))
         return blocked(
             spec,
             request,
             contract,
-            "Propeller output has invalid FDR or canonical values or duplicate state rows",
+            "Propeller output violates the canonical result contract ("
+            + "; ".join(details)
+            + ")",
         )
     cautions = [
         "Propeller adapter is synthetic-only validated and cannot support production measured claims"
@@ -335,10 +388,114 @@ def run_propeller_composition(
             "n_states": len(result_rows),
             "n_independent_units_per_arm": minimum_units,
             "contrast": contrast,
+            **input_accounting,
         },
-        outputs=(config_path, proportion_path, result_path, metadata_output),
-        metadata={"environment_profile": "composition-v1", "method": "speckle_propeller_1.10.0"},
+        outputs=(
+            config_path,
+            filtered_metadata_path,
+            accounting_path,
+            exclusions_path,
+            proportion_path,
+            result_path,
+            metadata_output,
+        ),
+        metadata={
+            "environment_profile": "composition-v1",
+            "method": "speckle_propeller_1.10.0",
+            "input_accounting": input_accounting,
+        },
     )
+
+
+def _read_selection_cell_ids(path: Path, column: str) -> list[str]:
+    opener = gzip.open if path.name.lower().endswith(".gz") else open
+    delimiter = "\t" if path.name.lower().endswith((".tsv", ".tsv.gz", ".txt", ".txt.gz")) else ","
+    with opener(path, "rt", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter=delimiter)
+        if reader.fieldnames is None or column not in reader.fieldnames:
+            raise ValueError(f"composition selection is missing cell identity column: {column}")
+        values = [str(row.get(column) or "").strip() for row in reader]
+    if not values or any(not value for value in values):
+        raise ValueError("composition selection contains no usable cell identities")
+    if len(set(values)) != len(values):
+        raise ValueError("composition selection contains duplicate cell identities")
+    return values
+
+
+def _propeller_analysis_rows(
+    fields: list[str],
+    rows: list[dict[str, str]],
+    *,
+    selection_ids: list[str] | None,
+    cell_id_column: str,
+    state_column: str,
+) -> tuple[list[dict[str, str]], list[dict[str, str]], dict[str, int | bool]]:
+    candidates = rows
+    if selection_ids is not None:
+        if cell_id_column not in fields:
+            raise ValueError(
+                f"composition metadata is missing cell identity column: {cell_id_column}"
+            )
+        by_cell: dict[str, dict[str, str]] = {}
+        for row in rows:
+            cell_id = str(row.get(cell_id_column) or "").strip()
+            if not cell_id:
+                raise ValueError("composition metadata contains an empty cell identity")
+            if cell_id in by_cell:
+                raise ValueError("composition metadata contains duplicate cell identities")
+            by_cell[cell_id] = row
+        missing = [cell_id for cell_id in selection_ids if cell_id not in by_cell]
+        if missing:
+            raise ValueError(
+                f"composition metadata is missing {len(missing)} selected cells"
+            )
+        candidates = [by_cell[cell_id] for cell_id in selection_ids]
+    missing_tokens = {"", "na", "nan", "none", "null", "<na>"}
+    analysis_rows: list[dict[str, str]] = []
+    excluded_rows: list[dict[str, str]] = []
+    for index, row in enumerate(candidates):
+        state = str(row.get(state_column) or "").strip()
+        if state.lower() in missing_tokens:
+            cell_id = str(row.get(cell_id_column) or f"row_{index + 1}").strip()
+            excluded_rows.append(
+                {"cell_id": cell_id, "reason": "missing_cell_state"}
+            )
+        else:
+            analysis_rows.append(row)
+    if not analysis_rows:
+        raise ValueError("composition selection contains no nonmissing cell states")
+    return analysis_rows, excluded_rows, {
+        "selection_applied": selection_ids is not None,
+        "evaluation_cells": len(candidates),
+        "analyzed_cells": len(analysis_rows),
+        "excluded_missing_state_cells": len(excluded_rows),
+    }
+
+
+def _invalid_propeller_rows(rows: list[dict[str, str]]) -> list[str]:
+    problems: list[str] = []
+    for index, row in enumerate(rows, 1):
+        state = str(row.get("cluster") or "").strip()
+        values = {
+            "baseline_proportion": _finite_probability,
+            "target_proportion": _finite_probability,
+            "effect": _finite_number,
+            "PValue": _finite_probability,
+            "FDR": _finite_probability,
+        }
+        invalid = [name for name, validator in values.items() if not validator(row.get(name))]
+        if not invalid and not math.isclose(
+            float(row["effect"]),
+            float(row["target_proportion"]) - float(row["baseline_proportion"]),
+            rel_tol=1e-9,
+            abs_tol=1e-12,
+        ):
+            invalid.append("effect_consistency")
+        if not state:
+            invalid.insert(0, "cluster")
+        if invalid:
+            problems.append(f"row {index} ({state or '<empty>'}): {','.join(invalid)}")
+    return problems
 
 
 def run_guide_target_sensitivity(
