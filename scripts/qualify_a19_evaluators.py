@@ -249,12 +249,46 @@ def _fill_protocol_outputs(
     schemas = dict(contract.get("artifact_schemas") or {})
     for relative in (contract.get("artifact_paths") or {}).values():
         path = output / str(relative)
-        if path.exists():
-            continue
         path.parent.mkdir(parents=True, exist_ok=True)
+        required_fields = [
+            str(item) for item in schemas.get(str(relative)) or ()
+        ]
+        if not path.suffix:
+            # Extensionless paper artifacts are directory-valued model bundles.
+            # A qualification fixture must preserve that public artifact shape;
+            # creating a header-only text file would pass the existence gate but
+            # poison downstream provenance bindings.
+            path.mkdir(parents=True, exist_ok=True)
+            marker = path / "qualification.json"
+            if not marker.exists():
+                marker.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": (
+                                "pertura-binding-qualification-artifact-v1"
+                            ),
+                            "qualification_only": True,
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+            continue
         if path.suffix == ".json":
-            path.write_text("{}\n", encoding="utf-8")
-        else:
+            if path.exists():
+                payload = _read_json(path)
+            else:
+                payload = {}
+            for field in required_fields:
+                payload.setdefault(
+                    field,
+                    ["qualification fixture"] if field == "limitations" else None,
+                )
+            path.write_text(
+                json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8"
+            )
+        elif not path.exists():
             columns = schemas.get(str(relative)) or ["qualification_id"]
             path.write_text("\t".join(columns) + "\n", encoding="utf-8")
 
@@ -268,17 +302,20 @@ def _fill_protocol_outputs(
         ]
         pd.DataFrame(rows, columns=columns).to_csv(path, sep="\t", index=False)
     for relative, values in (protocol.get("required_json_values") or {}).items():
-        payload = dict(values)
+        path = output / str(relative)
+        payload = _read_json(path) if path.exists() else {}
+        payload.update(dict(values))
         for balance in protocol.get("required_json_balances") or ():
             if str(balance.get("output")) != str(relative):
                 continue
             for part in balance.get("parts") or ():
-                payload.setdefault(str(part), 0)
+                if payload.get(str(part)) is None:
+                    payload[str(part)] = 0
             payload[str(balance["total"])] = sum(
                 float(payload[str(part)]) for part in balance.get("parts") or ()
             )
-        (output / str(relative)).write_text(
-            json.dumps(payload, sort_keys=True), encoding="utf-8"
+        path.write_text(
+            json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8"
         )
 
 

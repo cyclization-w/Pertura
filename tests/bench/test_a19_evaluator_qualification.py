@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
+import sys
+from types import SimpleNamespace
 
 import pandas as pd
 
 from pertura_bench.paper_task_evaluation import evaluate_paper_task
+from pertura_bench.paper_agent_execution import _artifact_paths_present
 from pertura_core.hashing import file_sha256
+from pertura_runtime.project.workspace import ProjectWorkspace
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -17,6 +22,15 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC is not None and SPEC.loader is not None
 qualification = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(qualification)
+sys.modules.setdefault("qualify_a19_evaluators", qualification)
+
+BINDING_SPEC = importlib.util.spec_from_file_location(
+    "qualify_a19_capability_bindings",
+    ROOT / "scripts/qualify_a19_capability_bindings.py",
+)
+assert BINDING_SPEC is not None and BINDING_SPEC.loader is not None
+binding_qualification = importlib.util.module_from_spec(BINDING_SPEC)
+BINDING_SPEC.loader.exec_module(binding_qualification)
 
 
 def _generic_fixture(tmp_path: Path, *, numeric: bool):
@@ -144,6 +158,14 @@ def test_qualification_materializes_protocol_balances(tmp_path: Path) -> None:
     task = {
         "output_contract": {
             "artifact_paths": {"accounting": "accounting.json"},
+            "artifact_schemas": {
+                "accounting.json": [
+                    "analyzed",
+                    "excluded",
+                    "evaluation_cells",
+                    "donor_count",
+                ]
+            },
         }
     }
     binding = {
@@ -169,6 +191,125 @@ def test_qualification_materializes_protocol_balances(tmp_path: Path) -> None:
         "evaluation_cells": 6.0,
         "excluded": 6,
     }
+
+
+def test_protocol_fixtures_satisfy_every_public_artifact_contract(
+    tmp_path: Path,
+) -> None:
+    catalog = json.loads(
+        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    references = json.loads(
+        (ROOT / "benchmarks/paper_v1/task_references.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    bindings = {
+        item["task_id"]: item for item in references["bindings"]
+    }
+    for workflow in catalog["workflows"]:
+        for task in workflow["turns"]:
+            output = tmp_path / task["task_id"]
+            output.mkdir(parents=True)
+            qualification._fill_protocol_outputs(
+                task, bindings.get(task["task_id"], {}), output
+            )
+            assert _artifact_paths_present(
+                output, task["output_contract"]
+            ), task["task_id"]
+
+    state_model = tmp_path / "PAPA-02" / "state_reference_model"
+    assert state_model.is_dir()
+    assert (state_model / "qualification.json").is_file()
+
+
+def test_binding_qualification_collects_failures_and_continues_task(
+    tmp_path: Path,
+) -> None:
+    project = ProjectWorkspace.initialize(tmp_path / "project")
+    run = project.create_run(logical_name="qualification")
+    conversation = project.create_conversation(run.run_id, title="qualification")
+    workspace = project.run_workspace(run.run_id)
+
+    def binding(capability_id: str, *, readiness: str, blockers=()):
+        return SimpleNamespace(
+            task_id="REPL-03",
+            binding_id=f"binding-{capability_id}",
+            binding_hash="sha256:" + "1" * 64,
+            capability_id=capability_id,
+            capability_scientific_hash="sha256:" + "2" * 64,
+            tool_name="run_diagnostic",
+            contract_id="contract-fixture",
+            contract_hash="sha256:" + "3" * 64,
+            scope={"dataset_id": "fixture"},
+            bound_parameters={},
+            input_assets=(),
+            dependency_result_ids=(),
+            dependency_verification_states=(),
+            dependency_receipt_ids=(),
+            dependency_binding_ids=(),
+            output_mapping={"fixture": "audit"},
+            readiness=readiness,
+            blockers=tuple(blockers),
+        )
+
+    failed = binding("diagnostic.fail.v1", readiness="ready")
+    blocked = binding(
+        "diagnostic.probe.v1",
+        readiness="blocked_probe",
+        blockers=("expected fixture blocker",),
+    )
+
+    class Runtime:
+        project_workspace = project
+        _invocation_bindings = {
+            failed.binding_id: failed,
+            blocked.binding_id: blocked,
+        }
+
+        @staticmethod
+        def run_diagnostic(*, binding_id):
+            if binding_id == failed.binding_id:
+                raise RuntimeError("first binding failed")
+            return {"status": "blocked", "result_id": None, "receipt_id": None}
+
+    agent = SimpleNamespace(
+        product_runtime=Runtime(),
+        workspace=workspace,
+        conversation_id=conversation.conversation_id,
+        manifest=None,
+    )
+    executor = binding_qualification._BindingQualificationExecutor(
+        tasks={
+            "REPL-03": {
+                "task_id": "REPL-03",
+                "dataset_id": "fixture",
+                "required_artifact_roles": ["audit"],
+                "expected_probe_capabilities": ["diagnostic.probe.v1"],
+                "output_contract": {
+                    "artifact_roles": ["audit"],
+                    "artifact_paths": {"audit": "audit.json"},
+                    "artifact_schemas": {"audit.json": ["status"]},
+                },
+            }
+        },
+        references={},
+        paper_root=tmp_path,
+    )
+
+    result = executor(agent, "task REPL-03 (turn 1)", 60)
+
+    assert result.status == "completed"
+    assert [item["qualification_status"] for item in executor.records] == [
+        "failed_execution",
+        "expected_blocked_probe",
+    ]
+    assert "first binding failed" in executor.records[0]["qualification_error"]
+    assert (
+        workspace.root / "outputs/tasks/REPL-03/submission_receipt.json"
+    ).is_file()
 
 
 def test_qualification_constructs_posterior_calibration_positive(

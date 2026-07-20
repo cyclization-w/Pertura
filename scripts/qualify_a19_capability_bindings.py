@@ -14,7 +14,10 @@ from pertura_bench.capability_availability import (
     availability_by_task,
     build_task_capability_availability,
 )
-from pertura_bench.paper_agent_execution import run_paper_agent_workflow
+from pertura_bench.paper_agent_execution import (
+    _artifact_paths_present,
+    run_paper_agent_workflow,
+)
 from pertura_bench.paper_tasks import load_paper_task_catalog
 from pertura_bench.task_submission import TaskSubmissionService
 from pertura_core.hashing import canonical_hash, file_sha256
@@ -49,6 +52,44 @@ def _task_map(catalog: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
             task["workflow_id"] = str(workflow["workflow_id"])
             records[str(task["task_id"])] = task
     return records
+
+
+def _binding_record(binding, **updates: Any) -> dict[str, Any]:
+    """Return one complete qualification record, including failed attempts."""
+
+    record = {
+        "task_id": binding.task_id,
+        "binding_id": binding.binding_id,
+        "binding_hash": binding.binding_hash,
+        "capability_id": binding.capability_id,
+        "capability_scientific_hash": binding.capability_scientific_hash,
+        "tool_name": binding.tool_name,
+        "contract_id": binding.contract_id,
+        "contract_hash": binding.contract_hash,
+        "scope": dict(binding.scope),
+        "bound_parameters_hash": canonical_hash(binding.bound_parameters),
+        "input_assets": [
+            item.model_dump(mode="json") for item in binding.input_assets
+        ],
+        "dependency_result_ids": list(binding.dependency_result_ids),
+        "dependency_verification_states": list(
+            binding.dependency_verification_states
+        ),
+        "dependency_receipt_ids": list(binding.dependency_receipt_ids),
+        "dependency_binding_ids": list(binding.dependency_binding_ids),
+        "output_mapping": dict(binding.output_mapping),
+        "readiness": binding.readiness,
+        "blockers": list(binding.blockers),
+        "qualification_status": "failed",
+        "qualification_error": None,
+        "result_id": None,
+        "result_hash": None,
+        "receipt_id": None,
+        "result_status": None,
+        "output_hashes": {},
+    }
+    record.update(updates)
+    return record
 
 
 def _materialize_submission(
@@ -99,6 +140,13 @@ def _materialize_submission(
     result["limitations"] = [
         "Internal execution qualification; not a scientific benchmark result."
     ]
+    if not _artifact_paths_present(
+        output, dict(task.get("output_contract") or {})
+    ):
+        raise RuntimeError(
+            f"{task['task_id']}: qualification fixture violates the public "
+            "artifact path/schema contract"
+        )
     return result
 
 
@@ -135,6 +183,7 @@ class _BindingQualificationExecutor:
         task_records: list[dict[str, Any]] = []
         try:
             for binding in runtime._invocation_bindings.values():
+                response = None
                 try:
                     if binding.tool_name == "run_diagnostic":
                         response = runtime.run_diagnostic(
@@ -154,105 +203,89 @@ class _BindingQualificationExecutor:
                             f"unsupported bound tool: {binding.tool_name}"
                         )
                 except Exception as exc:
-                    raise RuntimeError(
-                        f"{task_id}/{binding.capability_id}/"
-                        f"{binding.binding_id}: bound execution failed: {exc}"
-                    ) from exc
-
-                result_id = str(response.get("result_id") or "")
-                if binding.readiness == "blocked_probe":
-                    if binding.capability_id not in expected_probes:
-                        raise RuntimeError(
-                            f"{task_id}/{binding.capability_id}: unexpected "
-                            "preflight blocker on an advertised non-probe binding: "
-                            f"{binding.blockers}"
+                    task_records.append(
+                        _binding_record(
+                            binding,
+                            qualification_status="failed_execution",
+                            qualification_error=(
+                                f"{type(exc).__name__}: {exc}"
+                            ),
                         )
-                    if response.get("status") != "blocked" or result_id:
-                        raise RuntimeError(
-                            f"{task_id}/{binding.capability_id}: blocked probe executed"
-                        )
-                    qualification_status = "expected_blocked_probe"
-                    result_hash = None
-                    output_hashes: Mapping[str, str] = {}
-                else:
-                    if not result_id:
-                        raise RuntimeError(
-                            f"{task_id}/{binding.capability_id}: ready binding did not "
-                            "produce a committed result; "
-                            f"status={response.get('status')}, "
-                            f"blockers={response.get('blockers')}"
-                        )
-                    result = next(
-                        (
-                            item
-                            for item in runtime.planning_material(
-                                binding.contract_id
-                            )[1]
-                            if item.result_id == result_id
-                        ),
-                        None,
                     )
-                    if result is None:
-                        raise RuntimeError(
-                            f"{task_id}/{binding.capability_id}: result was not committed"
-                        )
-                    if result.capability_trust.value == "exploratory":
-                        if response.get("receipt_id") is not None:
-                            raise RuntimeError(
-                                f"{task_id}/{binding.capability_id}: exploratory result "
-                                "incorrectly received a trusted receipt"
-                            )
-                    elif not response.get("receipt_id"):
-                        raise RuntimeError(
-                            f"{task_id}/{binding.capability_id}: trusted result lacks receipt"
-                        )
-                    result_ids.append(result_id)
-                    qualification_status = "executed"
-                    result_hash = result.canonical_hash
-                    output_hashes = dict(result.output_hashes)
+                    continue
 
-                task_records.append(
-                    {
-                        "task_id": task_id,
-                        "binding_id": binding.binding_id,
-                        "binding_hash": binding.binding_hash,
-                        "capability_id": binding.capability_id,
-                        "capability_scientific_hash": (
-                            binding.capability_scientific_hash
-                        ),
-                        "tool_name": binding.tool_name,
-                        "contract_id": binding.contract_id,
-                        "contract_hash": binding.contract_hash,
-                        "scope": dict(binding.scope),
-                        "bound_parameters_hash": canonical_hash(
-                            binding.bound_parameters
-                        ),
-                        "input_assets": [
-                            item.model_dump(mode="json")
-                            for item in binding.input_assets
-                        ],
-                        "dependency_result_ids": list(
-                            binding.dependency_result_ids
-                        ),
-                        "dependency_verification_states": list(
-                            binding.dependency_verification_states
-                        ),
-                        "dependency_receipt_ids": list(
-                            binding.dependency_receipt_ids
-                        ),
-                        "dependency_binding_ids": list(
-                            binding.dependency_binding_ids
-                        ),
-                        "output_mapping": dict(binding.output_mapping),
-                        "readiness": binding.readiness,
-                        "qualification_status": qualification_status,
-                        "result_id": result_id or None,
-                        "result_hash": result_hash,
-                        "receipt_id": response.get("receipt_id"),
-                        "result_status": response.get("status"),
-                        "output_hashes": output_hashes,
-                    }
-                )
+                try:
+                    result_id = str(response.get("result_id") or "")
+                    if binding.readiness == "blocked_probe":
+                        if binding.capability_id not in expected_probes:
+                            raise RuntimeError(
+                                "unexpected preflight blocker on an advertised "
+                                f"non-probe binding: {binding.blockers}"
+                            )
+                        if response.get("status") != "blocked" or result_id:
+                            raise RuntimeError("blocked probe executed")
+                        qualification_status = "expected_blocked_probe"
+                        result_hash = None
+                        output_hashes: Mapping[str, str] = {}
+                    else:
+                        if not result_id:
+                            raise RuntimeError(
+                                "ready binding did not produce a committed result; "
+                                f"status={response.get('status')}, "
+                                f"blockers={response.get('blockers')}"
+                            )
+                        result = next(
+                            (
+                                item
+                                for item in runtime.planning_material(
+                                    binding.contract_id
+                                )[1]
+                                if item.result_id == result_id
+                            ),
+                            None,
+                        )
+                        if result is None:
+                            raise RuntimeError("result was not committed")
+                        if result.capability_trust.value == "exploratory":
+                            if response.get("receipt_id") is not None:
+                                raise RuntimeError(
+                                    "exploratory result incorrectly received a "
+                                    "trusted receipt"
+                                )
+                        elif not response.get("receipt_id"):
+                            raise RuntimeError("trusted result lacks receipt")
+                        result_ids.append(result_id)
+                        qualification_status = "executed"
+                        result_hash = result.canonical_hash
+                        output_hashes = dict(result.output_hashes)
+
+                    task_records.append(
+                        _binding_record(
+                            binding,
+                            qualification_status=qualification_status,
+                            result_id=result_id or None,
+                            result_hash=result_hash,
+                            receipt_id=response.get("receipt_id"),
+                            result_status=response.get("status"),
+                            output_hashes=output_hashes,
+                        )
+                    )
+                except Exception as exc:
+                    task_records.append(
+                        _binding_record(
+                            binding,
+                            qualification_status="failed_validation",
+                            qualification_error=(
+                                f"{type(exc).__name__}: {exc}"
+                            ),
+                            result_id=(
+                                str(response.get("result_id") or "") or None
+                            ),
+                            receipt_id=response.get("receipt_id"),
+                            result_status=response.get("status"),
+                        )
+                    )
+                    continue
 
             output = (
                 agent.workspace.root / "outputs" / "tasks" / task_id
@@ -460,20 +493,32 @@ def qualify(
             f"missing={sorted(expected_pairs - set(observed_pairs))}, "
             f"extra={sorted(set(observed_pairs) - expected_pairs)}"
         )
-    if any(
-        item["qualification_status"]
-        not in {"executed", "expected_blocked_probe"}
+    failed_records = [
+        item
         for item in records
-    ):
-        raise RuntimeError("one or more capability bindings were not qualified")
+        if item["qualification_status"]
+        not in {"executed", "expected_blocked_probe"}
+    ]
+    failure_summary = [
+        {
+            "task_id": item["task_id"],
+            "capability_id": item["capability_id"],
+            "binding_id": item["binding_id"],
+            "readiness": item["readiness"],
+            "blockers": item["blockers"],
+            "qualification_status": item["qualification_status"],
+            "qualification_error": item["qualification_error"],
+        }
+        for item in failed_records
+    ]
 
     commit = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=repo, text=True
     ).strip()
     payload = {
         "schema_version": "pertura-capability-binding-qualification-v1",
-        "status": "passed",
-        "passed": True,
+        "status": "failed" if failed_records else "passed",
+        "passed": not failed_records,
         "git_commit": commit,
         "wheel_sha256": file_sha256(wheel),
         "task_catalog_sha256": file_sha256(task_catalog_path),
@@ -499,6 +544,7 @@ def qualify(
             if task.get("role") == "optional"
         ),
         "workflow_runs": workflow_runs,
+        "failure_summary": failure_summary,
         "records": records,
     }
     payload["canonical_hash"] = canonical_hash(payload)
@@ -563,7 +609,7 @@ def main() -> int:
         encoding="utf-8",
     )
     print(json.dumps(payload, indent=2, sort_keys=True))
-    return 0
+    return 0 if payload["passed"] else 1
 
 
 if __name__ == "__main__":

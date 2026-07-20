@@ -155,6 +155,7 @@ class _Runtime:
                 },
             },
         )
+        self.invocation_bindings = {}
 
     def inspect_dataset(self, *args, **kwargs):
         raise AssertionError(
@@ -172,6 +173,14 @@ class _Runtime:
     def planning_material(self, contract_id=None):
         assert contract_id == self.contract.contract_id
         return self.contract, ()
+
+    def planning_commit_records(self):
+        return ()
+
+    def replace_invocation_bindings(self, *, task_id, bindings):
+        self.invocation_bindings = {
+            item.binding_id: item for item in bindings
+        }
 
     def close(self, graceful=True):
         return None
@@ -1282,6 +1291,171 @@ def test_pertura_full_runner_writes_answer_free_static_contract_subset(
     verdict = json.loads((root / "tasks/PAPA-01/verdict.json").read_text())
     assert verdict["evaluation_domain"] == "scientific_fidelity"
     assert verdict["task_evaluation"] == verdict["scientific_evaluation"]
+
+
+def test_accepted_papa01_artifact_is_available_to_papa02_binding(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Exercise the real cross-turn submission-to-binding provenance bridge."""
+
+    monkeypatch.setattr(execution, "ClaudePerturaAgent", _Agent)
+    monkeypatch.setattr(
+        execution,
+        "_resource_evidence",
+        lambda path: {
+            "mode": "scheduler",
+            "scheduler_job_id": "fixture-job",
+            "requested_memory_gb": 32,
+            "actual_memory_gb": 32,
+            "cpu_count": 1,
+            "n_jobs": 1,
+            "timeout_seconds": 9000,
+            "peak_rss_mb": 100,
+            "thread_environment": {
+                "OMP_NUM_THREADS": "1",
+                "OPENBLAS_NUM_THREADS": "1",
+                "MKL_NUM_THREADS": "1",
+                "NUMEXPR_NUM_THREADS": "1",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        execution,
+        "evaluate_paper_task",
+        lambda *args, **kwargs: {"status": "passed", "problems": []},
+    )
+
+    observed_papa02_bindings = []
+
+    def execute(agent, prompt, timeout):
+        del timeout
+        task_id = re.search(r"task (PAPA-\d+)", prompt).group(1)
+        output = agent.workspace.root / "outputs" / "tasks" / task_id
+        output.mkdir(parents=True, exist_ok=True)
+        if task_id == "PAPA-01":
+            (output / "alignment_audit.json").write_text("{}\n", encoding="utf-8")
+            (output / "guide_assignment.tsv").write_text(
+                "cell_id\tproxy_class\nc1\texternal_label_top_count_match\n",
+                encoding="utf-8",
+            )
+            (output / "ambient_qc.json").write_text(
+                '{"status":"unresolved","evidence_class":"external_label_proxy_only",'
+                '"limitations":["fixture"]}\n',
+                encoding="utf-8",
+            )
+            (output / "retained_cell_manifest.tsv").write_text(
+                "dataset_id\tsplit\tcell_id\texpected_state\treason\n"
+                "papalexi_thp1_eccite\tcalibration\tc1\t"
+                "retain_for_external_label_proxy\tfixture\n",
+                encoding="utf-8",
+            )
+            artifact_roles = [
+                "alignment_audit",
+                "guide_assignment",
+                "ambient_qc",
+                "retained_cell_manifest",
+            ]
+        else:
+            observed_papa02_bindings.extend(
+                agent.product_runtime.invocation_bindings.values()
+            )
+            (output / "state_reference_model").mkdir()
+            (output / "state_reference_model" / "model.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            (output / "reference_cell_manifest.tsv").write_text(
+                "cell_id\ttechnical_state_id\nc1\t0\n", encoding="utf-8"
+            )
+            (output / "reference_provenance.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            artifact_roles = [
+                "state_reference_model",
+                "reference_cell_manifest",
+                "reference_provenance",
+            ]
+
+        service = TaskSubmissionService(agent.workspace.root)
+        service.bind_task(
+            task_id=task_id,
+            dataset_id="papalexi_thp1_eccite",
+            allowed_analysis_units=("cell",) if task_id == "PAPA-01" else (),
+        )
+        accepted = service.submit_task_bundle(
+            {
+                "benchmark_result": {
+                    "schema_version": "pertura-agent-benchmark-result-v1",
+                    "case_id": task_id,
+                    "dataset_id": "papalexi_thp1_eccite",
+                    "result_type": "provenance_bridge_fixture",
+                    "analysis_unit": "cell",
+                    "status": "completed",
+                    "findings": [],
+                    "metrics": {},
+                    "limitations": ["fixture"],
+                    "artifact_roles": artifact_roles,
+                },
+                "turn_draft": {
+                    "schema_version": "pertura-turn-draft-v1",
+                    "headline": f"Completed {task_id}",
+                    "limitations": ["fixture"],
+                },
+            }
+        )
+        assert accepted["accepted"] is True
+        agent.manifest = SimpleNamespace(
+            result_subtype="success",
+            num_turns=1,
+            message_count=1,
+            total_cost_usd=0.0,
+        )
+        return SimpleNamespace(
+            status="completed", error=None, result_subtype="success"
+        )
+
+    result = execution.run_paper_agent_workflow(
+        "WF-PAPA",
+        repo_root=ROOT,
+        cache=tmp_path / "cache",
+        paper_root=tmp_path / "paper",
+        output=tmp_path / "runs",
+        condition="pertura_full",
+        repeat_index=1,
+        task_catalog_path=ROOT / "benchmarks/paper_v1/agent_tasks.v2.json",
+        task_reference_catalog_path=_bound_task_references(tmp_path),
+        paper_anchor_catalog_path=ROOT / "benchmarks/paper_v1/paper_anchors.v1.json",
+        asset_catalog_path=_asset_catalog(tmp_path),
+        resource_evidence_path=tmp_path / "resource.json",
+        smoke_task_ids=("PAPA-01", "PAPA-02"),
+        turn_executor=execute,
+        verify_checkpoint=False,
+    )
+
+    assert result["required_task_count"] == 2
+    assert len(observed_papa02_bindings) == 1
+    binding = observed_papa02_bindings[0]
+    assert binding.capability_id == "state.reference.fit.v1"
+    assert binding.readiness == "ready", binding.blockers
+    retained = [
+        item
+        for item in binding.input_assets
+        if item.role == "retained_cell_manifest"
+    ]
+    assert len(retained) == 1
+    assert retained[0].content_sha256
+    papa01_verdict = json.loads(
+        Path(result["task_records"][0]["verdict"]).read_text(encoding="utf-8")
+    )
+    retained_records = [
+        item
+        for item in papa01_verdict["submitted_artifact_assets"]
+        if item["role"] == "retained_cell_manifest"
+    ]
+    assert len(retained_records) == 1
+    assert retained_records[0]["origin_task_id"] == "PAPA-01"
+    assert retained_records[0]["submission_id"]
+    assert retained_records[0]["schema_validation_status"] == "validated"
+    assert retained_records[0]["content_sha256"] == retained[0].content_sha256
 
 
 def test_workflow_reuses_one_session_and_isolates_task_outputs(

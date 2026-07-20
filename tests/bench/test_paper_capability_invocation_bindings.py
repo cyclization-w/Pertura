@@ -251,6 +251,7 @@ def test_every_advertised_paper_surface_compiles_without_parameter_guessing(
         )
     )["datasets"]
     capability_registry = CapabilityRegistry.load_default()
+    compiled_binding_count = 0
 
     for workflow in catalog["workflows"]:
         for task in workflow["turns"]:
@@ -303,6 +304,7 @@ def test_every_advertised_paper_surface_compiles_without_parameter_guessing(
                 committed_results=(),
                 advertised_capability_ids=advertised,
             )
+            compiled_binding_count += len(bindings)
 
             assert [item.capability_id for item in bindings] == list(advertised)
             by_capability = {item.capability_id: item for item in bindings}
@@ -337,6 +339,8 @@ def test_every_advertised_paper_surface_compiles_without_parameter_guessing(
                     "binding_id",
                     "objective",
                 }
+
+    assert compiled_binding_count == 26
 
 
 def test_missing_upstream_assets_compile_to_structured_blocked_chain(
