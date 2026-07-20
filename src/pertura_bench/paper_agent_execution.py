@@ -80,6 +80,7 @@ PAPER_ASSET_KIND_ADAPTER = {
 # cannot make semantically different inputs interchangeable.
 PAPER_CAPABILITY_ASSET_ALIASES = {
     "primary_h5ad": "primary_dataset",
+    "donor_metadata": "cell_metadata",
 }
 
 
@@ -431,6 +432,9 @@ def run_paper_agent_workflow(
                 contract_subset_record = {
                     "task_id": task_id,
                     "subset_hash": subset["subset_hash"],
+                    "audited_codeact_fallback": bool(
+                        subset["audited_codeact_fallback"]
+                    ),
                     "candidate_capability_ids": list(
                         capability_availability_by_task[task_id][
                             "candidate_capability_ids"
@@ -1277,6 +1281,9 @@ def _task_capability_contract_subset(
         "schema_version": "pertura-paper-capability-contract-subset-v2",
         "task_id": str(task["task_id"]),
         "catalog_hash": str(contract_catalog["catalog_hash"]),
+        "audited_codeact_fallback": bool(
+            availability.get("audited_codeact_fallback")
+        ),
         # This is the provider-visible candidate surface. Excluded IDs and
         # reasons remain only in the checkpoint/verdict audit record.
         "candidate_capability_ids": advertised,
@@ -1317,9 +1324,8 @@ def _task_prompt(
         anchors_by_id[anchor_id] for anchor_id in task.get("paper_anchor_ids") or ()
     ]
     surface = (
-        "Use the Pertura workflow and domain tools where the task declares "
-        "capabilities. Generic CodeAct remains available for explicitly "
-        "non-capability scientific tasks."
+        "Use only the answer-free capability contracts advertised for this "
+        "task, together with the frozen CodeAct method contract."
         if condition == "pertura_full"
         else "Use the available generic CodeAct tools under this benchmark condition."
     )
@@ -1391,6 +1397,41 @@ def _task_prompt(
     )
     contract_policy = ""
     if condition == "pertura_full":
+        advertised_capability_ids = [
+            str(capability_id)
+            for capability_id in (
+                (contract_subset_record or {}).get("advertised_capability_ids")
+                or ()
+            )
+        ]
+        if task.get("execution_mode") == "capability_or_codeact":
+            if advertised_capability_ids:
+                capability_fallback_policy = (
+                    "Attempt only an advertised capability, and attempt each "
+                    "advertised capability at most once. If it reports a genuine "
+                    "scientific applicability or evidence blocker such as absent "
+                    "observed data, unresolved design identity, incompatible scope, "
+                    "or missing independent replicates, preserve that block and do "
+                    "not bypass it. If the advertised capability instead cannot be "
+                    "invoked because of an integration or access boundary, including "
+                    "an unavailable ancestor capability receipt, stop retrying and "
+                    "use the audited CodeAct fallback under the frozen task contract. "
+                    "A CodeAct fallback may produce evaluator-scored files, but it "
+                    "does not produce a capability receipt or measured authority and "
+                    "must not be described as capability execution. "
+                )
+            else:
+                capability_fallback_policy = (
+                    "The static compiler advertised no executable capability for "
+                    "this endpoint. Do not call an unadvertised capability or inspect "
+                    "source code or YAML to find one. Proceed directly with the "
+                    "audited CodeAct fallback under the frozen task contract. This "
+                    "fallback may produce evaluator-scored files, but it does not "
+                    "produce a capability receipt or measured authority and must not "
+                    "be described as capability execution. "
+                )
+        else:
+            capability_fallback_policy = ""
         qualified_task_skills = [
             skill if ":" in str(skill) else f"pertura:{skill}"
             for skill in (task.get("pertura_skills") or ())
@@ -1415,6 +1456,7 @@ def _task_prompt(
             f"{(contract_subset_record or {}).get('path', '')}; their bound IDs are "
             f"{json.dumps((contract_subset_record or {}).get('advertised_capability_ids', []))}. "
             f"{nonexecution_policy}"
+            f"{capability_fallback_policy}"
             "Use registered asset IDs for asset-valued capability parameters. The "
             "exact SDK Skill tool names frozen for this task are "
             f"{json.dumps(qualified_task_skills)}. Before any task-scientific Read, "

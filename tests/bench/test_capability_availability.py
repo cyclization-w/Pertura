@@ -40,20 +40,46 @@ def test_static_availability_excludes_impossible_roles_and_dependencies() -> Non
     assert _excluded_ids(records["REPL-01"]) == {
         "diagnostic.design_balance.v1"
     }
-    assert records["PAPA-01"]["advertised_capability_ids"] == [
+    assert records["PAPA-01"]["advertised_capability_ids"] == []
+    assert _excluded_ids(records["PAPA-01"]) == {
         "diagnostic.guide_assignment.v1"
-    ]
-    assert records["PAPA-02"]["advertised_conditional_capability_ids"] == [
-        "reference.state.control_pca_leiden.v1"
-    ]
+    }
+    assert records["PAPA-02"]["advertised_conditional_capability_ids"] == []
     assert _excluded_ids(records["PAPA-02"]) == {
+        "reference.state.control_pca_leiden.v1",
         "state.annotation_candidates.v1",
         "state.reference.fit.v1",
     }
     assert records["KANG-01"]["candidate_capability_ids"] == []
     assert records["KANG-01"]["advertised_capability_ids"] == []
+    kang_exclusions = {
+        item["capability_id"]: item["reasons"]
+        for item in records["KANG-02"]["structurally_excluded_capabilities"]
+    }
+    assert "required asset roles are unavailable: cell_metadata" not in (
+        kang_exclusions["diagnostic.design_balance.v1"]
+    )
+    assert kang_exclusions["diagnostic.design_balance.v1"] == [
+        "required capability has no legal producer: "
+        "diagnostic.dataset_integrity.v1"
+    ]
     assert "virtual.prediction.ingest.v1" in _excluded_ids(records["VIRT-01"])
+    deprecated = {
+        item["capability_id"]
+        for item in build_capability_contract_catalog()["capabilities"]
+        if item["deprecated"]
+    }
     for record in manifest["records"]:
+        task = next(
+            task
+            for workflow in TASKS["workflows"]
+            for task in workflow["turns"]
+            if task["task_id"] == record["task_id"]
+        )
+        assert record["audited_codeact_fallback"] is (
+            task["execution_mode"] == "capability_or_codeact"
+        )
+        assert not (set(record["advertised_capability_ids"]) & deprecated)
         assert not (
             set(record["advertised_capability_ids"])
             & _excluded_ids(record)
@@ -80,6 +106,7 @@ def test_provider_subset_contains_only_advertised_contracts() -> None:
     assert subset["candidate_capability_ids"] == (
         records["REPL-01"]["advertised_capability_ids"]
     )
+    assert subset["audited_codeact_fallback"] is True
     assert subset["structurally_excluded_capabilities"] == []
     serialized = json.dumps(subset)
     assert "diagnostic.design_balance.v1" not in serialized

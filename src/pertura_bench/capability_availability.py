@@ -6,7 +6,13 @@ from typing import Any
 from pertura_core.hashing import canonical_hash
 
 
-_PAPER_ROLE_ALIASES = {"primary_h5ad": "primary_dataset"}
+_PAPER_ROLE_ALIASES = {
+    "primary_h5ad": "primary_dataset",
+    # The frozen Kang asset catalog binds donor_metadata and
+    # cell_state_metadata to the same cell-level table.  Capabilities use the
+    # canonical cell_metadata role for that exact object.
+    "donor_metadata": "cell_metadata",
+}
 _NON_CAPABILITY_MODES = {"codeact_scientific", "evidence_interpretation"}
 
 
@@ -80,6 +86,10 @@ def build_task_capability_availability(
             for capability_id in candidates:
                 spec = capabilities[capability_id]
                 reasons = []
+                if bool(spec.get("deprecated")):
+                    reasons.append(
+                        "capability is deprecated or compatibility-only"
+                    )
                 if capability_id in explicit_nonexecutions:
                     reasons.append("capability is an explicit nonexecution for this task")
                 missing_roles = sorted(
@@ -145,6 +155,9 @@ def build_task_capability_availability(
             record = {
                 "workflow_id": workflow_id,
                 "task_id": task_id,
+                "audited_codeact_fallback": (
+                    task.get("execution_mode") == "capability_or_codeact"
+                ),
                 "candidate_capability_ids": candidates,
                 "advertised_direct_capability_ids": direct,
                 "advertised_conditional_capability_ids": conditional,

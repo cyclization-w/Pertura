@@ -51,8 +51,8 @@ def test_a19_contract_catalog_generator_freezes_executable_surfaces(
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
     summary = json.loads(completed.stdout)
-    assert summary["advertised_capability_count"] == 13
-    assert summary["structurally_excluded_capability_count"] == 46
+    assert summary["advertised_capability_count"] == 10
+    assert summary["structurally_excluded_capability_count"] == 49
     assert summary["task_capability_availability_hash"].startswith("sha256:")
     assert output.is_file()
 
@@ -90,6 +90,8 @@ def test_v2_catalog_freezes_required_shape_without_capability_growth() -> None:
     assert len(CapabilityRegistry.load_default(include_external=False).specs()) == 44
     by_id = {task["task_id"]: task for task in tasks}
     assert by_id["REPL-01"]["resources"]["timeout_seconds"] == 3600
+    assert by_id["PAPA-01"]["resources"]["timeout_seconds"] == 5400
+    assert by_id["PAPA-02"]["resources"]["timeout_seconds"] == 5400
 
 
 def test_task_capability_context_matches_frozen_scientific_endpoints() -> None:

@@ -662,6 +662,75 @@ def test_primary_h5ad_registers_a_strict_capability_alias(tmp_path: Path) -> Non
     assert "asset_id" not in shared_manifest["assets"][0]
 
 
+def test_donor_metadata_registers_a_hidden_strict_cell_metadata_alias(
+    tmp_path: Path,
+) -> None:
+    project = execution.ProjectWorkspace.initialize(
+        tmp_path / "project",
+        logical_name="cell-metadata-alias",
+    )
+    run = project.create_run(logical_name="cell metadata alias")
+    registry = execution.DataAssetRegistry(
+        project_id=project.project.project_id,
+        store=project.store,
+        object_root=project.objects_dir,
+    )
+    metadata = tmp_path / "cache" / "cell_metadata.tsv"
+    metadata.parent.mkdir(parents=True)
+    metadata.write_text(
+        "cell_id\tind\tstim\tstate\ncell-1\td1\tctrl\tA\n",
+        encoding="utf-8",
+    )
+
+    registered, paths = execution._register_workflow_assets(
+        registry,
+        project=project,
+        run_id=run.run_id,
+        raw_assets=(
+            {
+                "role": "donor_metadata",
+                "root": "cache",
+                "relative_path": metadata.name,
+                "content_sha256": file_sha256(metadata),
+                "kind": "observed",
+            },
+        ),
+        cache=metadata.parent,
+        paper_root=tmp_path / "paper",
+    )
+
+    by_role = {asset.role: asset for asset in registered}
+    assert set(by_role) == {"donor_metadata", "cell_metadata"}
+    assert (
+        by_role["donor_metadata"].content_sha256
+        == by_role["cell_metadata"].content_sha256
+    )
+    assert paths["donor_metadata"] == paths["cell_metadata"]
+    assert registry.resolve(
+        by_role["cell_metadata"].asset_id,
+        expected_role="cell_metadata",
+    ) == metadata.resolve()
+
+    baseline_manifest = execution._task_asset_manifest(
+        workflow_id="WF-KANG",
+        dataset_id="kang18_8vs8_pbmc",
+        condition="free_codeact",
+        roles=("donor_metadata",),
+        asset_paths=paths,
+        registered_assets={
+            role: {
+                "asset_id": asset.asset_id,
+                "content_sha256": asset.content_sha256,
+            }
+            for role, asset in by_role.items()
+        },
+    )
+    assert [item["role"] for item in baseline_manifest["assets"]] == [
+        "donor_metadata"
+    ]
+    assert "asset_id" not in baseline_manifest["assets"][0]
+
+
 def test_smoke_task_selection_runs_only_requested_turn(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -979,7 +1048,8 @@ def test_scientific_facts_are_shared_but_authority_context_is_pertura_only() -> 
         },
         "contract_subset_record": {
             "path": "task/capability_contracts/PAPA-01.json",
-            "capability_ids": task["expected_capability_dag"],
+            "advertised_capability_ids": [],
+            "audited_codeact_fallback": True,
         },
     }
 
@@ -1004,6 +1074,9 @@ def test_scientific_facts_are_shared_but_authority_context_is_pertura_only() -> 
     assert "do not probe rpy2" in full.lower()
     assert "explicit nonexecutions for this endpoint" in full
     assert "guide.assignment.nb_mixture.v1" in full
+    assert "advertised no executable capability" in full
+    assert "audited CodeAct fallback" in full
+    assert "does not produce a capability receipt or measured authority" in full
     assert "contract_fixture" not in prompt
     assert "contract_fixture" not in free
     assert "guide.assignment.nb_mixture.v1" not in prompt
@@ -1019,6 +1092,44 @@ def test_scientific_facts_are_shared_but_authority_context_is_pertura_only() -> 
         assert "execution brief" not in text
         assert "CodeAct handoff" not in text
         assert "completion guard" not in text
+
+
+def test_capability_or_codeact_prompt_preserves_scientific_blocks_but_exits_integration_dead_ends(
+) -> None:
+    catalog = json.loads(
+        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
+    )
+    workflow = next(
+        item for item in catalog["workflows"] if item["workflow_id"] == "WF-REPL"
+    )
+    task = next(item for item in workflow["turns"] if item["task_id"] == "REPL-01")
+    prompt = execution._task_prompt(
+        workflow=workflow,
+        task=task,
+        condition="pertura_full",
+        workspace_root=PROMPT_WORKSPACE,
+        asset_paths={},
+        anchors_by_id={
+            anchor_id: {"anchor_id": anchor_id}
+            for anchor_id in task["paper_anchor_ids"]
+        },
+        dependency_contracts={},
+        scientific_contract_context={},
+        contract_context={},
+        contract_subset_record={
+            "path": "task/capability_contracts/REPL-01.json",
+            "advertised_capability_ids": ["diagnostic.dataset_integrity.v1"],
+            "audited_codeact_fallback": True,
+        },
+    )
+
+    assert "attempt each advertised capability at most once" in prompt
+    assert "genuine scientific applicability or evidence blocker" in prompt
+    assert "preserve that block and do not bypass it" in prompt
+    assert "integration or access boundary" in prompt
+    assert "unavailable ancestor capability receipt" in prompt
+    assert "does not produce a capability receipt or measured authority" in prompt
+    assert "advertised no executable capability" not in prompt
 
 
 def test_kang_full_prompt_requires_exact_frozen_skill_order() -> None:
@@ -1140,17 +1251,21 @@ def test_pertura_full_runner_writes_answer_free_static_contract_subset(
     assert subset["schema_version"] == (
         "pertura-paper-capability-contract-subset-v2"
     )
-    assert subset["candidate_capability_ids"] == (
-        expected_task["expected_capability_dag"]
-    )
-    assert subset["advertised_capability_ids"] == (
-        expected_task["expected_capability_dag"]
-    )
+    assert subset["candidate_capability_ids"] == []
+    assert subset["advertised_capability_ids"] == []
     assert subset["conditional_capability_ids"] == []
     assert subset["structurally_excluded_capabilities"] == []
-    assert [item["capability_id"] for item in subset["capabilities"]] == (
+    assert subset["capabilities"] == []
+    assert subset["audited_codeact_fallback"] is True
+    assert subset_record["candidate_capability_ids"] == (
         expected_task["expected_capability_dag"]
     )
+    assert subset_record["structurally_excluded_capabilities"] == [
+        {
+            "capability_id": "diagnostic.guide_assignment.v1",
+            "reasons": ["capability is deprecated or compatibility-only"],
+        }
+    ]
     assert manifest["task_skills"]["PAPA-01"] == expected_task["pertura_skills"]
     assert manifest["skill_bundle_hash"].startswith("sha256:")
     serialized = json.dumps(subset).lower()
@@ -2003,7 +2118,7 @@ def test_dependency_assets_include_transitive_ancestors(tmp_path: Path) -> None:
     }
 
 
-def test_dependency_gate_requires_complete_upstream_contract(
+def test_dependency_gate_accepts_complete_codeact_artifacts_without_capability_receipt(
     tmp_path: Path,
 ) -> None:
     tasks = {
@@ -2051,6 +2166,7 @@ def test_dependency_gate_requires_complete_upstream_contract(
     )
 
     (output / "table.tsv").write_text("value\n1\n", encoding="utf-8")
+    assert not (output / "capability_receipt.json").exists()
     assert (
         execution._dependency_outputs_complete(
             tmp_path,
