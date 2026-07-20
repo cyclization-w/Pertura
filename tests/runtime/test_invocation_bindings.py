@@ -210,6 +210,58 @@ def test_bound_dataset_integrity_reads_small_materialized_h5ad(
     runtime.close()
 
 
+def test_bound_design_balance_reads_h5ad_observation_metadata(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ad = pytest.importorskip("anndata")
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    runtime, project, run, contract = _runtime(tmp_path, monkeypatch)
+    h5ad = tmp_path / "design.h5ad"
+    observations = pd.DataFrame(
+        {
+            "condition": ["control", "control", "target", "target"],
+            "replicate": ["r1", "r2", "r3", "r4"],
+            "batch": ["b1", "b2", "b1", "b2"],
+        },
+        index=["c1", "c2", "c3", "c4"],
+    )
+    ad.AnnData(np.ones((4, 2)), obs=observations).write_h5ad(h5ad)
+    asset = runtime.asset_registry.register(
+        h5ad,
+        role="cell_metadata",
+        kind="external_resource",
+    )
+    binding = build_invocation_binding(
+        run_id=run.run_id,
+        task_id="REPL-01",
+        spec=runtime.registry.get("diagnostic.design_balance.v1"),
+        contract=contract,
+        tool_name="run_diagnostic",
+        scope={"dataset_id": contract.dataset_id},
+        bound_parameters={
+            "metadata_path": asset.asset_id,
+            "condition_column": "condition",
+            "replicate_column": "replicate",
+            "batch_column": "batch",
+            "max_memory_gb": 1.0,
+            "n_jobs": 1,
+        },
+        project=project,
+        output_mapping={"design_balance": "supported_analysis_plan"},
+    )
+    runtime.replace_invocation_bindings(task_id="REPL-01", bindings=(binding,))
+
+    response = runtime.run_diagnostic(binding_id=binding.binding_id)
+
+    assert response["result_id"] is not None
+    assert response["status"] == "caution"
+    result = runtime.planning_material(contract.contract_id)[1][0]
+    assert result.metrics["n_conditions"] == 2
+    assert result.metrics["minimum_units_per_condition"] == 2
+    runtime.close()
+
+
 def test_binding_expires_when_the_project_advances_to_another_turn(
     tmp_path: Path, monkeypatch
 ) -> None:

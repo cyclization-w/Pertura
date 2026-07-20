@@ -35,7 +35,7 @@ parameters_schema:
       exclusiveMinimum: 0
     metadata_path:
       type: string
-      description: Registered asset ID with role cell_metadata.
+      description: Registered CSV/TSV metadata or H5AD obs asset with role cell_metadata.
       x-pertura-asset-role: cell_metadata
     n_jobs:
       type: integer

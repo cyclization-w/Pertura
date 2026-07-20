@@ -248,13 +248,27 @@ def run_design_balance(
         request.parameters.get("metadata_path"),
         label="metadata_path",
     )
-    fields, rows = read_rows(metadata_path)
     condition = str(request.parameters.get("condition_column") or "condition")
     replicate = str(request.parameters.get("replicate_column") or "replicate")
     donor = str(request.parameters.get("donor_column") or "donor")
     state = str(request.parameters.get("state_column") or "state")
     batch = str(request.parameters.get("batch_column") or "batch")
     paired = bool(request.parameters.get("paired", False))
+    try:
+        fields, rows = _read_design_metadata(
+            metadata_path,
+            required_columns=(condition, replicate),
+        )
+    except ModuleNotFoundError as exc:
+        return blocked(
+            spec,
+            request,
+            contract,
+            f"design metadata dependency is missing: {exc.name}",
+            metadata={"setup_command": "pertura env setup perturbseq-python-v1"},
+        )
+    except ValueError as exc:
+        return blocked(spec, request, contract, str(exc))
     required = [condition, replicate]
     missing = [name for name in required if name not in fields]
     if missing:
@@ -333,6 +347,43 @@ def run_design_balance(
         },
         outputs=(output,),
     )
+
+
+def _read_design_metadata(
+    path: Path,
+    *,
+    required_columns: tuple[str, ...],
+) -> tuple[list[str], list[dict[str, str]]]:
+    """Read a tabular metadata asset or the observation table of an H5AD.
+
+    H5AD is a legitimate metadata-bearing input for design diagnostics: backed
+    mode reads ``obs`` without materializing the expression matrix.  Missing
+    design columns remain scientific blockers in ``run_design_balance``.
+    """
+
+    if path.suffix.lower() != ".h5ad":
+        return read_rows(path)
+
+    import anndata as ad
+    import pandas as pd
+
+    data = ad.read_h5ad(path, backed="r")
+    try:
+        frame = data.obs.copy()
+        fields = [str(name) for name in frame.columns]
+        if not set(required_columns).issubset(fields):
+            return fields, []
+        rows = [
+            {
+                str(name): "" if pd.isna(value) else str(value).strip()
+                for name, value in record.items()
+            }
+            for record in frame.to_dict(orient="records")
+        ]
+    finally:
+        if getattr(data, "file", None):
+            data.file.close()
+    return fields, rows
 
 
 def _source_path(contract: DatasetContract, value: Any) -> Path:
