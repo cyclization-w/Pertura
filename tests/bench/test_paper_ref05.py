@@ -126,6 +126,10 @@ def test_product_propeller_uses_speckle_110_field_names() -> None:
     assert 'metadata_suffix %in% c("tsv", "txt")' in runner
     assert "metadata <- read.table(" in runner
     assert "metadata <- read.csv(" not in runner
+    assert "baseline_proportion" in runner
+    assert "target_proportion" in runner
+    assert "effect = as.numeric(target_mean" in runner
+    assert 'c("P.Value", "PValue", "p.value", "pvalue")' in runner
 
     reference_runner = (
         root

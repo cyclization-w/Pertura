@@ -280,7 +280,14 @@ def run_propeller_composition(
     if not all(path.is_file() for path in (result_path, proportion_path, metadata_output)):
         return blocked(spec, request, contract, "Propeller runner returned an incomplete output set")
     result_fields, result_rows = read_rows(result_path)
-    required_columns = {"cluster", "PropMean", "FDR"}
+    required_columns = {
+        "cluster",
+        "baseline_proportion",
+        "target_proportion",
+        "effect",
+        "PValue",
+        "FDR",
+    }
     if not required_columns.issubset(result_fields):
         return blocked(
             spec,
@@ -288,9 +295,30 @@ def run_propeller_composition(
             contract,
             "Propeller result is missing columns: " + ", ".join(sorted(required_columns - set(result_fields))),
         )
-    invalid = any(not _finite_probability(row["FDR"]) for row in result_rows)
+    invalid = any(
+        not str(row["cluster"]).strip()
+        or not _finite_probability(row["baseline_proportion"])
+        or not _finite_probability(row["target_proportion"])
+        or not _finite_number(row["effect"])
+        or not _finite_probability(row["PValue"])
+        or not _finite_probability(row["FDR"])
+        or abs(
+            float(row["effect"])
+            - (
+                float(row["target_proportion"])
+                - float(row["baseline_proportion"])
+            )
+        )
+        > 1e-12
+        for row in result_rows
+    )
     if invalid or len({row["cluster"] for row in result_rows}) != len(result_rows):
-        return blocked(spec, request, contract, "Propeller output has invalid FDR or duplicate state rows")
+        return blocked(
+            spec,
+            request,
+            contract,
+            "Propeller output has invalid FDR or canonical values or duplicate state rows",
+        )
     cautions = [
         "Propeller adapter is synthetic-only validated and cannot support production measured claims"
     ]
@@ -606,6 +634,14 @@ def _finite_probability(value: Any) -> bool:
     except (TypeError, ValueError):
         return False
     return math.isfinite(number) and 0 <= number <= 1
+
+
+def _finite_number(value: Any) -> bool:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(number)
 
 
 def _parameter_or_dependency_table(

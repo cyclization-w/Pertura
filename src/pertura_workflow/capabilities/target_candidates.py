@@ -98,10 +98,33 @@ def run_mixscape_responder(
     mapping_manifest = json.loads(mapping_manifest_path.read_text(encoding="utf-8"))
     pca_columns = [str(item) for item in mapping_manifest.get("pca_columns") or ()]
     hvg_names = [str(item) for item in mapping_manifest.get("reference_hvg_names") or ()]
-    if not pca_columns or not hvg_names or not set(pca_columns).issubset(mapping_table.columns):
+    if (
+        "cell_id" not in mapping_table.columns
+        or not pca_columns
+        or not hvg_names
+        or not set(pca_columns).issubset(mapping_table.columns)
+    ):
         return blocked(
             spec, request, contract, "state mapping dependency lacks frozen PCA/HVG content"
         )
+    try:
+        declared_mapping_count = int(mapping_manifest.get("n_cells"))
+    except (TypeError, ValueError):
+        return blocked(
+            spec,
+            request,
+            contract,
+            "state mapping dependency lacks a valid mapped-cell count",
+        )
+    if declared_mapping_count != len(mapping_table):
+        return blocked(
+            spec,
+            request,
+            contract,
+            "state mapping artifact row count disagrees with its committed manifest",
+        )
+    mapping_table = mapping_table.copy()
+    mapping_table["cell_id"] = mapping_table["cell_id"].astype(str).str.strip()
     consume_dependency_output(state_result, mapping_path, usage="scientific_input")
     consume_dependency_output(
         state_result, mapping_manifest_path, usage="scientific_input"
@@ -109,13 +132,16 @@ def run_mixscape_responder(
 
     inspection = ad.read_h5ad(h5ad_path, backed="r")
     try:
-        retained_mask = (
-            inspection.obs_names.astype(str).isin(retained)
-            if retained is not None
-            else np.ones(int(inspection.n_obs), dtype=bool)
-        )
-        selected_rows = np.flatnonzero(retained_mask)
-        retained_count = int(len(selected_rows))
+        try:
+            selected_rows_list, selection_scope = _mixscape_evaluation_rows(
+                inspection.obs_names.astype(str).tolist(),
+                retained,
+                mapping_table["cell_id"].tolist(),
+            )
+        except ValueError as exc:
+            return blocked(spec, request, contract, str(exc))
+        selected_rows = np.asarray(selected_rows_list, dtype=int)
+        selected_count = int(len(selected_rows))
         gene_index = {str(gene): index for index, gene in enumerate(inspection.var_names)}
         missing_hvg = [gene for gene in hvg_names if gene not in gene_index]
         if missing_hvg:
@@ -126,7 +152,7 @@ def run_mixscape_responder(
                 f"Mixscape input is missing {len(missing_hvg)} frozen reference HVGs",
             )
         estimated = budget.dense_bytes(
-            retained_count,
+            selected_count,
             len(hvg_names),
             arrays=3,
             itemsize=8,
@@ -150,22 +176,17 @@ def run_mixscape_responder(
     finally:
         if getattr(inspection, "file", None):
             inspection.file.close()
-    if retained_count == 0:
-        return blocked(spec, request, contract, "retained-cell manifest has no overlap with Mixscape input")
-    data = ad.AnnData(X=matrix, obs=selected_obs, var=selected_var)
-    if pert_key not in data.obs.columns:
-        return blocked(spec, request, contract, f"perturbation column is missing: {pert_key}")
-    mapping_index = mapping_table.set_index("cell_id")
-    missing_mapping = [
-        cell for cell in data.obs_names.astype(str) if cell not in mapping_index.index
-    ]
-    if missing_mapping:
+    if selected_count == 0:
         return blocked(
             spec,
             request,
             contract,
-            f"state mapping is missing {len(missing_mapping)} retained Mixscape cells",
+            "state mapping has no retained evaluation cells in the Mixscape input",
         )
+    data = ad.AnnData(X=matrix, obs=selected_obs, var=selected_var)
+    if pert_key not in data.obs.columns:
+        return blocked(spec, request, contract, f"perturbation column is missing: {pert_key}")
+    mapping_index = mapping_table.set_index("cell_id")
     data.obsm["X_pertura_reference"] = mapping_index.loc[
         data.obs_names.astype(str), pca_columns
     ].to_numpy(dtype=float)
@@ -271,6 +292,7 @@ def run_mixscape_responder(
             ),
             "frozen_hvg_count": len(hvg_names),
         },
+        "selection_scope": selection_scope,
         "package_versions": {
             "pertpy": package_metadata.version("pertpy"),
             "anndata": package_metadata.version("anndata"),
@@ -301,8 +323,72 @@ def run_mixscape_responder(
                 "source_rows_read": selection_stats.source_rows_read,
                 "selected_rows": selection_stats.selected_rows,
             },
+            "selection_scope": selection_scope,
         },
     )
+
+
+def _mixscape_evaluation_rows(
+    input_cell_ids: list[str],
+    retained_cell_ids: set[str] | None,
+    mapping_cell_ids: list[str],
+) -> tuple[list[int], dict[str, int | bool]]:
+    """Select the validated state-mapped evaluation universe for Mixscape.
+
+    A retained-cell manifest can cover both calibration and evaluation cells,
+    while ``state.reference.map_knn.v1`` intentionally maps only the frozen
+    evaluation split.  The mapping result therefore defines the analysis row
+    universe, but every mapped cell must still be grounded in the retained
+    manifest and present exactly once in the input dataset.
+    """
+
+    normalized_mapping = [str(cell).strip() for cell in mapping_cell_ids]
+    if not normalized_mapping or any(not cell for cell in normalized_mapping):
+        raise ValueError("state mapping contains no usable cell identities")
+    mapping_set = set(normalized_mapping)
+    if len(mapping_set) != len(normalized_mapping):
+        raise ValueError("state mapping contains duplicate cell identities")
+
+    normalized_input = [str(cell).strip() for cell in input_cell_ids]
+    if any(not cell for cell in normalized_input):
+        raise ValueError("Mixscape input contains an empty cell identity")
+    input_set = set(normalized_input)
+    if len(input_set) != len(normalized_input):
+        raise ValueError("Mixscape input contains duplicate cell identities")
+
+    retained_set = (
+        {str(cell).strip() for cell in retained_cell_ids}
+        if retained_cell_ids is not None
+        else None
+    )
+    if retained_set is not None:
+        outside_retained = mapping_set - retained_set
+        if outside_retained:
+            raise ValueError(
+                "state mapping contains "
+                f"{len(outside_retained)} cells outside the retained-cell manifest"
+            )
+
+    missing_input = mapping_set - input_set
+    if missing_input:
+        raise ValueError(
+            f"Mixscape input is missing {len(missing_input)} state-mapped evaluation cells"
+        )
+
+    selected_rows = [
+        index for index, cell in enumerate(normalized_input) if cell in mapping_set
+    ]
+    excluded_nonmapped = (
+        len(retained_set - mapping_set) if retained_set is not None else 0
+    )
+    return selected_rows, {
+        "retained_manifest_applied": retained_set is not None,
+        "retained_manifest_cell_count": len(retained_set)
+        if retained_set is not None
+        else 0,
+        "mapped_evaluation_cell_count": len(mapping_set),
+        "excluded_nonmapped_retained_cell_count": excluded_nonmapped,
+    }
 
 
 def run_guide_efficacy(

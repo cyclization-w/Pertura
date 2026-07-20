@@ -586,16 +586,17 @@ def _run_r_protocol_adapter(
                 raise ValueError("Propeller serializer emitted an invalid config")
             output = Path(config["output_dir"])
             header = (
-                "cluster,PropMean\n"
+                "cluster,baseline_proportion,target_proportion,effect,PValue\n"
                 if case.scenario == "planted_failure"
-                else "cluster,PropMean,FDR\n"
+                else "cluster,baseline_proportion,target_proportion,effect,PValue,FDR\n"
             )
             rows = (
-                "S1,0.5\n"
+                "S1,0.5,0.6,0.1,0.05\n"
                 if case.scenario == "planted_failure"
-                else "S1,0.5,1.2\n"
+                else "S1,0.5,0.6,0.1,0.05,1.2\n"
                 if case.scenario == "blocked"
-                else "S1,0.5,0.04\nS2,0.5,0.08\n"
+                else "S1,0.5,0.6,0.1,0.02,0.04\n"
+                "S2,0.5,0.4,-0.1,0.04,0.08\n"
             )
             (output / "propeller_results.csv").write_text(
                 header + rows, encoding="utf-8", newline="\n"

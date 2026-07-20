@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from pertura_core import CapabilityRunRequest, DatasetContract, DependencyRef, ScopeKey
 from pertura_core.hashing import file_sha256
@@ -706,7 +707,9 @@ def test_candidate_r_adapters_accept_complete_protocol_outputs(monkeypatch, tmp_
             )
         else:
             (output / "propeller_results.csv").write_text(
-                "cluster,PropMean,FDR\nS1,0.5,0.1\nS2,0.5,0.2\n",
+                "cluster,baseline_proportion,target_proportion,effect,PValue,FDR\n"
+                "S1,0.5,0.6,0.1,0.05,0.1\n"
+                "S2,0.5,0.4,-0.1,0.1,0.2\n",
                 encoding="utf-8",
             )
             (output / "sample_state_proportions.csv").write_text(
@@ -772,6 +775,45 @@ def test_candidate_r_adapters_accept_complete_protocol_outputs(monkeypatch, tmp_
     assert paired.status.value == "completed_with_caution"
     assert paired.metrics["n_independent_units_per_arm"] == 2
     assert captured_configs["composition-v1"]["pairing_column"] == "donor"
+
+
+def test_mixscape_uses_state_mapped_evaluation_subset_of_retained_cells() -> None:
+    from pertura_workflow.capabilities.target_candidates import (
+        _mixscape_evaluation_rows,
+    )
+
+    rows, scope = _mixscape_evaluation_rows(
+        ["cal-1", "eval-1", "cal-2", "eval-2"],
+        {"cal-1", "cal-2", "eval-1", "eval-2"},
+        ["eval-1", "eval-2"],
+    )
+
+    assert rows == [1, 3]
+    assert scope == {
+        "retained_manifest_applied": True,
+        "retained_manifest_cell_count": 4,
+        "mapped_evaluation_cell_count": 2,
+        "excluded_nonmapped_retained_cell_count": 2,
+    }
+
+
+def test_mixscape_rejects_state_mapping_outside_retained_or_input_cells() -> None:
+    from pertura_workflow.capabilities.target_candidates import (
+        _mixscape_evaluation_rows,
+    )
+
+    with pytest.raises(ValueError, match="outside the retained-cell manifest"):
+        _mixscape_evaluation_rows(
+            ["eval-1", "eval-2"],
+            {"eval-1"},
+            ["eval-1", "eval-2"],
+        )
+    with pytest.raises(ValueError, match="missing 1 state-mapped evaluation cells"):
+        _mixscape_evaluation_rows(
+            ["eval-1"],
+            {"eval-1", "eval-2"},
+            ["eval-1", "eval-2"],
+        )
 
 
 def test_scrublet_plan_scans_only_selected_cells_and_detected_features() -> None:

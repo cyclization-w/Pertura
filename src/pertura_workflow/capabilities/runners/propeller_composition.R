@@ -76,12 +76,45 @@ result <- propeller.ttest(
   contrasts = contrast,
   robust = TRUE,
   trend = FALSE,
-  sort = TRUE
+  sort = FALSE
 )
 if (!"cluster" %in% colnames(result)) {
   result$cluster <- rownames(result)
 }
-write.csv(result, file.path(cfg$output_dir, "propeller_results.csv"), row.names = FALSE)
+if (anyDuplicated(result$cluster)) stop("Propeller result contains duplicate clusters")
+result <- result[match(rownames(prop_list$Proportions), result$cluster), , drop = FALSE]
+if (any(is.na(result$cluster))) stop("Propeller result is missing an observed cluster")
+baseline_samples <- as.character(sample_table$condition) == contrast_levels[[1]]
+target_samples <- as.character(sample_table$condition) == contrast_levels[[2]]
+if (!any(baseline_samples) || !any(target_samples)) {
+  stop("Propeller contrast has an empty condition arm")
+}
+baseline_mean <- rowMeans(
+  prop_list$Proportions[, baseline_samples, drop = FALSE]
+)
+target_mean <- rowMeans(
+  prop_list$Proportions[, target_samples, drop = FALSE]
+)
+p_column <- intersect(
+  c("P.Value", "PValue", "p.value", "pvalue"),
+  colnames(result)
+)
+if (length(p_column) == 0L) stop("Propeller result lacks a p-value column")
+if (!"FDR" %in% colnames(result)) stop("Propeller result lacks FDR")
+canonical_result <- data.frame(
+  cluster = as.character(result$cluster),
+  baseline_proportion = as.numeric(baseline_mean[result$cluster]),
+  target_proportion = as.numeric(target_mean[result$cluster]),
+  effect = as.numeric(target_mean[result$cluster] - baseline_mean[result$cluster]),
+  PValue = as.numeric(result[[p_column[[1]]]]),
+  FDR = as.numeric(result$FDR),
+  stringsAsFactors = FALSE
+)
+write.csv(
+  canonical_result,
+  file.path(cfg$output_dir, "propeller_results.csv"),
+  row.names = FALSE
+)
 proportions <- as.data.frame(t(prop_list$Proportions), check.names = FALSE)
 proportions$sample_id <- rownames(proportions)
 proportions <- merge(proportions, sample_table, by = "sample_id", all.x = TRUE, sort = FALSE)
@@ -100,7 +133,7 @@ write_json(
     trend = FALSE,
     paired = paired,
     n_samples = nrow(sample_table),
-    n_states = nrow(result)
+    n_states = nrow(canonical_result)
   ),
   file.path(cfg$output_dir, "propeller_metadata.json"),
   auto_unbox = TRUE,
