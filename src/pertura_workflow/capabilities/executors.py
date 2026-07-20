@@ -4,6 +4,7 @@ from collections.abc import Callable
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 from typing import Any
 
@@ -324,8 +325,11 @@ def _execute_in_profile(
         for key in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP", "HOME", "USERPROFILE", "PATH")
         if key in os.environ
     }
-    source_root = str(Path(__file__).resolve().parents[2])
-    env["PYTHONPATH"] = source_root
+    # Expose only Pertura's pure-Python packages to the isolated interpreter.
+    # Pointing PYTHONPATH at the main environment's entire site-packages tree
+    # also exposes ABI-bound dependencies (for example a CPython 3.11
+    # pydantic-core extension) to the Python 3.12 scientific profiles.
+    env["PYTHONPATH"] = str(_isolated_package_overlay(staging))
     try:
         completed = subprocess.run(
             [
@@ -355,6 +359,28 @@ def _execute_in_profile(
     metadata["environment_execution"] = "isolated_profile"
     metadata["environment_profile"] = profile
     return result.model_copy(update={"metadata": metadata})
+
+
+def _isolated_package_overlay(staging: Path) -> Path:
+    """Build a dependency-free import surface for profile workers."""
+
+    source_root = Path(__file__).resolve().parents[2]
+    overlay = staging / "_environment_pythonpath"
+    overlay.mkdir(parents=True, exist_ok=True)
+    for package_name in ("pertura_core", "pertura_workflow"):
+        source = source_root / package_name
+        target = overlay / package_name
+        if target.exists() or target.is_symlink():
+            continue
+        try:
+            target.symlink_to(source, target_is_directory=True)
+        except OSError:
+            shutil.copytree(
+                source,
+                target,
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
+    return overlay
 
 
 def execute_capability(

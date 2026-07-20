@@ -339,7 +339,9 @@ def run_enrichment_ora(spec, request, contract, staging):
     if isinstance(loaded, str):
         return blocked(spec, request, contract, loaded)
     matrix, observed, perturbations, features, _ = loaded
-    gene_sets = _load_gene_sets(staging)
+    gene_sets = _load_gene_sets(
+        staging, str(request.parameters.get("gene_sets_path") or "")
+    )
     if isinstance(gene_sets, str):
         return blocked(spec, request, contract, gene_sets)
     try:
@@ -750,7 +752,12 @@ def _resource_artifact(staging, prefix):
     return None
 
 
-def _gene_set_path(staging):
+def _gene_set_path(staging, supplied=""):
+    if supplied:
+        path = Path(supplied)
+        if path.is_file():
+            return path
+        return "registered gene-set asset is missing"
     module_path = _dependency_file(staging, "gmt_modules.json")
     if module_path is not None:
         payload = json.loads(module_path.read_text(encoding="utf-8"))
@@ -786,10 +793,24 @@ def _gene_set_path(staging):
     return "no committed module reference or locked pathway resource was resolved"
 
 
-def _load_gene_sets(staging):
-    path = _gene_set_path(staging)
+def _load_gene_sets(staging, supplied=""):
+    path = _gene_set_path(staging, supplied)
     if isinstance(path, str):
         return path
+    if path.suffix.lower() == ".json":
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return f"gene-set JSON is invalid: {exc}"
+        modules = payload.get("valid_modules") or payload.get("modules") or {}
+        if not isinstance(modules, dict):
+            return "gene-set JSON does not contain a module mapping"
+        sets = {
+            str(name): {str(gene) for gene in genes}
+            for name, genes in modules.items()
+            if isinstance(genes, list) and genes
+        }
+        return sets if sets else "gene-set JSON contains no usable sets"
     sets = {}
     with path.open("r", encoding="utf-8-sig") as handle:
         for line in handle:

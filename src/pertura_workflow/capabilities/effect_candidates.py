@@ -197,22 +197,29 @@ def run_propeller_composition(
     )
     fields, rows = read_rows(metadata_path)
     sample_column = str(request.parameters.get("sample_column") or "replicate")
+    pairing_column = str(request.parameters.get("pairing_column") or "")
     state_column = str(request.parameters.get("state_column") or "state")
     condition_column = str(request.parameters.get("condition_column") or "condition")
     batch_column = str(request.parameters.get("batch_column") or "batch")
-    missing = [
-        name for name in (sample_column, state_column, condition_column)
-        if name not in fields
-    ]
+    required_columns = [sample_column, state_column, condition_column]
+    if pairing_column:
+        required_columns.append(pairing_column)
+    missing = [name for name in required_columns if name not in fields]
     if missing:
         return blocked(spec, request, contract, "composition metadata is missing: " + ", ".join(missing))
     units_by_arm: dict[str, set[str]] = defaultdict(set)
     batches_by_arm: dict[str, set[str]] = defaultdict(set)
     sample_arm: dict[str, str] = {}
     for row in rows:
-        sample = row.get(sample_column, "")
+        base_sample = row.get(sample_column, "")
         arm = row.get(condition_column, "")
-        if not sample or not arm:
+        subject = row.get(pairing_column, "") if pairing_column else ""
+        sample = (
+            f"{base_sample}::{arm}"
+            if pairing_column and base_sample and arm
+            else base_sample
+        )
+        if not sample or not arm or (pairing_column and not subject):
             continue
         if sample in sample_arm and sample_arm[sample] != arm:
             return blocked(spec, request, contract, f"sample maps to multiple conditions: {sample}")
@@ -235,6 +242,7 @@ def run_propeller_composition(
         "metadata_path": str(metadata_path),
         "output_dir": str(staging),
         "sample_column": sample_column,
+        "pairing_column": pairing_column or None,
         "state_column": state_column,
         "condition_column": condition_column,
         "batch_column": batch_column if batch_column in fields else None,

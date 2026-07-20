@@ -466,6 +466,15 @@ def test_every_advertised_paper_surface_compiles_without_parameter_guessing(
                 assert by_capability[downstream_id].dependency_binding_ids == (
                     by_capability[upstream_id].binding_id,
                 )
+            if task["task_id"] == "PAPA-08":
+                ora = by_capability["enrichment.ora.v1"]
+                assert ora.bound_parameters["gene_sets_path"]
+                assert any(
+                    item.role == "gene_modules" for item in ora.input_assets
+                )
+            if task["task_id"] == "KANG-02":
+                propeller = by_capability["composition.propeller.v1"]
+                assert propeller.bound_parameters["pairing_column"] == "ind"
             for binding in bindings:
                 if binding.readiness != "blocked_probe":
                     assert binding.output_mapping

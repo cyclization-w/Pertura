@@ -27,6 +27,10 @@ parameters_schema:
       minimum: 1
     effect_threshold:
       type: number
+    gene_sets_path:
+      type: string
+      description: Registered frozen gene-set asset or a workspace-derived gene-set file.
+      x-pertura-asset-role: gene_modules
     max_gene_set_size:
       type: integer
     max_memory_gb:
@@ -50,7 +54,6 @@ metadata:
   derived_only: true
   environment_profile: interpretation-v1
   execution_mode: isolated_python
-  resource_profile: pathway-knowledge-v1
   optional_result_kinds:
   - reference_modules
   dependency_policy:

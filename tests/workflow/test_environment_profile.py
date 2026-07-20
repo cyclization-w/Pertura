@@ -10,6 +10,16 @@ import yaml
 from pertura_core.hashing import canonical_hash, file_sha256
 import pertura_workflow.environment as environment_module
 from pertura_workflow.environment import doctor_environment, environment_prefix, micromamba_path
+from pertura_workflow.capabilities.executors import _isolated_package_overlay
+
+
+def test_profile_worker_pythonpath_exposes_only_pertura_packages(tmp_path: Path) -> None:
+    overlay = _isolated_package_overlay(tmp_path)
+
+    assert (overlay / "pertura_core").is_dir()
+    assert (overlay / "pertura_workflow").is_dir()
+    assert not (overlay / "pydantic").exists()
+    assert not (overlay / "pydantic_core").exists()
 
 
 def test_environment_doctor_is_offline_and_actionable(monkeypatch, tmp_path: Path) -> None:

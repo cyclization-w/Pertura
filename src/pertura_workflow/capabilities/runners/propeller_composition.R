@@ -15,10 +15,17 @@ if (!all(required %in% colnames(metadata))) {
   stop("metadata is missing sample, state, or condition columns")
 }
 
-sample_id <- as.character(metadata[[cfg$sample_column]])
-cluster <- as.character(metadata[[cfg$state_column]])
 condition <- as.character(metadata[[cfg$condition_column]])
-sample_table <- unique(data.frame(sample_id = sample_id, condition = condition))
+base_sample_id <- as.character(metadata[[cfg$sample_column]])
+cluster <- as.character(metadata[[cfg$state_column]])
+paired <- !is.null(cfg$pairing_column) && nzchar(cfg$pairing_column)
+subject_id <- if (paired) as.character(metadata[[cfg$pairing_column]]) else base_sample_id
+sample_id <- if (paired) paste(base_sample_id, condition, sep = "::") else base_sample_id
+sample_table <- unique(data.frame(
+  sample_id = sample_id,
+  condition = condition,
+  subject_id = subject_id
+))
 if (any(duplicated(sample_table$sample_id))) {
   stop("sample IDs map to multiple conditions")
 }
@@ -33,16 +40,27 @@ if (length(contrast_levels) != 2L || anyDuplicated(contrast_levels)) {
 }
 sample_table$condition <- factor(sample_table$condition, levels = contrast_levels)
 if (any(is.na(sample_table$condition))) stop("unknown Propeller condition label")
-design <- model.matrix(~0 + condition, data = sample_table)
+if (paired) {
+  sample_table$subject_id <- factor(sample_table$subject_id)
+  design <- model.matrix(~ subject_id + condition, data = sample_table)
+} else {
+  design <- model.matrix(~0 + condition, data = sample_table)
+  colnames(design) <- sub("^condition", "", colnames(design))
+}
 rownames(design) <- sample_table$sample_id
-colnames(design) <- sub("^condition", "", colnames(design))
 if (qr(design)$rank < ncol(design)) stop("Propeller design is rank deficient")
-group_columns <- match(contrast_levels, colnames(design))
-if (any(is.na(group_columns))) stop("Propeller contrast columns are not estimable")
 contrast <- numeric(ncol(design))
 names(contrast) <- colnames(design)
-contrast[group_columns[[1]]] <- -1
-contrast[group_columns[[2]]] <- 1
+if (paired) {
+  target_column <- paste0("condition", contrast_levels[[2]])
+  if (!target_column %in% colnames(design)) stop("paired Propeller contrast is not estimable")
+  contrast[[target_column]] <- 1
+} else {
+  group_columns <- match(contrast_levels, colnames(design))
+  if (any(is.na(group_columns))) stop("Propeller contrast columns are not estimable")
+  contrast[group_columns[[1]]] <- -1
+  contrast[group_columns[[2]]] <- 1
+}
 result <- propeller.ttest(
   prop_list,
   design = design,
@@ -71,6 +89,7 @@ write_json(
     contrast = cfg$contrast,
     robust = TRUE,
     trend = FALSE,
+    paired = paired,
     n_samples = nrow(sample_table),
     n_states = nrow(result)
   ),

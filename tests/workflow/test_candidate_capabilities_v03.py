@@ -565,6 +565,46 @@ def test_pure_python_effect_sensitivity_module_and_null_calibration(tmp_path: Pa
     assert blocked_calibration.status.value == "blocked"
 
 
+def test_ora_accepts_registered_frozen_gene_set_json(tmp_path: Path) -> None:
+    staging = tmp_path / "ora"
+    staging.mkdir()
+    features = np.asarray([f"G{i}" for i in range(20)])
+    matrix_path = tmp_path / "effect_matrix.npz"
+    np.savez_compressed(
+        matrix_path,
+        effects=np.asarray([[1.0] * 10 + [0.0] * 10]),
+        observed_mask=np.asarray([[True] * 20]),
+        perturbations=np.asarray(["T1"]),
+        features=features,
+    )
+    (staging / "_dependency_results.json").write_text(
+        json.dumps({
+            "results": [{
+                "result_id": "effect_matrix_result",
+                "result_kind": "effect_matrix",
+                "local_output_paths": [str(matrix_path)],
+            }]
+        }),
+        encoding="utf-8",
+    )
+    gene_sets = tmp_path / "frozen_gene_sets.json"
+    gene_sets.write_text(
+        json.dumps({"valid_modules": {"UP": [f"G{i}" for i in range(10)]}}),
+        encoding="utf-8",
+    )
+
+    result = _run(
+        "enrichment.ora.v1",
+        _contract(tmp_path),
+        staging,
+        {"gene_sets_path": str(gene_sets), "min_gene_set_size": 2},
+    )
+
+    assert result.status.value == "completed"
+    assert result.metrics["n_gene_sets"] == 1
+    assert result.metrics["n_tests"] == 1
+
+
 def test_optional_adapters_fail_closed_when_environments_are_missing(tmp_path: Path) -> None:
     contract = _contract(tmp_path)
     mixscape = _run(
@@ -640,8 +680,11 @@ def test_candidate_r_adapters_accept_complete_protocol_outputs(monkeypatch, tmp_
         encoding="utf-8",
     )
 
+    captured_configs = {}
+
     def fake_runner(profile, runner, config_path, *, timeout):
         config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        captured_configs[profile] = config
         output = Path(config["output_dir"])
         if profile == "sceptre-v1":
             (output / "sceptre_metadata.json").write_text(
@@ -703,6 +746,32 @@ def test_candidate_r_adapters_accept_complete_protocol_outputs(monkeypatch, tmp_
     assert propeller.status.value == "completed_with_caution"
     assert propeller.metrics["n_independent_units_per_arm"] == 3
     assert propeller.metrics["n_states"] == 2
+
+    paired_metadata = tmp_path / "paired_composition.csv"
+    paired_metadata.write_text(
+        "cell,state,stim,donor\n"
+        "a1,S1,ctrl,D1\n"
+        "a2,S2,stim,D1\n"
+        "b1,S1,ctrl,D2\n"
+        "b2,S2,stim,D2\n",
+        encoding="utf-8",
+    )
+    paired = _run(
+        "composition.propeller.v1",
+        contract,
+        tmp_path / "propeller-paired",
+        {
+            "metadata_path": str(paired_metadata),
+            "sample_column": "donor",
+            "pairing_column": "donor",
+            "state_column": "state",
+            "condition_column": "stim",
+            "contrast": ["ctrl", "stim"],
+        },
+    )
+    assert paired.status.value == "completed_with_caution"
+    assert paired.metrics["n_independent_units_per_arm"] == 2
+    assert captured_configs["composition-v1"]["pairing_column"] == "donor"
 
 
 def test_scrublet_plan_scans_only_selected_cells_and_detected_features() -> None:

@@ -26,6 +26,7 @@ _ROLE_ALIASES = {
     "donor_metadata": "cell_metadata",
     "target_expression": "expression_table",
     "trans_de_results": "effect_table",
+    "frozen_gene_sets": "gene_modules",
 }
 
 
@@ -375,8 +376,9 @@ def _recipe(
         )
         return parameters, (), blockers, overrides
     if capability_id == "enrichment.ora.v1":
-        # The effect matrix is a receipt-backed same-turn dependency and the
-        # frozen gene sets are supplied by the capability resource lock.
+        # The effect matrix is a receipt-backed same-turn dependency. Gene
+        # sets are an answer-free, provider-visible frozen task asset.
+        parameters["gene_sets_path"] = _asset_id(assets, "gene_modules")
         return parameters, (), blockers, overrides
     if capability_id == "interpretation.evidence_map.v1":
         provenance_assets = [
@@ -431,6 +433,7 @@ def _recipe(
         parameters.update(
             metadata_path=_asset_id(assets, "cell_metadata"),
             sample_column="ind",
+            pairing_column="ind",
             state_column="cell",
             condition_column="stim",
             contrast=["ctrl", "stim"],

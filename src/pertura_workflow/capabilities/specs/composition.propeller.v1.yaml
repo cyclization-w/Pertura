@@ -48,6 +48,8 @@ parameters_schema:
       type: integer
       default: 1
       minimum: 1
+    pairing_column:
+      type: string
     sample_column:
       type: string
     state_column:
