@@ -88,7 +88,7 @@ class DataAssetRegistry:
     def _materialize_location(self, asset: DataAssetRef, source: Path) -> AssetLocation:
         if source.is_file() and asset.kind in {"derived", "exploratory"}:
             digest = asset.content_sha256.split(":", 1)[1]
-            destination = self.object_root / digest[:2] / digest[2:]
+            destination = self.object_root / digest[:2] / _object_name(digest, source)
             destination.parent.mkdir(parents=True, exist_ok=True)
             mode = "hardlink"
             if not destination.exists():
@@ -100,7 +100,7 @@ class DataAssetRegistry:
             return AssetLocation(asset_id=asset.asset_id, absolute_path=str(destination), storage_mode=mode, observed_sha256=asset.content_sha256, observed_size_bytes=asset.size_bytes)
         if source.is_file() and asset.size_bytes <= SMALL_OBJECT_LIMIT and asset.kind == "external_resource":
             digest = asset.content_sha256.split(":", 1)[1]
-            destination = self.object_root / digest[:2] / digest[2:]
+            destination = self.object_root / digest[:2] / _object_name(digest, source)
             destination.parent.mkdir(parents=True, exist_ok=True)
             if not destination.exists():
                 shutil.copy2(source, destination)
@@ -151,3 +151,17 @@ class DataAssetRegistry:
         if kind == "derived":
             return "derived_artifact"
         return "observed_metadata"
+
+
+def _object_name(digest: str, source: Path) -> str:
+    """Keep the logical format visible on content-addressed object paths.
+
+    Capability readers dispatch on extensions such as ``.h5ad`` and ``.tsv``.
+    Removing those extensions when a small or derived asset is materialized can
+    make binary HDF5 inputs look like text and can silently select the wrong
+    delimiter for tables.  The digest remains the object identity; suffixes
+    preserve only the format needed by readers.
+    """
+
+    suffixes = "".join(source.suffixes)
+    return digest[2:] + suffixes

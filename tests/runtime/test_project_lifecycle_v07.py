@@ -53,6 +53,32 @@ def test_asset_identity_excludes_path_and_detects_drift(tmp_path: Path) -> None:
     assert registry.doctor(a.asset_id).status == "drifted"
 
 
+@pytest.mark.parametrize("kind", ["external_resource", "derived", "exploratory"])
+def test_materialized_asset_objects_preserve_format_suffixes(
+    tmp_path: Path,
+    kind: str,
+) -> None:
+    project = ProjectWorkspace.initialize(tmp_path / "study")
+    registry = DataAssetRegistry(
+        project_id=project.project.project_id,
+        store=project.store,
+        object_root=project.objects_dir,
+    )
+    h5ad = tmp_path / "tiny.h5ad"
+    h5ad.write_bytes(b"\x89HDF\r\n\x1a\nfixture")
+    table = tmp_path / "cells.tsv"
+    table.write_text("cell_id\tcondition\nc1\tcontrol\n", encoding="utf-8")
+
+    h5ad_asset = registry.register(h5ad, role="primary_dataset", kind=kind)
+    table_asset = registry.register(table, role="cell_metadata", kind=kind)
+
+    assert registry.resolve(h5ad_asset.asset_id).suffix == ".h5ad"
+    assert registry.resolve(table_asset.asset_id).suffix == ".tsv"
+    assert registry.resolve(h5ad_asset.asset_id).read_bytes().startswith(
+        b"\x89HDF\r\n\x1a\n"
+    )
+
+
 def test_turn_draft_downgrades_unbound_and_candidate_findings() -> None:
     draft = parse_turn_draft(json.dumps({
         "schema_version": "pertura-turn-draft-v1",

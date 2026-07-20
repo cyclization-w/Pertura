@@ -135,23 +135,29 @@ class _BindingQualificationExecutor:
         task_records: list[dict[str, Any]] = []
         try:
             for binding in runtime._invocation_bindings.values():
-                if binding.tool_name == "run_diagnostic":
-                    response = runtime.run_diagnostic(
-                        binding_id=binding.binding_id
-                    )
-                elif binding.tool_name == "run_analysis":
-                    response = runtime.run_analysis(
-                        f"Qualify {binding.capability_id} through its frozen binding",
-                        binding_id=binding.binding_id,
-                    )
-                elif binding.tool_name == "evaluate_virtual_model":
-                    response = runtime.evaluate_virtual_model(
-                        binding_id=binding.binding_id
-                    )
-                else:
+                try:
+                    if binding.tool_name == "run_diagnostic":
+                        response = runtime.run_diagnostic(
+                            binding_id=binding.binding_id
+                        )
+                    elif binding.tool_name == "run_analysis":
+                        response = runtime.run_analysis(
+                            f"Qualify {binding.capability_id} through its frozen binding",
+                            binding_id=binding.binding_id,
+                        )
+                    elif binding.tool_name == "evaluate_virtual_model":
+                        response = runtime.evaluate_virtual_model(
+                            binding_id=binding.binding_id
+                        )
+                    else:
+                        raise RuntimeError(
+                            f"unsupported bound tool: {binding.tool_name}"
+                        )
+                except Exception as exc:
                     raise RuntimeError(
-                        f"unsupported bound tool: {binding.tool_name}"
-                    )
+                        f"{task_id}/{binding.capability_id}/"
+                        f"{binding.binding_id}: bound execution failed: {exc}"
+                    ) from exc
 
                 result_id = str(response.get("result_id") or "")
                 if binding.readiness == "blocked_probe":

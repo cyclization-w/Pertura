@@ -170,6 +170,46 @@ def test_executed_design_diagnostic_can_return_a_scientific_block(
     runtime.close()
 
 
+def test_bound_dataset_integrity_reads_small_materialized_h5ad(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ad = pytest.importorskip("anndata")
+    np = pytest.importorskip("numpy")
+    runtime, project, run, contract = _runtime(tmp_path, monkeypatch)
+    h5ad = tmp_path / "tiny.h5ad"
+    ad.AnnData(np.asarray([[1.0, 0.0], [0.0, 2.0]])).write_h5ad(h5ad)
+    asset = runtime.asset_registry.register(
+        h5ad,
+        role="primary_dataset",
+        kind="external_resource",
+    )
+    binding = build_invocation_binding(
+        run_id=run.run_id,
+        task_id="REPL-01",
+        spec=runtime.registry.get("diagnostic.dataset_integrity.v1"),
+        contract=contract,
+        tool_name="run_diagnostic",
+        scope={"dataset_id": contract.dataset_id},
+        bound_parameters={
+            "input_path": asset.asset_id,
+            "max_memory_gb": 1.0,
+            "n_jobs": 1,
+        },
+        project=project,
+        output_mapping={"dataset_integrity": "dataset_profile"},
+    )
+    runtime.replace_invocation_bindings(task_id="REPL-01", bindings=(binding,))
+
+    response = runtime.run_diagnostic(binding_id=binding.binding_id)
+
+    assert response["result_id"] is not None
+    assert response["status"] in {"caution", "screen_passed"}
+    result = runtime.planning_material(contract.contract_id)[1][0]
+    assert result.metrics["layer"]["name"] == "X"
+    assert result.metrics["integer_like"] is True
+    runtime.close()
+
+
 def test_binding_expires_when_the_project_advances_to_another_turn(
     tmp_path: Path, monkeypatch
 ) -> None:
