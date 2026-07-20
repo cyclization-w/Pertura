@@ -857,6 +857,32 @@ def test_mixscape_stratifies_only_when_every_stratum_has_enough_controls() -> No
         )
 
 
+def test_mixscape_normalization_uses_full_registered_matrix() -> None:
+    from scipy import sparse
+    from pertura_workflow.capabilities.target_candidates import (
+        _normalize_total_log1p,
+    )
+
+    expression = np.asarray([[2.0, 3.0, 5.0], [0.0, 5.0, 15.0]])
+    expected = np.log1p(
+        np.asarray([[2000.0, 3000.0, 5000.0], [0.0, 2500.0, 7500.0]])
+    )
+
+    dense = _normalize_total_log1p(expression, target_sum=10_000.0)
+    sparse_result = _normalize_total_log1p(
+        sparse.csr_matrix(expression),
+        target_sum=10_000.0,
+    )
+
+    np.testing.assert_allclose(dense, expected)
+    np.testing.assert_allclose(sparse_result.toarray(), expected)
+    assert np.isfinite(dense).all()
+
+    expression[0, 0] = np.inf
+    with pytest.raises(ValueError, match="finite and nonnegative"):
+        _normalize_total_log1p(expression, target_sum=10_000.0)
+
+
 def test_propeller_applies_selection_and_excludes_missing_states(tmp_path: Path) -> None:
     from pertura_workflow.capabilities.effect_candidates import (
         _invalid_propeller_rows,

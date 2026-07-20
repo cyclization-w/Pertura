@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 import shutil
 from collections import Counter
@@ -153,7 +154,7 @@ def run_mixscape_responder(
             )
         estimated = budget.dense_bytes(
             selected_count,
-            len(hvg_names),
+            int(inspection.n_vars),
             arrays=3,
             itemsize=8,
         )
@@ -164,15 +165,13 @@ def run_mixscape_responder(
                 contract,
                 f"Mixscape working-set estimate {estimated / 1024**3:.3f} GB exceeds max_memory_gb={budget.max_memory_gb}",
             )
-        selected_genes = [gene_index[gene] for gene in hvg_names]
         matrix, selection_stats = materialize_backed_selection(
             inspection.X,
             selected_rows,
-            column_indices=selected_genes,
             chunk_rows=budget.chunk_rows,
         )
         selected_obs = inspection.obs.iloc[selected_rows].copy()
-        selected_var = inspection.var.iloc[selected_genes].copy()
+        selected_var = inspection.var.copy()
     finally:
         if getattr(inspection, "file", None):
             inspection.file.close()
@@ -183,6 +182,13 @@ def run_mixscape_responder(
             contract,
             "state mapping has no retained evaluation cells in the Mixscape input",
         )
+    try:
+        matrix = _normalize_total_log1p(
+            matrix,
+            target_sum=10_000.0,
+        )
+    except ValueError as exc:
+        return blocked(spec, request, contract, str(exc))
     data = ad.AnnData(X=matrix, obs=selected_obs, var=selected_var)
     if pert_key not in data.obs.columns:
         return blocked(spec, request, contract, f"perturbation column is missing: {pert_key}")
@@ -315,6 +321,13 @@ def run_mixscape_responder(
                 request.parameters.get("use_rep") or "X_pertura_reference"
             ),
             "frozen_hvg_count": len(hvg_names),
+            "normalization": {
+                "target_sum": 10_000.0,
+                "transform": "log1p",
+                "library_size_basis": "all_registered_genes",
+                "feature_scope": "all_registered_genes",
+                "normalized_gene_count": int(data.n_vars),
+            },
         },
         "selection_scope": selection_scope,
         "package_versions": {
@@ -478,6 +491,53 @@ def _mixscape_control_split_policy(
             else "no split column was requested"
         ),
     }
+
+
+def _normalize_total_log1p(
+    matrix: Any,
+    *,
+    target_sum: float,
+) -> Any:
+    """Apply the frozen REF-04 normalization to the full registered matrix."""
+
+    import numpy as np
+    from scipy import sparse
+
+    if not math.isfinite(float(target_sum)) or target_sum <= 0:
+        raise ValueError("Mixscape normalization target_sum must be positive")
+    values = (
+        matrix.data
+        if sparse.issparse(matrix)
+        else np.asarray(matrix).reshape(-1)
+    )
+    if values.size and (
+        not np.isfinite(values).all() or (np.asarray(values) < 0).any()
+    ):
+        raise ValueError("Mixscape expression must be finite and nonnegative")
+    totals = (
+        np.asarray(matrix.sum(axis=1, dtype=np.float64)).reshape(-1)
+        if sparse.issparse(matrix)
+        else np.asarray(matrix, dtype=np.float64).sum(axis=1)
+    )
+    if not np.isfinite(totals).all() or (totals < 0).any():
+        raise ValueError("Mixscape library sizes must be finite and nonnegative")
+    scale = np.divide(
+        target_sum,
+        totals,
+        out=np.zeros_like(totals),
+        where=totals > 0,
+    )
+    if sparse.issparse(matrix):
+        normalized = matrix.astype(np.float64).multiply(scale[:, None]).tocsr()
+        normalized.data = np.log1p(normalized.data)
+        values = normalized.data
+    else:
+        normalized = np.asarray(matrix, dtype=np.float64) * scale[:, None]
+        normalized = np.log1p(normalized)
+        values = normalized.reshape(-1)
+    if values.size and not np.isfinite(values).all():
+        raise ValueError("Mixscape normalization produced nonfinite values")
+    return normalized
 
 
 def run_guide_efficacy(
