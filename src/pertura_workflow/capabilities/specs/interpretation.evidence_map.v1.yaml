@@ -48,23 +48,3 @@ metadata:
   validation_status: synthetic_only
   candidate: true
   promotion_effect: none
-  dependency_sets:
-  - name: provenance_results
-    result_kinds:
-    - differential_expression
-    - conditional_association
-    - target_reliability
-    - effect_matrix
-    - response_programs
-    - pathway_enrichment_ora
-    - pathway_enrichment_gsea
-    - regulator_activity
-    - literature_prior
-    accepted_statuses:
-    - completed
-    - completed_with_caution
-    - screen_passed
-    - caution
-    scope_rule: same_dataset_context
-    min_count: 1
-    selection: all_compatible

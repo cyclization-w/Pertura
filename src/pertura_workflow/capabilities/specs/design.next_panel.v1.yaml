@@ -9,13 +9,11 @@ trust_level: exploratory
 executor: design_next_panel
 validator: candidate_standard
 input_requirements:
-- virtual_evaluation
+- evidence_or_virtual_evaluation
 - candidate_panel
 - budget
-depends_on:
-- virtual.evaluate.comprehensive.v1
-dependency_kinds:
-- virtual_evaluation
+depends_on: []
+dependency_kinds: []
 output_kind: next_panel_design
 source_class: hypothesis
 claim_permissions: []
@@ -59,10 +57,3 @@ metadata:
   validation_status: synthetic_only
   candidate: true
   hypothesis_only: true
-  dependency_policy:
-    virtual.evaluate.comprehensive.v1:
-      scope: exact
-      usage: scientific_input
-      accepted_statuses:
-      - supported
-      - limited

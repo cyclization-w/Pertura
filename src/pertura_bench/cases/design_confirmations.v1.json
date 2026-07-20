@@ -55,7 +55,7 @@
           "status": "confirmed"
         },
         "identity_fields": {
-          "control": {"status": "confirmed", "value": {"binding": "split_catalog.is_control", "label": "NTC"}, "source": "frozen_split_catalog"},
+          "control": {"status": "confirmed", "value": {"binding": "split_catalog.is_control", "label": "NTC", "primary_h5ad_column": "gene", "primary_h5ad_label": "NT"}, "source": "frozen_split_catalog_and_checksum_frozen_conversion"},
           "guide": {"status": "confirmed", "value": {"column": "guide_ID", "asset_role": "cell_metadata"}, "source": "checksum_frozen_source_export"},
           "target": {"status": "confirmed", "value": {"column": "gene", "asset_role": "cell_metadata"}, "source": "checksum_frozen_source_export"},
           "replicate": {"status": "confirmed", "value": {"column": "replicate", "asset_role": "cell_metadata"}, "source": "checksum_frozen_source_export"}

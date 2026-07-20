@@ -51,8 +51,8 @@ def test_a19_contract_catalog_generator_freezes_executable_surfaces(
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
     summary = json.loads(completed.stdout)
-    assert summary["advertised_capability_count"] == 10
-    assert summary["structurally_excluded_capability_count"] == 49
+    assert summary["advertised_capability_count"] == 28
+    assert summary["structurally_excluded_capability_count"] == 4
     assert summary["task_capability_availability_hash"].startswith("sha256:")
     assert output.is_file()
 
@@ -99,14 +99,11 @@ def test_task_capability_context_matches_frozen_scientific_endpoints() -> None:
     by_id = {task["task_id"]: task for task in catalog.tasks()}
 
     assert by_id["REPL-01"]["expected_capability_dag"] == [
-        "intake.materialize.v1",
         "diagnostic.contract_integrity.v1",
         "diagnostic.dataset_integrity.v1",
         "diagnostic.design_balance.v1",
     ]
-    assert by_id["PAPA-01"]["expected_capability_dag"] == [
-        "diagnostic.guide_assignment.v1"
-    ]
+    assert by_id["PAPA-01"]["expected_capability_dag"] == []
     assert by_id["REPL-02"]["expected_capability_dag"] == []
     assert by_id["NORM-02"]["expected_capability_dag"] == []
     assert by_id["KANG-02"]["expected_capability_dag"] == [

@@ -33,36 +33,25 @@ def test_static_availability_excludes_impossible_roles_and_dependencies() -> Non
     assert manifest["task_count"] == 21
     assert manifest["canonical_hash"].startswith("sha256:")
     assert records["REPL-01"]["advertised_direct_capability_ids"] == [
-        "intake.materialize.v1",
         "diagnostic.contract_integrity.v1",
         "diagnostic.dataset_integrity.v1",
+        "diagnostic.design_balance.v1",
     ]
-    assert _excluded_ids(records["REPL-01"]) == {
-        "diagnostic.design_balance.v1"
-    }
+    assert _excluded_ids(records["REPL-01"]) == set()
     assert records["PAPA-01"]["advertised_capability_ids"] == []
-    assert _excluded_ids(records["PAPA-01"]) == {
-        "diagnostic.guide_assignment.v1"
-    }
+    assert _excluded_ids(records["PAPA-01"]) == set()
     assert records["PAPA-02"]["advertised_conditional_capability_ids"] == []
-    assert _excluded_ids(records["PAPA-02"]) == {
-        "reference.state.control_pca_leiden.v1",
-        "state.annotation_candidates.v1",
-        "state.reference.fit.v1",
-    }
+    assert records["PAPA-02"]["advertised_capability_ids"] == [
+        "state.reference.fit.v1"
+    ]
+    assert _excluded_ids(records["PAPA-02"]) == set()
     assert records["KANG-01"]["candidate_capability_ids"] == []
     assert records["KANG-01"]["advertised_capability_ids"] == []
-    kang_exclusions = {
-        item["capability_id"]: item["reasons"]
-        for item in records["KANG-02"]["structurally_excluded_capabilities"]
-    }
-    assert "required asset roles are unavailable: cell_metadata" not in (
-        kang_exclusions["diagnostic.design_balance.v1"]
-    )
-    assert kang_exclusions["diagnostic.design_balance.v1"] == [
-        "required capability has no legal producer: "
-        "diagnostic.dataset_integrity.v1"
+    assert records["KANG-02"]["advertised_capability_ids"] == [
+        "diagnostic.design_balance.v1",
+        "composition.propeller.v1",
     ]
+    assert _excluded_ids(records["KANG-02"]) == set()
     assert "virtual.prediction.ingest.v1" in _excluded_ids(records["VIRT-01"])
     deprecated = {
         item["capability_id"]
@@ -109,8 +98,8 @@ def test_provider_subset_contains_only_advertised_contracts() -> None:
     assert subset["audited_codeact_fallback"] is True
     assert subset["structurally_excluded_capabilities"] == []
     serialized = json.dumps(subset)
-    assert "diagnostic.design_balance.v1" not in serialized
-    assert "cell_metadata" not in serialized
+    assert "diagnostic.design_balance.v1" in serialized
+    assert "cell_metadata" in serialized
 
 
 def test_capability_calls_are_observed_without_becoming_a_route_gate(
@@ -148,6 +137,172 @@ def test_capability_calls_are_observed_without_becoming_a_route_gate(
     ]
     assert audit["calls"][0]["advertised"] is True
     assert "status" not in audit
+
+
+def test_bound_call_errors_separate_runner_incidents_from_model_overrides(
+    tmp_path: Path,
+) -> None:
+    event_log = tmp_path / "events.jsonl"
+    records = [
+        {
+            "message_type": "AssistantMessage",
+            "payload": {
+                "content": [
+                    "ToolUseBlock(id='call_runner', "
+                    "name='mcp__pertura__run_analysis', "
+                    "input={'binding_id': 'binding_ready'})",
+                    "ToolUseBlock(id='call_model', "
+                    "name='mcp__pertura__run_analysis', "
+                    "input={'binding_id': 'binding_ready', "
+                    "'parameters': {'h5ad_path': 'wrong'}})",
+                    "ToolUseBlock(id='call_order', "
+                    "name='mcp__pertura__run_analysis', "
+                    "input={'binding_id': 'binding_ready'})",
+                ]
+            },
+        },
+        {
+            "message_type": "UserMessage",
+            "payload": {
+                "content": [
+                    "ToolResultBlock(tool_use_id='call_runner', "
+                    "content='environment lock drifted', is_error=True)",
+                    "ToolResultBlock(tool_use_id='call_model', "
+                    "content='caller attempted to override locked parameters', "
+                    "is_error=True)",
+                    "ToolResultBlock(tool_use_id='call_order', "
+                    "content='bound predecessor has not produced a result', "
+                    "is_error=True)",
+                ]
+            },
+        },
+    ]
+    event_log.write_text(
+        "\n".join(json.dumps(item) for item in records) + "\n",
+        encoding="utf-8",
+    )
+
+    audit = execution._audit_capability_treatment_uptake(
+        event_log,
+        start_offset=0,
+        advertised_capability_ids=("state.reference.fit.v1",),
+        invocation_bindings=(
+            {
+                "binding_id": "binding_ready",
+                "capability_id": "state.reference.fit.v1",
+                "tool": "run_analysis",
+            },
+        ),
+    )
+
+    assert len(audit["runner_binding_integration_errors"]) == 1
+    assert len(audit["model_binding_errors"]) == 2
+    assert audit["model_binding_error_counts"] == {"binding_ready": 2}
+    assert audit["model_binding_retry_status"] == "failed"
+
+
+def test_checkpoint_requires_self_hashed_binding_qualification(
+    tmp_path: Path,
+) -> None:
+    binding = {
+        "git_commit": "a" * 40,
+        "wheel_sha256": "sha256:" + "1" * 64,
+        "paper_task_catalog_hash": "sha256:" + "2" * 64,
+        "paper_task_reference_catalog_hash": "sha256:" + "3" * 64,
+        "paper_asset_catalog_hash": "sha256:" + "4" * 64,
+        "capability_contract_catalog_hash": "sha256:" + "5" * 64,
+    }
+    payload = {
+        "schema_version": "pertura-capability-binding-qualification-v1",
+        "status": "passed",
+        "passed": True,
+        "git_commit": binding["git_commit"],
+        "wheel_sha256": binding["wheel_sha256"],
+        "task_catalog_sha256": binding["paper_task_catalog_hash"],
+        "task_reference_catalog_sha256": binding[
+            "paper_task_reference_catalog_hash"
+        ],
+        "paper_asset_catalog_sha256": binding[
+            "paper_asset_catalog_hash"
+        ],
+        "capability_contract_catalog_sha256": binding[
+            "capability_contract_catalog_hash"
+        ],
+        "qualified_binding_count": 3,
+        "records": [
+            {
+                "binding_id": f"binding_{index}",
+                "qualification_status": "executed",
+            }
+            for index in range(3)
+        ],
+    }
+    payload["canonical_hash"] = execution.canonical_hash(payload)
+    path = tmp_path / "capability-binding-qualification.a19.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    observed = execution._verify_capability_binding_qualification(
+        path, checkpoint_binding=binding
+    )
+    assert observed["qualified_binding_count"] == 3
+
+    payload["qualified_binding_count"] = 2
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    try:
+        execution._verify_capability_binding_qualification(
+            path, checkpoint_binding=binding
+        )
+    except ValueError as error:
+        assert "not valid" in str(error)
+    else:
+        raise AssertionError("tampered qualification was accepted")
+
+
+def test_checkpoint_rejects_binding_qualification_input_drift(
+    tmp_path: Path,
+) -> None:
+    binding = {
+        "git_commit": "a" * 40,
+        "wheel_sha256": "sha256:" + "1" * 64,
+        "paper_task_catalog_hash": "sha256:" + "2" * 64,
+        "paper_task_reference_catalog_hash": "sha256:" + "3" * 64,
+        "paper_asset_catalog_hash": "sha256:" + "4" * 64,
+        "capability_contract_catalog_hash": "sha256:" + "5" * 64,
+    }
+    payload = {
+        "schema_version": "pertura-capability-binding-qualification-v1",
+        "status": "passed",
+        "passed": True,
+        "git_commit": binding["git_commit"],
+        "wheel_sha256": binding["wheel_sha256"],
+        "task_catalog_sha256": binding["paper_task_catalog_hash"],
+        "task_reference_catalog_sha256": binding[
+            "paper_task_reference_catalog_hash"
+        ],
+        "paper_asset_catalog_sha256": binding[
+            "paper_asset_catalog_hash"
+        ],
+        "capability_contract_catalog_sha256": "sha256:" + "9" * 64,
+        "qualified_binding_count": 1,
+        "records": [
+            {
+                "binding_id": "binding_1",
+                "qualification_status": "executed",
+            }
+        ],
+    }
+    payload["canonical_hash"] = execution.canonical_hash(payload)
+    path = tmp_path / "capability-binding-qualification.a19.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    try:
+        execution._verify_capability_binding_qualification(
+            path, checkpoint_binding=binding
+        )
+    except ValueError as error:
+        assert "capability_contract_catalog_sha256" in str(error)
+    else:
+        raise AssertionError("drifted qualification was accepted")
 
 
 def _excluded_ids(record: dict) -> set[str]:

@@ -42,6 +42,9 @@ class DataAssetRegistry:
         source_class: str | None = None,
         created_by_turn: str | None = None,
         dependencies: tuple[str, ...] = (),
+        origin_task_id: str | None = None,
+        submission_id: str | None = None,
+        schema_validation_status: str | None = None,
     ) -> DataAssetRef:
         source = Path(path).expanduser().resolve()
         if not source.exists():
@@ -57,6 +60,9 @@ class DataAssetRegistry:
             "size_bytes": size,
             "source_class": source_class or self._default_source_class(kind, role),
             "dependencies": dependencies,
+            "origin_task_id": origin_task_id,
+            "submission_id": submission_id,
+            "schema_validation_status": schema_validation_status,
         }
         asset_id = "asset_" + canonical_hash(identity).split(":", 1)[1][:32]
         asset = DataAssetRef(
@@ -71,6 +77,9 @@ class DataAssetRegistry:
             source_class=identity["source_class"],
             created_by_turn=created_by_turn,
             dependencies=dependencies,
+            origin_task_id=origin_task_id,
+            submission_id=submission_id,
+            schema_validation_status=schema_validation_status,
         )
         location = self._materialize_location(asset, source)
         self.store.put_asset(asset, location)
@@ -139,4 +148,6 @@ class DataAssetRegistry:
             return "curated_prior"
         if kind == "exploratory":
             return "hypothesis"
+        if kind == "derived":
+            return "derived_artifact"
         return "observed_metadata"

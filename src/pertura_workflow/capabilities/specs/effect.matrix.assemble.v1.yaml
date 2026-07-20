@@ -9,7 +9,7 @@ trust_level: exploratory
 executor: effect_matrix_assemble
 validator: candidate_standard
 input_requirements:
-- committed_gene_effect_results
+- gene_effect_results_or_validated_effect_tables
 depends_on: []
 dependency_kinds: []
 output_kind: effect_matrix
@@ -31,6 +31,23 @@ parameters_schema:
     min_perturbations:
       type: integer
     missing_fraction_caution:
+      type: number
+      minimum: 0
+      maximum: 1
+    effect_table_paths:
+      type: array
+      minItems: 1
+      items:
+        type: string
+      description: Registered artifact asset IDs containing signed gene-level effects.
+      x-pertura-asset-role: effect_table
+    effect_scale:
+      type: string
+      enum:
+      - log2_fold_change
+      - logFC
+      - log2FC
+    estimand:
       type: string
     n_jobs:
       type: integer
@@ -45,17 +62,3 @@ metadata:
   validation_status: synthetic_only
   candidate: true
   derived_only: true
-  dependency_sets:
-  - name: effect_results
-    result_kinds:
-    - differential_expression
-    - conditional_association
-    - gene_effect
-    source_classes:
-    - measured_result
-    accepted_statuses:
-    - completed
-    - completed_with_caution
-    scope_rule: same_dataset_context
-    min_count: 2
-    selection: all_compatible

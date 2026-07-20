@@ -544,7 +544,7 @@ def test_failed_benchmark_result_is_schema_valid_but_not_pass_eligible(
 def test_paper_asset_kinds_adapt_to_product_registry() -> None:
     expected = {
         "observed": ("observed", "observed_metadata"),
-        "derived": ("derived", "measured_result"),
+        "derived": ("derived", "derived_artifact"),
         "exploratory": ("exploratory", "hypothesis"),
         "external_resource": ("external_resource", "curated_prior"),
         "environment_lock": ("external_resource", "curated_prior"),
@@ -1127,7 +1127,7 @@ def test_capability_or_codeact_prompt_preserves_scientific_blocks_but_exits_inte
     assert "genuine scientific applicability or evidence blocker" in prompt
     assert "preserve that block and do not bypass it" in prompt
     assert "integration or access boundary" in prompt
-    assert "unavailable ancestor capability receipt" in prompt
+    assert "unavailable verified ancestor capability result" in prompt
     assert "does not produce a capability receipt or measured authority" in prompt
     assert "advertised no executable capability" not in prompt
 
@@ -1260,12 +1260,7 @@ def test_pertura_full_runner_writes_answer_free_static_contract_subset(
     assert subset_record["candidate_capability_ids"] == (
         expected_task["expected_capability_dag"]
     )
-    assert subset_record["structurally_excluded_capabilities"] == [
-        {
-            "capability_id": "diagnostic.guide_assignment.v1",
-            "reasons": ["capability is deprecated or compatibility-only"],
-        }
-    ]
+    assert subset_record["structurally_excluded_capabilities"] == []
     assert manifest["task_skills"]["PAPA-01"] == expected_task["pertura_skills"]
     assert manifest["skill_bundle_hash"].startswith("sha256:")
     serialized = json.dumps(subset).lower()

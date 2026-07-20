@@ -115,6 +115,39 @@ print("qualified_scientific_evaluators:", qualification["task_count"])
 print("evaluator_qualification_hash:", qualification["canonical_hash"])
 PY
 
+CAPABILITY_BINDING_QUALIFICATION="$CHECKPOINT_ROOT/capability-binding-qualification.a19.json"
+"$MAIN_ENV/bin/python" "$PERTURA_REPO/scripts/qualify_a19_capability_bindings.py" \
+  --repo "$PERTURA_REPO" \
+  --wheel "$WHEEL" \
+  --task-catalog "$TASKS" \
+  --task-reference-catalog "$TASK_REFS" \
+  --paper-anchor-catalog "$ANCHORS" \
+  --asset-catalog "$ASSETS" \
+  --capability-contract-catalog "$CONTRACT_CATALOG" \
+  --paper-root "$PAPER_ROOT" \
+  --cache "$BENCHMARK_ROOT/cache" \
+  --resource-lock "$RESOURCE_LOCK_SET" \
+  --output "$CAPABILITY_BINDING_QUALIFICATION"
+sha256sum "$CAPABILITY_BINDING_QUALIFICATION" | \
+  tee "$CHECKPOINT_ROOT/capability-binding-qualification-sha256.txt"
+
+"$MAIN_ENV/bin/python" - "$CAPABILITY_BINDING_QUALIFICATION" <<'PY'
+import json
+import sys
+
+qualification = json.load(open(sys.argv[1], encoding="utf-8"))
+assert qualification["schema_version"] == "pertura-capability-binding-qualification-v1"
+assert qualification["passed"] is True
+assert qualification["status"] == "passed"
+assert qualification["qualified_binding_count"] > 0
+assert all(
+    record["qualification_status"] in {"executed", "expected_blocked_probe"}
+    for record in qualification["records"]
+)
+print("qualified_capability_bindings:", qualification["qualified_binding_count"])
+print("capability_binding_qualification_hash:", qualification["canonical_hash"])
+PY
+
 "$MAIN_ENV/bin/python" -m pertura_bench export-server-plan \
   --repo "$PERTURA_REPO" \
   --paper-task-catalog "$TASKS" \
@@ -190,4 +223,5 @@ echo "commit=$COMMIT"
 echo "wheel=$WHEEL"
 echo "plan=$BOUND_PLAN"
 echo "evaluator_qualification=$EVALUATOR_QUALIFICATION"
+echo "capability_binding_qualification=$CAPABILITY_BINDING_QUALIFICATION"
 echo "reference_index=${REFERENCE_INDEX:-resolved-from-previous-binding}"

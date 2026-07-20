@@ -64,6 +64,7 @@ PRODUCT_TOOL_SPECS = (
         "run_diagnostic",
         "Run one registered diagnostic capability through the independent verifier.",
         {
+            "binding_id": "string",
             "capability_id": "string",
             "contract_id": "string",
             "scope": "object",
@@ -85,6 +86,7 @@ PRODUCT_TOOL_SPECS = (
         "run_analysis",
         "Route an objective to a registered analysis capability and execute it through the independent verifier.",
         {
+            "binding_id": "string",
             "objective": "string",
             "capability_id": "string",
             "contract_id": "string",
@@ -107,6 +109,7 @@ PRODUCT_TOOL_SPECS = (
         "evaluate_virtual_model",
         "Evaluate a virtual perturbation model under a fixed split contract. Unsupported evaluators return out_of_scope.",
         {
+            "binding_id": "string",
             "capability_id": "string",
             "contract_id": "string",
             "scope": "object",

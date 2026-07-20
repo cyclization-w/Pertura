@@ -9,10 +9,7 @@ executor: guide_efficacy
 validator: candidate_standard
 input_requirements:
 - retained_cells
-- design_balance
-depends_on:
-- screen.retained_cells.v1
-- diagnostic.design_balance.v1
+depends_on: []
 dependency_kinds:
 - contract
 - retained_cell_manifest
@@ -143,14 +140,3 @@ implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
-  dependency_policy:
-    screen.retained_cells.v1:
-      scope: exact
-      usage: row_filter
-      accepted_statuses: &id001
-      - screen_passed
-      - caution
-    diagnostic.design_balance.v1:
-      scope: exact
-      usage: validation_gate
-      accepted_statuses: *id001

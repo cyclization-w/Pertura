@@ -28,6 +28,10 @@ from pertura_bench.paper_tasks import (
     validate_task_reference_catalog,
 )
 from pertura_bench.paper_task_evaluation import evaluate_paper_task
+from pertura_bench.paper_capability_bindings import (
+    build_paper_task_invocation_bindings,
+    provider_binding_contract,
+)
 from pertura_bench.real_execution import load_design_confirmation_catalog
 from pertura_bench.task_submission import (
     SUBMISSION_ALLOWED_TOOL,
@@ -64,7 +68,7 @@ PAPER_CODEACT_PACKAGES = (
 
 PAPER_ASSET_KIND_ADAPTER = {
     "observed": ("observed", "observed_metadata"),
-    "derived": ("derived", "measured_result"),
+    "derived": ("derived", "derived_artifact"),
     "exploratory": ("exploratory", "hypothesis"),
     "external_resource": ("external_resource", "curated_prior"),
     "environment_lock": ("external_resource", "curated_prior"),
@@ -81,6 +85,9 @@ PAPER_ASSET_KIND_ADAPTER = {
 PAPER_CAPABILITY_ASSET_ALIASES = {
     "primary_h5ad": "primary_dataset",
     "donor_metadata": "cell_metadata",
+    "construct_metadata": "cell_metadata",
+    "target_expression": "expression_table",
+    "trans_de_results": "effect_table",
 }
 
 
@@ -415,6 +422,11 @@ def run_paper_agent_workflow(
                 contract, committed = agent.product_runtime.planning_material(
                     str(registered_contract["contract_id"])
                 )
+                committed_records = (
+                    agent.product_runtime.planning_commit_records()
+                    if hasattr(agent.product_runtime, "planning_commit_records")
+                    else ()
+                )
                 contract_context = _dataset_contract_context(
                     contract=contract,
                     committed_results=committed,
@@ -425,6 +437,35 @@ def run_paper_agent_workflow(
                     contract_catalog=contract_catalog,
                     availability=capability_availability_by_task[task_id],
                 )
+                invocation_bindings = build_paper_task_invocation_bindings(
+                    run_id=run.run_id,
+                    task=task,
+                    dataset_id=str(workflow["dataset_id"]),
+                    contract=contract,
+                    registry=agent.product_runtime.registry,
+                    asset_registry=registry,
+                    project=project,
+                    registered_assets=task_registered_assets,
+                    committed_results=committed,
+                    committed_records=committed_records,
+                    advertised_capability_ids=tuple(
+                        subset["advertised_capability_ids"]
+                    ),
+                    verify_runtime_dependencies=turn_executor is None,
+                )
+                if hasattr(agent.product_runtime, "replace_invocation_bindings"):
+                    agent.product_runtime.replace_invocation_bindings(
+                        task_id=task_id,
+                        bindings=invocation_bindings,
+                    )
+                subset["invocation_bindings"] = provider_binding_contract(
+                    invocation_bindings
+                )
+                subset_without_hash = {
+                    key: value for key, value in subset.items()
+                    if key != "subset_hash"
+                }
+                subset["subset_hash"] = canonical_hash(subset_without_hash)
                 subset_path = (
                     workspace.task_dir / "capability_contracts" / f"{task_id}.json"
                 )
@@ -452,6 +493,10 @@ def run_paper_agent_workflow(
                         ]
                     ),
                     "path": subset_path.relative_to(workspace.root).as_posix(),
+                    "invocation_bindings": list(subset["invocation_bindings"]),
+                    "required_binding_ids": [
+                        item.binding_id for item in invocation_bindings
+                    ],
                 }
                 contract_subsets.append(contract_subset_record)
             prompt = _task_prompt(
@@ -509,6 +554,11 @@ def run_paper_agent_workflow(
                     if contract_subset_record is not None
                     else ()
                 ),
+                invocation_bindings=(
+                    tuple(contract_subset_record["invocation_bindings"])
+                    if contract_subset_record is not None
+                    else ()
+                ),
             )
             if contract_subset_record is not None:
                 contract_subset_record["actual_mcp_capability_calls"] = list(
@@ -551,6 +601,50 @@ def run_paper_agent_workflow(
                 tasks_by_id=tasks_by_id,
                 initial_result_sha256=initial_result_sha256,
             )
+            submitted_artifact_assets = []
+            submission_receipt, _ = validate_submission_receipt(
+                task_output,
+                task_id=task_id,
+                dataset_id=str(workflow["dataset_id"]),
+            )
+            if (
+                submission_receipt is not None
+                and output_gates.get("provider_result_updated") is True
+                and output_gates.get("required_artifact_paths") is True
+                and benchmark_result is not None
+            ):
+                submitted_artifact_assets = _register_submitted_task_artifacts(
+                    registry,
+                    project=project,
+                    run_id=run.run_id,
+                    task=task,
+                    task_output=task_output,
+                    submission_receipt=submission_receipt,
+                    observed_roles=tuple(benchmark_result.artifact_roles),
+                    turn_id=final.turn_id if final is not None else None,
+                    input_asset_ids=tuple(
+                        sorted(
+                            {
+                                str(item["asset_id"])
+                                for item in task_registered_assets.values()
+                                if item.get("asset_id")
+                            }
+                        )
+                    ),
+                )
+                for artifact_asset in submitted_artifact_assets:
+                    registered_assets[artifact_asset.role] = {
+                        "asset_id": artifact_asset.asset_id,
+                        "path": str(
+                            registry.resolve(
+                                artifact_asset.asset_id,
+                                expected_role=artifact_asset.role,
+                            )
+                        ),
+                        "content_sha256": artifact_asset.content_sha256,
+                        "kind": str(artifact_asset.kind),
+                        "source_class": str(artifact_asset.source_class),
+                    }
             dependency_gate_status = "evaluated"
             if smoke_task_ids is not None and task.get("depends_on_tasks"):
                 output_gates["dependencies_present"] = True
@@ -568,6 +662,16 @@ def run_paper_agent_workflow(
             hard_gates = {
                 **output_gates,
                 "provider_scientific_completion": provider_scientific_completion,
+                "capability_first_bound_invocation": (
+                    capability_treatment_uptake.get("capability_first_status")
+                    in {"passed", "not_applicable"}
+                ),
+                "capability_binding_call_validity": (
+                    capability_treatment_uptake.get(
+                        "model_binding_retry_status"
+                    )
+                    in {"passed", "not_applicable"}
+                ),
                 "prior_task_outputs_immutable": mutation_free,
                 "resource_evidence": (
                     _task_resource_gate(task, resource_evidence)
@@ -584,6 +688,11 @@ def run_paper_agent_workflow(
                 task_status=status,
                 termination_reason=termination_reason,
                 provider_error=provider_error,
+                capability_binding_incident=bool(
+                    capability_treatment_uptake.get(
+                        "runner_binding_integration_errors"
+                    )
+                ),
                 skill_leakage_audit=skill_leakage_audit,
                 reference_leakage_audit=reference_leakage_audit,
                 resource_evidence=resource_evidence,
@@ -647,6 +756,10 @@ def run_paper_agent_workflow(
                 "reference_leakage_audit": reference_leakage_audit,
                 "capability_contract_subset": contract_subset_record,
                 "capability_treatment_uptake": capability_treatment_uptake,
+                "submitted_artifact_assets": [
+                    item.model_dump(mode="json")
+                    for item in submitted_artifact_assets
+                ],
                 "post_turn_output_hashes": _tree_hashes(task_output),
                 "post_turn_ancestor_hashes": {
                     dependency: _tree_hashes(
@@ -1404,6 +1517,9 @@ def _task_prompt(
                 or ()
             )
         ]
+        invocation_bindings = list(
+            (contract_subset_record or {}).get("invocation_bindings") or ()
+        )
         if task.get("execution_mode") == "capability_or_codeact":
             if advertised_capability_ids:
                 capability_fallback_policy = (
@@ -1414,7 +1530,7 @@ def _task_prompt(
                     "or missing independent replicates, preserve that block and do "
                     "not bypass it. If the advertised capability instead cannot be "
                     "invoked because of an integration or access boundary, including "
-                    "an unavailable ancestor capability receipt, stop retrying and "
+                    "an unavailable verified ancestor capability result, stop retrying and "
                     "use the audited CodeAct fallback under the frozen task contract. "
                     "A CodeAct fallback may produce evaluator-scored files, but it "
                     "does not produce a capability receipt or measured authority and "
@@ -1457,7 +1573,16 @@ def _task_prompt(
             f"{json.dumps((contract_subset_record or {}).get('advertised_capability_ids', []))}. "
             f"{nonexecution_policy}"
             f"{capability_fallback_policy}"
-            "Use registered asset IDs for asset-valued capability parameters. The "
+            "The runner-prevalidated capability invocation bindings are "
+            f"{json.dumps(invocation_bindings, sort_keys=True)}. "
+            "When bindings are present, invoke every listed minimal_call once, in "
+            "the listed order, before any scientific Bash, Notebook, Write/Edit, "
+            "Glob/Grep, unrestricted data Read, or unbound scientific MCP call. "
+            "Do not provide capability_id, contract_id, scope, dependencies, file "
+            "paths, asset IDs, or parameters unless they appear under that "
+            "binding's allowed_overrides. A completed, caution, structured blocked, "
+            "or one integration-boundary failure unlocks the audited fallback. "
+            "Do not hand-compose a capability call when a binding exists. The "
             "exact SDK Skill tool names frozen for this task are "
             f"{json.dumps(qualified_task_skills)}. Before any task-scientific Read, "
             "Glob, Grep, Bash, Notebook, or scientific MCP call, invoke each of "
@@ -1646,6 +1771,61 @@ def _optional_configured(
     return True
 
 
+def _register_submitted_task_artifacts(
+    registry: DataAssetRegistry,
+    *,
+    project: ProjectWorkspace,
+    run_id: str,
+    task: Mapping[str, Any],
+    task_output: Path,
+    submission_receipt: Mapping[str, Any],
+    observed_roles: tuple[str, ...],
+    turn_id: str | None,
+    input_asset_ids: tuple[str, ...],
+) -> list[Any]:
+    """Register accepted task artifacts as provenance-only data assets."""
+
+    output_contract = dict(task.get("output_contract") or {})
+    artifact_paths = dict(output_contract.get("artifact_paths") or {})
+    declared = set(observed_roles)
+    registered = []
+    for role, relative in sorted(artifact_paths.items()):
+        role = str(role)
+        if role not in declared:
+            continue
+        path = (task_output / str(relative)).resolve()
+        try:
+            path.relative_to(task_output.resolve())
+        except ValueError as exc:
+            raise ValueError(f"submitted artifact escapes task output: {role}") from exc
+        if not path.exists():
+            continue
+        dependencies = tuple(
+            dict.fromkeys(
+                (
+                    *input_asset_ids,
+                    f"submission:{submission_receipt['submission_id']}",
+                )
+            )
+        )
+        asset = registry.register(
+            path,
+            role=role,
+            kind="derived",
+            source_class="derived_artifact",
+            created_by_turn=turn_id,
+            dependencies=dependencies,
+            origin_task_id=str(task["task_id"]),
+            submission_id=str(submission_receipt["submission_id"]),
+            schema_validation_status="validated",
+        )
+        project.store.put_asset_binding(
+            AssetBinding(run_id=run_id, asset_id=asset.asset_id, role=role)
+        )
+        registered.append(asset)
+    return registered
+
+
 def _dependency_asset_paths(
     workspace_root: Path,
     *,
@@ -1813,6 +1993,7 @@ def _classify_task_validity(
     task_status: str,
     termination_reason: str,
     provider_error: Any,
+    capability_binding_incident: bool = False,
     skill_leakage_audit: Mapping[str, Any],
     resource_evidence: Mapping[str, Any],
     reference_leakage_audit: Mapping[str, Any] | None = None,
@@ -1823,6 +2004,8 @@ def _classify_task_validity(
         skill_leakage_audit.get("status") == "failed"
         or (reference_leakage_audit or {}).get("status") == "failed"
     ):
+        return "invalid_infrastructure", "invalid_infrastructure"
+    if capability_binding_incident:
         return "invalid_infrastructure", "invalid_infrastructure"
     if not _workflow_resource_gate(workflow_id, resource_evidence):
         return "invalid_infrastructure", "invalid_infrastructure"
@@ -2174,7 +2357,86 @@ def _verify_paper_checkpoint(
     wheel = Path(wheel_value).expanduser().resolve()
     if not wheel.is_file() or file_sha256(wheel) != binding["wheel_sha256"]:
         raise ValueError("paper checkpoint wheel drift")
+
+    qualification_path = plan_path.parent / (
+        "capability-binding-qualification.a19.json"
+    )
+    _verify_capability_binding_qualification(
+        qualification_path, checkpoint_binding=binding
+    )
     return binding
+
+
+def _verify_capability_binding_qualification(
+    qualification_path: Path,
+    *,
+    checkpoint_binding: Mapping[str, str],
+) -> dict[str, Any]:
+    if not qualification_path.is_file():
+        raise FileNotFoundError(
+            "capability binding qualification is missing from the checkpoint: "
+            f"{qualification_path}"
+        )
+    qualification = json.loads(
+        qualification_path.read_text(encoding="utf-8")
+    )
+    if not isinstance(qualification, dict):
+        raise ValueError("capability binding qualification must be a JSON object")
+    qualification_without_hash = dict(qualification)
+    observed_qualification_hash = qualification_without_hash.pop(
+        "canonical_hash", None
+    )
+    qualification_records = qualification.get("records")
+    qualified_binding_count = qualification.get("qualified_binding_count")
+    if (
+        qualification.get("schema_version")
+        != "pertura-capability-binding-qualification-v1"
+        or qualification.get("passed") is not True
+        or qualification.get("status") != "passed"
+        or not isinstance(qualified_binding_count, int)
+        or qualified_binding_count <= 0
+        or not isinstance(qualification_records, list)
+        or len(qualification_records) != qualified_binding_count
+        or len(
+            {
+                str(item.get("binding_id") or "")
+                for item in qualification_records
+                if isinstance(item, Mapping)
+            }
+        )
+        != qualified_binding_count
+        or any(
+            not isinstance(item, Mapping)
+            or item.get("qualification_status")
+            not in {"executed", "expected_blocked_probe"}
+            for item in qualification_records
+        )
+        or observed_qualification_hash
+        != canonical_hash(qualification_without_hash)
+    ):
+        raise ValueError("capability binding qualification is not valid")
+    qualification_bindings = {
+        "git_commit": checkpoint_binding["git_commit"],
+        "wheel_sha256": checkpoint_binding["wheel_sha256"],
+        "task_catalog_sha256": checkpoint_binding[
+            "paper_task_catalog_hash"
+        ],
+        "task_reference_catalog_sha256": checkpoint_binding[
+            "paper_task_reference_catalog_hash"
+        ],
+        "paper_asset_catalog_sha256": checkpoint_binding[
+            "paper_asset_catalog_hash"
+        ],
+        "capability_contract_catalog_sha256": checkpoint_binding[
+            "capability_contract_catalog_hash"
+        ],
+    }
+    for field, expected in qualification_bindings.items():
+        if str(qualification.get(field)) != expected:
+            raise ValueError(
+                f"capability binding qualification drift: {field}"
+            )
+    return qualification
 
 
 def _run_with_timeout(agent: ClaudePerturaAgent, prompt: str, timeout: int):
@@ -2199,10 +2461,26 @@ def _audit_capability_treatment_uptake(
     *,
     start_offset: int,
     advertised_capability_ids: tuple[str, ...],
+    invocation_bindings: tuple[Mapping[str, Any], ...] = (),
 ) -> dict[str, Any]:
-    """Record task capability calls without turning uptake into a route gate."""
+    """Record binding uptake and enforce the frozen capability-first boundary."""
 
     calls: list[dict[str, Any]] = []
+    required_binding_ids = [
+        str(item["binding_id"]) for item in invocation_bindings
+    ]
+    capability_by_binding = {
+        str(item["binding_id"]): str(item["capability_id"])
+        for item in invocation_bindings
+    }
+    tool_by_binding = {
+        str(item["binding_id"]): str(item["tool"])
+        for item in invocation_bindings
+    }
+    observed_binding_ids: list[str] = []
+    bound_tool_use_ids: dict[str, dict[str, Any]] = {}
+    binding_errors: list[dict[str, Any]] = []
+    first_boundary_violation: dict[str, Any] | None = None
     if event_log.is_file():
         with event_log.open("rb") as handle:
             handle.seek(max(0, start_offset))
@@ -2212,37 +2490,187 @@ def _audit_capability_treatment_uptake(
                 event = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            content = (event.get("payload") or {}).get("content") or []
+            if event.get("message_type") == "UserMessage":
+                for item in content if isinstance(content, list) else [content]:
+                    serialized = str(item)
+                    result_id = re.search(
+                        r"tool_use_id=['\"]([^'\"]+)['\"]", serialized
+                    )
+                    if not result_id or result_id.group(1) not in bound_tool_use_ids:
+                        continue
+                    is_error = re.search(
+                        r"is_error=(True|true)", serialized
+                    ) or re.search(
+                        r"['\"]is_error['\"]\s*:\s*(true|True)", serialized
+                    )
+                    if not is_error:
+                        continue
+                    call = bound_tool_use_ids[result_id.group(1)]
+                    binding_errors.append(
+                        {
+                            **call,
+                            "result_event_line": line_number,
+                            "error_excerpt": serialized[:1000],
+                        }
+                    )
+                continue
             if event.get("message_type") != "AssistantMessage":
                 continue
-            content = (event.get("payload") or {}).get("content") or []
             for item in content if isinstance(content, list) else [content]:
                 serialized = str(item)
+                any_tool = re.search(r"name=['\"]([^'\"]+)['\"]", serialized)
+                if not any_tool:
+                    continue
+                raw_tool_name = any_tool.group(1)
                 tool = re.search(
                     r"name=['\"]mcp__pertura__(run_analysis|run_diagnostic|evaluate_virtual_model)['\"]",
+                    serialized,
+                )
+                binding_match = re.search(
+                    r"['\"]binding_id['\"]\s*:\s*['\"]([^'\"]+)['\"]",
                     serialized,
                 )
                 capability = re.search(
                     r"['\"]capability_id['\"]\s*:\s*['\"]([^'\"]+)['\"]",
                     serialized,
                 )
-                if not tool or not capability:
+                if tool:
+                    binding_id = binding_match.group(1) if binding_match else None
+                    capability_id = (
+                        capability_by_binding.get(binding_id or "")
+                        or (capability.group(1) if capability else None)
+                    )
+                    forbidden_bound_fields = [
+                        field
+                        for field in (
+                            "capability_id",
+                            "contract_id",
+                            "scope",
+                            "parameters",
+                            "dependencies",
+                        )
+                        if re.search(
+                            rf"['\"]{field}['\"]\s*:", serialized
+                        )
+                    ]
+                    exact_minimal_call = bool(
+                        binding_id in required_binding_ids
+                        and tool_by_binding.get(str(binding_id)) == tool.group(1)
+                        and not forbidden_bound_fields
+                    )
+                    if exact_minimal_call:
+                        observed_binding_ids.append(str(binding_id))
+                    calls.append(
+                        {
+                            "event_line": line_number,
+                            "tool_name": tool.group(1),
+                            "binding_id": binding_id,
+                            "capability_id": capability_id,
+                            "advertised": capability_id in advertised_capability_ids,
+                            "bound": binding_id in required_binding_ids,
+                            "exact_minimal_call": exact_minimal_call,
+                            "forbidden_bound_fields": forbidden_bound_fields,
+                        }
+                    )
+                    tool_use = re.search(r"id=['\"]([^'\"]+)['\"]", serialized)
+                    if binding_id in required_binding_ids and tool_use:
+                        bound_tool_use_ids[tool_use.group(1)] = calls[-1]
                     continue
-                capability_id = capability.group(1)
-                calls.append(
-                    {
+                if (
+                    required_binding_ids
+                    and not set(required_binding_ids).issubset(observed_binding_ids)
+                    and _is_prebinding_scientific_tool(raw_tool_name, serialized)
+                    and first_boundary_violation is None
+                ):
+                    first_boundary_violation = {
                         "event_line": line_number,
-                        "tool_name": tool.group(1),
-                        "capability_id": capability_id,
-                        "advertised": capability_id in advertised_capability_ids,
+                        "tool_name": raw_tool_name,
+                        "missing_binding_ids": [
+                            item for item in required_binding_ids
+                            if item not in observed_binding_ids
+                        ],
                     }
-                )
+    if not required_binding_ids:
+        capability_first_status = "not_applicable"
+    elif (
+        first_boundary_violation is None
+        and set(required_binding_ids).issubset(observed_binding_ids)
+    ):
+        capability_first_status = "passed"
+    else:
+        capability_first_status = "failed"
+    caller_error_markers = (
+        "attempted to override locked parameters",
+        "cannot replace the bound",
+        "requires run_",
+        "unknown or inactive capability invocation binding",
+        "outside the active task",
+        "bound predecessor has not produced",
+    )
+    model_binding_errors = [
+        item
+        for item in binding_errors
+        if (
+            not item.get("exact_minimal_call")
+            or any(
+                marker in item["error_excerpt"].lower()
+                for marker in caller_error_markers
+            )
+        )
+    ]
+    runner_binding_errors = [
+        item for item in binding_errors if item not in model_binding_errors
+    ]
+    model_error_counts = {
+        binding_id: sum(
+            str(item.get("binding_id") or "") == binding_id
+            for item in model_binding_errors
+        )
+        for binding_id in required_binding_ids
+    }
+    if not required_binding_ids:
+        model_binding_retry_status = "not_applicable"
+    elif any(count > 1 for count in model_error_counts.values()):
+        model_binding_retry_status = "failed"
+    else:
+        model_binding_retry_status = "passed"
     return {
-        "schema_version": "pertura-paper-capability-treatment-uptake-v1",
+        "schema_version": "pertura-paper-capability-treatment-uptake-v2",
         "advertised_capability_ids": list(advertised_capability_ids),
+        "required_binding_ids": required_binding_ids,
+        "observed_binding_ids": list(dict.fromkeys(observed_binding_ids)),
+        "capability_first_status": capability_first_status,
+        "first_boundary_violation": first_boundary_violation,
         "actual_mcp_capability_ids": list(
-            dict.fromkeys(item["capability_id"] for item in calls)
+            dict.fromkeys(
+                item["capability_id"] for item in calls if item["capability_id"]
+            )
         ),
         "calls": calls,
+        "runner_binding_integration_errors": runner_binding_errors,
+        "model_binding_errors": model_binding_errors,
+        "model_binding_error_counts": model_error_counts,
+        "model_binding_retry_status": model_binding_retry_status,
+    }
+
+
+def _is_prebinding_scientific_tool(tool_name: str, serialized: str) -> bool:
+    short = tool_name.rsplit("__", 1)[-1]
+    if short in {"Skill", "submit_task_bundle"}:
+        return False
+    if short == "Read" and any(
+        marker in serialized
+        for marker in (
+            "paper_benchmark_assets.json",
+            "capability_contracts",
+            "SKILL.md",
+        )
+    ):
+        return False
+    return short in {
+        "Read", "Glob", "Grep", "Bash", "Notebook", "Write", "Edit",
+        "run_analysis", "run_diagnostic", "evaluate_virtual_model",
     }
 
 

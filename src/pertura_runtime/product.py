@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import hashlib
+from collections.abc import Mapping
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -11,16 +12,25 @@ from pertura_core.hashing import canonical_hash
 from pertura_core import CapabilityRunRequest, CapabilitySpec, DatasetContract, DependencyRef, DesignConfirmation, PromotionPolicy, ResultEnvelope, RunReceipt, ScientificStatement, ScopeKey, SourceClass, decide_promotion
 from pertura_runtime.claude.workspace import ClaudeRunWorkspace
 from pertura_runtime.network_policy import NetworkAccessPolicy
+from pertura_runtime.invocation_bindings import (
+    CapabilityInvocationBindingError,
+    binding_dependency_hints,
+)
 from pertura_runtime.parameter_protocol import (
     CapabilityParameterError,
     validate_and_resolve_parameters,
 )
 from pertura_runtime.project.assets import DataAssetRegistry
-from pertura_runtime.project.models import AssetBinding, ReportRevision
+from pertura_runtime.project.models import (
+    AssetBinding,
+    CapabilityInvocationBinding,
+    ReportRevision,
+)
 from pertura_runtime.project.workspace import ProjectWorkspace
 from pertura_runtime.verifier import AuthoritySessionStore, VerifierBroker
 from pertura_runtime.verifier.broker import VerifierBrokerError
 from pertura_workflow.capabilities import CapabilityRegistry
+from pertura_workflow.capabilities.registry import capability_scientific_hash
 from pertura_workflow.intake import contract_with_confirmations, inspect_dataset_path
 from pertura_workflow.environment import environment_lock
 from pertura_workflow.knowledge_resources import knowledge_resource_lock
@@ -67,6 +77,8 @@ class PerturaProductRuntime:
         )
         self._started = False
         self._contracts: dict[str, DatasetContract] = {}
+        self._invocation_bindings: dict[str, CapabilityInvocationBinding] = {}
+        self._invocation_task_id: str | None = None
         self.asset_registry = (
             DataAssetRegistry(
                 project_id=project_workspace.project.project_id,
@@ -76,6 +88,7 @@ class PerturaProductRuntime:
             if project_workspace is not None
             else None
         )
+        self._invocation_binding_results: dict[str, str] = {}
 
     @property
     def broker(self) -> VerifierBroker:
@@ -96,6 +109,36 @@ class PerturaProductRuntime:
         contract = self._get_contract(contract_id)
         _, committed, _ = self._resolution_material()
         return contract, committed
+
+    def planning_commit_records(self) -> tuple[dict[str, Any], ...]:
+        """Expose verified commit metadata for deterministic binding compilation.
+
+        Open-session entries are normalized to the state they receive after a
+        valid seal.  No receipt is created here: exploratory results remain
+        ``validated_untrusted`` and cannot acquire measured claim authority.
+        """
+
+        current_session_id = self.broker.session_id if self._started else None
+        records: list[dict[str, Any]] = []
+        for item in self._committed_entries():
+            record = dict(item)
+            session = record.get("authority_session") or {}
+            is_current_open = bool(
+                current_session_id
+                and session.get("session_id") == current_session_id
+            )
+            state = str(record.get("verification_state") or "")
+            if is_current_open:
+                state = (
+                    "trusted_receipt"
+                    if record.get("receipt")
+                    else "validated_untrusted"
+                )
+            if state not in {"trusted_receipt", "validated_untrusted"}:
+                continue
+            record["verification_state"] = state
+            records.append(record)
+        return tuple(records)
 
     def close(self, *, graceful: bool = True) -> None:
         if self._started:
@@ -170,7 +213,127 @@ class PerturaProductRuntime:
             confirmation_ids.append(confirmation.confirmation_id)
         return _contract_summary(revised, self.workspace) | {"confirmation_ids": confirmation_ids}
 
-    def run_diagnostic(self, capability_id: str, *, contract_id: str | None = None, scope: dict[str, Any] | None = None, parameters: dict[str, Any] | None = None, dependencies: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    def replace_invocation_bindings(
+        self,
+        *,
+        task_id: str,
+        bindings: tuple[CapabilityInvocationBinding, ...],
+    ) -> None:
+        """Activate exactly one task's prevalidated invocation surface."""
+
+        observed: dict[str, CapabilityInvocationBinding] = {}
+        for binding in bindings:
+            if binding.run_id != self.run_id:
+                raise CapabilityInvocationBindingError(
+                    "invocation binding belongs to another analysis run"
+                )
+            if binding.task_id != task_id:
+                raise CapabilityInvocationBindingError(
+                    "invocation binding belongs to another task"
+                )
+            if self._binding_turn_sequence() != binding.turn_sequence:
+                raise CapabilityInvocationBindingError(
+                    "invocation binding belongs to another or inactive turn"
+                )
+            if binding.binding_id in observed:
+                raise CapabilityInvocationBindingError(
+                    f"duplicate invocation binding: {binding.binding_id}"
+                )
+            observed[binding.binding_id] = binding
+        order = {binding.binding_id: index for index, binding in enumerate(bindings)}
+        for binding in bindings:
+            for predecessor_id in binding.dependency_binding_ids:
+                if predecessor_id not in observed:
+                    raise CapabilityInvocationBindingError(
+                        f"invocation predecessor is outside the active task: {predecessor_id}"
+                    )
+                if order[predecessor_id] >= order[binding.binding_id]:
+                    raise CapabilityInvocationBindingError(
+                        "invocation predecessor bindings must appear earlier in the task"
+                    )
+        if task_id != self._invocation_task_id:
+            self._invocation_binding_results = {}
+        self._invocation_task_id = task_id
+        self._invocation_bindings = observed
+
+    def invocation_binding(self, binding_id: str) -> CapabilityInvocationBinding:
+        try:
+            binding = self._invocation_bindings[binding_id]
+        except KeyError as exc:
+            raise CapabilityInvocationBindingError(
+                f"unknown or inactive capability invocation binding: {binding_id}"
+            ) from exc
+        if binding.task_id != self._invocation_task_id:
+            raise CapabilityInvocationBindingError(
+                "capability invocation binding is outside the active task"
+            )
+        return binding
+
+    def _record_invocation_binding_result(
+        self, binding_id: str, response: Mapping[str, Any]
+    ) -> None:
+        result_id = str(response.get("result_id") or "")
+        if result_id:
+            self._invocation_binding_results[binding_id] = result_id
+
+    def _binding_turn_sequence(self) -> int:
+        if self.project_workspace is None:
+            raise CapabilityInvocationBindingError(
+                "invocation binding requires a project workspace"
+            )
+        run = self.project_workspace.store.get_run(self.run_id)
+        if run is None:
+            raise CapabilityInvocationBindingError(
+                "invocation binding run is unavailable"
+            )
+        if run.active_turn_id:
+            active = self.project_workspace.store.get_turn(run.active_turn_id)
+            if active is not None:
+                return active.sequence
+        turns = [
+            turn
+            for conversation in self.project_workspace.store.list_conversations(
+                self.project_workspace.project.project_id
+            )
+            if conversation.run_id == self.run_id
+            for turn in self.project_workspace.store.list_turns(
+                conversation.conversation_id
+            )
+        ]
+        return max((turn.sequence for turn in turns), default=0) + 1
+
+    def run_diagnostic(self, capability_id: str | None = None, *, binding_id: str | None = None, contract_id: str | None = None, scope: dict[str, Any] | None = None, parameters: dict[str, Any] | None = None, dependencies: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        if binding_id:
+            capability_id, contract_id, scope, parameters, dependencies, blocked = (
+                self._resolve_invocation_binding(
+                    binding_id,
+                    tool_name="run_diagnostic",
+                    capability_id=capability_id,
+                    contract_id=contract_id,
+                    scope=scope,
+                    parameters=parameters,
+                    dependencies=dependencies,
+                )
+            )
+            if blocked is not None:
+                return blocked
+            response = self._run(
+                capability_id,
+                kind="diagnostic",
+                contract_id=contract_id,
+                scope=scope,
+                parameters=parameters,
+                dependencies=dependencies,
+            )
+            self._record_invocation_binding_result(binding_id, response)
+            binding = self.invocation_binding(binding_id)
+            return response | {
+                "binding_id": binding_id,
+                "binding_hash": binding.binding_hash,
+                "output_mapping": dict(binding.output_mapping),
+            }
+        if not capability_id:
+            raise ValueError("capability_id or binding_id is required")
         contract = self._get_contract(contract_id)
         _, committed, _ = self._resolution_material()
         plan = plan_requested_capability(
@@ -204,7 +367,37 @@ class PerturaProductRuntime:
             dependencies=dependencies,
         )
 
-    def run_analysis(self, objective: str, *, capability_id: str | None = None, contract_id: str | None = None, scope: dict[str, Any] | None = None, parameters: dict[str, Any] | None = None, dependencies: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    def run_analysis(self, objective: str, *, binding_id: str | None = None, capability_id: str | None = None, contract_id: str | None = None, scope: dict[str, Any] | None = None, parameters: dict[str, Any] | None = None, dependencies: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        if binding_id:
+            capability_id, contract_id, scope, parameters, dependencies, blocked = (
+                self._resolve_invocation_binding(
+                    binding_id,
+                    tool_name="run_analysis",
+                    capability_id=capability_id,
+                    contract_id=contract_id,
+                    scope=scope,
+                    parameters=parameters,
+                    dependencies=dependencies,
+                )
+            )
+            if blocked is not None:
+                return blocked
+            response = self._run(
+                capability_id,
+                kind="analysis",
+                contract_id=contract_id,
+                scope=scope,
+                parameters=parameters,
+                dependencies=dependencies,
+                objective=objective,
+            )
+            self._record_invocation_binding_result(binding_id, response)
+            binding = self.invocation_binding(binding_id)
+            return response | {
+                "binding_id": binding_id,
+                "binding_hash": binding.binding_hash,
+                "output_mapping": dict(binding.output_mapping),
+            }
         contract = self._get_contract(contract_id)
         _, committed, _ = self._resolution_material()
         plan = plan_analysis(
@@ -250,8 +443,198 @@ class PerturaProductRuntime:
 
 
 
-    def evaluate_virtual_model(self, *, capability_id: str = "virtual.evaluate.comprehensive.v1", contract_id: str | None = None, scope: dict[str, Any] | None = None, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
+    def evaluate_virtual_model(self, *, binding_id: str | None = None, capability_id: str | None = "virtual.evaluate.comprehensive.v1", contract_id: str | None = None, scope: dict[str, Any] | None = None, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
+        if binding_id:
+            capability_id, contract_id, scope, parameters, dependencies, blocked = (
+                self._resolve_invocation_binding(
+                    binding_id,
+                    tool_name="evaluate_virtual_model",
+                    capability_id=capability_id,
+                    contract_id=contract_id,
+                    scope=scope,
+                    parameters=parameters,
+                    dependencies=None,
+                )
+            )
+            if blocked is not None:
+                return blocked
+            response = self._run(
+                capability_id,
+                kind="virtual",
+                contract_id=contract_id,
+                scope=scope,
+                parameters=parameters,
+                dependencies=dependencies,
+            )
+            self._record_invocation_binding_result(binding_id, response)
+            binding = self.invocation_binding(binding_id)
+            return response | {
+                "binding_id": binding_id,
+                "binding_hash": binding.binding_hash,
+                "output_mapping": dict(binding.output_mapping),
+            }
+        if not capability_id:
+            raise ValueError("capability_id or binding_id is required")
         return self._run(capability_id, kind="virtual", contract_id=contract_id, scope=scope, parameters=parameters)
+
+    def _resolve_invocation_binding(
+        self,
+        binding_id: str,
+        *,
+        tool_name: str,
+        capability_id: str | None,
+        contract_id: str | None,
+        scope: dict[str, Any] | None,
+        parameters: dict[str, Any] | None,
+        dependencies: list[dict[str, Any]] | None,
+    ) -> tuple[
+        str,
+        str,
+        dict[str, Any],
+        dict[str, Any],
+        list[dict[str, Any]],
+        dict[str, Any] | None,
+    ]:
+        binding = self.invocation_binding(binding_id)
+        run = self.project_workspace.store.get_run(self.run_id)
+        active = (
+            self.project_workspace.store.get_turn(run.active_turn_id)
+            if run is not None and run.active_turn_id
+            else None
+        )
+        if active is None or active.sequence != binding.turn_sequence:
+            raise CapabilityInvocationBindingError(
+                "capability invocation binding is stale for the active turn"
+            )
+        if binding.tool_name != tool_name:
+            raise CapabilityInvocationBindingError(
+                f"binding {binding_id} requires {binding.tool_name}, not {tool_name}"
+            )
+        if capability_id and capability_id != binding.capability_id:
+            raise CapabilityInvocationBindingError(
+                "caller cannot replace the bound capability"
+            )
+        if contract_id and contract_id != binding.contract_id:
+            raise CapabilityInvocationBindingError(
+                "caller cannot replace the bound DatasetContract"
+            )
+        if scope and dict(scope) != binding.scope:
+            raise CapabilityInvocationBindingError("caller cannot replace the bound scope")
+        if dependencies:
+            raise CapabilityInvocationBindingError(
+                "caller cannot replace bound capability dependencies"
+            )
+        contract = self._get_contract(binding.contract_id)
+        if contract.canonical_hash != binding.contract_hash:
+            raise CapabilityInvocationBindingError("bound DatasetContract has drifted")
+        spec = self.registry.get(binding.capability_id, binding.capability_version)
+        if capability_scientific_hash(spec) != binding.capability_scientific_hash:
+            raise CapabilityInvocationBindingError("bound capability contract has drifted")
+
+        supplied = dict(parameters or {})
+        forbidden = sorted(set(supplied) - set(binding.allowed_overrides))
+        if forbidden:
+            raise CapabilityInvocationBindingError(
+                f"caller attempted to override locked parameters: {forbidden}"
+            )
+        merged = {**binding.bound_parameters, **supplied}
+        for expected in binding.input_assets:
+            asset = (
+                self.project_workspace.store.get_asset(expected.asset_id)
+                if self.project_workspace is not None
+                else None
+            )
+            if asset is None or asset.identity_hash != expected.asset_identity_hash:
+                raise CapabilityInvocationBindingError(
+                    f"bound asset is missing or has drifted: {expected.asset_id}"
+                )
+            if asset.role != expected.role:
+                raise CapabilityInvocationBindingError(
+                    f"bound asset role has drifted: {expected.asset_id}"
+                )
+
+        _, committed, _ = self._resolution_material()
+        by_id = {item.result_id: item for item in committed}
+        commit_by_id = {
+            str((item.get("result") or {}).get("result_id")): item
+            for item in self.planning_commit_records()
+        }
+        for result_id, result_hash, state, receipt_id in zip(
+            binding.dependency_result_ids,
+            binding.dependency_result_hashes,
+            binding.dependency_verification_states,
+            binding.dependency_receipt_ids,
+            strict=True,
+        ):
+            result = by_id.get(result_id)
+            record = commit_by_id.get(result_id) or {}
+            receipt = record.get("receipt") or {}
+            observed_receipt_id = (
+                receipt.get("receipt_id") if isinstance(receipt, Mapping) else None
+            )
+            if (
+                result is None
+                or result.canonical_hash != result_hash
+                or result.stale
+                or record.get("verification_state") != state
+                or observed_receipt_id != receipt_id
+            ):
+                raise CapabilityInvocationBindingError(
+                    f"bound dependency is missing or stale: {result_id}"
+                )
+
+        if binding.readiness == "blocked_probe":
+            return (
+                binding.capability_id,
+                binding.contract_id,
+                dict(binding.scope),
+                merged,
+                binding_dependency_hints(binding),
+                _blocked_runtime_response(
+                    capability_id=binding.capability_id,
+                    scope_id=None,
+                    blockers=binding.blockers,
+                    required_upstream=(),
+                    trust_level=spec.trust_level.value,
+                    validation_status=spec.metadata.get("validation_status"),
+                    summary=(
+                        "The bound applicability probe identified missing "
+                        "prerequisites."
+                    ),
+                )
+                | {
+                    "binding_id": binding.binding_id,
+                    "binding_hash": binding.binding_hash,
+                    "output_mapping": dict(binding.output_mapping),
+                },
+            )
+
+        dependency_hints = binding_dependency_hints(binding)
+        for predecessor_id in binding.dependency_binding_ids:
+            predecessor = self.invocation_binding(predecessor_id)
+            result_id = self._invocation_binding_results.get(predecessor_id)
+            result = by_id.get(str(result_id or ""))
+            if result is None or result.stale:
+                raise CapabilityInvocationBindingError(
+                    "bound predecessor has not produced a current committed result: "
+                    f"{predecessor.capability_id}"
+                )
+            dependency_hints.append(
+                {
+                    "object_id": result.result_id,
+                    "object_hash": result.canonical_hash,
+                    "state": "current",
+                }
+            )
+
+        return (
+            binding.capability_id,
+            binding.contract_id,
+            dict(binding.scope),
+            merged,
+            dependency_hints,
+            None,
+        )
 
     def finalize_report(self, run_id: str | None = None) -> dict[str, Any]:
         selected_run = run_id or self.run_id
@@ -696,6 +1079,7 @@ class PerturaProductRuntime:
         raw_hints = [dict(item) for item in (dependencies or [])]
         result_hints: list[dict[str, Any]] = []
         environment_hints: list[dict[str, Any]] = []
+        data_asset_hints: list[dict[str, Any]] = []
         for hint in raw_hints:
             hint_kind = str(hint.get("kind") or "")
             if hint_kind == "contract":
@@ -705,6 +1089,8 @@ class PerturaProductRuntime:
                     raise ValueError("caller-supplied contract dependency hash is forged or stale")
             elif hint_kind == "environment":
                 environment_hints.append(hint)
+            elif hint_kind == "data_asset":
+                data_asset_hints.append(hint)
             else:
                 result_hints.append(hint)
 
@@ -732,28 +1118,61 @@ class PerturaProductRuntime:
             )
         explicit_dependencies = list(resolution.dependencies)
         if self.asset_registry is not None:
-            properties = (spec.parameters_schema or {}).get("properties") or {}
-            for name, field_schema in properties.items():
-                role = field_schema.get("x-pertura-asset-role") if isinstance(field_schema, dict) else None
-                asset_id = submitted_parameters.get(name)
-                if not role or not isinstance(asset_id, str) or not asset_id.startswith("asset_"):
-                    continue
+            for hint in data_asset_hints:
+                asset_id = str(hint.get("object_id") or "")
                 asset = self.project_workspace.store.get_asset(asset_id)
                 if asset is None:
                     raise ValueError(f"unknown registered asset: {asset_id}")
-                resolved_path = self.asset_registry.resolve(asset_id, expected_role=str(role))
+                supplied_hash = str(hint.get("object_hash") or "")
+                if supplied_hash and supplied_hash != asset.identity_hash:
+                    raise ValueError(f"data asset dependency hash mismatch: {asset_id}")
+                resolved_path = self.asset_registry.resolve(asset_id)
                 self.broker.register_runtime_object(
                     kind="data_asset",
                     object_id=asset.asset_id,
                     object_hash=asset.identity_hash,
-                    payload=asset.model_dump(mode="json") | {"resolved_path": str(resolved_path)},
+                    payload=asset.model_dump(mode="json")
+                    | {"resolved_path": str(resolved_path)},
                 )
-                explicit_dependencies.append(DependencyRef(
+                dependency = DependencyRef(
                     kind="data_asset",
                     object_id=asset.asset_id,
                     object_hash=asset.identity_hash,
-                    role=f"asset:{role}",
-                ))
+                    role=f"asset:{asset.role}",
+                )
+                if dependency not in explicit_dependencies:
+                    explicit_dependencies.append(dependency)
+            properties = (spec.parameters_schema or {}).get("properties") or {}
+            for name, field_schema in properties.items():
+                role = field_schema.get("x-pertura-asset-role") if isinstance(field_schema, dict) else None
+                value = submitted_parameters.get(name)
+                asset_ids = value if isinstance(value, list) else [value]
+                if not role:
+                    continue
+                for asset_id in asset_ids:
+                    if not isinstance(asset_id, str) or not asset_id.startswith("asset_"):
+                        continue
+                    asset = self.project_workspace.store.get_asset(asset_id)
+                    if asset is None:
+                        raise ValueError(f"unknown registered asset: {asset_id}")
+                    resolved_path = self.asset_registry.resolve(
+                        asset_id, expected_role=str(role)
+                    )
+                    self.broker.register_runtime_object(
+                        kind="data_asset",
+                        object_id=asset.asset_id,
+                        object_hash=asset.identity_hash,
+                        payload=asset.model_dump(mode="json")
+                        | {"resolved_path": str(resolved_path)},
+                    )
+                    dependency = DependencyRef(
+                        kind="data_asset",
+                        object_id=asset.asset_id,
+                        object_hash=asset.identity_hash,
+                        role=f"asset:{role}",
+                    )
+                    if dependency not in explicit_dependencies:
+                        explicit_dependencies.append(dependency)
         environment_profile = str(spec.metadata.get("environment_profile") or "")
         if environment_profile:
             try:
@@ -902,46 +1321,65 @@ class PerturaProductRuntime:
             if not isinstance(field_schema, dict):
                 continue
             role = str(field_schema.get("x-pertura-asset-role") or "")
+            if not role or name not in normalized:
+                continue
             value = normalized.get(name)
-            if not role or not isinstance(value, str) or not value:
+            if value is None:
+                # Optional asset-valued parameters are absent, not explicit
+                # JSON nulls.  Preserve compatibility with callers that omit
+                # them while still rejecting null for a required parameter in
+                # the normal schema-validation step.
+                normalized.pop(name, None)
                 continue
-            if value.startswith("asset_"):
+            values = value if isinstance(value, list) else [value]
+            if not values:
                 continue
-            candidate = Path(value).expanduser()
-            resolved = (
-                candidate.resolve()
-                if candidate.is_absolute()
-                else (workspace_root / candidate).resolve()
-            )
-            try:
-                resolved.relative_to(workspace_root)
-            except ValueError as exc:
-                raise CapabilityParameterError(
-                    f"external path for {name} is not registered: {resolved}"
-                ) from exc
-            if resolved == workspace_root:
-                raise CapabilityParameterError(
-                    f"asset parameter {name} must name a workspace artifact"
+            normalized_values: list[Any] = []
+            for item in values:
+                if not isinstance(item, str) or not item:
+                    normalized_values.append(item)
+                    continue
+                if item.startswith("asset_"):
+                    normalized_values.append(item)
+                    continue
+                candidate = Path(item).expanduser()
+                resolved = (
+                    candidate.resolve()
+                    if candidate.is_absolute()
+                    else (workspace_root / candidate).resolve()
                 )
-            if not resolved.exists():
-                raise CapabilityParameterError(
-                    f"workspace asset parameter {name} is missing: {resolved}"
+                try:
+                    resolved.relative_to(workspace_root)
+                except ValueError as exc:
+                    raise CapabilityParameterError(
+                        f"external path for {name} is not registered: {resolved}"
+                    ) from exc
+                if resolved == workspace_root:
+                    raise CapabilityParameterError(
+                        f"asset parameter {name} must name a workspace artifact"
+                    )
+                if not resolved.exists():
+                    raise CapabilityParameterError(
+                        f"workspace asset parameter {name} is missing: {resolved}"
+                    )
+                asset = self.asset_registry.register(
+                    resolved,
+                    role=role,
+                    kind="derived",
+                    source_class="derived_artifact",
+                    created_by_turn=active_turn_id,
                 )
-            asset = self.asset_registry.register(
-                resolved,
-                role=role,
-                kind="derived",
-                source_class="observed_metadata",
-                created_by_turn=active_turn_id,
-            )
-            self.project_workspace.store.put_asset_binding(
-                AssetBinding(
-                    run_id=self.run_id,
-                    asset_id=asset.asset_id,
-                    role=asset.role,
+                self.project_workspace.store.put_asset_binding(
+                    AssetBinding(
+                        run_id=self.run_id,
+                        asset_id=asset.asset_id,
+                        role=asset.role,
+                    )
                 )
+                normalized_values.append(asset.asset_id)
+            normalized[name] = (
+                normalized_values if isinstance(value, list) else normalized_values[0]
             )
-            normalized[name] = asset.asset_id
         return normalized
 
     def resolve_result_for_turn(self, result_id: str) -> dict[str, Any] | None:

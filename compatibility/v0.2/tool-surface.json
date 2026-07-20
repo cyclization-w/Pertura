@@ -2,6 +2,7 @@
   "contracts": {
     "evaluate_virtual_model": {
       "input": {
+        "binding_id": "string",
         "capability_id": "string",
         "contract_id": "string",
         "parameters": "object",
@@ -56,6 +57,7 @@
     },
     "run_analysis": {
       "input": {
+        "binding_id": "string",
         "capability_id": "string",
         "contract_id": "string",
         "dependencies": "array",
@@ -78,6 +80,7 @@
     },
     "run_diagnostic": {
       "input": {
+        "binding_id": "string",
         "capability_id": "string",
         "contract_id": "string",
         "dependencies": "array",

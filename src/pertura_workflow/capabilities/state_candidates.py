@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import csv
+import gzip
 from itertools import combinations
 from pathlib import Path
 from typing import Any
@@ -58,6 +60,9 @@ def run_state_reference_fit(
     budget = resource_budget(request.parameters)
     max_memory_gb, n_jobs = budget
     h5ad_path = resolve_input(contract, request.parameters.get("h5ad_path"), label="h5ad_path")
+    selection_path = resolve_input(
+        contract, request.parameters.get("selection_path"), label="selection_path"
+    )
     control_column = str(request.parameters.get("control_column") or "")
     control_values = {str(item) for item in request.parameters.get("control_values") or []}
     if not control_column or not control_values:
@@ -67,6 +72,8 @@ def run_state_reference_fit(
         if control_column not in data.obs.columns:
             return blocked(spec, request, contract, f"control column is missing: {control_column}")
         control_mask = data.obs[control_column].astype(str).isin(control_values).to_numpy()
+        selected_cells = _selected_cell_ids(selection_path)
+        control_mask &= data.obs_names.astype(str).isin(selected_cells)
         retained = retained_cells_for_request(staging, request, required=True)
         if retained is not None:
             control_mask &= data.obs_names.astype(str).isin(retained)
@@ -273,6 +280,9 @@ def run_state_reference_map(
         )
     budget = resource_budget(request.parameters)
     h5ad_path = resolve_input(contract, request.parameters.get("h5ad_path"), label="h5ad_path")
+    selection_path = resolve_input(
+        contract, request.parameters.get("selection_path"), label="selection_path"
+    )
     model_path = _parameter_or_dependency_path(
         contract,
         staging,
@@ -283,7 +293,7 @@ def run_state_reference_map(
     model = np.load(model_path, allow_pickle=False)
     data = ad.read_h5ad(h5ad_path, backed="r")
     retained = retained_cells_for_request(staging, request, required=True)
-    retained_set = set(retained or ())
+    retained_set = set(retained or ()) & _selected_cell_ids(selection_path)
     retained_indices = np.asarray(
         [
             index
@@ -555,3 +565,25 @@ def _parameter_or_dependency_path(
                 )
                 return candidate
     raise ValueError(f"{capability_id} dependency does not expose a {suffix} output")
+
+
+def _selected_cell_ids(path: Path) -> set[str]:
+    opener = gzip.open if path.suffix.lower() == ".gz" else open
+    with opener(path, "rt", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        if not reader.fieldnames:
+            raise ValueError("cell selection has no header")
+        key = next(
+            (name for name in ("cell_id", "raw_barcode") if name in reader.fieldnames),
+            None,
+        )
+        if key is None:
+            raise ValueError("cell selection is missing cell_id")
+        selected = {
+            str(row.get(key) or "").strip()
+            for row in reader
+            if str(row.get(key) or "").strip()
+        }
+    if not selected:
+        raise ValueError("cell selection is empty")
+    return selected

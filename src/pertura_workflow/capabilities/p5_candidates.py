@@ -488,8 +488,9 @@ def run_virtual_evaluate_comprehensive(spec, request, contract, staging):
 
 def run_design_next_panel(spec, request, contract, staging):
     evaluation = _dependency_json(staging, "virtual_evaluation.json")
-    if evaluation is None:
-        return blocked(spec, request, contract, "committed virtual evaluation is missing")
+    evaluation = evaluation or {"limited_reasons": [
+        "no virtual evaluation was supplied; ranking uses explicit evidence scores only"
+    ]}
     candidates = request.parameters.get("candidates")
     if not isinstance(candidates, list) or not candidates:
         return blocked(spec, request, contract, "next-panel candidate records are required")

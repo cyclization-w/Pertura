@@ -148,10 +148,18 @@ class DataAssetRef(InternalModel):
     upstream_lock_hash: str | None = None
     size_bytes: int = Field(ge=0)
     source_class: Literal[
-        "observed_metadata", "measured_result", "prediction", "curated_prior", "hypothesis"
+        "observed_metadata",
+        "derived_artifact",
+        "measured_result",
+        "prediction",
+        "curated_prior",
+        "hypothesis",
     ]
     created_by_turn: str | None = None
     dependencies: tuple[str, ...] = ()
+    origin_task_id: str | None = None
+    submission_id: str | None = None
+    schema_validation_status: Literal["validated", "not_applicable"] | None = None
     status: Literal["current", "missing", "drifted"] = "current"
 
     @model_validator(mode="after")
@@ -168,6 +176,89 @@ class DataAssetRef(InternalModel):
                 exclude={"status", "created_by_turn", "logical_name"},
             )
         )
+
+
+class CapabilityInvocationAsset(InternalModel):
+    """One immutable asset input captured by an invocation binding."""
+
+    parameter: str
+    asset_id: str
+    role: str
+    asset_identity_hash: str
+    content_sha256: str | None = None
+
+
+class CapabilityInvocationBinding(InternalModel):
+    """A run- and task-scoped, prevalidated capability invocation."""
+
+    schema_version: Literal["pertura-capability-invocation-binding-v1"] = (
+        "pertura-capability-invocation-binding-v1"
+    )
+    binding_id: str
+    run_id: str
+    task_id: str
+    turn_sequence: int = Field(ge=1)
+    capability_id: str
+    capability_version: str
+    capability_scientific_hash: str
+    tool_name: Literal["run_diagnostic", "run_analysis", "evaluate_virtual_model"]
+    contract_id: str
+    contract_hash: str
+    scope: dict[str, Any]
+    bound_parameters: dict[str, Any] = Field(default_factory=dict)
+    allowed_overrides: tuple[str, ...] = ()
+    input_assets: tuple[CapabilityInvocationAsset, ...] = ()
+    dependency_result_ids: tuple[str, ...] = ()
+    dependency_result_hashes: tuple[str, ...] = ()
+    dependency_verification_states: tuple[
+        Literal["trusted_receipt", "validated_untrusted"], ...
+    ] = ()
+    dependency_receipt_ids: tuple[str | None, ...] = ()
+    dependency_binding_ids: tuple[str, ...] = ()
+    output_mapping: dict[str, str] = Field(default_factory=dict)
+    readiness: Literal["ready", "conditional_ready", "blocked_probe"]
+    blockers: tuple[str, ...] = ()
+    binding_hash: str
+
+    @model_validator(mode="after")
+    def _binding_identity(self) -> "CapabilityInvocationBinding":
+        dependency_count = len(self.dependency_result_ids)
+        if not all(
+            len(values) == dependency_count
+            for values in (
+                self.dependency_result_hashes,
+                self.dependency_verification_states,
+                self.dependency_receipt_ids,
+            )
+        ):
+            raise ValueError("capability invocation dependency records are misaligned")
+        for state, receipt_id in zip(
+            self.dependency_verification_states,
+            self.dependency_receipt_ids,
+            strict=True,
+        ):
+            if state == "trusted_receipt" and not receipt_id:
+                raise ValueError("trusted invocation dependency requires a receipt")
+            if state == "validated_untrusted" and receipt_id:
+                raise ValueError(
+                    "validated-untrusted invocation dependency cannot claim a receipt"
+                )
+        if self.binding_id in self.dependency_binding_ids:
+            raise ValueError("capability invocation binding cannot depend on itself")
+        if len(set(self.dependency_binding_ids)) != len(self.dependency_binding_ids):
+            raise ValueError("capability invocation predecessor bindings are duplicated")
+        payload = self.model_dump(mode="json", exclude={"binding_id", "binding_hash"})
+        observed = canonical_hash(payload)
+        if self.binding_hash != observed:
+            raise ValueError("capability invocation binding hash is invalid")
+        expected_id = "capbinding_" + observed.split(":", 1)[1][:32]
+        if self.binding_id != expected_id:
+            raise ValueError("capability invocation binding ID is invalid")
+        if self.readiness == "blocked_probe" and not self.blockers:
+            raise ValueError("blocked probe binding requires at least one blocker")
+        if self.readiness != "blocked_probe" and self.blockers:
+            raise ValueError("ready invocation binding cannot carry blockers")
+        return self
 
 
 class AssetLocation(InternalModel):

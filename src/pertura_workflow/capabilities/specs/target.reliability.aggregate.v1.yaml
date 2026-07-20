@@ -9,12 +9,9 @@ executor: target_reliability_aggregate
 validator: candidate_standard
 input_requirements:
 - retained_cells
-- design_balance
 - guide_efficacy
 - mixscape
 depends_on:
-- screen.retained_cells.v1
-- diagnostic.design_balance.v1
 - target.guide_efficacy.v1
 - target.responder.mixscape.v1
 dependency_kinds:
@@ -49,20 +46,12 @@ metadata:
   validation_status: synthetic_only
   candidate: true
   dependency_policy:
-    screen.retained_cells.v1:
+    target.guide_efficacy.v1:
       scope: exact
       usage: scientific_input
       accepted_statuses: &id001
       - screen_passed
       - caution
-    diagnostic.design_balance.v1:
-      scope: exact
-      usage: validation_gate
-      accepted_statuses: *id001
-    target.guide_efficacy.v1:
-      scope: exact
-      usage: scientific_input
-      accepted_statuses: *id001
     target.responder.mixscape.v1:
       scope: exact
       usage: scientific_input

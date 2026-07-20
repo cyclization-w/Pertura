@@ -408,6 +408,10 @@ def run_guide_efficacy(
         "schema_version": "pertura-target-guide-efficacy-set-v1",
         "profile": str(request.parameters.get("profile") or "dev_unvalidated_v0"),
         "profile_validation": "dev_unvalidated",
+        "retained_manifest_applied": any(
+            bool(item["evaluation"].get("retained_manifest_applied"))
+            for item in evaluations
+        ),
         "target_count": len(evaluations),
         "status_counts": {
             "screen_passed": passed_count,
@@ -437,7 +441,7 @@ def run_guide_efficacy(
         metadata={
             "profile": payload["profile"],
             "profile_validation": "dev_unvalidated",
-            "retained_manifest_applied": True,
+            "retained_manifest_applied": payload["retained_manifest_applied"],
             "batch_mode": True,
         },
     )
@@ -473,7 +477,7 @@ def _run_single_guide_efficacy(
     layer_scale = str(request.parameters.get("layer_scale") or "log_normalized")
     profile_name = str(request.parameters.get("profile") or "dev_unvalidated_v0")
     profile = _load_profile(profile_name)
-    retained = retained_cells_for_request(staging, request, required=True)
+    retained = retained_cells_for_request(staging, request, required=False)
     expression = _read_expression(expression_path, cell_column)
     metadata = {
         cell: row
@@ -603,6 +607,7 @@ def _run_single_guide_efficacy(
     replicate_overlap = _axis_overlap(metadata, target_cells, control_cells, replicate_column)
     payload = {
         "schema_version": "pertura-target-guide-efficacy-v1",
+        "retained_manifest_applied": retained is not None,
         "target_uid": target_uid,
         "control_uid": control_uid,
         "target_gene": target_gene,
@@ -650,7 +655,7 @@ def _run_single_guide_efficacy(
         metadata={
             "profile": profile_name,
             "profile_validation": "dev_unvalidated",
-            "retained_manifest_applied": True,
+            "retained_manifest_applied": retained is not None,
         },
     )
 
@@ -663,8 +668,6 @@ def run_target_reliability_aggregate(
 ):
     results = dependency_results(staging)
     required = {
-        "screen.retained_cells.v1",
-        "diagnostic.design_balance.v1",
         "target.guide_efficacy.v1",
         "target.responder.mixscape.v1",
     }
@@ -682,8 +685,7 @@ def run_target_reliability_aggregate(
     trace = []
     for capability_id in sorted(required):
         result = by_capability[capability_id]
-        if capability_id != "diagnostic.design_balance.v1":
-            consume_dependency_result(result, usage="scientific_input")
+        consume_dependency_result(result, usage="scientific_input")
         trace.append(
             {
                 "capability_id": capability_id,

@@ -12,6 +12,11 @@ _PAPER_ROLE_ALIASES = {
     # cell_state_metadata to the same cell-level table.  Capabilities use the
     # canonical cell_metadata role for that exact object.
     "donor_metadata": "cell_metadata",
+    "construct_metadata": "cell_metadata",
+    "target_expression": "expression_table",
+    "trans_de_results": "effect_table",
+    "calibration_split": "cell_selection",
+    "evaluation_split": "cell_selection",
 }
 _NON_CAPABILITY_MODES = {"codeact_scientific", "evidence_interpretation"}
 
@@ -65,16 +70,26 @@ def build_task_capability_availability(
             )
             for ancestor_id in ancestor_ids:
                 ancestor = tasks_by_id[ancestor_id]
-                available_roles.update(
+                ancestor_roles = {
                     str(item)
                     for item in (
                         (ancestor.get("output_contract") or {}).get("artifact_paths")
                         or {}
                     )
+                }
+                available_roles.update(ancestor_roles)
+                available_roles.update(
+                    _PAPER_ROLE_ALIASES[role]
+                    for role in ancestor_roles
+                    if role in _PAPER_ROLE_ALIASES
                 )
 
             explicit_nonexecutions = set(
                 str(item) for item in task.get("expected_nonexecutions") or ()
+            )
+            probe_capabilities = set(
+                str(item)
+                for item in task.get("expected_probe_capabilities") or ()
             )
             ancestor_nonexecutions = {
                 str(item)
@@ -92,16 +107,21 @@ def build_task_capability_availability(
                     )
                 if capability_id in explicit_nonexecutions:
                     reasons.append("capability is an explicit nonexecution for this task")
-                missing_roles = sorted(
-                    _required_asset_roles(spec) - available_roles
-                )
+                missing_roles = sorted(_required_asset_roles(spec) - available_roles)
                 if missing_roles:
-                    reasons.append(
-                        "required asset roles are unavailable: " + ", ".join(missing_roles)
-                    )
+                    if capability_id not in probe_capabilities:
+                        reasons.append(
+                            "required asset roles are unavailable: "
+                            + ", ".join(missing_roles)
+                        )
                 if reasons:
                     states[capability_id] = "structurally_excluded"
                     exclusion_reasons[capability_id] = reasons
+                elif capability_id in probe_capabilities:
+                    # A probe is executable precisely to return a structured
+                    # prerequisite blocker. Its missing scientific inputs are
+                    # not advertised as runnable analysis inputs.
+                    states[capability_id] = "advertised_direct"
 
             unresolved = {
                 item for item in candidates if item not in states

@@ -26,7 +26,7 @@ from pertura_workflow.environment import environment_prefix, micromamba_path
 
 
 def run_effect_matrix_assemble(spec, request, contract, staging):
-    tables = _effect_tables(staging)
+    tables = _effect_tables(staging, request)
     if not tables:
         return blocked(spec, request, contract, "no committed gene-effect table was resolved")
     identities = {
@@ -574,6 +574,13 @@ def run_interpretation_evidence_map(spec, request, contract, staging):
     available = {
         item["result_id"]: item for item in dependency_results(staging)
     }
+    available_assets = {
+        str((item.get("payload") or {}).get("asset_id") or item.get("object_id") or ""): (
+            item.get("payload") or {}
+        )
+        for item in runtime_dependencies(staging)
+        if item.get("kind") == "data_asset"
+    }
     roles = {"measured", "derived", "prior", "contradiction", "hypothesis", "next_experiment"}
     accepted, rejected = [], []
     for index, record in enumerate(proposed):
@@ -582,6 +589,7 @@ def run_interpretation_evidence_map(spec, request, contract, staging):
             continue
         role, text = str(record.get("role") or ""), str(record.get("text") or "").strip()
         result_ids = tuple(str(item) for item in record.get("result_ids") or ())
+        artifact_ids = tuple(str(item) for item in record.get("artifact_ids") or ())
         literature_ids = tuple(str(item) for item in record.get("literature_ids") or ())
         reasons = []
         if role not in roles:
@@ -590,28 +598,42 @@ def run_interpretation_evidence_map(spec, request, contract, staging):
             reasons.append("empty_text")
         if any(item not in available for item in result_ids):
             reasons.append("unknown_result_reference")
+        if any(item not in available_assets for item in artifact_ids):
+            reasons.append("unknown_artifact_reference")
         referenced = [available[item] for item in result_ids if item in available]
+        referenced_assets = [
+            available_assets[item] for item in artifact_ids if item in available_assets
+        ]
         for dependency in referenced:
             consume_dependency_result(dependency, usage="scientific_input")
         source_classes = {str(item.get("source_class") or "") for item in referenced}
-        if role in {"measured", "derived", "contradiction"} and not result_ids:
+        if role in {"measured", "derived", "contradiction"} and not (
+            result_ids or artifact_ids
+        ):
             reasons.append("result_provenance_required")
-        if role == "measured" and source_classes != {"measured_result"}:
+        if role == "measured" and (
+            artifact_ids or source_classes != {"measured_result"}
+        ):
             reasons.append("measured_role_requires_measured_results")
         if role == "derived" and source_classes & {"prediction", "hypothesis"}:
             reasons.append("derived_role_cannot_reclassify_prediction_or_hypothesis")
         if role == "prior" and not (
-            literature_ids or "curated_prior" in source_classes
+            literature_ids
+            or "curated_prior" in source_classes
+            or any(item.get("source_class") == "curated_prior" for item in referenced_assets)
         ):
             reasons.append("prior_provenance_required")
-        if role in {"hypothesis", "next_experiment"} and not (result_ids or literature_ids):
+        if role in {"hypothesis", "next_experiment"} and not (
+            result_ids or artifact_ids or literature_ids
+        ):
             reasons.append("antecedent_required")
         if reasons:
             rejected.append({"index": index, "reasons": reasons})
         else:
             accepted.append({
                 "record_id": f"interpretation_{index:04d}", "role": role, "text": text,
-                "result_ids": list(result_ids), "literature_ids": list(literature_ids),
+                "result_ids": list(result_ids), "artifact_ids": list(artifact_ids),
+                "literature_ids": list(literature_ids),
                 "limitations": list(record.get("limitations") or ()),
                 "role_assignment": "explicit_structured_input", "promotion_effect": "none",
             })
@@ -633,7 +655,7 @@ def run_interpretation_evidence_map(spec, request, contract, staging):
     )
 
 
-def _effect_tables(staging):
+def _effect_tables(staging, request):
     names = {"edger_results.csv", "sceptre_results.csv", "effect_table.csv", "gene_effects.csv"}
     found = []
     for result in dependency_results(staging):
@@ -647,6 +669,34 @@ def _effect_tables(staging):
             if path.is_file() and path.name in names:
                 consume_dependency_output(result, path, usage="scientific_input")
                 found.append((result, path))
+    supplied_paths = request.parameters.get("effect_table_paths") or ()
+    if supplied_paths:
+        runtime_by_path = {
+            str((item.get("payload") or {}).get("resolved_path") or ""): item
+            for item in runtime_dependencies(staging)
+            if item.get("kind") == "data_asset"
+        }
+        estimand = str(request.parameters.get("estimand") or "")
+        effect_scale = str(request.parameters.get("effect_scale") or "")
+        for raw_path in supplied_paths:
+            path = Path(str(raw_path))
+            if not path.is_file():
+                continue
+            dependency = runtime_by_path.get(str(path.resolve())) or {}
+            payload = dependency.get("payload") or {}
+            if payload.get("schema_validation_status") != "validated":
+                continue
+            asset_id = str(payload.get("asset_id") or dependency.get("object_id") or "")
+            found.append(({
+                "result_id": asset_id,
+                "result_kind": "gene_effect",
+                "capability_id": "validated.effect_table.asset",
+                "scope": {"estimand": estimand},
+                "metadata": {
+                    "effect_scale": effect_scale,
+                    "provenance_only_input": True,
+                },
+            }, path))
     return found
 
 

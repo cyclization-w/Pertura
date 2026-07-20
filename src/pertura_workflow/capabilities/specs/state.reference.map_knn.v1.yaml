@@ -9,14 +9,11 @@ executor: state_reference_map
 validator: candidate_standard
 input_requirements:
 - state_reference
-- retained_cells
 depends_on:
 - state.reference.fit.v1
-- screen.retained_cells.v1
 dependency_kinds:
 - contract
 - state_reference
-- retained_cell_manifest
 output_kind: state_mapping
 source_class: measured_result
 claim_permissions: []
@@ -45,11 +42,17 @@ parameters_schema:
       type: string
       description: Registered asset ID with role capability_artifact.
       x-pertura-asset-role: capability_artifact
+    selection_path:
+      type: string
+      description: Registered cell-selection asset limiting held-out mapping rows.
+      x-pertura-asset-role: cell_selection
   required:
   - h5ad_path
+  - selection_path
   additionalProperties: false
   examples:
   - h5ad_path: asset_example_primary_dataset
+    selection_path: asset_example_cell_selection
 implemented: true
 metadata:
   validation_status: synthetic_only
@@ -63,9 +66,3 @@ metadata:
       accepted_statuses:
       - completed
       - completed_with_caution
-    screen.retained_cells.v1:
-      scope: exact
-      usage: row_filter
-      accepted_statuses:
-      - screen_passed
-      - caution

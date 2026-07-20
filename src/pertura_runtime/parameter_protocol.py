@@ -41,25 +41,41 @@ def validate_and_resolve_parameters(
         if not role:
             continue
         value = payload[name]
-        if not isinstance(value, str):
-            raise CapabilityParameterError(f"asset parameter {name} must be an asset ID")
+        is_array = property_schema.get("type") == "array"
+        if is_array:
+            if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+                raise CapabilityParameterError(
+                    f"asset parameter {name} must be an array of asset IDs"
+                )
+            values = value
+        else:
+            if not isinstance(value, str):
+                raise CapabilityParameterError(f"asset parameter {name} must be an asset ID")
+            values = [value]
         if asset_registry is None:
             # Standalone compatibility runs keep their existing DatasetContract path adapter.
             continue
-        if value.startswith("asset_"):
-            resolved[name] = str(asset_registry.resolve(value, expected_role=str(role)))
-            continue
-        path = Path(value).expanduser()
-        if path.is_absolute():
-            raise CapabilityParameterError(
-                f"external path for {name} is not registered; run `pertura assets add <project> {path} --role {role} --kind external_resource`"
-            )
-        candidate = (workspace_root / path).resolve()
-        try:
-            candidate.relative_to(workspace_root.resolve())
-        except ValueError as exc:
-            raise CapabilityParameterError(f"asset parameter {name} escapes the run workspace") from exc
-        resolved[name] = str(candidate)
+        resolved_values: list[str] = []
+        for item in values:
+            if item.startswith("asset_"):
+                resolved_values.append(
+                    str(asset_registry.resolve(item, expected_role=str(role)))
+                )
+                continue
+            path = Path(item).expanduser()
+            if path.is_absolute():
+                raise CapabilityParameterError(
+                    f"external path for {name} is not registered; run `pertura assets add <project> {path} --role {role} --kind external_resource`"
+                )
+            candidate = (workspace_root / path).resolve()
+            try:
+                candidate.relative_to(workspace_root.resolve())
+            except ValueError as exc:
+                raise CapabilityParameterError(
+                    f"asset parameter {name} escapes the run workspace"
+                ) from exc
+            resolved_values.append(str(candidate))
+        resolved[name] = resolved_values if is_array else resolved_values[0]
     return resolved
 
 

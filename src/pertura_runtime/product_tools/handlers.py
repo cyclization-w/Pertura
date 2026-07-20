@@ -25,7 +25,8 @@ def dispatch_product_tool(
         )
     if tool_name == "run_diagnostic":
         return runtime.run_diagnostic(
-            str(payload.get("capability_id") or ""),
+            payload.get("capability_id") or None,
+            binding_id=payload.get("binding_id") or None,
             contract_id=payload.get("contract_id") or None,
             scope=dict(payload.get("scope") or {}) or None,
             parameters=dict(payload.get("parameters") or {}),
@@ -34,6 +35,7 @@ def dispatch_product_tool(
     if tool_name == "run_analysis":
         return runtime.run_analysis(
             str(payload.get("objective") or ""),
+            binding_id=payload.get("binding_id") or None,
             capability_id=payload.get("capability_id") or None,
             contract_id=payload.get("contract_id") or None,
             scope=dict(payload.get("scope") or {}) or None,
@@ -42,7 +44,12 @@ def dispatch_product_tool(
         )
     if tool_name == "evaluate_virtual_model":
         return runtime.evaluate_virtual_model(
-            capability_id=payload.get("capability_id") or "virtual.evaluate.comprehensive.v1",
+            binding_id=payload.get("binding_id") or None,
+            capability_id=(
+                payload.get("capability_id")
+                if payload.get("binding_id")
+                else payload.get("capability_id") or "virtual.evaluate.comprehensive.v1"
+            ),
             contract_id=payload.get("contract_id") or None,
             scope=dict(payload.get("scope") or {}) or None,
             parameters=dict(payload.get("parameters") or {}),

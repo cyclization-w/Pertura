@@ -11,7 +11,6 @@ input_requirements:
 - retained_cells
 - state_reference
 depends_on:
-- screen.retained_cells.v1
 - state.reference.map_knn.v1
 dependency_kinds:
 - contract
@@ -88,12 +87,6 @@ metadata:
   execution_mode: isolated_python
   method_version: pertpy-1.1.1
   dependency_policy:
-    screen.retained_cells.v1:
-      scope: exact
-      usage: row_filter
-      accepted_statuses:
-      - screen_passed
-      - caution
     state.reference.map_knn.v1:
       scope: exact
       usage: scientific_input

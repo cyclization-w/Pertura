@@ -594,8 +594,8 @@ def test_a19_contract_catalog_and_executable_surfaces_are_stable() -> None:
 
     # The benchmark exposes only executable or receipt-conditional contracts;
     # missing raw DAG edges are retained solely as hidden audit reasons.
-    assert advertised == 10
-    assert excluded == 49
+    assert advertised == 28
+    assert excluded == 4
     deprecated = {
         item["capability_id"]
         for item in catalog["capabilities"]
