@@ -6,7 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from pertura_core import CapabilityRunRequest, DatasetContract, ScopeKey
+from pertura_core import CapabilityRunRequest, DatasetContract, DependencyRef, ScopeKey
+from pertura_core.hashing import file_sha256
 from pertura_workflow.capabilities import CapabilityRegistry
 from pertura_workflow.capabilities.executors import execute_capability
 from pertura_workflow.capabilities.guide_candidates import (
@@ -298,10 +299,44 @@ def test_target_guide_efficacy_and_leakage_blocking(tmp_path: Path) -> None:
     assert leaked.metrics["signature_confirmation_allowed"] is False
     assert any("leakage" in item for item in leaked.cautions)
 
+    retained_manifest = tmp_path / "retained_cells.tsv"
+    retained_manifest.write_text(
+        "cell_id\texpected_state\n"
+        + "".join(
+            f"{line.split(',', 1)[0]}\tretain_for_external_label_proxy\n"
+            for line in metadata_lines[1:]
+        ),
+        encoding="utf-8",
+    )
+    batch_staging = tmp_path / "batch_efficacy"
+    batch_staging.mkdir()
+    retained_asset_id = "asset_retained_fixture"
+    retained_asset_hash = "sha256:" + "a" * 64
+    (batch_staging / "_runtime_dependencies.json").write_text(
+        json.dumps(
+            {
+                "dependencies": [
+                    {
+                        "kind": "data_asset",
+                        "object_id": retained_asset_id,
+                        "object_hash": retained_asset_hash,
+                        "payload": {
+                            "asset_id": retained_asset_id,
+                            "role": "retained_cell_manifest",
+                            "resolved_path": str(retained_manifest),
+                            "content_sha256": file_sha256(retained_manifest),
+                            "schema_validation_status": "validated",
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
     batched = _run(
         "target.guide_efficacy.v1",
         contract,
-        tmp_path / "batch_efficacy",
+        batch_staging,
         {
             "expression_path": str(expression),
             "metadata_path": str(metadata),
@@ -322,6 +357,14 @@ def test_target_guide_efficacy_and_leakage_blocking(tmp_path: Path) -> None:
             "bootstrap_iterations": 10,
             "guide_bootstrap_iterations": 5,
         },
+        dependencies=(
+            DependencyRef(
+                kind="data_asset",
+                object_id=retained_asset_id,
+                object_hash=retained_asset_hash,
+                role="asset:retained_cell_manifest",
+            ),
+        ),
     )
     assert batched.metrics["target_count"] == 2
     payload = json.loads(
@@ -331,6 +374,15 @@ def test_target_guide_efficacy_and_leakage_blocking(tmp_path: Path) -> None:
     )
     assert payload["schema_version"] == "pertura-target-guide-efficacy-set-v1"
     assert [item["target_gene"] for item in payload["targets"]] == ["TG", "S1"]
+    assert payload["retained_manifest_applied"] is True
+    assert all(
+        (
+            batch_staging
+            / f"target_{index:04d}"
+            / "_runtime_dependencies.json"
+        ).is_file()
+        for index in (1, 2)
+    )
 
     mixed = _run(
         "target.guide_efficacy.v1",

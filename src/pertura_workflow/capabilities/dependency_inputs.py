@@ -117,6 +117,10 @@ def _retained_cells_from_data_asset(
     staging: Path,
     bindings: list[Any],
 ) -> set[str]:
+    from pertura_workflow.capabilities.execution_context import (
+        record_dependency_consumption,
+    )
+
     if len({item.object_id for item in bindings}) != 1:
         raise ValueError("retained-cell data asset is ambiguous")
     dependency = bindings[0]

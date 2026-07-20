@@ -82,7 +82,12 @@ def run_effect_matrix_assemble(spec, request, contract, staging):
         for row in rows:
             gene = _first(row, "gene", "gene_id", "response_id", "feature_id")
             perturbation = _first(
-                row, "perturbation", "perturbation_id", "grna_target", "target"
+                row,
+                "perturbation",
+                "perturbation_id",
+                "target_uid",
+                "grna_target",
+                "target",
             ) or default
             raw = _value(row, "logFC", "log2FC", "log_2_fold_change", "effect")
             if raw is None and row.get("fold_change") not in (None, ""):

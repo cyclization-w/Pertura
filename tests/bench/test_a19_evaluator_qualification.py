@@ -312,6 +312,146 @@ def test_binding_qualification_collects_failures_and_continues_task(
     ).is_file()
 
 
+def test_binding_qualification_distinguishes_terminal_and_chain_blocks(
+    tmp_path: Path,
+) -> None:
+    project = ProjectWorkspace.initialize(tmp_path / "project")
+    run = project.create_run(logical_name="qualification-status")
+    conversation = project.create_conversation(
+        run.run_id, title="qualification-status"
+    )
+    workspace = project.run_workspace(run.run_id)
+
+    def binding(capability_id: str, tool_name: str):
+        return SimpleNamespace(
+            task_id="REPL-01",
+            binding_id=f"binding-{capability_id}",
+            binding_hash="sha256:" + "1" * 64,
+            capability_id=capability_id,
+            capability_scientific_hash="sha256:" + "2" * 64,
+            tool_name=tool_name,
+            contract_id="contract-fixture",
+            contract_hash="sha256:" + "3" * 64,
+            scope={"dataset_id": "fixture"},
+            bound_parameters={},
+            input_assets=(),
+            dependency_result_ids=(),
+            dependency_verification_states=(),
+            dependency_receipt_ids=(),
+            dependency_binding_ids=(),
+            output_mapping={"fixture": "audit"},
+            readiness="ready",
+            blockers=(),
+        )
+
+    diagnostic = binding("diagnostic.audit.v1", "run_diagnostic")
+    analysis = binding("analysis.chain.v1", "run_analysis")
+
+    def result(result_id: str, status: str, blocker: str):
+        return SimpleNamespace(
+            result_id=result_id,
+            status=SimpleNamespace(value=status),
+            blockers=(blocker,),
+            cautions=(),
+            capability_trust=SimpleNamespace(value="exploratory"),
+            canonical_hash="sha256:" + result_id[-1] * 64,
+            output_hashes={},
+        )
+
+    diagnostic_result = result(
+        "result_diagnostic_1", "blocked", "design fact remains unresolved"
+    )
+    analysis_result = result(
+        "result_analysis_2", "blocked", "required upstream result is unusable"
+    )
+
+    class Runtime:
+        project_workspace = project
+        _invocation_bindings = {
+            diagnostic.binding_id: diagnostic,
+            analysis.binding_id: analysis,
+        }
+
+        @staticmethod
+        def run_diagnostic(*, binding_id):
+            assert binding_id == diagnostic.binding_id
+            return {
+                "status": "blocked",
+                "result_id": diagnostic_result.result_id,
+                "receipt_id": None,
+                "blockers": list(diagnostic_result.blockers),
+            }
+
+        @staticmethod
+        def run_analysis(objective, *, binding_id):
+            assert objective
+            assert binding_id == analysis.binding_id
+            return {
+                "status": "blocked",
+                "result_id": analysis_result.result_id,
+                "receipt_id": None,
+                "blockers": list(analysis_result.blockers),
+                "required_upstream": ["upstream.fixture.v1"],
+                "candidate_result_ids": ["result_candidate_3"],
+                "dependency_verdicts": [
+                    {
+                        "capability_id": "upstream.fixture.v1",
+                        "usable": False,
+                        "reasons": ["status_not_accepted"],
+                    }
+                ],
+            }
+
+        @staticmethod
+        def planning_material(contract_id):
+            assert contract_id == "contract-fixture"
+            return None, (diagnostic_result, analysis_result)
+
+    agent = SimpleNamespace(
+        product_runtime=Runtime(),
+        workspace=workspace,
+        conversation_id=conversation.conversation_id,
+        manifest=None,
+    )
+    executor = binding_qualification._BindingQualificationExecutor(
+        tasks={
+            "REPL-01": {
+                "task_id": "REPL-01",
+                "dataset_id": "fixture",
+                "required_artifact_roles": ["audit"],
+                "expected_probe_capabilities": [],
+                "output_contract": {
+                    "artifact_roles": ["audit"],
+                    "artifact_paths": {"audit": "audit.json"},
+                    "artifact_schemas": {"audit.json": ["status"]},
+                },
+            }
+        },
+        references={},
+        paper_root=tmp_path,
+    )
+
+    completed = executor(agent, "task REPL-01 (turn 1)", 60)
+
+    assert completed.status == "completed"
+    assert [item["qualification_status"] for item in executor.records] == [
+        "executed_terminal_diagnostic_block",
+        "failed_validation",
+    ]
+    assert executor.records[0]["result_blockers"] == [
+        "design fact remains unresolved"
+    ]
+    failed = executor.records[1]
+    assert failed["result_status"] == "blocked"
+    assert failed["result_blockers"] == [
+        "required upstream result is unusable"
+    ]
+    assert failed["response_required_upstream"] == ["upstream.fixture.v1"]
+    assert failed["response_dependency_verdicts"][0]["reasons"] == [
+        "status_not_accepted"
+    ]
+
+
 def test_qualification_constructs_posterior_calibration_positive(
     tmp_path: Path,
 ) -> None:

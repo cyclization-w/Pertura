@@ -325,7 +325,13 @@ def run_guide_efficacy(
 
     target_uids: set[str] = set()
     evaluations: list[dict[str, Any]] = []
-    dependency_projection = staging / "_dependency_results.json"
+    dependency_projections = tuple(
+        staging / name
+        for name in (
+            "_dependency_results.json",
+            "_runtime_dependencies.json",
+        )
+    )
     for index, raw in enumerate(configured):
         if not isinstance(raw, dict):
             return blocked(spec, request, contract, "each targets entry must be an object")
@@ -347,11 +353,16 @@ def run_guide_efficacy(
         child_request = request.model_copy(update={"parameters": merged})
         child_staging = staging / f"target_{index + 1:04d}"
         child_staging.mkdir(parents=True, exist_ok=True)
-        if dependency_projection.is_file():
-            shutil.copyfile(
-                dependency_projection,
-                child_staging / dependency_projection.name,
-            )
+        # Each target executes in its own staging directory.  Preserve both
+        # receipt-backed result projections and provenance-only data-asset
+        # projections so a bound retained-cell manifest remains visible to
+        # every child invocation.
+        for projection in dependency_projections:
+            if projection.is_file():
+                shutil.copyfile(
+                    projection,
+                    child_staging / projection.name,
+                )
         child = _run_single_guide_efficacy(
             spec,
             child_request,

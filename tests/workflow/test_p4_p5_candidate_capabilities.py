@@ -185,11 +185,69 @@ def test_effect_matrix_signed_program_cluster_and_ora(tmp_path: Path) -> None:
         "enrichment.ora.v1",
         contract,
         ora_stage,
-        {"min_gene_set_size": 2, "max_gene_set_size": 10, "effect_threshold": 0.1},
+        {
+            "min_gene_set_size": 2,
+            "max_gene_set_size": 10,
+            "effect_threshold": 0.1,
+        },
     )
     assert ora.status.value in {"completed", "completed_with_caution"}
     assert (ora_stage / "ora_results.csv").is_file()
     assert (ora_stage / "ora_manifest.json").is_file()
+
+
+def test_effect_matrix_accepts_public_trans_de_target_uid_rows(
+    tmp_path: Path,
+) -> None:
+    contract = _contract(tmp_path)
+    effect_table = tmp_path / "trans_de_results.tsv"
+    lines = ["target_uid\tgene\tlogFC\tPValue\tFDR"]
+    lines.extend(
+        f"T{target}\tG{gene}\t{(target - gene) / 10:.3f}\t0.01\t0.05"
+        for target in range(5)
+        for gene in range(200)
+    )
+    effect_table.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    staging = tmp_path / "target_uid_effect_matrix"
+    staging.mkdir()
+    (staging / "_runtime_dependencies.json").write_text(
+        json.dumps(
+            {
+                "dependencies": [
+                    {
+                        "kind": "data_asset",
+                        "object_id": "asset_effect_table_fixture",
+                        "object_hash": "sha256:" + "b" * 64,
+                        "payload": {
+                            "asset_id": "asset_effect_table_fixture",
+                            "role": "effect_table",
+                            "resolved_path": str(effect_table.resolve()),
+                            "schema_validation_status": "validated",
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assembled = _run(
+        "effect.matrix.assemble.v1",
+        contract,
+        staging,
+        {
+            "effect_table_paths": [str(effect_table)],
+            "effect_scale": "logFC",
+            "estimand": "target_by_replicate_pseudobulk",
+            "min_perturbations": 5,
+            "min_features": 200,
+        },
+    )
+
+    assert assembled.status.value == "completed"
+    assert assembled.metrics["n_perturbations"] == 5
+    assert assembled.metrics["n_features"] == 200
 
 
 def test_interpretation_provenance_and_literature_opt_in(

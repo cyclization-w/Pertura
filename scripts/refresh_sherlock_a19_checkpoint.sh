@@ -141,7 +141,11 @@ assert qualification["passed"] is True
 assert qualification["status"] == "passed"
 assert qualification["qualified_binding_count"] > 0
 assert all(
-    record["qualification_status"] in {"executed", "expected_blocked_probe"}
+    record["qualification_status"] in {
+        "executed",
+        "expected_blocked_probe",
+        "executed_terminal_diagnostic_block",
+    }
     for record in qualification["records"]
 )
 print("qualified_capability_bindings:", qualification["qualified_binding_count"])

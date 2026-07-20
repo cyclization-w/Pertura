@@ -35,6 +35,12 @@ from qualify_a19_evaluators import (
 
 _TASK_PATTERN = re.compile(r"task ([A-Z]+-[0-9]+) \(turn")
 
+_SUCCESS_STATUSES_BY_TOOL = {
+    "run_diagnostic": {"screen_passed", "caution"},
+    "run_analysis": {"completed", "completed_with_caution"},
+    "evaluate_virtual_model": {"supported", "limited"},
+}
+
 
 def _read_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -86,6 +92,12 @@ def _binding_record(binding, **updates: Any) -> dict[str, Any]:
         "result_hash": None,
         "receipt_id": None,
         "result_status": None,
+        "result_blockers": [],
+        "result_cautions": [],
+        "response_blockers": [],
+        "response_required_upstream": [],
+        "response_candidate_result_ids": [],
+        "response_dependency_verdicts": [],
         "output_hashes": {},
     }
     record.update(updates)
@@ -181,9 +193,18 @@ class _BindingQualificationExecutor:
         turn = project.store.begin_turn(agent.conversation_id, prompt)
         result_ids: list[str] = []
         task_records: list[dict[str, Any]] = []
+        bindings = tuple(runtime._invocation_bindings.values())
+        predecessor_binding_ids = {
+            predecessor_id
+            for binding in bindings
+            for predecessor_id in binding.dependency_binding_ids
+        }
         try:
-            for binding in runtime._invocation_bindings.values():
+            for binding in bindings:
                 response = None
+                result_status: str | None = None
+                result_blockers: list[str] = []
+                result_cautions: list[str] = []
                 try:
                     if binding.tool_name == "run_diagnostic":
                         response = runtime.run_diagnostic(
@@ -216,6 +237,19 @@ class _BindingQualificationExecutor:
 
                 try:
                     result_id = str(response.get("result_id") or "")
+                    response_details = {
+                        "response_blockers": list(response.get("blockers") or ()),
+                        "response_required_upstream": list(
+                            response.get("required_upstream") or ()
+                        ),
+                        "response_candidate_result_ids": list(
+                            response.get("candidate_result_ids") or ()
+                        ),
+                        "response_dependency_verdicts": [
+                            dict(item)
+                            for item in response.get("dependency_verdicts") or ()
+                        ],
+                    }
                     if binding.readiness == "blocked_probe":
                         if binding.capability_id not in expected_probes:
                             raise RuntimeError(
@@ -227,6 +261,9 @@ class _BindingQualificationExecutor:
                         qualification_status = "expected_blocked_probe"
                         result_hash = None
                         output_hashes: Mapping[str, str] = {}
+                        result_status = str(response.get("status") or "")
+                        result_blockers: list[str] = []
+                        result_cautions: list[str] = []
                     else:
                         if not result_id:
                             raise RuntimeError(
@@ -246,6 +283,35 @@ class _BindingQualificationExecutor:
                         )
                         if result is None:
                             raise RuntimeError("result was not committed")
+                        result_status = str(
+                            getattr(result.status, "value", result.status)
+                        )
+                        result_blockers = list(result.blockers)
+                        result_cautions = list(result.cautions)
+                        successful_statuses = _SUCCESS_STATUSES_BY_TOOL[
+                            binding.tool_name
+                        ]
+                        if result_status not in successful_statuses:
+                            # A committed diagnostic block can be the valid
+                            # outcome of a terminal design audit.  It cannot,
+                            # however, qualify a binding whose result is an
+                            # input to another bound capability.
+                            if (
+                                binding.tool_name == "run_diagnostic"
+                                and binding.binding_id
+                                not in predecessor_binding_ids
+                                and result_status in {"blocked", "unresolved"}
+                            ):
+                                qualification_status = (
+                                    "executed_terminal_diagnostic_block"
+                                )
+                            else:
+                                raise RuntimeError(
+                                    "bound execution produced an unusable result; "
+                                    f"status={result_status}, "
+                                    f"blockers={result_blockers}, "
+                                    f"cautions={result_cautions}"
+                                )
                         if result.capability_trust.value == "exploratory":
                             if response.get("receipt_id") is not None:
                                 raise RuntimeError(
@@ -255,7 +321,8 @@ class _BindingQualificationExecutor:
                         elif not response.get("receipt_id"):
                             raise RuntimeError("trusted result lacks receipt")
                         result_ids.append(result_id)
-                        qualification_status = "executed"
+                        if result_status in successful_statuses:
+                            qualification_status = "executed"
                         result_hash = result.canonical_hash
                         output_hashes = dict(result.output_hashes)
 
@@ -266,8 +333,11 @@ class _BindingQualificationExecutor:
                             result_id=result_id or None,
                             result_hash=result_hash,
                             receipt_id=response.get("receipt_id"),
-                            result_status=response.get("status"),
+                            result_status=result_status,
+                            result_blockers=result_blockers,
+                            result_cautions=result_cautions,
                             output_hashes=output_hashes,
+                            **response_details,
                         )
                     )
                 except Exception as exc:
@@ -282,7 +352,29 @@ class _BindingQualificationExecutor:
                                 str(response.get("result_id") or "") or None
                             ),
                             receipt_id=response.get("receipt_id"),
-                            result_status=response.get("status"),
+                            result_status=(
+                                result_status
+                                or str(response.get("status") or "")
+                                or None
+                            ),
+                            result_blockers=result_blockers,
+                            result_cautions=result_cautions,
+                            response_blockers=list(
+                                response.get("blockers") or ()
+                            ),
+                            response_required_upstream=list(
+                                response.get("required_upstream") or ()
+                            ),
+                            response_candidate_result_ids=list(
+                                response.get("candidate_result_ids") or ()
+                            ),
+                            response_dependency_verdicts=[
+                                dict(item)
+                                for item in response.get(
+                                    "dependency_verdicts"
+                                )
+                                or ()
+                            ],
                         )
                     )
                     continue
@@ -497,7 +589,11 @@ def qualify(
         item
         for item in records
         if item["qualification_status"]
-        not in {"executed", "expected_blocked_probe"}
+        not in {
+            "executed",
+            "expected_blocked_probe",
+            "executed_terminal_diagnostic_block",
+        }
     ]
     failure_summary = [
         {
@@ -508,6 +604,19 @@ def qualify(
             "blockers": item["blockers"],
             "qualification_status": item["qualification_status"],
             "qualification_error": item["qualification_error"],
+            "result_status": item["result_status"],
+            "result_blockers": item["result_blockers"],
+            "result_cautions": item["result_cautions"],
+            "response_blockers": item["response_blockers"],
+            "response_required_upstream": item[
+                "response_required_upstream"
+            ],
+            "response_candidate_result_ids": item[
+                "response_candidate_result_ids"
+            ],
+            "response_dependency_verdicts": item[
+                "response_dependency_verdicts"
+            ],
         }
         for item in failed_records
     ]
@@ -536,6 +645,11 @@ def qualify(
         "qualified_binding_count": len(records),
         "expected_blocked_probe_count": sum(
             item["qualification_status"] == "expected_blocked_probe"
+            for item in records
+        ),
+        "terminal_diagnostic_block_count": sum(
+            item["qualification_status"]
+            == "executed_terminal_diagnostic_block"
             for item in records
         ),
         "optional_unconfigured_task_ids": sorted(

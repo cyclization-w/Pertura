@@ -3,6 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from pertura_core import (
+    AnalysisStatus,
+    CapabilityTrust,
+    ResultEnvelope,
+    ScopeKey,
+    SourceClass,
+)
+
 from pertura_bench.paper_agent_execution import (
     _paper_dataset_contract,
     _register_submitted_task_artifacts,
@@ -230,6 +238,134 @@ def test_papa02_binding_uses_frozen_assets_contract_and_minimal_provider_call(
     ]
     assert "h5ad_path" not in json.dumps(visible)
     assert "retained_cell_manifest" not in json.dumps(visible)
+
+
+def test_papa03_binding_uses_runtime_dependency_admissibility(
+    tmp_path: Path,
+) -> None:
+    project, run, asset_registry = _workspace(tmp_path)
+    data = tmp_path / "papalexi.h5ad"
+    data.write_bytes(b"frozen-h5ad")
+    split = tmp_path / "evaluation.tsv"
+    split.write_text("cell_id\nisolated-cell\n", encoding="utf-8")
+    retained = tmp_path / "retained.tsv"
+    retained.write_text(
+        "cell_id\texpected_state\n"
+        "isolated-cell\tretain_for_external_label_proxy\n",
+        encoding="utf-8",
+    )
+    primary = _register(
+        asset_registry, project, run.run_id, data, "primary_dataset"
+    )
+    evaluation = _register(
+        asset_registry, project, run.run_id, split, "evaluation_split"
+    )
+    retained_asset = _register(
+        asset_registry,
+        project,
+        run.run_id,
+        retained,
+        "retained_cell_manifest",
+        kind="derived",
+    )
+    registered = {
+        asset.role: {
+            "asset_id": asset.asset_id,
+            "path": str(path),
+            "content_sha256": asset.content_sha256,
+            "kind": asset.kind,
+            "source_class": asset.source_class,
+        }
+        for asset, path in (
+            (primary, data),
+            (evaluation, split),
+            (retained_asset, retained),
+        )
+    }
+    template = json.loads(
+        (
+            ROOT / "src/pertura_bench/cases/design_confirmations.v1.json"
+        ).read_text(encoding="utf-8")
+    )["datasets"]["papalexi_thp1_eccite"]["paper_contract"]
+    contract = _paper_dataset_contract(
+        dataset_id="papalexi_thp1_eccite",
+        template=template,
+        registered_assets=registered,
+    )
+    upstream = ResultEnvelope(
+        run_id=run.run_id,
+        request_id="request_state_fit_fixture",
+        capability_id="state.reference.fit.v1",
+        capability_version="0.1.0",
+        capability_trust=CapabilityTrust.exploratory,
+        contract_id=contract.contract_id,
+        contract_hash=contract.canonical_hash,
+        scope=ScopeKey(dataset_id="papalexi_thp1_eccite"),
+        status=AnalysisStatus.blocked,
+        result_kind="state_reference_fit",
+        source_class=SourceClass.measured_result,
+        summary="Reference fitting was scientifically blocked.",
+        blockers=("no admissible control-state solution",),
+    )
+    task = {
+        "task_id": "PAPA-03",
+        "expected_probe_capabilities": [],
+        "output_contract": {
+            "artifact_paths": {"state_mapping": "state_mapping.tsv"}
+        },
+    }
+
+    blocked_binding = build_paper_task_invocation_bindings(
+        run_id=run.run_id,
+        task=task,
+        dataset_id="papalexi_thp1_eccite",
+        contract=contract,
+        registry=CapabilityRegistry.load_default(),
+        asset_registry=asset_registry,
+        project=project,
+        registered_assets=registered,
+        committed_results=(upstream,),
+        committed_records=(
+            {
+                "result": upstream.model_dump(mode="json"),
+                "verification_state": "validated_untrusted",
+            },
+        ),
+        advertised_capability_ids=("state.reference.map_knn.v1",),
+    )[0]
+
+    assert blocked_binding.readiness == "blocked_probe"
+    assert any(
+        "state.reference.fit.v1" in blocker
+        for blocker in blocked_binding.blockers
+    )
+
+    completed_payload = upstream.model_dump(mode="json")
+    completed_payload["canonical_hash"] = ""
+    completed_payload["status"] = AnalysisStatus.completed.value
+    completed_payload["blockers"] = []
+    completed = ResultEnvelope.model_validate(completed_payload)
+    ready_binding = build_paper_task_invocation_bindings(
+        run_id=run.run_id,
+        task=task,
+        dataset_id="papalexi_thp1_eccite",
+        contract=contract,
+        registry=CapabilityRegistry.load_default(),
+        asset_registry=asset_registry,
+        project=project,
+        registered_assets=registered,
+        committed_results=(completed,),
+        committed_records=(
+            {
+                "result": completed.model_dump(mode="json"),
+                "verification_state": "validated_untrusted",
+            },
+        ),
+        advertised_capability_ids=("state.reference.map_knn.v1",),
+    )[0]
+
+    assert ready_binding.readiness == "ready"
+    assert ready_binding.dependency_result_ids == (completed.result_id,)
 
 
 def test_every_advertised_paper_surface_compiles_without_parameter_guessing(

@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from pertura_core import CapabilitySpec, DatasetContract, ResultEnvelope
+from pertura_core import CapabilitySpec, DatasetContract, ResultEnvelope, ScopeKey
 from pertura_runtime.invocation_bindings import build_invocation_binding
 from pertura_runtime.project.assets import DataAssetRegistry
 from pertura_runtime.project.models import (
@@ -17,6 +17,7 @@ from pertura_runtime.project.workspace import ProjectWorkspace
 from pertura_workflow.capabilities.registry import CapabilityRegistry
 from pertura_workflow.environment import environment_lock
 from pertura_workflow.knowledge_resources import knowledge_resource_lock
+from pertura_workflow.planner import resolve_dependencies
 
 
 _ROLE_ALIASES = {
@@ -119,6 +120,8 @@ def build_paper_task_invocation_bindings(
             spec=spec,
             candidates=candidates,
             registry=registry,
+            contract=contract,
+            required_scope=ScopeKey(dataset_id=dataset_id),
             committed_results=committed_results,
             committed_records=committed_records,
         )
@@ -445,6 +448,8 @@ def _bound_dependencies(
     spec: CapabilitySpec,
     candidates: tuple[str, ...],
     registry: CapabilityRegistry,
+    contract: DatasetContract,
+    required_scope: ScopeKey,
     committed_results: tuple[ResultEnvelope, ...],
     committed_records: tuple[Mapping[str, Any], ...],
 ) -> tuple[tuple[ResultEnvelope, ...], list[str]]:
@@ -501,7 +506,57 @@ def _bound_dependencies(
                     "dependency set "
                     f"{group.get('name', 'unnamed')} lacks {minimum} verified result(s)"
                 )
-    return tuple(selected), missing
+    # Compile ancestor dependencies through the same resolver used at runtime.
+    # Same-turn predecessors remain represented by dependency_binding_ids and
+    # are intentionally absent from this ancestor-only validation spec.
+    ancestor_dependencies = tuple(
+        dependency_id
+        for dependency_id in spec.depends_on
+        if dependency_id not in candidates
+    )
+    if ancestor_dependencies:
+        validation_spec = spec.model_copy(
+            update={"depends_on": ancestor_dependencies}
+        )
+        selected_ids = {item.result_id for item in selected}
+        resolution = resolve_dependencies(
+            validation_spec,
+            contract=contract,
+            required_scope=required_scope,
+            committed_results=tuple(current),
+            dependency_hints=tuple(
+                {
+                    "object_id": item.result_id,
+                    "object_hash": item.canonical_hash,
+                    "state": "current",
+                }
+                for item in selected
+                if item.capability_id in ancestor_dependencies
+            ),
+            trusted_receipt_result_ids=tuple(
+                item.result_id
+                for item in current
+                if (
+                    records_by_id.get(item.result_id) or {}
+                ).get("verification_state")
+                == "trusted_receipt"
+            ),
+            registry=registry,
+        )
+        if not resolution.ok:
+            missing.extend(resolution.blockers)
+        resolved_ids = {
+            dependency.object_id
+            for dependency in resolution.dependencies
+            if dependency.object_id in selected_ids
+        }
+        selected = [
+            item
+            for item in selected
+            if item.capability_id not in ancestor_dependencies
+            or item.result_id in resolved_ids
+        ]
+    return tuple(selected), list(dict.fromkeys(missing))
 
 
 def _ensure_role_alias(
