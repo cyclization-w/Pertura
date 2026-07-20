@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -370,7 +371,10 @@ def qualify(
                 {
                     "schema_version": "pertura-resource-evidence-v1",
                     "mode": "scheduler",
-                    "scheduler_job_id": "a19-binding-qualification",
+                    "scheduler_job_id": (
+                        os.environ.get("SLURM_JOB_ID")
+                        or "a19-binding-qualification"
+                    ),
                     "requested_memory_gb": memory_gb,
                     "actual_memory_gb": memory_gb,
                     "cpu_count": 1,
