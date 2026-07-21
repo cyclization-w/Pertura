@@ -77,7 +77,9 @@ sha256sum "$RESOURCE_LOCK_SET" | tee "$PAPER_MANIFESTS/resource-lock-set.a19.she
 LEGACY_TASK_REFS="$PAPER_MANIFESTS/task-reference-catalog.a18.bound.json"
 TASK_REFS="$PAPER_MANIFESTS/task-reference-catalog.a19.bound.json"
 ANCHORS="$PERTURA_REPO/benchmarks/paper_v1/paper_anchors.v1.json"
-ASSETS="$PAPER_MANIFESTS/paper-agent-assets.a18.sherlock.bound.json"
+LEGACY_ASSETS="$PAPER_MANIFESTS/paper-agent-assets.a18.sherlock.bound.json"
+ASSET_TEMPLATE="$CHECKPOINT_ROOT/paper-agent-assets.a19.sherlock.template.json"
+ASSETS="$PAPER_MANIFESTS/paper-agent-assets.a19.sherlock.bound.json"
 PLAN_TEMPLATE="$CHECKPOINT_ROOT/server-plan.a19.sherlock.template.json"
 BOUND_PLAN="$CHECKPOINT_ROOT/server-plan.a19.sherlock.bound.json"
 
@@ -99,6 +101,88 @@ fi
   --output "$TASK_REFS"
 sha256sum "$TASK_REFS" | \
   tee "$PAPER_MANIFESTS/task-reference-catalog.a19.bound.sha256"
+
+# The legacy catalog incorrectly tied PAPA-07 to the shared task-reference
+# manifest. Updating the independent PAPA-06 reference must not invalidate
+# PAPA-07. Derive an otherwise identical template with exactly that obsolete
+# role removed, then bind every remaining asset against its current bytes.
+"$MAIN_ENV/bin/python" - "$LEGACY_ASSETS" "$ASSET_TEMPLATE" <<'PY'
+import copy
+import json
+import sys
+from pathlib import Path
+
+source_path, output_path = map(Path, sys.argv[1:])
+source = json.loads(source_path.read_text(encoding="utf-8"))
+assert source["schema_version"] == "pertura-paper-agent-assets-v1"
+assert source["passed"] is True
+workflows = copy.deepcopy(source["workflows"])
+removed = []
+for workflow_id, workflow in workflows.items():
+    retained = []
+    for asset in workflow.get("assets") or []:
+        if asset.get("role") == "global_effect_reference_lock":
+            removed.append((workflow_id, dict(asset)))
+            continue
+        asset.pop("content_sha256", None)
+        retained.append(asset)
+    workflow["assets"] = retained
+assert len(removed) == 1 and removed[0][0] == "WF-PAPA", removed
+payload = {
+    "schema_version": "pertura-paper-agent-assets-template-v1",
+    "source_catalogs": {
+        "legacy_bound_catalog": str(source_path),
+        "transformation": "remove_obsolete_global_effect_reference_lock",
+    },
+    "workflows": workflows,
+}
+output_path.write_text(
+    json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
+print("removed_asset_role: global_effect_reference_lock")
+PY
+
+"$MAIN_ENV/bin/python" "$PERTURA_REPO/scripts/bind_paper_agent_catalogs.py" \
+  assets \
+  --template "$ASSET_TEMPLATE" \
+  --task-catalog "$TASKS" \
+  --cache "$BENCHMARK_ROOT/cache" \
+  --paper-root "$PAPER_ROOT" \
+  --output "$ASSETS"
+
+"$MAIN_ENV/bin/python" - "$LEGACY_ASSETS" "$ASSETS" <<'PY'
+import json
+import sys
+
+old, new = (json.load(open(path, encoding="utf-8")) for path in sys.argv[1:])
+assert new["passed"] is True
+for workflow_id, old_workflow in old["workflows"].items():
+    old_assets = {
+        item["role"]: item for item in old_workflow.get("assets") or []
+        if item["role"] != "global_effect_reference_lock"
+    }
+    new_assets = {
+        item["role"]: item
+        for item in new["workflows"][workflow_id].get("assets") or []
+    }
+    assert set(old_assets) == set(new_assets), workflow_id
+    for role, old_asset in old_assets.items():
+        current = new_assets[role]
+        assert current["root"] == old_asset["root"], (workflow_id, role)
+        assert current["relative_path"] == old_asset["relative_path"], (workflow_id, role)
+        assert current["content_sha256"] == old_asset["content_sha256"], (
+            workflow_id, role, old_asset["content_sha256"],
+            current["content_sha256"],
+        )
+assert all(
+    item["role"] != "global_effect_reference_lock"
+    for workflow in new["workflows"].values()
+    for item in workflow.get("assets") or []
+)
+print("asset_catalog_delta: obsolete_role_only")
+PY
+sha256sum "$ASSETS" | \
+  tee "$PAPER_MANIFESTS/paper-agent-assets.a19.sherlock.bound.sha256"
 
 EVALUATOR_QUALIFICATION="$CHECKPOINT_ROOT/evaluator-qualification.a19.json"
 "$MAIN_ENV/bin/python" "$PERTURA_REPO/scripts/qualify_a19_evaluators.py" \
@@ -362,6 +446,9 @@ if test -f "$CANARY_SCRIPT"; then
     "$CANARY_SCRIPT"
   sed -i \
     's/task-reference-catalog\.a18\.bound\.json/task-reference-catalog.a19.bound.json/g' \
+    "$CANARY_SCRIPT"
+  sed -i \
+    's/paper-agent-assets\.a18\.sherlock\.bound\.json/paper-agent-assets.a19.sherlock.bound.json/g' \
     "$CANARY_SCRIPT"
   bash -n "$CANARY_SCRIPT"
 fi
