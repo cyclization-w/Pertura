@@ -15,6 +15,7 @@ from pertura_bench.capability_availability import (
     build_task_capability_availability,
 )
 from pertura_bench.paper_agent_execution import (
+    CAPABILITY_BINDING_QUALIFICATION_STATUSES,
     _artifact_paths_present,
     run_paper_agent_workflow,
 )
@@ -589,11 +590,7 @@ def qualify(
         item
         for item in records
         if item["qualification_status"]
-        not in {
-            "executed",
-            "expected_blocked_probe",
-            "executed_terminal_diagnostic_block",
-        }
+        not in CAPABILITY_BINDING_QUALIFICATION_STATUSES
     ]
     failure_summary = [
         {

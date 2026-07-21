@@ -232,9 +232,15 @@ def test_checkpoint_requires_self_hashed_binding_qualification(
         "records": [
             {
                 "binding_id": f"binding_{index}",
-                "qualification_status": "executed",
+                "qualification_status": status,
             }
-            for index in range(3)
+            for index, status in enumerate(
+                (
+                    "executed",
+                    "expected_blocked_probe",
+                    "executed_terminal_diagnostic_block",
+                )
+            )
         ],
     }
     payload["canonical_hash"] = execution.canonical_hash(payload)

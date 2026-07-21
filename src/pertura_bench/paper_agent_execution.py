@@ -54,6 +54,14 @@ from pertura_runtime.project.workspace import ProjectWorkspace
 from pertura_workflow.capability_contracts import build_capability_contract_catalog
 
 
+CAPABILITY_BINDING_QUALIFICATION_STATUSES = frozenset(
+    {
+        "executed",
+        "expected_blocked_probe",
+        "executed_terminal_diagnostic_block",
+    }
+)
+
 TurnExecutor = Callable[[ClaudePerturaAgent, str, int], Any]
 
 PAPER_CODEACT_PACKAGES = (
@@ -2408,7 +2416,7 @@ def _verify_capability_binding_qualification(
         or any(
             not isinstance(item, Mapping)
             or item.get("qualification_status")
-            not in {"executed", "expected_blocked_probe"}
+            not in CAPABILITY_BINDING_QUALIFICATION_STATUSES
             for item in qualification_records
         )
         or observed_qualification_hash

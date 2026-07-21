@@ -135,17 +135,18 @@ sha256sum "$CAPABILITY_BINDING_QUALIFICATION" | \
 import json
 import sys
 
+from pertura_bench.paper_agent_execution import (
+    CAPABILITY_BINDING_QUALIFICATION_STATUSES,
+)
+
 qualification = json.load(open(sys.argv[1], encoding="utf-8"))
 assert qualification["schema_version"] == "pertura-capability-binding-qualification-v1"
 assert qualification["passed"] is True
 assert qualification["status"] == "passed"
 assert qualification["qualified_binding_count"] > 0
 assert all(
-    record["qualification_status"] in {
-        "executed",
-        "expected_blocked_probe",
-        "executed_terminal_diagnostic_block",
-    }
+    record["qualification_status"]
+    in CAPABILITY_BINDING_QUALIFICATION_STATUSES
     for record in qualification["records"]
 )
 print("qualified_capability_bindings:", qualification["qualified_binding_count"])
@@ -176,6 +177,55 @@ PY
 
 sha256sum "$PLAN_TEMPLATE" "$BOUND_PLAN" | \
   tee "$CHECKPOINT_ROOT/server-plan-sha256.txt"
+
+export PERTURA_BENCH_CHECKPOINT_BINDING="$BOUND_PLAN"
+export PERTURA_BENCH_WHEEL="$WHEEL"
+"$MAIN_ENV/bin/python" - \
+  "$PERTURA_REPO" \
+  "$TASKS" \
+  "$TASK_REFS" \
+  "$ANCHORS" \
+  "$ASSETS" \
+  "$CONTRACT_CATALOG" \
+  "$CAPABILITY_AVAILABILITY" \
+  "$BOUND_PLAN" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+from pertura_bench.paper_agent_execution import _verify_paper_checkpoint
+
+(
+    repo,
+    task_catalog,
+    task_references,
+    anchors,
+    assets,
+    capability_catalog,
+    availability_path,
+    plan_path,
+) = (Path(value) for value in sys.argv[1:])
+availability = json.loads(availability_path.read_text(encoding="utf-8"))
+plan = json.loads(plan_path.read_text(encoding="utf-8"))
+jobs = [
+    job for job in plan["jobs"]
+    if job["kind"] == "paper_agent_workflow"
+]
+for job in jobs:
+    _verify_paper_checkpoint(
+        repo_root=repo,
+        workflow_id=str(job["workflow_id"]),
+        condition=str(job["benchmark_condition"]),
+        repeat_index=int(job["repeat_index"]),
+        task_catalog_path=task_catalog,
+        task_reference_catalog_path=task_references,
+        paper_anchor_catalog_path=anchors,
+        asset_catalog_path=assets,
+        capability_contract_catalog_path=capability_catalog,
+        capability_availability_hash=availability["canonical_hash"],
+    )
+print("runtime_checkpoint_preflight_jobs:", len(jobs))
+PY
 
 "$MAIN_ENV/bin/python" - "$BOUND_PLAN" "$COMMIT" "$CAPABILITY_AVAILABILITY" <<'PY'
 import json
