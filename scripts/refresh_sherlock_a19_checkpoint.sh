@@ -47,6 +47,18 @@ set -a
 source "$PAPER_MANIFESTS/sherlock-environment-paths.env"
 set +a
 
+# The scientific-method checkpoint changes the frozen Python runner resources
+# used by these two profiles without changing their package specifications.
+# Refresh their manifests only when the newly installed wheel makes doctor fail.
+for profile in python-science-v1 perturbseq-python-v1; do
+  if "$MAIN_ENV/bin/pertura" env doctor "$profile" >/dev/null 2>&1; then
+    echo "environment manifest current: $profile"
+  else
+    echo "relocking environment manifest: $profile"
+    "$MAIN_ENV/bin/pertura" env setup "$profile"
+  fi
+done
+
 CONTRACT_CATALOG="$PAPER_MANIFESTS/capability-contract-catalog.a19.json"
 TASKS="$PERTURA_REPO/benchmarks/paper_v1/agent_tasks.v2.json"
 CAPABILITY_AVAILABILITY="$CHECKPOINT_ROOT/task-capability-availability.a19.json"
