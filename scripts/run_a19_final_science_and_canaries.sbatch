@@ -87,7 +87,8 @@ mkdir -p "$(dirname "$PAPA_EXPRESSION")"
   --obs-column gene --obs-column guide_ID --obs-column replicate \
   --expression-genes-file "$PAPA_GUIDE_MAP" \
   --expression-gene-column target --gene-alias PDL1=CD274 \
-  --exclude-gene eGFP --normalize-total 10000 --log1p \
+  --exclude-gene NT --exclude-gene NTC --exclude-gene eGFP \
+  --normalize-total 10000 --log1p \
   --chunk-rows 1024 --max-memory-gb 4
 test -f "$PAPA_EXPRESSION"
 "$MAIN_ENV/bin/python" - "$(dirname "$PAPA_EXPRESSION")/benchmark_tables_manifest.json" <<'PY'

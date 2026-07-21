@@ -200,6 +200,7 @@ def test_method_parity_gate_has_exact_real_task_coverage() -> None:
     ).read_text(encoding="utf-8")
     assert "#SBATCH --mem=48G" in finalizer
     assert "--normalize-total 10000 --log1p" in finalizer
+    assert "--exclude-gene NT --exclude-gene NTC --exclude-gene eGFP" in finalizer
     assert "PAPA target-expression transform verified" in finalizer
     binding_qualification = (
         ROOT / "scripts/qualify_a19_capability_bindings.py"
