@@ -22,16 +22,13 @@ PROMPT_WORKSPACE = (
 
 
 def test_codeact_task_prompt_freezes_environment_for_all_conditions() -> None:
-    catalog = json.loads(
-        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
-    )
+    catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
     workflow = next(
         item for item in catalog["workflows"] if item["workflow_id"] == "WF-KANG"
     )
     task = next(item for item in workflow["turns"] if item["task_id"] == "KANG-01")
     anchors = {
-        anchor_id: {"anchor_id": anchor_id}
-        for anchor_id in task["paper_anchor_ids"]
+        anchor_id: {"anchor_id": anchor_id} for anchor_id in task["paper_anchor_ids"]
     }
 
     for condition in ("pertura_full", "prompt_only", "free_codeact"):
@@ -58,9 +55,7 @@ def test_codeact_task_prompt_freezes_environment_for_all_conditions() -> None:
 
 
 def test_task_prompt_publishes_one_absolute_canonical_output_root() -> None:
-    catalog = json.loads(
-        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
-    )
+    catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
 
     for workflow in catalog["workflows"]:
         for task in workflow["turns"]:
@@ -82,10 +77,7 @@ def test_task_prompt_publishes_one_absolute_canonical_output_root() -> None:
                     dependency_contracts={},
                 )
 
-                assert (
-                    f"Canonical task output root (absolute): {task_root}"
-                    in prompt
-                )
+                assert f"Canonical task output root (absolute): {task_root}" in prompt
                 assert "exact workspace-relative destinations" not in prompt
                 assert (
                     "do not write to a similarly named project-level "
@@ -178,9 +170,7 @@ class _Runtime:
         return ()
 
     def replace_invocation_bindings(self, *, task_id, bindings):
-        self.invocation_bindings = {
-            item.binding_id: item for item in bindings
-        }
+        self.invocation_bindings = {item.binding_id: item for item in bindings}
 
     def close(self, graceful=True):
         return None
@@ -646,10 +636,13 @@ def test_primary_h5ad_registers_a_strict_capability_alias(tmp_path: Path) -> Non
         "primary_h5ad": str(h5ad.resolve()),
         "primary_dataset": str(h5ad.resolve()),
     }
-    assert registry.resolve(
-        by_role["primary_dataset"].asset_id,
-        expected_role="primary_dataset",
-    ) == h5ad.resolve()
+    assert (
+        registry.resolve(
+            by_role["primary_dataset"].asset_id,
+            expected_role="primary_dataset",
+        )
+        == h5ad.resolve()
+    )
 
     shared_manifest = execution._task_asset_manifest(
         workflow_id="WF-PAPA",
@@ -665,9 +658,7 @@ def test_primary_h5ad_registers_a_strict_capability_alias(tmp_path: Path) -> Non
             for role, asset in by_role.items()
         },
     )
-    assert [item["role"] for item in shared_manifest["assets"]] == [
-        "primary_h5ad"
-    ]
+    assert [item["role"] for item in shared_manifest["assets"]] == ["primary_h5ad"]
     assert "asset_id" not in shared_manifest["assets"][0]
 
 
@@ -715,10 +706,13 @@ def test_donor_metadata_registers_a_hidden_strict_cell_metadata_alias(
         == by_role["cell_metadata"].content_sha256
     )
     assert paths["donor_metadata"] == paths["cell_metadata"]
-    assert registry.resolve(
-        by_role["cell_metadata"].asset_id,
-        expected_role="cell_metadata",
-    ) == metadata.resolve()
+    assert (
+        registry.resolve(
+            by_role["cell_metadata"].asset_id,
+            expected_role="cell_metadata",
+        )
+        == metadata.resolve()
+    )
 
     baseline_manifest = execution._task_asset_manifest(
         workflow_id="WF-KANG",
@@ -734,9 +728,7 @@ def test_donor_metadata_registers_a_hidden_strict_cell_metadata_alias(
             for role, asset in by_role.items()
         },
     )
-    assert [item["role"] for item in baseline_manifest["assets"]] == [
-        "donor_metadata"
-    ]
+    assert [item["role"] for item in baseline_manifest["assets"]] == ["donor_metadata"]
     assert "asset_id" not in baseline_manifest["assets"][0]
 
 
@@ -793,10 +785,7 @@ def test_smoke_task_selection_runs_only_requested_turn(
     assert result["smoke_task_ids"] == ["REPL-03"]
     assert result["required_task_count"] == 1
     verdict = json.loads(
-        (
-            Path(result["execution_root"])
-            / "tasks/REPL-03/verdict.json"
-        ).read_text()
+        (Path(result["execution_root"]) / "tasks/REPL-03/verdict.json").read_text()
     )
     assert verdict["provider_status"] == "failed"
     assert verdict["provider_error"] == "fixture provider failure"
@@ -843,6 +832,18 @@ def test_accepted_submission_survives_later_max_turn_termination(
         execution,
         "evaluate_paper_task",
         lambda *args, **kwargs: {"status": "passed", "problems": []},
+    )
+    monkeypatch.setattr(
+        execution,
+        "_audit_capability_treatment_uptake",
+        lambda *args, **kwargs: {
+            "schema_version": "pertura-paper-capability-treatment-uptake-v2",
+            "capability_first_status": "failed",
+            "required_binding_coverage_status": "failed",
+            "model_binding_retry_status": "failed",
+            "runner_binding_integration_errors": [],
+            "calls": [],
+        },
     )
 
     def execute(agent, prompt, timeout):
@@ -936,27 +937,46 @@ def test_accepted_submission_survives_later_max_turn_termination(
     assert verdict["termination_reason"] == "max_turns"
     assert verdict["hard_gates"]["provider_scientific_completion"] is True
     assert verdict["hard_gates"]["independent_evaluation"] is True
+    assert "capability_first_bound_invocation" not in verdict["hard_gates"]
+    assert "required_binding_coverage" not in verdict["hard_gates"]
+    assert "capability_binding_call_validity" not in verdict["hard_gates"]
+    assert verdict["capability_process_checks"] == {
+        "schema_version": "pertura-capability-process-checks-v1",
+        "affects_task_status": False,
+        "capability_first_bound_invocation": False,
+        "advertised_binding_coverage": False,
+        "capability_binding_call_validity": False,
+    }
 
 
 def test_provider_termination_reason_is_separate_from_submission_state() -> None:
-    assert execution._provider_termination_reason(
-        provider_status="timeout",
-        provider_error=None,
-        provider_result_subtype=None,
-        timed_out=True,
-    ) == "task_timeout"
-    assert execution._provider_termination_reason(
-        provider_status="failed",
-        provider_error="Claude SDK result error: error_max_turns",
-        provider_result_subtype="error_max_turns",
-        timed_out=False,
-    ) == "max_turns"
-    assert execution._provider_termination_reason(
-        provider_status="completed",
-        provider_error=None,
-        provider_result_subtype="success",
-        timed_out=False,
-    ) == "completed"
+    assert (
+        execution._provider_termination_reason(
+            provider_status="timeout",
+            provider_error=None,
+            provider_result_subtype=None,
+            timed_out=True,
+        )
+        == "task_timeout"
+    )
+    assert (
+        execution._provider_termination_reason(
+            provider_status="failed",
+            provider_error="Claude SDK result error: error_max_turns",
+            provider_result_subtype="error_max_turns",
+            timed_out=False,
+        )
+        == "max_turns"
+    )
+    assert (
+        execution._provider_termination_reason(
+            provider_status="completed",
+            provider_error=None,
+            provider_result_subtype="success",
+            timed_out=False,
+        )
+        == "completed"
+    )
 
 
 def test_smoke_task_selection_rejects_unknown_task(tmp_path: Path) -> None:
@@ -1008,12 +1028,10 @@ def test_evidence_interpretation_prompt_forbids_recomputation() -> None:
     assert "Upstream repair contracts: {}" in prompt
     task_root = (PROMPT_WORKSPACE / "outputs/tasks/PAPA-07").as_posix()
     assert (
-        '"global_effect_claims": '
-        f'"{task_root}/global_effect_claims.tsv"'
+        '"global_effect_claims": ' f'"{task_root}/global_effect_claims.tsv"'
     ) in prompt
     assert (
-        '"global_effect_limitations": '
-        f'"{task_root}/global_effect_limitations.json"'
+        '"global_effect_limitations": ' f'"{task_root}/global_effect_limitations.json"'
     ) in prompt
     assert "exact absolute destinations" in prompt
 
@@ -1073,7 +1091,7 @@ def test_scientific_facts_are_shared_but_authority_context_is_pertura_only() -> 
     assert "registered_calibration_and_evaluation_selections" in full
     assert "do not call inspect_dataset again" in full
     assert (
-        'exact SDK Skill tool names frozen for this task are '
+        "exact SDK Skill tool names frozen for this task are "
         '["pertura:operate-pertura-workflow", '
         '"pertura:diagnose-perturb-seq-screen"]'
     ) in full
@@ -1103,11 +1121,10 @@ def test_scientific_facts_are_shared_but_authority_context_is_pertura_only() -> 
         assert "completion guard" not in text
 
 
-def test_capability_or_codeact_prompt_preserves_scientific_blocks_but_exits_integration_dead_ends(
-) -> None:
-    catalog = json.loads(
-        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text()
-    )
+def test_capability_or_codeact_prompt_preserves_scientific_blocks_but_exits_integration_dead_ends() -> (
+    None
+):
+    catalog = json.loads((ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text())
     workflow = next(
         item for item in catalog["workflows"] if item["workflow_id"] == "WF-REPL"
     )
@@ -1132,7 +1149,10 @@ def test_capability_or_codeact_prompt_preserves_scientific_blocks_but_exits_inte
         },
     )
 
-    assert "attempt each advertised capability at most once" in prompt
+    assert "optional treatment routes" in prompt
+    assert "uptake without changing task pass/fail" in prompt
+    assert "not required to invoke the first or every listed binding" in prompt
+    assert "When you choose to invoke a bound capability" in prompt
     assert "genuine scientific applicability or evidence blocker" in prompt
     assert "preserve that block and do not bypass it" in prompt
     assert "integration or access boundary" in prompt
@@ -1257,9 +1277,7 @@ def test_pertura_full_runner_writes_answer_free_static_contract_subset(
         for task in workflow["turns"]
         if task["task_id"] == "PAPA-01"
     )
-    assert subset["schema_version"] == (
-        "pertura-paper-capability-contract-subset-v2"
-    )
+    assert subset["schema_version"] == ("pertura-paper-capability-contract-subset-v2")
     assert subset["candidate_capability_ids"] == []
     assert subset["advertised_capability_ids"] == []
     assert subset["conditional_capability_ids"] == []
@@ -1366,9 +1384,7 @@ def test_accepted_papa01_artifact_is_available_to_papa02_binding(
             (output / "reference_cell_manifest.tsv").write_text(
                 "cell_id\ttechnical_state_id\nc1\t0\n", encoding="utf-8"
             )
-            (output / "reference_provenance.json").write_text(
-                "{}\n", encoding="utf-8"
-            )
+            (output / "reference_provenance.json").write_text("{}\n", encoding="utf-8")
             artifact_roles = [
                 "state_reference_model",
                 "reference_cell_manifest",
@@ -1409,9 +1425,7 @@ def test_accepted_papa01_artifact_is_available_to_papa02_binding(
             message_count=1,
             total_cost_usd=0.0,
         )
-        return SimpleNamespace(
-            status="completed", error=None, result_subtype="success"
-        )
+        return SimpleNamespace(status="completed", error=None, result_subtype="success")
 
     result = execution.run_paper_agent_workflow(
         "WF-PAPA",
@@ -1437,9 +1451,7 @@ def test_accepted_papa01_artifact_is_available_to_papa02_binding(
     assert binding.capability_id == "state.reference.fit.v1"
     assert binding.readiness == "ready", binding.blockers
     retained = [
-        item
-        for item in binding.input_assets
-        if item.role == "retained_cell_manifest"
+        item for item in binding.input_assets if item.role == "retained_cell_manifest"
     ]
     assert len(retained) == 1
     assert retained[0].content_sha256
@@ -1648,14 +1660,20 @@ def test_frozen_workflow_allocations_and_failure_classification() -> None:
         },
     }
     assert execution._workflow_resource_gate("WF-REPL", evidence) is True
-    assert execution._workflow_resource_gate(
-        "WF-REPL", evidence | {"allocated_cpus_on_node": 7}
-    ) is True
+    assert (
+        execution._workflow_resource_gate(
+            "WF-REPL", evidence | {"allocated_cpus_on_node": 7}
+        )
+        is True
+    )
     assert execution._workflow_resource_gate("WF-PAPA", evidence) is False
-    assert execution._workflow_resource_gate(
-        "WF-PAPA",
-        evidence | {"requested_memory_gb": 32, "actual_memory_gb": 32},
-    ) is True
+    assert (
+        execution._workflow_resource_gate(
+            "WF-PAPA",
+            evidence | {"requested_memory_gb": 32, "actual_memory_gb": 32},
+        )
+        is True
+    )
 
     valid_oom = execution._classify_task_validity(
         workflow_id="WF-REPL",
@@ -1702,6 +1720,20 @@ def test_frozen_workflow_allocations_and_failure_classification() -> None:
         resource_evidence=evidence,
     )
     assert network == ("invalid_infrastructure", "invalid_infrastructure")
+
+    runner_binding_incident = execution._classify_task_validity(
+        workflow_id="WF-REPL",
+        task_status="passed",
+        termination_reason="completed",
+        provider_error=None,
+        capability_binding_incident=True,
+        skill_leakage_audit={"status": "passed"},
+        resource_evidence=evidence,
+    )
+    assert runner_binding_incident == (
+        "invalid_infrastructure",
+        "invalid_infrastructure",
+    )
 
     for error in (
         "Authentication failed: invalid API key",
@@ -2018,6 +2050,51 @@ def test_reference_truth_access_audit_detects_scoring_inputs(tmp_path: Path) -> 
     )
 
 
+def test_reference_audit_ignores_non_path_metric_reference_identifier(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "message_type": "AssistantMessage",
+                        "payload": {
+                            "content": [
+                                "ToolUseBlock(name='Write', input={'file_path': "
+                                "'/workspace/analysis.py', 'content': "
+                                "'metric_reference = observed_metrics'})"
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "message_type": "AssistantMessage",
+                        "payload": {
+                            "content": [
+                                "ToolUseBlock(name='Read', input={'file_path': "
+                                "'/workspace/pertura_bench/cases/"
+                                "metric_references.v1.json'})"
+                            ]
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    audit = execution._audit_reference_truth_access(events, start_offset=0)
+
+    assert audit["status"] == "failed"
+    assert audit["scanned_tool_events"] == 2
+    assert len(audit["hits"]) == 1
+    assert audit["hits"][0]["matched_tokens"] == ["metric_references.v1.json"]
+
+
 def test_reference_audit_allows_only_registered_provider_assets(
     tmp_path: Path,
 ) -> None:
@@ -2090,8 +2167,7 @@ def test_reference_audit_allows_only_registered_provider_assets(
     )
     assert mixed["status"] == "failed"
     assert {
-        token.replace("\\", "/")
-        for token in mixed["hits"][0]["matched_tokens"]
+        token.replace("\\", "/") for token in mixed["hits"][0]["matched_tokens"]
     } == {"task_references/"}
 
 
@@ -2135,8 +2211,7 @@ def test_reference_audit_does_not_allow_unregistered_neutral_sibling(
     )
     assert audit["status"] == "failed"
     assert {
-        token.replace("\\", "/")
-        for token in audit["hits"][0]["matched_tokens"]
+        token.replace("\\", "/") for token in audit["hits"][0]["matched_tokens"]
     } == {"task_references/"}
 
 

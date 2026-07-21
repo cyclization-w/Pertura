@@ -15,9 +15,7 @@ from pertura_workflow.capability_contracts import (
 
 ROOT = Path(__file__).resolve().parents[2]
 TASKS = json.loads(
-    (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text(
-        encoding="utf-8"
-    )
+    (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text(encoding="utf-8")
 )
 
 
@@ -41,9 +39,7 @@ def test_static_availability_excludes_impossible_roles_and_dependencies() -> Non
     assert records["PAPA-01"]["advertised_capability_ids"] == []
     assert _excluded_ids(records["PAPA-01"]) == set()
     assert records["PAPA-02"]["advertised_conditional_capability_ids"] == []
-    assert records["PAPA-02"]["advertised_capability_ids"] == [
-        "state.reference.fit.v1"
-    ]
+    assert records["PAPA-02"]["advertised_capability_ids"] == ["state.reference.fit.v1"]
     assert _excluded_ids(records["PAPA-02"]) == set()
     assert records["KANG-01"]["candidate_capability_ids"] == []
     assert records["KANG-01"]["advertised_capability_ids"] == []
@@ -69,10 +65,7 @@ def test_static_availability_excludes_impossible_roles_and_dependencies() -> Non
             task["execution_mode"] == "capability_or_codeact"
         )
         assert not (set(record["advertised_capability_ids"]) & deprecated)
-        assert not (
-            set(record["advertised_capability_ids"])
-            & _excluded_ids(record)
-        )
+        assert not (set(record["advertised_capability_ids"]) & _excluded_ids(record))
 
 
 def test_provider_subset_contains_only_advertised_contracts() -> None:
@@ -89,9 +82,7 @@ def test_provider_subset_contains_only_advertised_contracts() -> None:
         availability=records["REPL-01"],
     )
 
-    assert subset["schema_version"] == (
-        "pertura-paper-capability-contract-subset-v2"
-    )
+    assert subset["schema_version"] == ("pertura-paper-capability-contract-subset-v2")
     assert subset["candidate_capability_ids"] == (
         records["REPL-01"]["advertised_capability_ids"]
     )
@@ -127,9 +118,7 @@ def test_capability_calls_are_observed_without_becoming_a_route_gate(
     audit = execution._audit_capability_treatment_uptake(
         event_log,
         start_offset=0,
-        advertised_capability_ids=(
-            "reference.state.control_pca_leiden.v1",
-        ),
+        advertised_capability_ids=("reference.state.control_pca_leiden.v1",),
     )
 
     assert audit["actual_mcp_capability_ids"] == [
@@ -199,6 +188,187 @@ def test_bound_call_errors_separate_runner_incidents_from_model_overrides(
     assert len(audit["model_binding_errors"]) == 2
     assert audit["model_binding_error_counts"] == {"binding_ready": 2}
     assert audit["model_binding_retry_status"] == "failed"
+    assert audit["capability_first_status"] == "passed"
+    assert audit["required_binding_coverage_status"] == "passed"
+    assert audit["boundary_release"]["outcome"] == ("integration_boundary_error")
+
+
+def test_first_binding_result_unlocks_scoped_work_between_later_bindings(
+    tmp_path: Path,
+) -> None:
+    event_log = tmp_path / "events.jsonl"
+    records = [
+        {
+            "message_type": "AssistantMessage",
+            "payload": {
+                "content": [
+                    "ToolUseBlock(id='call_first', "
+                    "name='mcp__pertura__run_diagnostic', "
+                    "input={'binding_id': 'binding_first'})"
+                ]
+            },
+        },
+        {
+            "message_type": "UserMessage",
+            "payload": {
+                "content": [
+                    "ToolResultBlock(tool_use_id='call_first', "
+                    "content='completed', is_error=False)"
+                ]
+            },
+        },
+        {
+            "message_type": "AssistantMessage",
+            "payload": {
+                "content": [
+                    "ToolUseBlock(id='call_bash', name='Bash', "
+                    "input={'command': 'inspect scoped output'})"
+                ]
+            },
+        },
+        {
+            "message_type": "AssistantMessage",
+            "payload": {
+                "content": [
+                    "ToolUseBlock(id='call_second', "
+                    "name='mcp__pertura__run_diagnostic', "
+                    "input={'binding_id': 'binding_second'})"
+                ]
+            },
+        },
+        {
+            "message_type": "UserMessage",
+            "payload": {
+                "content": [
+                    "ToolResultBlock(tool_use_id='call_second', "
+                    "content='blocked', is_error=False)"
+                ]
+            },
+        },
+    ]
+    event_log.write_text(
+        "\n".join(json.dumps(item) for item in records) + "\n",
+        encoding="utf-8",
+    )
+
+    audit = execution._audit_capability_treatment_uptake(
+        event_log,
+        start_offset=0,
+        advertised_capability_ids=("first.v1", "second.v1"),
+        invocation_bindings=(
+            {
+                "binding_id": "binding_first",
+                "capability_id": "first.v1",
+                "tool": "run_diagnostic",
+            },
+            {
+                "binding_id": "binding_second",
+                "capability_id": "second.v1",
+                "tool": "run_diagnostic",
+            },
+        ),
+    )
+
+    assert audit["capability_first_status"] == "passed"
+    assert audit["required_binding_coverage_status"] == "passed"
+    assert audit["first_boundary_violation"] is None
+    assert audit["missing_binding_ids"] == []
+
+
+def test_scientific_codeact_before_first_binding_remains_a_failure(
+    tmp_path: Path,
+) -> None:
+    event_log = tmp_path / "events.jsonl"
+    event_log.write_text(
+        json.dumps(
+            {
+                "message_type": "AssistantMessage",
+                "payload": {
+                    "content": [
+                        "ToolUseBlock(id='call_bash', name='Bash', "
+                        "input={'command': 'inspect data'})"
+                    ]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    audit = execution._audit_capability_treatment_uptake(
+        event_log,
+        start_offset=0,
+        advertised_capability_ids=("first.v1",),
+        invocation_bindings=(
+            {
+                "binding_id": "binding_first",
+                "capability_id": "first.v1",
+                "tool": "run_diagnostic",
+            },
+        ),
+    )
+
+    assert audit["capability_first_status"] == "failed"
+    assert audit["required_binding_coverage_status"] == "failed"
+    assert audit["first_boundary_violation"]["tool_name"] == "Bash"
+
+
+def test_declared_binding_parameter_override_counts_as_an_exact_call(
+    tmp_path: Path,
+) -> None:
+    event_log = tmp_path / "events.jsonl"
+    records = [
+        {
+            "message_type": "AssistantMessage",
+            "payload": {
+                "content": [
+                    "ToolUseBlock(id='call_override', "
+                    "name='mcp__pertura__run_analysis', "
+                    "input={'binding_id': 'binding_panel', "
+                    "'objective': 'Execute panel design', "
+                    "'parameters': {'weights': {'uncertainty': 1.0}}})"
+                ]
+            },
+        },
+        {
+            "message_type": "UserMessage",
+            "payload": {
+                "content": [
+                    "ToolResultBlock(tool_use_id='call_override', "
+                    "content='completed', is_error=False)"
+                ]
+            },
+        },
+    ]
+    event_log.write_text(
+        "\n".join(json.dumps(item) for item in records) + "\n",
+        encoding="utf-8",
+    )
+
+    audit = execution._audit_capability_treatment_uptake(
+        event_log,
+        start_offset=0,
+        advertised_capability_ids=("design.next_panel.v1",),
+        invocation_bindings=(
+            {
+                "binding_id": "binding_panel",
+                "capability_id": "design.next_panel.v1",
+                "tool": "run_analysis",
+                "allowed_overrides": ["weights"],
+                "minimal_call": {
+                    "arguments": {
+                        "binding_id": "binding_panel",
+                        "objective": "Execute panel design",
+                    }
+                },
+            },
+        ),
+    )
+
+    assert audit["calls"][0]["exact_minimal_call"] is True
+    assert audit["calls"][0]["supplied_override_fields"] == ["weights"]
+    assert audit["capability_first_status"] == "passed"
+    assert audit["required_binding_coverage_status"] == "passed"
 
 
 def test_checkpoint_requires_self_hashed_binding_qualification(
@@ -219,20 +389,33 @@ def test_checkpoint_requires_self_hashed_binding_qualification(
         "git_commit": binding["git_commit"],
         "wheel_sha256": binding["wheel_sha256"],
         "task_catalog_sha256": binding["paper_task_catalog_hash"],
-        "task_reference_catalog_sha256": binding[
-            "paper_task_reference_catalog_hash"
-        ],
-        "paper_asset_catalog_sha256": binding[
-            "paper_asset_catalog_hash"
-        ],
+        "task_reference_catalog_sha256": binding["paper_task_reference_catalog_hash"],
+        "paper_asset_catalog_sha256": binding["paper_asset_catalog_hash"],
         "capability_contract_catalog_sha256": binding[
             "capability_contract_catalog_hash"
         ],
+        "provider_schema_parity_passed": True,
+        "provider_result_visibility_passed": True,
+        "provider_tool_schema_hashes": {
+            name: "sha256:" + str(index) * 64
+            for index, name in enumerate(
+                (
+                    "inspect_dataset",
+                    "run_diagnostic",
+                    "run_analysis",
+                    "evaluate_virtual_model",
+                    "finalize_report",
+                ),
+                start=1,
+            )
+        },
         "qualified_binding_count": 3,
         "records": [
             {
                 "binding_id": f"binding_{index}",
                 "qualification_status": status,
+                "provider_schema_validation_status": "passed",
+                "provider_result_visibility_status": "passed",
             }
             for index, status in enumerate(
                 (
@@ -282,18 +465,31 @@ def test_checkpoint_rejects_binding_qualification_input_drift(
         "git_commit": binding["git_commit"],
         "wheel_sha256": binding["wheel_sha256"],
         "task_catalog_sha256": binding["paper_task_catalog_hash"],
-        "task_reference_catalog_sha256": binding[
-            "paper_task_reference_catalog_hash"
-        ],
-        "paper_asset_catalog_sha256": binding[
-            "paper_asset_catalog_hash"
-        ],
+        "task_reference_catalog_sha256": binding["paper_task_reference_catalog_hash"],
+        "paper_asset_catalog_sha256": binding["paper_asset_catalog_hash"],
         "capability_contract_catalog_sha256": "sha256:" + "9" * 64,
+        "provider_schema_parity_passed": True,
+        "provider_result_visibility_passed": True,
+        "provider_tool_schema_hashes": {
+            name: "sha256:" + str(index) * 64
+            for index, name in enumerate(
+                (
+                    "inspect_dataset",
+                    "run_diagnostic",
+                    "run_analysis",
+                    "evaluate_virtual_model",
+                    "finalize_report",
+                ),
+                start=1,
+            )
+        },
         "qualified_binding_count": 1,
         "records": [
             {
                 "binding_id": "binding_1",
                 "qualification_status": "executed",
+                "provider_schema_validation_status": "passed",
+                "provider_result_visibility_status": "passed",
             }
         ],
     }
@@ -313,6 +509,5 @@ def test_checkpoint_rejects_binding_qualification_input_drift(
 
 def _excluded_ids(record: dict) -> set[str]:
     return {
-        item["capability_id"]
-        for item in record["structurally_excluded_capabilities"]
+        item["capability_id"] for item in record["structurally_excluded_capabilities"]
     }

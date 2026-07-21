@@ -197,18 +197,14 @@ def test_protocol_fixtures_satisfy_every_public_artifact_contract(
     tmp_path: Path,
 ) -> None:
     catalog = json.loads(
-        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text(
-            encoding="utf-8"
-        )
+        (ROOT / "benchmarks/paper_v1/agent_tasks.v2.json").read_text(encoding="utf-8")
     )
     references = json.loads(
         (ROOT / "benchmarks/paper_v1/task_references.v1.json").read_text(
             encoding="utf-8"
         )
     )
-    bindings = {
-        item["task_id"]: item for item in references["bindings"]
-    }
+    bindings = {item["task_id"]: item for item in references["bindings"]}
     for workflow in catalog["workflows"]:
         for task in workflow["turns"]:
             output = tmp_path / task["task_id"]
@@ -216,9 +212,9 @@ def test_protocol_fixtures_satisfy_every_public_artifact_contract(
             qualification._fill_protocol_outputs(
                 task, bindings.get(task["task_id"], {}), output
             )
-            assert _artifact_paths_present(
-                output, task["output_contract"]
-            ), task["task_id"]
+            assert _artifact_paths_present(output, task["output_contract"]), task[
+                "task_id"
+            ]
 
     state_model = tmp_path / "PAPA-02" / "state_reference_model"
     assert state_model.is_dir()
@@ -270,7 +266,10 @@ def test_binding_qualification_collects_failures_and_continues_task(
         }
 
         @staticmethod
-        def run_diagnostic(*, binding_id):
+        def run_diagnostic(capability_id=None, *, binding_id, **kwargs):
+            assert capability_id is None
+            assert kwargs["parameters"] == {}
+            assert kwargs["dependencies"] == []
             if binding_id == failed.binding_id:
                 raise RuntimeError("first binding failed")
             return {"status": "blocked", "result_id": None, "receipt_id": None}
@@ -307,9 +306,7 @@ def test_binding_qualification_collects_failures_and_continues_task(
         "expected_blocked_probe",
     ]
     assert "first binding failed" in executor.records[0]["qualification_error"]
-    assert (
-        workspace.root / "outputs/tasks/REPL-03/submission_receipt.json"
-    ).is_file()
+    assert (workspace.root / "outputs/tasks/REPL-03/submission_receipt.json").is_file()
 
 
 def test_binding_qualification_distinguishes_terminal_and_chain_blocks(
@@ -317,9 +314,7 @@ def test_binding_qualification_distinguishes_terminal_and_chain_blocks(
 ) -> None:
     project = ProjectWorkspace.initialize(tmp_path / "project")
     run = project.create_run(logical_name="qualification-status")
-    conversation = project.create_conversation(
-        run.run_id, title="qualification-status"
-    )
+    conversation = project.create_conversation(run.run_id, title="qualification-status")
     workspace = project.run_workspace(run.run_id)
 
     def binding(capability_id: str, tool_name: str):
@@ -373,7 +368,10 @@ def test_binding_qualification_distinguishes_terminal_and_chain_blocks(
         }
 
         @staticmethod
-        def run_diagnostic(*, binding_id):
+        def run_diagnostic(capability_id=None, *, binding_id, **kwargs):
+            assert capability_id is None
+            assert kwargs["parameters"] == {}
+            assert kwargs["dependencies"] == []
             assert binding_id == diagnostic.binding_id
             return {
                 "status": "blocked",
@@ -383,9 +381,12 @@ def test_binding_qualification_distinguishes_terminal_and_chain_blocks(
             }
 
         @staticmethod
-        def run_analysis(objective, *, binding_id):
+        def run_analysis(objective, *, binding_id, **kwargs):
             assert objective
             assert binding_id == analysis.binding_id
+            assert kwargs["capability_id"] is None
+            assert kwargs["parameters"] == {}
+            assert kwargs["dependencies"] == []
             return {
                 "status": "blocked",
                 "result_id": analysis_result.result_id,
@@ -438,14 +439,10 @@ def test_binding_qualification_distinguishes_terminal_and_chain_blocks(
         "executed_terminal_diagnostic_block",
         "failed_validation",
     ]
-    assert executor.records[0]["result_blockers"] == [
-        "design fact remains unresolved"
-    ]
+    assert executor.records[0]["result_blockers"] == ["design fact remains unresolved"]
     failed = executor.records[1]
     assert failed["result_status"] == "blocked"
-    assert failed["result_blockers"] == [
-        "required upstream result is unusable"
-    ]
+    assert failed["result_blockers"] == ["required upstream result is unusable"]
     assert failed["response_required_upstream"] == ["upstream.fixture.v1"]
     assert failed["response_dependency_verdicts"][0]["reasons"] == [
         "status_not_accepted"

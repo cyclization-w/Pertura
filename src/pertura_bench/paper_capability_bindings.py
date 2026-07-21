@@ -84,8 +84,7 @@ def build_paper_task_invocation_bindings(
             parameters = {}
             additional_roles = ()
             blockers = [
-                "required bound asset is unavailable at execution time: "
-                f"{exc}"
+                "required bound asset is unavailable at execution time: " f"{exc}"
             ]
             allowed_overrides = ()
         properties = dict((spec.parameters_schema or {}).get("properties") or {})
@@ -105,7 +104,9 @@ def build_paper_task_invocation_bindings(
             )
             if source_role is None:
                 if name in set(spec.parameters_schema.get("required") or ()):
-                    blockers.append(f"required asset role is unavailable: {expected_role}")
+                    blockers.append(
+                        f"required asset role is unavailable: {expected_role}"
+                    )
                 continue
             record = _ensure_role_alias(
                 source_role=source_role,
@@ -163,9 +164,11 @@ def build_paper_task_invocation_bindings(
             readiness = "blocked_probe"
         elif blockers:
             readiness = "blocked_probe"
-        elif any(dep in candidates for dep in spec.depends_on if dep not in {
-            item.capability_id for item in dependencies
-        }):
+        elif any(
+            dep in candidates
+            for dep in spec.depends_on
+            if dep not in {item.capability_id for item in dependencies}
+        ):
             readiness = "conditional_ready"
         else:
             readiness = "ready"
@@ -179,8 +182,7 @@ def build_paper_task_invocation_bindings(
         task_artifact_roles = set(
             str(role)
             for role in (
-                (task.get("output_contract") or {}).get("artifact_paths")
-                or {}
+                (task.get("output_contract") or {}).get("artifact_paths") or {}
             )
         )
         invalid_output_roles = sorted(
@@ -216,7 +218,9 @@ def build_paper_task_invocation_bindings(
                 additional_assets=additional_assets,
                 output_mapping=output_mapping,
                 readiness=readiness,
-                blockers=tuple(dict.fromkeys(blockers)) if readiness == "blocked_probe" else (),
+                blockers=tuple(dict.fromkeys(blockers))
+                if readiness == "blocked_probe"
+                else (),
             )
         )
     return tuple(bindings)
@@ -227,9 +231,7 @@ def provider_binding_contract(
 ) -> list[dict[str, Any]]:
     records = []
     for binding in bindings:
-        arguments = {"binding_id": binding.binding_id}
-        if binding.tool_name == "run_analysis":
-            arguments["objective"] = f"Execute {binding.capability_id} under the frozen task binding"
+        arguments = minimal_binding_arguments(binding)
         records.append(
             {
                 "binding_id": binding.binding_id,
@@ -243,6 +245,21 @@ def provider_binding_contract(
             }
         )
     return records
+
+
+def minimal_binding_arguments(
+    binding: CapabilityInvocationBinding,
+    *,
+    objective_prefix: str = "Execute",
+) -> dict[str, Any]:
+    """Return the exact provider-visible invocation for one frozen binding."""
+
+    arguments = {"binding_id": binding.binding_id}
+    if binding.tool_name == "run_analysis":
+        arguments[
+            "objective"
+        ] = f"{objective_prefix} {binding.capability_id} under the frozen task binding"
+    return arguments
 
 
 def _verify_runtime_dependencies(spec: CapabilitySpec) -> None:
@@ -308,8 +325,12 @@ def _recipe(
         parameters.update(
             h5ad_path=_asset_id(assets, "primary_dataset"),
             selection_path=_task_alias(
-                assets, "calibration_split", "cell_selection",
-                asset_registry, project, run_id,
+                assets,
+                "calibration_split",
+                "cell_selection",
+                asset_registry,
+                project,
+                run_id,
             ),
             control_column=str(control_fact["primary_h5ad_column"]),
             control_values=[str(control_fact["primary_h5ad_label"])],
@@ -322,8 +343,12 @@ def _recipe(
         parameters.update(
             h5ad_path=_asset_id(assets, "primary_dataset"),
             selection_path=_task_alias(
-                assets, "evaluation_split", "cell_selection",
-                asset_registry, project, run_id,
+                assets,
+                "evaluation_split",
+                "cell_selection",
+                asset_registry,
+                project,
+                run_id,
             ),
             mapping_probability_threshold=0.5,
         )
@@ -407,7 +432,8 @@ def _recipe(
         return parameters, tuple(dict.fromkeys(additional)), blockers, overrides
     if capability_id == "design.next_panel.v1":
         candidate_roles = [
-            role for role in sorted(assets)
+            role
+            for role in sorted(assets)
             if role not in {"primary_dataset", "primary_h5ad"}
         ]
         parameters.update(
@@ -433,8 +459,12 @@ def _recipe(
         parameters.update(
             metadata_path=_asset_id(assets, "cell_metadata"),
             selection_path=_task_alias(
-                assets, "evaluation_split", "cell_selection",
-                asset_registry, project, run_id,
+                assets,
+                "evaluation_split",
+                "cell_selection",
+                asset_registry,
+                project,
+                run_id,
             ),
             cell_id_column="cell_id",
             selection_cell_id_column="cell_id",
@@ -493,7 +523,8 @@ def _bound_dependencies(
         kinds = set(str(item) for item in group.get("result_kinds") or ())
         sources = set(str(item) for item in group.get("source_classes") or ())
         compatible = [
-            item for item in current
+            item
+            for item in current
             if (not kinds or item.result_kind in kinds)
             and (
                 not sources
@@ -507,7 +538,8 @@ def _bound_dependencies(
                 selected.append(item)
         if len(compatible) < minimum:
             producers = [
-                candidate for candidate in candidates
+                candidate
+                for candidate in candidates
                 if (not kinds or registry.get(candidate).output_kind in kinds)
             ]
             if not producers:
@@ -524,9 +556,7 @@ def _bound_dependencies(
         if dependency_id not in candidates
     )
     if ancestor_dependencies:
-        validation_spec = spec.model_copy(
-            update={"depends_on": ancestor_dependencies}
-        )
+        validation_spec = spec.model_copy(update={"depends_on": ancestor_dependencies})
         selected_ids = {item.result_id for item in selected}
         resolution = resolve_dependencies(
             validation_spec,
@@ -545,9 +575,7 @@ def _bound_dependencies(
             trusted_receipt_result_ids=tuple(
                 item.result_id
                 for item in current
-                if (
-                    records_by_id.get(item.result_id) or {}
-                ).get("verification_state")
+                if (records_by_id.get(item.result_id) or {}).get("verification_state")
                 == "trusted_receipt"
             ),
             registry=registry,
@@ -616,14 +644,16 @@ def _task_alias(
     project: ProjectWorkspace,
     run_id: str,
 ) -> str:
-    return str(_ensure_role_alias(
-        source_role=source_role,
-        target_role=target_role,
-        assets=assets,
-        asset_registry=asset_registry,
-        project=project,
-        run_id=run_id,
-    )["asset_id"])
+    return str(
+        _ensure_role_alias(
+            source_role=source_role,
+            target_role=target_role,
+            assets=assets,
+            asset_registry=asset_registry,
+            project=project,
+            run_id=run_id,
+        )["asset_id"]
+    )
 
 
 def _asset_id(assets: Mapping[str, Mapping[str, Any]], role: str) -> str:
@@ -633,9 +663,7 @@ def _asset_id(assets: Mapping[str, Mapping[str, Any]], role: str) -> str:
         raise _BindingInputUnavailable(role) from exc
 
 
-def _confirmed_fact_value(
-    contract: DatasetContract, field: str
-) -> dict[str, Any]:
+def _confirmed_fact_value(contract: DatasetContract, field: str) -> dict[str, Any]:
     fact = dict(contract.identity_fields.get(field) or {})
     if str(fact.get("status") or "") != "confirmed":
         raise ValueError(f"required frozen design fact is unresolved: {field}")

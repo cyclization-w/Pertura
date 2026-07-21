@@ -5,7 +5,10 @@ from pertura_runtime.product_tools.definitions import (
     ProductToolSpec,
     get_product_tool_spec,
 )
-from pertura_runtime.product_tools.handlers import dispatch_product_tool
+from pertura_runtime.product_tools.handlers import (
+    dispatch_product_tool,
+    product_tool_mcp_result,
+)
 
 __all__ = [
     "PRODUCT_TOOL_CONTRACTS",
@@ -14,4 +17,5 @@ __all__ = [
     "ProductToolSpec",
     "dispatch_product_tool",
     "get_product_tool_spec",
+    "product_tool_mcp_result",
 ]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import runpy
 import sys
 import tomllib
@@ -31,10 +33,16 @@ def test_mcp_server_uses_package_metadata_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
+    schemas: dict[str, dict[str, object]] = {}
 
     def tool(name: str, description: str, schema: dict[str, object]):
-        del name, description, schema
-        return lambda function: function
+        del description
+        schemas[name] = schema
+        return lambda function: types.SimpleNamespace(
+            name=name,
+            input_schema=schema,
+            handler=function,
+        )
 
     def create_sdk_mcp_server(**kwargs: object) -> dict[str, object]:
         captured.update(kwargs)
@@ -50,6 +58,66 @@ def test_mcp_server_uses_package_metadata_version(
 
     assert server["version"] == "9.8.7"
     assert len(server["tools"]) == 5
+    assert schemas == {
+        spec.name: spec.json_input_schema() for spec in product_tools.PRODUCT_TOOL_SPECS
+    }
+
+
+def test_mcp_binding_minimal_call_is_visible_and_returns_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Runtime:
+        def run_diagnostic(self, capability_id, **kwargs):
+            return {
+                "status": "screen_passed",
+                "binding_id": kwargs["binding_id"],
+            }
+
+    def tool(name: str, description: str, schema: dict[str, object]):
+        del description
+        return lambda function: types.SimpleNamespace(
+            name=name,
+            input_schema=schema,
+            handler=function,
+        )
+
+    def create_sdk_mcp_server(**kwargs: object) -> dict[str, object]:
+        return dict(kwargs)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "claude_agent_sdk",
+        types.SimpleNamespace(
+            tool=tool,
+            create_sdk_mcp_server=create_sdk_mcp_server,
+        ),
+    )
+    server = product_tools.create_product_mcp_server(Runtime())
+    diagnostic = next(item for item in server["tools"] if item.name == "run_diagnostic")
+
+    assert diagnostic.input_schema["oneOf"] == [
+        {
+            "required": ["binding_id"],
+            "not": {
+                "anyOf": [
+                    {"required": ["capability_id"]},
+                    {"required": ["contract_id"]},
+                    {"required": ["scope"]},
+                    {"required": ["dependencies"]},
+                ]
+            },
+        },
+        {
+            "not": {"required": ["binding_id"]},
+            "required": ["capability_id"],
+        },
+    ]
+    response = asyncio.run(diagnostic.handler({"binding_id": "binding_fixture"}))
+    visible = json.loads(response["content"][0]["text"])
+    assert visible == {
+        "binding_id": "binding_fixture",
+        "status": "screen_passed",
+    }
 
 
 def test_dashboard_uses_package_metadata_version(

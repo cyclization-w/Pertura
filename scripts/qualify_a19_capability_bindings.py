@@ -10,6 +10,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Mapping
 
+from jsonschema import Draft202012Validator
+
 from pertura_bench.capability_availability import (
     availability_by_task,
     build_task_capability_availability,
@@ -19,9 +21,16 @@ from pertura_bench.paper_agent_execution import (
     _artifact_paths_present,
     run_paper_agent_workflow,
 )
+from pertura_bench.paper_capability_bindings import minimal_binding_arguments
 from pertura_bench.paper_tasks import load_paper_task_catalog
 from pertura_bench.task_submission import TaskSubmissionService
 from pertura_core.hashing import canonical_hash, file_sha256
+from pertura_runtime.product_tools import (
+    PRODUCT_TOOL_SPECS,
+    dispatch_product_tool,
+    get_product_tool_spec,
+    product_tool_mcp_result,
+)
 from pertura_runtime.project.models import TurnStatus
 from pertura_workflow.capability_contracts import build_capability_contract_catalog
 
@@ -64,6 +73,8 @@ def _task_map(catalog: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
 def _binding_record(binding, **updates: Any) -> dict[str, Any]:
     """Return one complete qualification record, including failed attempts."""
 
+    provider_schema = get_product_tool_spec(binding.tool_name).json_input_schema()
+    provider_arguments = minimal_binding_arguments(binding, objective_prefix="Qualify")
     record = {
         "task_id": binding.task_id,
         "binding_id": binding.binding_id,
@@ -75,18 +86,18 @@ def _binding_record(binding, **updates: Any) -> dict[str, Any]:
         "contract_hash": binding.contract_hash,
         "scope": dict(binding.scope),
         "bound_parameters_hash": canonical_hash(binding.bound_parameters),
-        "input_assets": [
-            item.model_dump(mode="json") for item in binding.input_assets
-        ],
+        "input_assets": [item.model_dump(mode="json") for item in binding.input_assets],
         "dependency_result_ids": list(binding.dependency_result_ids),
-        "dependency_verification_states": list(
-            binding.dependency_verification_states
-        ),
+        "dependency_verification_states": list(binding.dependency_verification_states),
         "dependency_receipt_ids": list(binding.dependency_receipt_ids),
         "dependency_binding_ids": list(binding.dependency_binding_ids),
         "output_mapping": dict(binding.output_mapping),
         "readiness": binding.readiness,
         "blockers": list(binding.blockers),
+        "provider_input_schema_hash": canonical_hash(provider_schema),
+        "provider_minimal_arguments_hash": canonical_hash(provider_arguments),
+        "provider_schema_validation_status": "not_run",
+        "provider_result_visibility_status": "not_run",
         "qualification_status": "failed",
         "qualification_error": None,
         "result_id": None,
@@ -153,9 +164,7 @@ def _materialize_submission(
     result["limitations"] = [
         "Internal execution qualification; not a scientific benchmark result."
     ]
-    if not _artifact_paths_present(
-        output, dict(task.get("output_contract") or {})
-    ):
+    if not _artifact_paths_present(output, dict(task.get("output_contract") or {})):
         raise RuntimeError(
             f"{task['task_id']}: qualification fixture violates the public "
             "artifact path/schema contract"
@@ -184,8 +193,7 @@ class _BindingQualificationExecutor:
         task_id = match.group(1)
         task = dict(self.tasks[task_id])
         expected_probes = {
-            str(item)
-            for item in task.get("expected_probe_capabilities") or ()
+            str(item) for item in task.get("expected_probe_capabilities") or ()
         }
         runtime = agent.product_runtime
         project = runtime.project_workspace
@@ -206,31 +214,50 @@ class _BindingQualificationExecutor:
                 result_status: str | None = None
                 result_blockers: list[str] = []
                 result_cautions: list[str] = []
+                provider_schema_validation_status = "not_run"
+                provider_result_visibility_status = "not_run"
                 try:
-                    if binding.tool_name == "run_diagnostic":
-                        response = runtime.run_diagnostic(
-                            binding_id=binding.binding_id
-                        )
-                    elif binding.tool_name == "run_analysis":
-                        response = runtime.run_analysis(
-                            f"Qualify {binding.capability_id} through its frozen binding",
-                            binding_id=binding.binding_id,
-                        )
-                    elif binding.tool_name == "evaluate_virtual_model":
-                        response = runtime.evaluate_virtual_model(
-                            binding_id=binding.binding_id
-                        )
-                    else:
+                    provider_schema = get_product_tool_spec(
+                        binding.tool_name
+                    ).json_input_schema()
+                    provider_arguments = minimal_binding_arguments(
+                        binding, objective_prefix="Qualify"
+                    )
+                    Draft202012Validator.check_schema(provider_schema)
+                    Draft202012Validator(provider_schema).validate(provider_arguments)
+                    provider_schema_validation_status = "passed"
+                    response = dispatch_product_tool(
+                        runtime,
+                        binding.tool_name,
+                        provider_arguments,
+                    )
+                    visible_result = product_tool_mcp_result(response)
+                    visible_content = visible_result.get("content") or ()
+                    if (
+                        len(visible_content) != 1
+                        or visible_content[0].get("type") != "text"
+                        or json.loads(visible_content[0]["text"]) != response
+                    ):
                         raise RuntimeError(
-                            f"unsupported bound tool: {binding.tool_name}"
+                            "provider-visible MCP result does not preserve the "
+                            "product response"
                         )
+                    provider_result_visibility_status = "passed"
                 except Exception as exc:
                     task_records.append(
                         _binding_record(
                             binding,
                             qualification_status="failed_execution",
-                            qualification_error=(
-                                f"{type(exc).__name__}: {exc}"
+                            qualification_error=(f"{type(exc).__name__}: {exc}"),
+                            provider_schema_validation_status=(
+                                provider_schema_validation_status
+                                if provider_schema_validation_status == "passed"
+                                else "failed"
+                            ),
+                            provider_result_visibility_status=(
+                                provider_result_visibility_status
+                                if provider_result_visibility_status == "passed"
+                                else "failed"
                             ),
                         )
                     )
@@ -299,8 +326,7 @@ class _BindingQualificationExecutor:
                             # input to another bound capability.
                             if (
                                 binding.tool_name == "run_diagnostic"
-                                and binding.binding_id
-                                not in predecessor_binding_ids
+                                and binding.binding_id not in predecessor_binding_ids
                                 and result_status in {"blocked", "unresolved"}
                             ):
                                 qualification_status = (
@@ -338,6 +364,8 @@ class _BindingQualificationExecutor:
                             result_blockers=result_blockers,
                             result_cautions=result_cautions,
                             output_hashes=output_hashes,
+                            provider_schema_validation_status="passed",
+                            provider_result_visibility_status="passed",
                             **response_details,
                         )
                     )
@@ -346,12 +374,8 @@ class _BindingQualificationExecutor:
                         _binding_record(
                             binding,
                             qualification_status="failed_validation",
-                            qualification_error=(
-                                f"{type(exc).__name__}: {exc}"
-                            ),
-                            result_id=(
-                                str(response.get("result_id") or "") or None
-                            ),
+                            qualification_error=(f"{type(exc).__name__}: {exc}"),
+                            result_id=(str(response.get("result_id") or "") or None),
                             receipt_id=response.get("receipt_id"),
                             result_status=(
                                 result_status
@@ -360,9 +384,7 @@ class _BindingQualificationExecutor:
                             ),
                             result_blockers=result_blockers,
                             result_cautions=result_cautions,
-                            response_blockers=list(
-                                response.get("blockers") or ()
-                            ),
+                            response_blockers=list(response.get("blockers") or ()),
                             response_required_upstream=list(
                                 response.get("required_upstream") or ()
                             ),
@@ -371,18 +393,15 @@ class _BindingQualificationExecutor:
                             ),
                             response_dependency_verdicts=[
                                 dict(item)
-                                for item in response.get(
-                                    "dependency_verdicts"
-                                )
-                                or ()
+                                for item in response.get("dependency_verdicts") or ()
                             ],
+                            provider_schema_validation_status="passed",
+                            provider_result_visibility_status="passed",
                         )
                     )
                     continue
 
-            output = (
-                agent.workspace.root / "outputs" / "tasks" / task_id
-            )
+            output = agent.workspace.root / "outputs" / "tasks" / task_id
             output.mkdir(parents=True, exist_ok=True)
             result = _materialize_submission(
                 task=task,
@@ -393,9 +412,7 @@ class _BindingQualificationExecutor:
             allowed_units = tuple(
                 str(item)
                 for item in (
-                    (task.get("output_contract") or {}).get(
-                        "allowed_analysis_units"
-                    )
+                    (task.get("output_contract") or {}).get("allowed_analysis_units")
                     or ()
                 )
             )
@@ -469,8 +486,7 @@ def qualify(
     tasks = _task_map(raw_catalog)
     references_payload = _read_json(task_reference_catalog_path)
     references = {
-        str(item["task_id"]): item
-        for item in references_payload.get("bindings") or ()
+        str(item["task_id"]): item for item in references_payload.get("bindings") or ()
     }
     availability = availability_by_task(
         build_task_capability_availability(
@@ -504,8 +520,7 @@ def qualify(
                     "schema_version": "pertura-resource-evidence-v1",
                     "mode": "scheduler",
                     "scheduler_job_id": (
-                        os.environ.get("SLURM_JOB_ID")
-                        or "a19-binding-qualification"
+                        os.environ.get("SLURM_JOB_ID") or "a19-binding-qualification"
                     ),
                     "requested_memory_gb": memory_gb,
                     "actual_memory_gb": memory_gb,
@@ -565,22 +580,20 @@ def qualify(
     expected_pairs = {
         (task_id, capability_id)
         for task_id in configured_tasks
-        for capability_id in availability[task_id][
-            "advertised_capability_ids"
-        ]
+        for capability_id in availability[task_id]["advertised_capability_ids"]
     }
     observed_pairs = [
-        (str(item["task_id"]), str(item["capability_id"]))
-        for item in records
+        (str(item["task_id"]), str(item["capability_id"])) for item in records
     ]
     if len(records) != expected_binding_count:
         raise RuntimeError(
             "binding qualification coverage mismatch: "
             f"expected {expected_binding_count}, observed {len(records)}"
         )
-    if len(set(observed_pairs)) != len(observed_pairs) or set(
-        observed_pairs
-    ) != expected_pairs:
+    if (
+        len(set(observed_pairs)) != len(observed_pairs)
+        or set(observed_pairs) != expected_pairs
+    ):
         raise RuntimeError(
             "binding qualification task/capability coverage drifted: "
             f"missing={sorted(expected_pairs - set(observed_pairs))}, "
@@ -589,8 +602,7 @@ def qualify(
     failed_records = [
         item
         for item in records
-        if item["qualification_status"]
-        not in CAPABILITY_BINDING_QUALIFICATION_STATUSES
+        if item["qualification_status"] not in CAPABILITY_BINDING_QUALIFICATION_STATUSES
     ]
     failure_summary = [
         {
@@ -605,15 +617,9 @@ def qualify(
             "result_blockers": item["result_blockers"],
             "result_cautions": item["result_cautions"],
             "response_blockers": item["response_blockers"],
-            "response_required_upstream": item[
-                "response_required_upstream"
-            ],
-            "response_candidate_result_ids": item[
-                "response_candidate_result_ids"
-            ],
-            "response_dependency_verdicts": item[
-                "response_dependency_verdicts"
-            ],
+            "response_required_upstream": item["response_required_upstream"],
+            "response_candidate_result_ids": item["response_candidate_result_ids"],
+            "response_dependency_verdicts": item["response_dependency_verdicts"],
         }
         for item in failed_records
     ]
@@ -628,31 +634,35 @@ def qualify(
         "git_commit": commit,
         "wheel_sha256": file_sha256(wheel),
         "task_catalog_sha256": file_sha256(task_catalog_path),
-        "task_reference_catalog_sha256": file_sha256(
-            task_reference_catalog_path
-        ),
+        "task_reference_catalog_sha256": file_sha256(task_reference_catalog_path),
         "paper_asset_catalog_sha256": file_sha256(asset_catalog_path),
         "capability_contract_catalog_sha256": file_sha256(
             capability_contract_catalog_path
         ),
         "resource_lock_sha256": file_sha256(resource_lock_path),
-        "qualified_task_count": len(
-            {str(item["task_id"]) for item in records}
-        ),
+        "qualified_task_count": len({str(item["task_id"]) for item in records}),
         "qualified_binding_count": len(records),
-        "expected_blocked_probe_count": sum(
-            item["qualification_status"] == "expected_blocked_probe"
+        "provider_schema_parity_passed": all(
+            item.get("provider_schema_validation_status") == "passed"
             for item in records
         ),
+        "provider_result_visibility_passed": all(
+            item.get("provider_result_visibility_status") == "passed"
+            for item in records
+        ),
+        "provider_tool_schema_hashes": {
+            spec.name: canonical_hash(spec.json_input_schema())
+            for spec in PRODUCT_TOOL_SPECS
+        },
+        "expected_blocked_probe_count": sum(
+            item["qualification_status"] == "expected_blocked_probe" for item in records
+        ),
         "terminal_diagnostic_block_count": sum(
-            item["qualification_status"]
-            == "executed_terminal_diagnostic_block"
+            item["qualification_status"] == "executed_terminal_diagnostic_block"
             for item in records
         ),
         "optional_unconfigured_task_ids": sorted(
-            task_id
-            for task_id, task in tasks.items()
-            if task.get("role") == "optional"
+            task_id for task_id, task in tasks.items() if task.get("role") == "optional"
         ),
         "workflow_runs": workflow_runs,
         "failure_summary": failure_summary,

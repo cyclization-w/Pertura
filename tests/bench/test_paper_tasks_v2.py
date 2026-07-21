@@ -151,7 +151,9 @@ def test_task_capability_context_matches_frozen_scientific_endpoints() -> None:
     assert "do not run those methods" in by_id["NORM-02"]["objective"]
 
 
-def test_task_catalog_rejects_expected_capabilities_with_nonexecuted_dependencies() -> None:
+def test_task_catalog_rejects_expected_capabilities_with_nonexecuted_dependencies() -> (
+    None
+):
     payload = json.loads(CATALOG.read_text(encoding="utf-8"))
     repl02 = next(
         task
@@ -167,8 +169,7 @@ def test_task_catalog_rejects_expected_capabilities_with_nonexecuted_dependencie
 
     problems = validate_paper_task_catalog(payload)
     assert any(
-        "REPL-02: expected capabilities depend on explicit nonexecutions"
-        in problem
+        "REPL-02: expected capabilities depend on explicit nonexecutions" in problem
         for problem in problems
     )
 
@@ -232,10 +233,7 @@ def test_task_reference_domains_separate_protocol_from_scientific_fidelity() -> 
 
     assert observed == PAPER_TASK_EVALUATION_DOMAINS
     assert sum(value == "scientific_fidelity" for value in observed.values()) == 9
-    assert (
-        sum(value == "protocol_claim_compliance" for value in observed.values())
-        == 9
-    )
+    assert sum(value == "protocol_claim_compliance" for value in observed.values()) == 9
     assert {
         task_id
         for task_id, domain in observed.items()
@@ -243,9 +241,7 @@ def test_task_reference_domains_separate_protocol_from_scientific_fidelity() -> 
     } == {"KANG-01", "KANG-02"}
 
     invalid = json.loads(json.dumps(references))
-    repl01 = next(
-        item for item in invalid["bindings"] if item["task_id"] == "REPL-01"
-    )
+    repl01 = next(item for item in invalid["bindings"] if item["task_id"] == "REPL-01")
     repl01["evaluation_domain"] = "scientific_fidelity"
     problems = validate_task_reference_catalog(invalid, catalog.tasks())
     assert any("TREF-REPL-01: evaluation_domain" in problem for problem in problems)
@@ -280,6 +276,7 @@ def test_papa01_freezes_proxy_row_scope_and_ambient_boundary() -> None:
         "status": "unresolved",
         "evidence_class": "external_label_proxy_only",
         "reason": "raw empty-droplet evidence is unavailable",
+        "limitations": ["raw empty-droplet evidence is unavailable"],
     }
     assert semantics["retained_cell_manifest.tsv"] == {
         "row_scope": "registered_calibration_and_evaluation_selections",
@@ -364,9 +361,9 @@ def test_scientific_categorical_contract_drift_fails_reference_validation() -> N
     references = json.loads(REFERENCES.read_text(encoding="utf-8"))
     tasks = json.loads(json.dumps(catalog.tasks()))
     repl02 = next(task for task in tasks if task["task_id"] == "REPL-02")
-    repl02["output_contract"]["artifact_semantics"][
-        "retained_cell_manifest.tsv"
-    ]["expected_state_values"] = ["retained"]
+    repl02["output_contract"]["artifact_semantics"]["retained_cell_manifest.tsv"][
+        "expected_state_values"
+    ] = ["retained"]
 
     problems = validate_task_reference_catalog(references, tasks)
 
@@ -507,9 +504,7 @@ def test_formal_server_plan_uses_24_workflow_jobs_not_120_sessions(
     for job in jobs:
         expected_memory = 48.0 if job["workflow_id"] == "WF-REPL" else 32.0
         assert float(job["resources"]["memory_gb"]) == expected_memory
-        assert job["failure_policy"]["scheduler_oom"] == (
-            "scored_resource_failure"
-        )
+        assert job["failure_policy"]["scheduler_oom"] == ("scored_resource_failure")
         assert job["failure_policy"]["scheduler_preemption"] == (
             "invalid_infrastructure"
         )
@@ -580,9 +575,7 @@ def test_v2_catalog_freezes_task_scoped_skill_bindings() -> None:
         assert protocol["environment_profile"] == "edger-v1"
         assert protocol["environment_variable"] == "PERTURA_EDGER_ENV"
         assert protocol["entrypoint"] == "Rscript"
-    assert by_id["KANG-01"]["codeact_protocol"]["gene_identity"] == (
-        "adata.var_names"
-    )
+    assert by_id["KANG-01"]["codeact_protocol"]["gene_identity"] == ("adata.var_names")
     assert by_id["PAPA-06"]["codeact_protocol"]["gene_identity"] == (
         "registered_gene_id"
     )

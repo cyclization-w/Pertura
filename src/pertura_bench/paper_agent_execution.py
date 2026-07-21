@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import asyncio
 import csv
 import hashlib
@@ -159,8 +160,7 @@ def run_paper_agent_workflow(
     asset_catalog = load_paper_asset_catalog(asset_catalog_path)
     design_catalog, design_catalog_sha256 = load_design_confirmation_catalog()
     dataset_design = dict(
-        (design_catalog.get("datasets") or {}).get(str(workflow["dataset_id"]))
-        or {}
+        (design_catalog.get("datasets") or {}).get(str(workflow["dataset_id"])) or {}
     )
     partial_contract_template = dict(dataset_design.get("paper_contract") or {})
     if not partial_contract_template:
@@ -188,9 +188,7 @@ def run_paper_agent_workflow(
         task_catalog.payload,
         contract_catalog,
     )
-    capability_availability_by_task = availability_by_task(
-        capability_availability
-    )
+    capability_availability_by_task = availability_by_task(capability_availability)
     tasks = task_catalog.tasks()
     catalog_problems = [
         *validate_task_reference_catalog(task_references, tasks),
@@ -219,16 +217,13 @@ def run_paper_agent_workflow(
             paper_anchor_catalog_path=paper_anchor_catalog_path,
             asset_catalog_path=asset_catalog_path,
             capability_contract_catalog_path=Path(capability_contract_catalog_path),
-            capability_availability_hash=capability_availability[
-                "canonical_hash"
-            ],
+            capability_availability_hash=capability_availability["canonical_hash"],
         )
         if verify_checkpoint
         else {"test_only": "checkpoint_verification_disabled"}
     )
     if verify_checkpoint and (
-        checkpoint.get("design_confirmation_catalog_hash")
-        != design_catalog_sha256
+        checkpoint.get("design_confirmation_catalog_hash") != design_catalog_sha256
     ):
         raise ValueError("paper checkpoint catalog drift: design confirmations")
     workflow_assets = dict(
@@ -398,16 +393,17 @@ def run_paper_agent_workflow(
                 if role in registered_assets
             }
             if condition == "pertura_full":
-                for paper_role, capability_role in (
-                    PAPER_CAPABILITY_ASSET_ALIASES.items()
-                ):
+                for (
+                    paper_role,
+                    capability_role,
+                ) in PAPER_CAPABILITY_ASSET_ALIASES.items():
                     if (
                         paper_role in task_input_roles
                         and capability_role in registered_assets
                     ):
-                        task_registered_assets[capability_role] = (
-                            registered_assets[capability_role]
-                        )
+                        task_registered_assets[capability_role] = registered_assets[
+                            capability_role
+                        ]
             task_asset_manifest = _task_asset_manifest(
                 workflow_id=workflow_id,
                 dataset_id=str(workflow["dataset_id"]),
@@ -470,8 +466,7 @@ def run_paper_agent_workflow(
                     invocation_bindings
                 )
                 subset_without_hash = {
-                    key: value for key, value in subset.items()
-                    if key != "subset_hash"
+                    key: value for key, value in subset.items() if key != "subset_hash"
                 }
                 subset["subset_hash"] = canonical_hash(subset_without_hash)
                 subset_path = (
@@ -667,28 +662,32 @@ def run_paper_agent_workflow(
             provider_scientific_completion = _provider_scientific_completion(
                 output_gates
             )
-            hard_gates = {
-                **output_gates,
-                "provider_scientific_completion": provider_scientific_completion,
+            capability_process_checks = {
+                "schema_version": "pertura-capability-process-checks-v1",
+                "affects_task_status": False,
                 "capability_first_bound_invocation": (
                     capability_treatment_uptake.get("capability_first_status")
                     in {"passed", "not_applicable"}
                 ),
-                "capability_binding_call_validity": (
-                    capability_treatment_uptake.get(
-                        "model_binding_retry_status"
-                    )
+                "advertised_binding_coverage": (
+                    capability_treatment_uptake.get("required_binding_coverage_status")
                     in {"passed", "not_applicable"}
                 ),
+                "capability_binding_call_validity": (
+                    capability_treatment_uptake.get("model_binding_retry_status")
+                    in {"passed", "not_applicable"}
+                ),
+            }
+            hard_gates = {
+                **output_gates,
+                "provider_scientific_completion": provider_scientific_completion,
                 "prior_task_outputs_immutable": mutation_free,
                 "resource_evidence": (
                     _task_resource_gate(task, resource_evidence)
                     and _workflow_resource_gate(workflow_id, resource_evidence)
                 ),
                 "no_skill_leakage": skill_leakage_audit["status"] != "failed",
-                "no_reference_leakage": (
-                    reference_leakage_audit["status"] != "failed"
-                ),
+                "no_reference_leakage": (reference_leakage_audit["status"] != "failed"),
             }
             status = "passed" if all(hard_gates.values()) else "failed"
             validity_status, failure_class = _classify_task_validity(
@@ -697,9 +696,7 @@ def run_paper_agent_workflow(
                 termination_reason=termination_reason,
                 provider_error=provider_error,
                 capability_binding_incident=bool(
-                    capability_treatment_uptake.get(
-                        "runner_binding_integration_errors"
-                    )
+                    capability_treatment_uptake.get("runner_binding_integration_errors")
                 ),
                 skill_leakage_audit=skill_leakage_audit,
                 reference_leakage_audit=reference_leakage_audit,
@@ -739,9 +736,7 @@ def run_paper_agent_workflow(
                 "provider_message_count": getattr(
                     provider_manifest, "message_count", None
                 ),
-                "provider_cost_usd": getattr(
-                    provider_manifest, "total_cost_usd", None
-                ),
+                "provider_cost_usd": getattr(provider_manifest, "total_cost_usd", None),
                 "wall_seconds": wall_seconds,
                 "resource_evidence": resource_evidence,
                 "initial_benchmark_result_sha256": initial_result_sha256,
@@ -764,9 +759,9 @@ def run_paper_agent_workflow(
                 "reference_leakage_audit": reference_leakage_audit,
                 "capability_contract_subset": contract_subset_record,
                 "capability_treatment_uptake": capability_treatment_uptake,
+                "capability_process_checks": capability_process_checks,
                 "submitted_artifact_assets": [
-                    item.model_dump(mode="json")
-                    for item in submitted_artifact_assets
+                    item.model_dump(mode="json") for item in submitted_artifact_assets
                 ],
                 "post_turn_output_hashes": _tree_hashes(task_output),
                 "post_turn_ancestor_hashes": {
@@ -911,9 +906,7 @@ def run_paper_agent_workflow(
         ),
         "asset_catalog_sha256": asset_catalog["_catalog_sha256"],
         "capability_contract_catalog_hash": contract_catalog["catalog_hash"],
-        "capability_availability_hash": capability_availability[
-            "canonical_hash"
-        ],
+        "capability_availability_hash": capability_availability["canonical_hash"],
         "capability_contract_catalog_sha256": (
             file_sha256(Path(capability_contract_catalog_path))
             if capability_contract_catalog_path is not None
@@ -944,14 +937,10 @@ def run_paper_agent_workflow(
             list(smoke_task_ids) if smoke_task_ids is not None else None
         ),
         "execution_status": (
-            "invalid_infrastructure"
-            if invalid_infrastructure_detected
-            else "completed"
+            "invalid_infrastructure" if invalid_infrastructure_detected else "completed"
         ),
         "validity_status": (
-            "invalid_infrastructure"
-            if invalid_infrastructure_detected
-            else "valid"
+            "invalid_infrastructure" if invalid_infrastructure_detected else "valid"
         ),
         "score_status": (
             "not_scored" if invalid_infrastructure_detected else workflow_status
@@ -1030,9 +1019,7 @@ def _refresh_workflow_task_verdicts(
                 {
                     "task_id": task_id,
                     "status": str(verdict.get("status") or "failed"),
-                    "validity_status": str(
-                        verdict.get("validity_status") or "valid"
-                    ),
+                    "validity_status": str(verdict.get("validity_status") or "valid"),
                     "failure_class": str(
                         verdict.get("failure_class") or "scored_agent_failure"
                     ),
@@ -1065,12 +1052,8 @@ def _refresh_workflow_task_verdicts(
         hard_gates = dict(verdict.get("hard_gates") or {})
         original_result_updated = bool(hard_gates.get("provider_result_updated"))
         hard_gates.update(output_gates)
-        provider_scientific_completion = _provider_scientific_completion(
-            output_gates
-        )
-        hard_gates["provider_scientific_completion"] = (
-            provider_scientific_completion
-        )
+        provider_scientific_completion = _provider_scientific_completion(output_gates)
+        hard_gates["provider_scientific_completion"] = provider_scientific_completion
         status = "passed" if all(hard_gates.values()) else "failed"
         validity_status = str(verdict.get("validity_status") or "valid")
         failure_class = str(verdict.get("failure_class") or "none")
@@ -1276,16 +1259,12 @@ def _shared_scientific_contract_context(
         },
         "design_facts": {
             name: {
-                key: value
-                for key, value in fact.items()
-                if key in {"status", "value"}
+                key: value for key, value in fact.items() if key in {"status", "value"}
             }
             for name, fact in sorted(contract.identity_fields.items())
         },
         "unresolved_facts": list(contract.unresolved_fields),
-        "asset_availability": dict(
-            contract.metadata.get("asset_availability") or {}
-        ),
+        "asset_availability": dict(contract.metadata.get("asset_availability") or {}),
         "task_design_protocol": dict(task.get("codeact_protocol") or {}),
     }
 
@@ -1351,9 +1330,7 @@ def _dataset_contract_context(
         "confirmed_design_facts": confirmed,
         "conflicting_design_facts": conflicting,
         "unresolved_design_facts": list(contract.unresolved_fields),
-        "asset_availability": dict(
-            contract.metadata.get("asset_availability") or {}
-        ),
+        "asset_availability": dict(contract.metadata.get("asset_availability") or {}),
         "provenance": dict(contract.metadata.get("provenance") or {}),
         "registered_assets": {
             role: {
@@ -1402,16 +1379,13 @@ def _task_capability_contract_subset(
         "schema_version": "pertura-paper-capability-contract-subset-v2",
         "task_id": str(task["task_id"]),
         "catalog_hash": str(contract_catalog["catalog_hash"]),
-        "audited_codeact_fallback": bool(
-            availability.get("audited_codeact_fallback")
-        ),
+        "audited_codeact_fallback": bool(availability.get("audited_codeact_fallback")),
         # This is the provider-visible candidate surface. Excluded IDs and
         # reasons remain only in the checkpoint/verdict audit record.
         "candidate_capability_ids": advertised,
         "advertised_capability_ids": advertised,
         "conditional_capability_ids": [
-            str(item)
-            for item in availability.get("conditional_capability_ids") or ()
+            str(item) for item in availability.get("conditional_capability_ids") or ()
         ],
         "structurally_excluded_capabilities": [],
         "capabilities": [catalog[capability_id] for capability_id in advertised],
@@ -1521,8 +1495,7 @@ def _task_prompt(
         advertised_capability_ids = [
             str(capability_id)
             for capability_id in (
-                (contract_subset_record or {}).get("advertised_capability_ids")
-                or ()
+                (contract_subset_record or {}).get("advertised_capability_ids") or ()
             )
         ]
         invocation_bindings = list(
@@ -1531,8 +1504,11 @@ def _task_prompt(
         if task.get("execution_mode") == "capability_or_codeact":
             if advertised_capability_ids:
                 capability_fallback_policy = (
-                    "Attempt only an advertised capability, and attempt each "
-                    "advertised capability at most once. If it reports a genuine "
+                    "The advertised capabilities are optional treatment routes, not "
+                    "task-completion requirements. You may invoke an advertised "
+                    "capability or proceed directly with the audited CodeAct fallback; "
+                    "the runner records uptake without changing task pass/fail. If you "
+                    "invoke a capability, attempt it at most once. If it reports a genuine "
                     "scientific applicability or evidence blocker such as absent "
                     "observed data, unresolved design identity, incompatible scope, "
                     "or missing independent replicates, preserve that block and do "
@@ -1583,13 +1559,15 @@ def _task_prompt(
             f"{capability_fallback_policy}"
             "The runner-prevalidated capability invocation bindings are "
             f"{json.dumps(invocation_bindings, sort_keys=True)}. "
-            "When bindings are present, invoke every listed minimal_call once, in "
-            "the listed order, before any scientific Bash, Notebook, Write/Edit, "
-            "Glob/Grep, unrestricted data Read, or unbound scientific MCP call. "
+            "Binding uptake is non-dispositive and is reported separately under an "
+            "intention-to-treat analysis; you are not required to invoke the first or "
+            "every listed binding before scientific work or task submission. When you "
+            "choose to invoke a bound capability, use its listed minimal_call exactly "
+            "and inspect the returned completed, caution, structured blocked, or "
+            "integration-boundary outcome before deciding what to do next. "
             "Do not provide capability_id, contract_id, scope, dependencies, file "
             "paths, asset IDs, or parameters unless they appear under that "
-            "binding's allowed_overrides. A completed, caution, structured blocked, "
-            "or one integration-boundary failure unlocks the audited fallback. "
+            "binding's allowed_overrides. "
             "Do not hand-compose a capability call when a binding exists. The "
             "exact SDK Skill tool names frozen for this task are "
             f"{json.dumps(qualified_task_skills)}. Before any task-scientific Read, "
@@ -2209,9 +2187,7 @@ def _task_resource_gate(task: Mapping[str, Any], evidence: Mapping[str, Any]) ->
     )
 
 
-def _workflow_resource_gate(
-    workflow_id: str, evidence: Mapping[str, Any]
-) -> bool:
+def _workflow_resource_gate(workflow_id: str, evidence: Mapping[str, Any]) -> bool:
     """Require the checkpoint-frozen workflow allocation for every condition."""
 
     expected_memory = PAPER_WORKFLOW_MEMORY_GB.get(workflow_id)
@@ -2385,15 +2361,11 @@ def _verify_capability_binding_qualification(
             "capability binding qualification is missing from the checkpoint: "
             f"{qualification_path}"
         )
-    qualification = json.loads(
-        qualification_path.read_text(encoding="utf-8")
-    )
+    qualification = json.loads(qualification_path.read_text(encoding="utf-8"))
     if not isinstance(qualification, dict):
         raise ValueError("capability binding qualification must be a JSON object")
     qualification_without_hash = dict(qualification)
-    observed_qualification_hash = qualification_without_hash.pop(
-        "canonical_hash", None
-    )
+    observed_qualification_hash = qualification_without_hash.pop("canonical_hash", None)
     qualification_records = qualification.get("records")
     qualified_binding_count = qualification.get("qualified_binding_count")
     if (
@@ -2401,6 +2373,16 @@ def _verify_capability_binding_qualification(
         != "pertura-capability-binding-qualification-v1"
         or qualification.get("passed") is not True
         or qualification.get("status") != "passed"
+        or qualification.get("provider_schema_parity_passed") is not True
+        or qualification.get("provider_result_visibility_passed") is not True
+        or set((qualification.get("provider_tool_schema_hashes") or {}).keys())
+        != {
+            "inspect_dataset",
+            "run_diagnostic",
+            "run_analysis",
+            "evaluate_virtual_model",
+            "finalize_report",
+        }
         or not isinstance(qualified_binding_count, int)
         or qualified_binding_count <= 0
         or not isinstance(qualification_records, list)
@@ -2417,33 +2399,28 @@ def _verify_capability_binding_qualification(
             not isinstance(item, Mapping)
             or item.get("qualification_status")
             not in CAPABILITY_BINDING_QUALIFICATION_STATUSES
+            or item.get("provider_schema_validation_status") != "passed"
+            or item.get("provider_result_visibility_status") != "passed"
             for item in qualification_records
         )
-        or observed_qualification_hash
-        != canonical_hash(qualification_without_hash)
+        or observed_qualification_hash != canonical_hash(qualification_without_hash)
     ):
         raise ValueError("capability binding qualification is not valid")
     qualification_bindings = {
         "git_commit": checkpoint_binding["git_commit"],
         "wheel_sha256": checkpoint_binding["wheel_sha256"],
-        "task_catalog_sha256": checkpoint_binding[
-            "paper_task_catalog_hash"
-        ],
+        "task_catalog_sha256": checkpoint_binding["paper_task_catalog_hash"],
         "task_reference_catalog_sha256": checkpoint_binding[
             "paper_task_reference_catalog_hash"
         ],
-        "paper_asset_catalog_sha256": checkpoint_binding[
-            "paper_asset_catalog_hash"
-        ],
+        "paper_asset_catalog_sha256": checkpoint_binding["paper_asset_catalog_hash"],
         "capability_contract_catalog_sha256": checkpoint_binding[
             "capability_contract_catalog_hash"
         ],
     }
     for field, expected in qualification_bindings.items():
         if str(qualification.get(field)) != expected:
-            raise ValueError(
-                f"capability binding qualification drift: {field}"
-            )
+            raise ValueError(f"capability binding qualification drift: {field}")
     return qualification
 
 
@@ -2474,21 +2451,31 @@ def _audit_capability_treatment_uptake(
     """Record binding uptake and enforce the frozen capability-first boundary."""
 
     calls: list[dict[str, Any]] = []
-    required_binding_ids = [
-        str(item["binding_id"]) for item in invocation_bindings
-    ]
+    required_binding_ids = [str(item["binding_id"]) for item in invocation_bindings]
     capability_by_binding = {
         str(item["binding_id"]): str(item["capability_id"])
         for item in invocation_bindings
     }
     tool_by_binding = {
-        str(item["binding_id"]): str(item["tool"])
+        str(item["binding_id"]): str(item["tool"]) for item in invocation_bindings
+    }
+    allowed_overrides_by_binding = {
+        str(item["binding_id"]): {
+            str(name) for name in item.get("allowed_overrides") or ()
+        }
+        for item in invocation_bindings
+    }
+    minimal_arguments_by_binding = {
+        str(item["binding_id"]): dict(
+            ((item.get("minimal_call") or {}).get("arguments") or {})
+        )
         for item in invocation_bindings
     }
     observed_binding_ids: list[str] = []
     bound_tool_use_ids: dict[str, dict[str, Any]] = {}
     binding_errors: list[dict[str, Any]] = []
     first_boundary_violation: dict[str, Any] | None = None
+    boundary_release: dict[str, Any] | None = None
     if event_log.is_file():
         with event_log.open("rb") as handle:
             handle.seek(max(0, start_offset))
@@ -2507,14 +2494,25 @@ def _audit_capability_treatment_uptake(
                     )
                     if not result_id or result_id.group(1) not in bound_tool_use_ids:
                         continue
+                    call = bound_tool_use_ids[result_id.group(1)]
                     is_error = re.search(
                         r"is_error=(True|true)", serialized
-                    ) or re.search(
-                        r"['\"]is_error['\"]\s*:\s*(true|True)", serialized
-                    )
+                    ) or re.search(r"['\"]is_error['\"]\s*:\s*(true|True)", serialized)
+                    if call.get("exact_minimal_call") and boundary_release is None:
+                        boundary_release = {
+                            "binding_id": call.get("binding_id"),
+                            "capability_id": call.get("capability_id"),
+                            "tool_name": call.get("tool_name"),
+                            "call_event_line": call.get("event_line"),
+                            "result_event_line": line_number,
+                            "outcome": (
+                                "integration_boundary_error"
+                                if is_error
+                                else "provider_result"
+                            ),
+                        }
                     if not is_error:
                         continue
-                    call = bound_tool_use_ids[result_id.group(1)]
                     binding_errors.append(
                         {
                             **call,
@@ -2544,10 +2542,10 @@ def _audit_capability_treatment_uptake(
                     serialized,
                 )
                 if tool:
+                    parsed_input = _serialized_tool_input(serialized)
                     binding_id = binding_match.group(1) if binding_match else None
-                    capability_id = (
-                        capability_by_binding.get(binding_id or "")
-                        or (capability.group(1) if capability else None)
+                    capability_id = capability_by_binding.get(binding_id or "") or (
+                        capability.group(1) if capability else None
                     )
                     forbidden_bound_fields = [
                         field
@@ -2555,13 +2553,41 @@ def _audit_capability_treatment_uptake(
                             "capability_id",
                             "contract_id",
                             "scope",
-                            "parameters",
                             "dependencies",
                         )
-                        if re.search(
-                            rf"['\"]{field}['\"]\s*:", serialized
-                        )
+                        if re.search(rf"['\"]{field}['\"]\s*:", serialized)
                     ]
+                    expected_arguments = minimal_arguments_by_binding.get(
+                        str(binding_id or ""), {}
+                    )
+                    if "objective" in expected_arguments and (
+                        not isinstance(parsed_input, Mapping)
+                        or parsed_input.get("objective")
+                        != expected_arguments["objective"]
+                    ):
+                        forbidden_bound_fields.append("objective")
+                    supplied_override_fields: list[str] = []
+                    if re.search(r"['\"]parameters['\"]\s*:", serialized):
+                        supplied_parameters = (
+                            parsed_input.get("parameters")
+                            if isinstance(parsed_input, Mapping)
+                            else None
+                        )
+                        allowed_overrides = allowed_overrides_by_binding.get(
+                            str(binding_id or ""), set()
+                        )
+                        if not isinstance(supplied_parameters, Mapping):
+                            forbidden_bound_fields.append("parameters")
+                        else:
+                            supplied_override_fields = sorted(
+                                set(supplied_parameters) & allowed_overrides
+                            )
+                            forbidden_bound_fields.extend(
+                                f"parameters.{name}"
+                                for name in sorted(
+                                    set(supplied_parameters) - allowed_overrides
+                                )
+                            )
                     exact_minimal_call = bool(
                         binding_id in required_binding_ids
                         and tool_by_binding.get(str(binding_id)) == tool.group(1)
@@ -2579,6 +2605,7 @@ def _audit_capability_treatment_uptake(
                             "bound": binding_id in required_binding_ids,
                             "exact_minimal_call": exact_minimal_call,
                             "forbidden_bound_fields": forbidden_bound_fields,
+                            "supplied_override_fields": supplied_override_fields,
                         }
                     )
                     tool_use = re.search(r"id=['\"]([^'\"]+)['\"]", serialized)
@@ -2587,7 +2614,7 @@ def _audit_capability_treatment_uptake(
                     continue
                 if (
                     required_binding_ids
-                    and not set(required_binding_ids).issubset(observed_binding_ids)
+                    and boundary_release is None
                     and _is_prebinding_scientific_tool(raw_tool_name, serialized)
                     and first_boundary_violation is None
                 ):
@@ -2595,19 +2622,23 @@ def _audit_capability_treatment_uptake(
                         "event_line": line_number,
                         "tool_name": raw_tool_name,
                         "missing_binding_ids": [
-                            item for item in required_binding_ids
+                            item
+                            for item in required_binding_ids
                             if item not in observed_binding_ids
                         ],
                     }
     if not required_binding_ids:
         capability_first_status = "not_applicable"
-    elif (
-        first_boundary_violation is None
-        and set(required_binding_ids).issubset(observed_binding_ids)
-    ):
+    elif first_boundary_violation is None and boundary_release is not None:
         capability_first_status = "passed"
     else:
         capability_first_status = "failed"
+    if not required_binding_ids:
+        required_binding_coverage_status = "not_applicable"
+    elif set(required_binding_ids).issubset(observed_binding_ids):
+        required_binding_coverage_status = "passed"
+    else:
+        required_binding_coverage_status = "failed"
     caller_error_markers = (
         "attempted to override locked parameters",
         "cannot replace the bound",
@@ -2621,6 +2652,7 @@ def _audit_capability_treatment_uptake(
         for item in binding_errors
         if (
             not item.get("exact_minimal_call")
+            or bool(item.get("supplied_override_fields"))
             or any(
                 marker in item["error_excerpt"].lower()
                 for marker in caller_error_markers
@@ -2650,6 +2682,11 @@ def _audit_capability_treatment_uptake(
         "observed_binding_ids": list(dict.fromkeys(observed_binding_ids)),
         "capability_first_status": capability_first_status,
         "first_boundary_violation": first_boundary_violation,
+        "boundary_release": boundary_release,
+        "required_binding_coverage_status": required_binding_coverage_status,
+        "missing_binding_ids": [
+            item for item in required_binding_ids if item not in observed_binding_ids
+        ],
         "actual_mcp_capability_ids": list(
             dict.fromkeys(
                 item["capability_id"] for item in calls if item["capability_id"]
@@ -2661,6 +2698,19 @@ def _audit_capability_treatment_uptake(
         "model_binding_error_counts": model_error_counts,
         "model_binding_retry_status": model_binding_retry_status,
     }
+
+
+def _serialized_tool_input(serialized: str) -> dict[str, Any] | None:
+    """Parse the stable ToolUseBlock input repr without executing it."""
+
+    match = re.search(r"\binput=(\{.*\})\)?$", serialized, flags=re.DOTALL)
+    if not match:
+        return None
+    try:
+        payload = ast.literal_eval(match.group(1))
+    except (SyntaxError, ValueError):
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _is_prebinding_scientific_tool(tool_name: str, serialized: str) -> bool:
@@ -2677,8 +2727,16 @@ def _is_prebinding_scientific_tool(tool_name: str, serialized: str) -> bool:
     ):
         return False
     return short in {
-        "Read", "Glob", "Grep", "Bash", "Notebook", "Write", "Edit",
-        "run_analysis", "run_diagnostic", "evaluate_virtual_model",
+        "Read",
+        "Glob",
+        "Grep",
+        "Bash",
+        "Notebook",
+        "Write",
+        "Edit",
+        "run_analysis",
+        "run_diagnostic",
+        "evaluate_virtual_model",
     }
 
 
@@ -2781,7 +2839,8 @@ def _audit_reference_truth_access(
         "task_references\\",
         "/references/ref-",
         "\\references\\ref-",
-        "metric_reference",
+        "metric_references.v1.json",
+        "pertura_bench_metric_references",
         "paper_task_evaluation.py",
         "metric_evaluators.py",
         "/grader",
@@ -2861,9 +2920,7 @@ def _registered_provider_audit_paths(
         if visible_children == registered_children:
             allowed[str(parent)] = True
 
-    return tuple(
-        sorted(allowed.items(), key=lambda item: (-len(item[0]), item[0]))
-    )
+    return tuple(sorted(allowed.items(), key=lambda item: (-len(item[0]), item[0])))
 
 
 def _redact_registered_provider_paths(

@@ -143,10 +143,21 @@ qualification = json.load(open(sys.argv[1], encoding="utf-8"))
 assert qualification["schema_version"] == "pertura-capability-binding-qualification-v1"
 assert qualification["passed"] is True
 assert qualification["status"] == "passed"
+assert qualification["provider_schema_parity_passed"] is True
+assert qualification["provider_result_visibility_passed"] is True
+assert set(qualification["provider_tool_schema_hashes"]) == {
+    "inspect_dataset",
+    "run_diagnostic",
+    "run_analysis",
+    "evaluate_virtual_model",
+    "finalize_report",
+}
 assert qualification["qualified_binding_count"] > 0
 assert all(
     record["qualification_status"]
     in CAPABILITY_BINDING_QUALIFICATION_STATUSES
+    and record["provider_schema_validation_status"] == "passed"
+    and record["provider_result_visibility_status"] == "passed"
     for record in qualification["records"]
 )
 print("qualified_capability_bindings:", qualification["qualified_binding_count"])

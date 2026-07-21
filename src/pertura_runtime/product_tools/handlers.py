@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 from pertura_runtime.product_tools.definitions import get_product_tool_spec
@@ -57,3 +58,20 @@ def dispatch_product_tool(
     if tool_name == "finalize_report":
         return runtime.finalize_report(payload.get("run_id") or None)
     raise AssertionError(f"unhandled Pertura product tool: {tool_name}")
+
+
+def product_tool_mcp_result(response: dict[str, Any]) -> dict[str, Any]:
+    """Expose a compact product response as provider-visible MCP text."""
+
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": json.dumps(
+                    response,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                ),
+            }
+        ]
+    }

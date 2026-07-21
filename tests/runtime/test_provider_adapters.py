@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
+
 from pertura_runtime.adapters.openai import (
     build_openai_dynamic_instructions,
     openai_adapter_status,
@@ -14,6 +18,7 @@ from pertura_runtime.product_tools import (
     PRODUCT_TOOL_CONTRACTS,
     PRODUCT_TOOL_NAMES,
     dispatch_product_tool,
+    get_product_tool_spec,
 )
 
 
@@ -30,6 +35,33 @@ def test_provider_tool_surfaces_share_the_frozen_five_tools() -> None:
             for key, value in schema["parameters"]["properties"].items()
         }
         assert observed == expected
+
+
+def test_provider_schemas_accept_exact_binding_calls() -> None:
+    minimal_calls = {
+        "run_diagnostic": {"binding_id": "binding_diagnostic"},
+        "run_analysis": {
+            "binding_id": "binding_analysis",
+            "objective": "Execute the frozen analysis binding",
+        },
+        "evaluate_virtual_model": {"binding_id": "binding_virtual"},
+    }
+
+    for name, arguments in minimal_calls.items():
+        schema = get_product_tool_spec(name).json_input_schema()
+        Draft202012Validator.check_schema(schema)
+        Draft202012Validator(schema).validate(arguments)
+
+    diagnostic = get_product_tool_spec("run_diagnostic").json_input_schema()
+    with pytest.raises(ValidationError):
+        Draft202012Validator(diagnostic).validate({})
+    with pytest.raises(ValidationError):
+        Draft202012Validator(diagnostic).validate(
+            {
+                "binding_id": "binding_diagnostic",
+                "capability_id": "diagnostic.dataset_integrity.v1",
+            }
+        )
 
 
 def test_openai_skeleton_is_import_safe_and_explicitly_unimplemented() -> None:
@@ -84,21 +116,32 @@ class FakeRuntime:
 def test_neutral_dispatch_is_the_single_product_handler_path() -> None:
     runtime = FakeRuntime()
 
-    assert dispatch_product_tool(runtime, "inspect_dataset", {})["tool"] == "inspect_dataset"
-    assert dispatch_product_tool(
-        runtime,
-        "run_diagnostic",
-        {"capability_id": "diagnostic.dataset_integrity.v1"},
-    )["tool"] == "run_diagnostic"
-    assert dispatch_product_tool(
-        runtime,
-        "run_analysis",
-        {"objective": "replicated expression"},
-    )["tool"] == "run_analysis"
-    assert dispatch_product_tool(runtime, "evaluate_virtual_model", {})[
-        "tool"
-    ] == "evaluate_virtual_model"
-    assert dispatch_product_tool(runtime, "finalize_report", {})[
-        "tool"
-    ] == "finalize_report"
+    assert (
+        dispatch_product_tool(runtime, "inspect_dataset", {})["tool"]
+        == "inspect_dataset"
+    )
+    assert (
+        dispatch_product_tool(
+            runtime,
+            "run_diagnostic",
+            {"capability_id": "diagnostic.dataset_integrity.v1"},
+        )["tool"]
+        == "run_diagnostic"
+    )
+    assert (
+        dispatch_product_tool(
+            runtime,
+            "run_analysis",
+            {"objective": "replicated expression"},
+        )["tool"]
+        == "run_analysis"
+    )
+    assert (
+        dispatch_product_tool(runtime, "evaluate_virtual_model", {})["tool"]
+        == "evaluate_virtual_model"
+    )
+    assert (
+        dispatch_product_tool(runtime, "finalize_report", {})["tool"]
+        == "finalize_report"
+    )
     assert [item[0] for item in runtime.calls] == list(PRODUCT_TOOL_NAMES)

@@ -8,6 +8,7 @@ from pertura_runtime.product_tools import (
     PRODUCT_TOOL_NAMES,
     PRODUCT_TOOL_SPECS,
     dispatch_product_tool,
+    product_tool_mcp_result,
 )
 
 if TYPE_CHECKING:
@@ -20,11 +21,6 @@ __all__ = [
 ]
 
 
-def _claude_input_schema(input_types: dict[str, str]) -> dict[str, type]:
-    type_map = {"string": str, "object": dict, "array": list}
-    return {name: type_map[type_name] for name, type_name in input_types.items()}
-
-
 def create_product_mcp_server(runtime: "PerturaProductRuntime"):
     """Wrap the neutral five-tool surface for the Claude Agent SDK."""
 
@@ -32,18 +28,20 @@ def create_product_mcp_server(runtime: "PerturaProductRuntime"):
 
     tools = []
     for spec in PRODUCT_TOOL_SPECS:
+
         async def invoke(
             args: dict[str, Any],
             *,
             _tool_name: str = spec.name,
         ) -> dict[str, Any]:
-            return dispatch_product_tool(runtime, _tool_name, args)
+            response = dispatch_product_tool(runtime, _tool_name, args)
+            return product_tool_mcp_result(response)
 
         tools.append(
             tool(
                 spec.name,
                 spec.description,
-                _claude_input_schema(dict(spec.input_types)),
+                spec.json_input_schema(),
             )(invoke)
         )
 
