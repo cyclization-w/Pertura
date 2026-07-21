@@ -655,7 +655,7 @@ def test_state_module_leakage_is_blocked_before_fitting(tmp_path: Path) -> None:
         {},
     )
     assert state.status.value == "blocked"
-    assert any("pertura env setup perturbseq-python-v1" in item for item in state.blockers)
+    assert any("pertura env setup python-science-v1" in item for item in state.blockers)
 
 def test_candidate_r_adapters_accept_complete_protocol_outputs(monkeypatch, tmp_path: Path) -> None:
     from types import SimpleNamespace
@@ -795,6 +795,87 @@ def test_mixscape_uses_state_mapped_evaluation_subset_of_retained_cells() -> Non
         "mapped_evaluation_cell_count": 2,
         "excluded_nonmapped_retained_cell_count": 2,
     }
+
+
+def test_ref03_mapping_rejects_low_probability_or_large_distance() -> None:
+    from pertura_workflow.capabilities.state_candidates import (
+        _frozen_mapping_assignment,
+    )
+
+    accepted = _frozen_mapping_assignment(
+        ["state_a", "state_a", "state_b"],
+        [0.1, 0.2, 0.3],
+        probability_threshold=0.60,
+        distance_threshold=1.0,
+    )
+    assert accepted == {
+        "technical_state_id": "state_a",
+        "nearest_state_id": "state_a",
+        "mapping_probability": 2 / 3,
+        "median_neighbor_distance": 0.2,
+        "rejected": False,
+    }
+
+    low_probability = _frozen_mapping_assignment(
+        ["state_a", "state_b"],
+        [0.1, 0.2],
+        probability_threshold=0.60,
+        distance_threshold=1.0,
+    )
+    assert low_probability["rejected"] is True
+    assert low_probability["technical_state_id"] == "unresolved_state"
+
+    distant = _frozen_mapping_assignment(
+        ["state_a", "state_a", "state_a"],
+        [2.0, 3.0, 4.0],
+        probability_threshold=0.60,
+        distance_threshold=1.0,
+    )
+    assert distant["rejected"] is True
+
+
+def test_ref04_capability_uses_replicate_equal_effects_and_exact_classes() -> None:
+    from pertura_workflow.capabilities.target_candidates import (
+        _canonical_mixscape_class,
+        _paired_replicate_effect,
+    )
+
+    expression = {
+        "t1": {"A": 2.0},
+        "t2": {"A": 2.0},
+        "t3": {"A": 2.0},
+        "t4": {"A": 2.0},
+        "t5": {"A": 2.0},
+        "t6": {"A": 2.0},
+        "t7": {"A": 2.0},
+        "t8": {"A": 2.0},
+        "t9": {"A": 2.0},
+        "t10": {"A": 2.0},
+        "c1": {"A": 0.0},
+        "t11": {"A": 1.0},
+        "c2": {"A": 9.0},
+    }
+    metadata = {
+        cell: {"replicate": "r1"}
+        for cell in [f"t{i}" for i in range(1, 11)] + ["c1"]
+    }
+    metadata.update({"t11": {"replicate": "r2"}, "c2": {"replicate": "r2"}})
+    effect, replicate_effects = _paired_replicate_effect(
+        expression,
+        metadata,
+        [f"t{i}" for i in range(1, 12)],
+        ["c1", "c2"],
+        "A",
+        "replicate",
+        "log_normalized",
+    )
+    assert replicate_effects == [2.0, -8.0]
+    assert effect == -3.0
+    assert _canonical_mixscape_class("A KO") == "responder"
+    assert _canonical_mixscape_class("A NP") == "escape"
+    assert _canonical_mixscape_class("NT") == "control"
+    with pytest.raises(ValueError, match="unsupported Pertpy Mixscape class"):
+        _canonical_mixscape_class(0.9)
 
 
 def test_mixscape_rejects_state_mapping_outside_retained_or_input_cells() -> None:

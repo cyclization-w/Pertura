@@ -151,6 +151,28 @@ def test_task_capability_context_matches_frozen_scientific_endpoints() -> None:
     assert "do not run those methods" in by_id["NORM-02"]["objective"]
 
 
+def test_papa06_public_protocol_freezes_filterbyexpr_and_full_gene_encoding() -> None:
+    catalog = load_paper_task_catalog(CATALOG)
+    task = next(task for task in catalog.tasks() if task["task_id"] == "PAPA-06")
+    protocol = task["codeact_protocol"]
+    encoding = task["output_contract"]["artifact_semantics"][
+        "trans_de_results.tsv"
+    ]["untested_encoding"]
+
+    assert protocol["gene_filter"] == "edgeR::filterByExpr(y, design)"
+    assert protocol["normalization"] == "edgeR::calcNormFactors"
+    assert protocol["fit"] == "edgeR quasi-likelihood with robust=TRUE"
+    assert protocol["design"] == "~ replicate + condition"
+    assert protocol["baseline"] == "NTC"
+    assert protocol["minimum_paired_replicates"] == 2
+    assert encoding == {
+        "tested": False,
+        "logFC": 0,
+        "PValue": 1,
+        "FDR": 1,
+    }
+
+
 def test_task_catalog_rejects_expected_capabilities_with_nonexecuted_dependencies() -> (
     None
 ):

@@ -145,6 +145,18 @@ assert qualification["passed"] is True
 assert qualification["status"] == "passed"
 assert qualification["provider_schema_parity_passed"] is True
 assert qualification["provider_result_visibility_passed"] is True
+assert qualification["scientific_parity_passed"] is True
+assert set(qualification["scientific_parity_task_ids"]) == {
+    "PAPA-02",
+    "PAPA-03",
+    "PAPA-04",
+    "PAPA-05",
+    "KANG-02",
+}
+assert all(
+    record["status"] == "passed" and record["task_status"] == "passed"
+    for record in qualification["scientific_parity_records"]
+)
 assert set(qualification["provider_tool_schema_hashes"]) == {
     "inspect_dataset",
     "run_diagnostic",
@@ -161,7 +173,67 @@ assert all(
     for record in qualification["records"]
 )
 print("qualified_capability_bindings:", qualification["qualified_binding_count"])
+print("qualified_binding_scientific_tasks:", len(qualification["scientific_parity_records"]))
 print("capability_binding_qualification_hash:", qualification["canonical_hash"])
+PY
+
+SCIENTIFIC_METHOD_PARITY="$CHECKPOINT_ROOT/scientific-method-parity.a19.json"
+"$MAIN_ENV/bin/python" "$PERTURA_REPO/scripts/qualify_a19_scientific_methods.py" \
+  --repo "$PERTURA_REPO" \
+  --wheel "$WHEEL" \
+  --task-catalog "$TASKS" \
+  --task-reference-catalog "$TASK_REFS" \
+  --asset-catalog "$ASSETS" \
+  --paper-root "$PAPER_ROOT" \
+  --resource-lock "$RESOURCE_LOCK_SET" \
+  --binding-qualification "$CAPABILITY_BINDING_QUALIFICATION" \
+  --work-root "$BUILD_ROOT/scientific-method-parity" \
+  --output "$SCIENTIFIC_METHOD_PARITY"
+sha256sum "$SCIENTIFIC_METHOD_PARITY" | \
+  tee "$CHECKPOINT_ROOT/scientific-method-parity-sha256.txt"
+
+"$MAIN_ENV/bin/python" - "$SCIENTIFIC_METHOD_PARITY" <<'PY'
+import json
+import sys
+
+qualification = json.load(open(sys.argv[1], encoding="utf-8"))
+assert qualification["schema_version"] == "pertura-scientific-method-parity-v1"
+assert qualification["passed"] is True
+assert qualification["status"] == "passed"
+assert qualification["task_count"] == 7
+assert set(qualification["required_task_ids"]) == {
+    "PAPA-02",
+    "PAPA-03",
+    "PAPA-04",
+    "PAPA-05",
+    "PAPA-06",
+    "KANG-01",
+    "KANG-02",
+}
+assert not qualification["failure_summary"]
+assert all(record["status"] == "passed" for record in qualification["records"])
+print("qualified_scientific_method_tasks:", qualification["task_count"])
+print("scientific_method_parity_hash:", qualification["canonical_hash"])
+PY
+
+SCIENTIFIC_SCOPE_AUDIT="$CHECKPOINT_ROOT/scientific-method-scope-audit.a19.json"
+"$MAIN_ENV/bin/python" "$PERTURA_REPO/scripts/audit_a19_scientific_method_scope.py" \
+  --repo "$PERTURA_REPO" \
+  --task-catalog "$TASKS" \
+  --output "$SCIENTIFIC_SCOPE_AUDIT"
+sha256sum "$SCIENTIFIC_SCOPE_AUDIT" | \
+  tee "$CHECKPOINT_ROOT/scientific-method-scope-audit-sha256.txt"
+
+"$MAIN_ENV/bin/python" - "$SCIENTIFIC_SCOPE_AUDIT" <<'PY'
+import json
+import sys
+
+audit = json.load(open(sys.argv[1], encoding="utf-8"))
+assert audit["schema_version"] == "pertura-a19-scientific-method-scope-audit-v1"
+assert audit["passed"] is True
+assert audit["status"] == "passed"
+assert not audit["problems"]
+print("scientific_method_scope_audit_hash:", audit["canonical_hash"])
 PY
 
 "$MAIN_ENV/bin/python" -m pertura_bench export-server-plan \
@@ -289,4 +361,6 @@ echo "wheel=$WHEEL"
 echo "plan=$BOUND_PLAN"
 echo "evaluator_qualification=$EVALUATOR_QUALIFICATION"
 echo "capability_binding_qualification=$CAPABILITY_BINDING_QUALIFICATION"
+echo "scientific_method_parity=$SCIENTIFIC_METHOD_PARITY"
+echo "scientific_method_scope_audit=$SCIENTIFIC_SCOPE_AUDIT"
 echo "reference_index=${REFERENCE_INDEX:-resolved-from-previous-binding}"

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -11,6 +13,7 @@ from types import SimpleNamespace
 from typing import Any, Mapping
 
 from jsonschema import Draft202012Validator
+import pandas as pd
 
 from pertura_bench.capability_availability import (
     availability_by_task,
@@ -24,7 +27,7 @@ from pertura_bench.paper_agent_execution import (
 from pertura_bench.paper_capability_bindings import minimal_binding_arguments
 from pertura_bench.paper_tasks import load_paper_task_catalog
 from pertura_bench.task_submission import TaskSubmissionService
-from pertura_core.hashing import canonical_hash, file_sha256
+from pertura_core.hashing import canonical_hash, file_sha256, path_sha256
 from pertura_runtime.product_tools import (
     PRODUCT_TOOL_SPECS,
     dispatch_product_tool,
@@ -50,6 +53,10 @@ _SUCCESS_STATUSES_BY_TOOL = {
     "run_analysis": {"completed", "completed_with_caution"},
     "evaluate_virtual_model": {"supported", "limited"},
 }
+
+_REAL_SCIENTIFIC_PARITY_TASKS = frozenset(
+    {"PAPA-02", "PAPA-03", "PAPA-04", "PAPA-05", "KANG-02"}
+)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -116,20 +123,312 @@ def _binding_record(binding, **updates: Any) -> dict[str, Any]:
     return record
 
 
+def _result_outputs(result: Any, workspace_root: Path) -> dict[str, Path]:
+    """Resolve and re-verify one committed capability's published outputs."""
+
+    resolved: dict[str, Path] = {}
+    for raw in result.output_paths:
+        path = Path(str(raw))
+        if not path.is_absolute():
+            path = workspace_root / path
+        path = path.resolve()
+        if not path.exists():
+            raise FileNotFoundError(path)
+        name = path.name
+        if name in resolved:
+            raise RuntimeError(
+                f"{result.capability_id}: duplicate published output name: {name}"
+            )
+        expected = str(result.output_hashes.get(name) or "")
+        observed = path_sha256(path)
+        if not expected or expected != observed:
+            raise RuntimeError(
+                f"{result.capability_id}: published output hash drifted: {name}"
+            )
+        resolved[name] = path
+    return resolved
+
+
+def _write_tsv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns, delimiter="\t")
+        writer.writeheader()
+        writer.writerows({name: row.get(name) for name in columns} for row in rows)
+
+
+def _require_ref03_environment_parity(actual: Mapping[str, Any], paper_root: Path) -> None:
+    reference = _read_json(paper_root / "references/REF-03/manifest.json")
+    actual_versions = dict((actual.get("environment") or {}).get("versions") or {})
+    reference_versions = dict(reference.get("environment") or {})
+    key_map = {
+        "anndata": "anndata",
+        "scanpy": "scanpy",
+        "scikit_learn": "scikit-learn",
+        "igraph": "igraph",
+        "leidenalg": "leidenalg",
+    }
+    mismatches = {
+        reference_name: {
+            "reference": str(reference_versions.get(reference_name)),
+            "actual": str(actual_versions.get(actual_name)),
+        }
+        for reference_name, actual_name in key_map.items()
+        if str(reference_versions.get(reference_name))
+        != str(actual_versions.get(actual_name))
+    }
+    if mismatches:
+        raise RuntimeError(f"PAPA-02 REF-03 environment version drift: {mismatches}")
+
+
+def _require_ref04_environment_parity(actual: Mapping[str, Any], paper_root: Path) -> None:
+    reference = _read_json(paper_root / "references/REF-04/manifest.json")
+    actual_versions = dict((actual.get("environment") or {}).get("versions") or {})
+    reference_versions = dict(reference.get("environment") or {})
+    key_map = {
+        "anndata": "anndata",
+        "scanpy": "scanpy",
+        "pertpy": "pertpy",
+        "pandas": "pandas",
+        "scikit_learn": "scikit-learn",
+        "igraph": "igraph",
+        "leidenalg": "leidenalg",
+        "scipy": "scipy",
+    }
+    mismatches = {
+        reference_name: {
+            "reference": str(reference_versions.get(reference_name)),
+            "actual": str(actual_versions.get(actual_name)),
+        }
+        for reference_name, actual_name in key_map.items()
+        if str(reference_versions.get(reference_name))
+        != str(actual_versions.get(actual_name))
+    }
+    if mismatches:
+        raise RuntimeError(f"PAPA-05 REF-04 environment version drift: {mismatches}")
+
+
+def _materialize_real_scientific_outputs(
+    *,
+    task_id: str,
+    results: Mapping[str, Any],
+    workspace_root: Path,
+    output: Path,
+    paper_root: Path,
+) -> dict[str, str]:
+    """Map real capability outputs to the already-frozen public task artifacts.
+
+    This is a qualification-only adapter.  It does not invent a ResultEnvelope
+    or measured claim; every scientific value below comes from a committed,
+    receipt-backed capability result whose published hash is re-verified first.
+    """
+
+    by_capability = {
+        capability_id: _result_outputs(result, workspace_root)
+        for capability_id, result in results.items()
+    }
+    output.mkdir(parents=True, exist_ok=True)
+
+    if task_id == "PAPA-02":
+        sources = by_capability["state.reference.fit.v1"]
+        provenance = _read_json(sources["state_reference_fit.json"])
+        _require_ref03_environment_parity(provenance, paper_root)
+        model_root = output / "state_reference_model"
+        model_root.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(sources["state_reference_fit.npz"], model_root / "model.npz")
+        assignments = pd.read_parquet(sources["control_state_assignments.parquet"])
+        assignments[["cell_id", "technical_state_id"]].to_csv(
+            output / "reference_cell_manifest.tsv", sep="\t", index=False
+        )
+        shutil.copy2(
+            sources["state_reference_fit.json"],
+            output / "reference_provenance.json",
+        )
+
+    elif task_id == "PAPA-03":
+        sources = by_capability["state.reference.map_knn.v1"]
+        mapping = pd.read_parquet(sources["state_mapping.parquet"])
+        mapping.to_csv(output / "state_mapping.tsv", sep="\t", index=False)
+        manifest = _read_json(sources["state_mapping.json"])
+        (output / "mapping_rejections.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "pertura-mapping-rejections-v1",
+                    "mapping_probability_threshold": manifest[
+                        "mapping_probability_threshold"
+                    ],
+                    "distance_threshold": manifest["distance_threshold"],
+                    "rejected_cell_count": int(mapping["rejected"].sum()),
+                    "mapped_cell_count": len(mapping),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        result = results["state.reference.map_knn.v1"]
+        (output / "dependency_consumption.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "pertura-dependency-consumption-v1",
+                    "result_id": result.result_id,
+                    "result_hash": result.canonical_hash,
+                    "dependencies": [
+                        item.model_dump(mode="json") for item in result.dependencies
+                    ],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    elif task_id == "PAPA-04":
+        efficacy_path = by_capability["target.guide_efficacy.v1"][
+            "target_guide_efficacy.json"
+        ]
+        efficacy = _read_json(efficacy_path)
+        if efficacy.get("schema_version") != "pertura-target-guide-efficacy-set-v1":
+            raise RuntimeError("PAPA-04 qualification requires batch efficacy output")
+        target_rows: list[dict[str, Any]] = []
+        guide_rows: list[dict[str, Any]] = []
+        for target in efficacy.get("targets") or ():
+            evaluation = dict(target.get("evaluation") or {})
+            target_uid = str(target.get("target_uid") or "")
+            target_rows.append(
+                {
+                    "target_uid": target_uid,
+                    "direct_effect": evaluation.get("direct_effect"),
+                    "direction_supported": evaluation.get(
+                        "direction_supported", False
+                    ),
+                }
+            )
+            for guide, values in dict(evaluation.get("guide_effects") or {}).items():
+                guide_rows.append(
+                    {
+                        "target_uid": target_uid,
+                        "guide": str(guide),
+                        "effect": values.get("effect"),
+                        "direction_supported": values.get(
+                            "direction_supported", False
+                        ),
+                    }
+                )
+        sensitivity = _read_json(
+            by_capability["effect.guide_target_sensitivity.v1"][
+                "guide_target_sensitivity.json"
+            ]
+        )
+        sensitivity_rows = [
+            {
+                "target_uid": str(target.get("target") or ""),
+                "excluded_guide": str(guide),
+                "leave_one_guide_out_effect": value,
+            }
+            for target in sensitivity.get("targets") or ()
+            for guide, value in dict(target.get("leave_one_guide_out") or {}).items()
+        ]
+        _write_tsv(
+            output / "target_efficacy.tsv",
+            target_rows,
+            ["target_uid", "direct_effect", "direction_supported"],
+        )
+        _write_tsv(
+            output / "guide_effects.tsv",
+            guide_rows,
+            ["target_uid", "guide", "effect", "direction_supported"],
+        )
+        _write_tsv(
+            output / "guide_sensitivity.tsv",
+            sensitivity_rows,
+            ["target_uid", "excluded_guide", "leave_one_guide_out_effect"],
+        )
+
+    elif task_id == "PAPA-05":
+        mixscape = by_capability["target.responder.mixscape.v1"]
+        cells = pd.read_parquet(mixscape["mixscape_cells.parquet"])
+        cells.to_csv(output / "mixscape_cells.tsv", sep="\t", index=False)
+        summary = _read_json(mixscape["mixscape_summary.json"])
+        _require_ref04_environment_parity(summary, paper_root)
+        _write_tsv(
+            output / "mixscape_targets.tsv",
+            [dict(item) for item in summary.get("targets") or ()],
+            ["target_uid", "responder_fraction", "escape_fraction"],
+        )
+        reliability = _read_json(
+            by_capability["target.reliability.aggregate.v1"][
+                "target_reliability_aggregate.json"
+            ]
+        )
+        _write_tsv(
+            output / "target_reliability.tsv",
+            [dict(item) for item in reliability.get("target_verdicts") or ()],
+            [
+                "target_uid",
+                "target_gene",
+                "status",
+                "direct_effect",
+                "direction_supported",
+                "responder_fraction",
+                "escape_fraction",
+                "target_specific_join",
+                "limitations",
+            ],
+        )
+
+    elif task_id == "KANG-02":
+        sources = by_capability["composition.propeller.v1"]
+        shutil.copy2(
+            sources["composition_input_accounting.json"],
+            output / "composition_input_accounting.json",
+        )
+        pd.read_csv(sources["propeller_results.csv"]).to_csv(
+            output / "propeller_results.tsv", sep="\t", index=False
+        )
+        shutil.copy2(
+            sources["missing_state_exclusions.tsv"],
+            output / "missing_state_exclusions.tsv",
+        )
+    else:
+        raise KeyError(task_id)
+
+    return {
+        path.relative_to(output).as_posix(): path_sha256(path)
+        for path in sorted(output.rglob("*"))
+        if path.is_file()
+    }
+
+
 def _materialize_submission(
     *,
     task: Mapping[str, Any],
     reference_binding: Mapping[str, Any],
     output: Path,
     paper_root: Path,
+    capability_results: Mapping[str, Any],
+    workspace_root: Path,
 ) -> dict[str, Any]:
-    evaluator_id = str(reference_binding.get("evaluator_id") or "")
-    if evaluator_id == "task.trans_de_edger.v1":
-        _materialize_trans_de_positive(reference_binding, output, paper_root)
-    elif evaluator_id == "task.global_effect_claims.v1":
-        _materialize_global_effect_positive(reference_binding, output, paper_root)
-    elif reference_binding.get("evaluators"):
-        _materialize_generic_positive(reference_binding, output, paper_root)
+    task_id = str(task["task_id"])
+    actual_parity = task_id in _REAL_SCIENTIFIC_PARITY_TASKS
+    if actual_parity:
+        _materialize_real_scientific_outputs(
+            task_id=task_id,
+            results=capability_results,
+            workspace_root=workspace_root,
+            output=output,
+            paper_root=paper_root,
+        )
+    else:
+        evaluator_id = str(reference_binding.get("evaluator_id") or "")
+        if evaluator_id == "task.trans_de_edger.v1":
+            _materialize_trans_de_positive(reference_binding, output, paper_root)
+        elif evaluator_id == "task.global_effect_claims.v1":
+            _materialize_global_effect_positive(reference_binding, output, paper_root)
+        elif reference_binding.get("evaluators"):
+            _materialize_generic_positive(reference_binding, output, paper_root)
     _fill_protocol_outputs(task, reference_binding, output)
 
     # Protocol-only endpoints can lack evaluator-backed files.  Their frozen
@@ -160,9 +459,15 @@ def _materialize_submission(
 
     result = _positive_result(task, reference_binding)
     result["dataset_id"] = str(task["dataset_id"])
-    result["result_type"] = "capability_binding_qualification"
+    result["result_type"] = (
+        "scientific_method_parity" if actual_parity else "capability_binding_qualification"
+    )
     result["limitations"] = [
-        "Internal execution qualification; not a scientific benchmark result."
+        (
+            "Internal real-output scientific parity qualification; not a paper result."
+            if actual_parity
+            else "Internal execution qualification; not a scientific benchmark result."
+        )
     ]
     if not _artifact_paths_present(output, dict(task.get("output_contract") or {})):
         raise RuntimeError(
@@ -184,6 +489,8 @@ class _BindingQualificationExecutor:
         self.references = references
         self.paper_root = paper_root
         self.records: list[dict[str, Any]] = []
+        self.scientific_artifact_hashes: dict[str, dict[str, str]] = {}
+        self.scientific_result_hashes: dict[str, dict[str, str]] = {}
 
     def __call__(self, agent, prompt: str, timeout: int):
         del timeout
@@ -202,6 +509,7 @@ class _BindingQualificationExecutor:
         turn = project.store.begin_turn(agent.conversation_id, prompt)
         result_ids: list[str] = []
         task_records: list[dict[str, Any]] = []
+        capability_results: dict[str, Any] = {}
         bindings = tuple(runtime._invocation_bindings.values())
         predecessor_binding_ids = {
             predecessor_id
@@ -348,6 +656,7 @@ class _BindingQualificationExecutor:
                         elif not response.get("receipt_id"):
                             raise RuntimeError("trusted result lacks receipt")
                         result_ids.append(result_id)
+                        capability_results[binding.capability_id] = result
                         if result_status in successful_statuses:
                             qualification_status = "executed"
                         result_hash = result.canonical_hash
@@ -408,7 +717,19 @@ class _BindingQualificationExecutor:
                 reference_binding=self.references.get(task_id, {}),
                 output=output,
                 paper_root=self.paper_root,
+                capability_results=capability_results,
+                workspace_root=agent.workspace.root,
             )
+            if task_id in _REAL_SCIENTIFIC_PARITY_TASKS:
+                self.scientific_artifact_hashes[task_id] = {
+                    path.relative_to(output).as_posix(): path_sha256(path)
+                    for path in sorted(output.rglob("*"))
+                    if path.is_file()
+                }
+                self.scientific_result_hashes[task_id] = {
+                    capability_id: result.canonical_hash
+                    for capability_id, result in sorted(capability_results.items())
+                }
             allowed_units = tuple(
                 str(item)
                 for item in (
@@ -502,6 +823,7 @@ def qualify(
 
     records: list[dict[str, Any]] = []
     workflow_runs: list[dict[str, Any]] = []
+    scientific_parity_records: list[dict[str, Any]] = []
     work_root.mkdir(parents=True, exist_ok=True)
     for workflow in loaded_catalog.workflows:
         workflow_id = str(workflow["workflow_id"])
@@ -564,6 +886,37 @@ def qualify(
             verify_checkpoint=False,
         )
         records.extend(executor.records)
+        verdicts_by_task = {
+            str(item["task_id"]): _read_json(Path(str(item["verdict"])))
+            for item in workflow_result.get("task_records") or ()
+            if item.get("verdict")
+        }
+        for task_id in sorted(executor.scientific_artifact_hashes):
+            verdict = verdicts_by_task.get(task_id)
+            if verdict is None:
+                raise RuntimeError(
+                    f"{task_id}: real scientific parity verdict was not written"
+                )
+            scientific_parity_records.append(
+                {
+                    "task_id": task_id,
+                    "status": str(
+                        (verdict.get("task_evaluation") or {}).get("status")
+                        or "not_available"
+                    ),
+                    "task_status": str(verdict.get("status") or "failed"),
+                    "evaluation": verdict.get("task_evaluation"),
+                    "evaluation_hash": canonical_hash(
+                        verdict.get("task_evaluation") or {}
+                    ),
+                    "observed_artifact_hashes": executor.scientific_artifact_hashes[
+                        task_id
+                    ],
+                    "capability_result_hashes": executor.scientific_result_hashes[
+                        task_id
+                    ],
+                }
+            )
         workflow_runs.append(
             {
                 "workflow_id": workflow_id,
@@ -599,10 +952,24 @@ def qualify(
             f"missing={sorted(expected_pairs - set(observed_pairs))}, "
             f"extra={sorted(set(observed_pairs) - expected_pairs)}"
         )
+    observed_scientific_parity = {
+        str(item["task_id"]) for item in scientific_parity_records
+    }
+    if observed_scientific_parity != _REAL_SCIENTIFIC_PARITY_TASKS:
+        raise RuntimeError(
+            "real scientific parity coverage drifted: "
+            f"missing={sorted(_REAL_SCIENTIFIC_PARITY_TASKS - observed_scientific_parity)}, "
+            f"extra={sorted(observed_scientific_parity - _REAL_SCIENTIFIC_PARITY_TASKS)}"
+        )
     failed_records = [
         item
         for item in records
         if item["qualification_status"] not in CAPABILITY_BINDING_QUALIFICATION_STATUSES
+    ]
+    failed_scientific_parity = [
+        item
+        for item in scientific_parity_records
+        if item["status"] != "passed" or item["task_status"] != "passed"
     ]
     failure_summary = [
         {
@@ -629,8 +996,8 @@ def qualify(
     ).strip()
     payload = {
         "schema_version": "pertura-capability-binding-qualification-v1",
-        "status": "failed" if failed_records else "passed",
-        "passed": not failed_records,
+        "status": "failed" if failed_records or failed_scientific_parity else "passed",
+        "passed": not failed_records and not failed_scientific_parity,
         "git_commit": commit,
         "wheel_sha256": file_sha256(wheel),
         "task_catalog_sha256": file_sha256(task_catalog_path),
@@ -666,6 +1033,10 @@ def qualify(
         ),
         "workflow_runs": workflow_runs,
         "failure_summary": failure_summary,
+        "scientific_parity_task_ids": sorted(_REAL_SCIENTIFIC_PARITY_TASKS),
+        "scientific_parity_passed": not failed_scientific_parity,
+        "scientific_parity_failure_summary": failed_scientific_parity,
+        "scientific_parity_records": scientific_parity_records,
         "records": records,
     }
     payload["canonical_hash"] = canonical_hash(payload)

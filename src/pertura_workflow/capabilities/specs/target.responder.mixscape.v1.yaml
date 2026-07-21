@@ -86,6 +86,7 @@ metadata:
   environment_profile: perturbseq-python-v1
   execution_mode: isolated_python
   method_version: pertpy-1.1.1
+  posterior_semantics: exact_mixscape_class_p_ko
   dependency_policy:
     state.reference.map_knn.v1:
       scope: exact

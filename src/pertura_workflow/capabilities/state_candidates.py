@@ -35,14 +35,14 @@ def run_state_reference_fit(
     contract: DatasetContract,
     staging: Path,
 ):
-    environment = doctor_environment("perturbseq-python-v1")
+    environment = doctor_environment("python-science-v1")
     if not environment["ok"]:
         return blocked(
             spec,
             request,
             contract,
             *environment["problems"],
-            metadata={"setup_command": "pertura env setup perturbseq-python-v1"},
+            metadata={"setup_command": "pertura env setup python-science-v1"},
         )
     try:
         import anndata as ad
@@ -50,8 +50,9 @@ def run_state_reference_fit(
         import leidenalg
         import numpy as np
         import pandas as pd
+        import scanpy as sc
         from scipy import sparse
-        from sklearn.decomposition import IncrementalPCA
+        from sklearn.decomposition import PCA
         from sklearn.metrics import adjusted_rand_score
         from sklearn.neighbors import NearestNeighbors
     except ModuleNotFoundError as exc:
@@ -60,7 +61,7 @@ def run_state_reference_fit(
             request,
             contract,
             f"state reference dependency is missing: {exc.name}",
-            metadata={"setup_command": "pertura env setup perturbseq-python-v1"},
+            metadata={"setup_command": "pertura env setup python-science-v1"},
         )
     budget = resource_budget(request.parameters)
     max_memory_gb, n_jobs = budget
@@ -108,38 +109,51 @@ def run_state_reference_fit(
     finally:
         if getattr(data, "file", None):
             data.file.close()
-    if sparse.issparse(matrix):
-        matrix = matrix.tocsr().astype(float)
-        if matrix.data.size and np.any(matrix.data < 0):
-            return blocked(spec, request, contract, "state reference requires nonnegative expression input")
-        library = np.asarray(matrix.sum(axis=1)).ravel()
-        scale = np.divide(1e4, library, out=np.zeros_like(library, dtype=float), where=library > 0)
-        normalized_sparse = sparse.diags(scale) @ matrix
-        normalized_sparse.data = np.log1p(normalized_sparse.data)
-        means = np.asarray(normalized_sparse.mean(axis=0)).ravel()
-        squared_means = np.asarray(normalized_sparse.power(2).mean(axis=0)).ravel()
-        variances = np.maximum(0.0, squared_means - means**2)
-    else:
-        matrix = np.asarray(matrix)
-        if np.any(matrix < 0):
-            return blocked(spec, request, contract, "state reference requires nonnegative expression input")
-        budget.require_dense(matrix.shape[0], matrix.shape[1], arrays=2, label="control normalization")
-        library = matrix.sum(axis=1)
-        normalized_dense = np.divide(matrix, library[:, None], out=np.zeros_like(matrix, dtype=float), where=library[:, None] > 0) * 1e4
-        normalized_dense = np.log1p(normalized_dense)
-        variances = normalized_dense.var(axis=0)
-    n_hvg = min(2000, int((variances > 0).sum()))
+    matrix = matrix.tocsr().astype(float) if sparse.issparse(matrix) else np.asarray(matrix, dtype=float)
+    values = matrix.data if sparse.issparse(matrix) else matrix.reshape(-1)
+    if values.size and (not np.isfinite(values).all() or np.any(values < 0)):
+        return blocked(
+            spec,
+            request,
+            contract,
+            "state reference requires finite nonnegative expression input",
+        )
+    control = ad.AnnData(X=matrix)
+    control.var_names = genes
+    control.obs_names = obs_names[control_indices]
+    sc.pp.normalize_total(control, target_sum=1e4)
+    sc.pp.log1p(control)
+    sc.pp.highly_variable_genes(
+        control,
+        flavor="seurat",
+        n_top_genes=min(2000, int(control.n_vars)),
+        subset=False,
+        inplace=True,
+    )
+    hvg_names = np.asarray(
+        control.var_names[control.var["highly_variable"]], dtype=str
+    )
+    n_hvg = int(len(hvg_names))
     if n_hvg < 2:
         return blocked(spec, request, contract, "fewer than two variable genes are available in controls")
-    hvg_index = np.argsort(variances)[-n_hvg:]
-    n_pcs = min(50, len(control_indices) - 1, n_hvg)
+    n_pcs = min(30, len(control_indices) - 1, n_hvg)
     budget.require_dense(len(control_indices), n_hvg, arrays=3, label="control HVG PCA")
-    controls_hvg = normalized_sparse[:, hvg_index].toarray() if sparse.issparse(matrix) else normalized_dense[:, hvg_index]
-    pca = IncrementalPCA(n_components=n_pcs, batch_size=max(n_pcs, min(budget.chunk_rows, len(control_indices))))
+    controls_hvg = control[:, hvg_names].X
+    controls_hvg = (
+        controls_hvg.toarray()
+        if sparse.issparse(controls_hvg)
+        else np.asarray(controls_hvg, dtype=float)
+    )
+    pca = PCA(n_components=n_pcs, svd_solver="full", random_state=1729)
     control_pcs = pca.fit_transform(controls_hvg)
     n_neighbors = min(15, control_pcs.shape[0] - 1)
-    neighbors = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs).fit(control_pcs)
-    graph_indices = neighbors.kneighbors(control_pcs, return_distance=False)[:, 1:]
+    neighbors = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=1).fit(control_pcs)
+    control_distances, graph_indices = neighbors.kneighbors(
+        control_pcs, return_distance=True
+    )
+    graph_indices = graph_indices[:, 1:]
+    control_distance = np.median(control_distances[:, 1:], axis=1)
+    distance_threshold = float(np.quantile(control_distance, 0.99))
     edges = {
         tuple(sorted((index, int(neighbor))))
         for index, row in enumerate(graph_indices)
@@ -149,7 +163,7 @@ def run_state_reference_fit(
     graph = ig.Graph(n=control_pcs.shape[0], edges=sorted(edges), directed=False)
     candidates = []
     resolutions = [float(item) for item in request.parameters.get("resolutions") or [0.5, 1.0, 1.5]]
-    seeds = [int(item) for item in request.parameters.get("seeds") or [0, 1, 2]]
+    seeds = [int(item) for item in request.parameters.get("seeds") or [1729, 1730, 1731]]
     for resolution in resolutions:
         label_sets = []
         for seed in seeds:
@@ -182,7 +196,8 @@ def run_state_reference_fit(
         sum(adjusted_rand_score(labels, other) for other in chosen["labels"])
         for labels in chosen["labels"]
     ]
-    control_labels = chosen["labels"][int(np.argmax(seed_scores))]
+    chosen_seed_index = int(np.argmax(seed_scores))
+    control_labels = chosen["labels"][chosen_seed_index]
     technical_ids = {}
     for label in sorted(set(control_labels)):
         centroid = control_pcs[control_labels == label].mean(axis=0)
@@ -194,13 +209,23 @@ def run_state_reference_fit(
     model_path = staging / "state_reference_fit.npz"
     np.savez_compressed(
         model_path,
-        hvg_names=genes[hvg_index],
+        model_schema_version=np.asarray(["pertura-state-reference-fit-v2"]),
+        hvg_names=hvg_names,
         pca_components=pca.components_,
         pca_mean=pca.mean_,
         control_pcs=control_pcs,
         control_labels=control_labels,
         control_cell_ids=obs_names[control_indices],
         technical_state_ids=np.asarray([technical_ids[item] for item in control_labels]),
+        control_state_ids=np.asarray([technical_ids[item] for item in control_labels]),
+        n_neighbors=np.asarray([n_neighbors]),
+        mapping_probability_threshold=np.asarray([0.60]),
+        distance_rejection_quantile=np.asarray([0.99]),
+        distance_threshold=np.asarray([distance_threshold]),
+        resolutions=np.asarray(resolutions, dtype=float),
+        seeds=np.asarray(seeds, dtype=int),
+        chosen_resolution=np.asarray([chosen["resolution"]], dtype=float),
+        chosen_seed=np.asarray([seeds[chosen_seed_index]], dtype=int),
     )
     assignment_path = staging / "control_state_assignments.parquet"
     pd.DataFrame(
@@ -226,15 +251,38 @@ def run_state_reference_fit(
             "n_hvg": n_hvg,
             "n_pcs": n_pcs,
             "n_neighbors": n_neighbors,
+            "hvg_method": "scanpy_seurat",
+            "pca_solver": "full",
             "resolution_candidates": public_candidates,
             "chosen_resolution": chosen["resolution"],
+            "chosen_seed": seeds[chosen_seed_index],
             "chosen_stability": chosen["stability"],
+            "mapping_probability_threshold": 0.60,
+            "distance_rejection_quantile": 0.99,
+            "distance_threshold": distance_threshold,
             "technical_state_ids": sorted(set(technical_ids.values())),
             "leakage": {
                 "perturbation_labels_used_for_fit": False,
                 "test_split_used_for_fit": False,
             },
             "resource_budget": {"max_memory_gb": max_memory_gb, "n_jobs": n_jobs},
+            "environment": {
+                "profile": "python-science-v1",
+                "lock_hash": environment.get("lock_hash"),
+                "versions": dict(environment.get("versions") or {}),
+            },
+            "input_provenance": {
+                "contract_hash": request.contract_hash,
+                "dependencies": [
+                    {
+                        "kind": item.kind,
+                        "object_id": item.object_id,
+                        "object_hash": item.object_hash,
+                        "role": item.role,
+                    }
+                    for item in request.dependencies
+                ],
+            },
         },
     )
     return envelope(
@@ -268,14 +316,14 @@ def run_state_reference_map(
     contract: DatasetContract,
     staging: Path,
 ):
-    environment = doctor_environment("perturbseq-python-v1")
+    environment = doctor_environment("python-science-v1")
     if not environment["ok"]:
         return blocked(
             spec,
             request,
             contract,
             *environment["problems"],
-            metadata={"setup_command": "pertura env setup perturbseq-python-v1"},
+            metadata={"setup_command": "pertura env setup python-science-v1"},
         )
     try:
         import anndata as ad
@@ -289,7 +337,7 @@ def run_state_reference_map(
             request,
             contract,
             f"state mapping dependency is missing: {exc.name}",
-            metadata={"setup_command": "pertura env setup perturbseq-python-v1"},
+            metadata={"setup_command": "pertura env setup python-science-v1"},
         )
     budget = resource_budget(request.parameters)
     h5ad_path = resolve_input(contract, request.parameters.get("h5ad_path"), label="h5ad_path")
@@ -304,6 +352,25 @@ def run_state_reference_map(
         capability_id="state.reference.fit.v1",
     )
     model = np.load(model_path, allow_pickle=False)
+    required_model_fields = {
+        "hvg_names",
+        "pca_components",
+        "pca_mean",
+        "control_pcs",
+        "technical_state_ids",
+        "n_neighbors",
+        "mapping_probability_threshold",
+        "distance_threshold",
+    }
+    missing_model_fields = sorted(required_model_fields - set(model.files))
+    if missing_model_fields:
+        return blocked(
+            spec,
+            request,
+            contract,
+            "state reference model is missing frozen fields: "
+            + ", ".join(missing_model_fields),
+        )
     data = ad.read_h5ad(h5ad_path, backed="r")
     retained = retained_cells_for_request(staging, request, required=True)
     retained_set = set(retained or ()) & _selected_cell_ids(selection_path)
@@ -335,9 +402,26 @@ def run_state_reference_map(
     budget.require_dense(budget.chunk_rows, len(selected_indices), arrays=3, label="state mapping chunk")
     control_pcs = model["control_pcs"]
     labels = [str(item) for item in model["technical_state_ids"]]
-    n_neighbors = min(15, control_pcs.shape[0])
-    neighbors = NearestNeighbors(n_neighbors=n_neighbors, n_jobs=budget.n_jobs).fit(control_pcs)
-    threshold = float(request.parameters.get("mapping_probability_threshold", 0.60))
+    n_neighbors = int(np.asarray(model["n_neighbors"]).reshape(-1)[0])
+    if n_neighbors <= 0 or n_neighbors > control_pcs.shape[0]:
+        return blocked(spec, request, contract, "state reference model has invalid n_neighbors")
+    neighbors = NearestNeighbors(n_neighbors=n_neighbors, n_jobs=1).fit(control_pcs)
+    threshold = float(
+        np.asarray(model["mapping_probability_threshold"]).reshape(-1)[0]
+    )
+    requested_threshold = request.parameters.get("mapping_probability_threshold")
+    if requested_threshold is not None and float(requested_threshold) != threshold:
+        return blocked(
+            spec,
+            request,
+            contract,
+            "mapping_probability_threshold cannot override the frozen state model",
+        )
+    distance_threshold = float(
+        np.asarray(model["distance_threshold"]).reshape(-1)[0]
+    )
+    if not np.isfinite(distance_threshold) or distance_threshold < 0:
+        return blocked(spec, request, contract, "state reference model has invalid distance_threshold")
     output = staging / "state_mapping.parquet"
     writer = None
     selection_stats = BackedSelectionStats()
@@ -363,20 +447,30 @@ def run_state_reference_map(
             normalized = np.divide(selected, library[:, None], out=np.zeros_like(selected, dtype=float), where=library[:, None] > 0) * 1e4
             normalized = np.log1p(normalized)
             pcs = (normalized - model["pca_mean"]) @ model["pca_components"].T
-            indices = neighbors.kneighbors(pcs, return_distance=False)
+            distances, indices = neighbors.kneighbors(pcs, return_distance=True)
             rows = []
             cell_ids = [str(data.obs_names[index]) for index in chunk_indices]
-            for cell, neighbor_indices, cell_pcs in zip(cell_ids, indices, pcs):
+            for cell, local_distances, neighbor_indices, cell_pcs in zip(
+                cell_ids, distances, indices, pcs
+            ):
                 votes = [labels[int(index)] for index in neighbor_indices]
-                counts = {label: votes.count(label) for label in set(votes)}
-                label, count = max(counts.items(), key=lambda item: (item[1], item[0]))
-                probability = count / len(votes)
-                technical = label if probability >= threshold else "unresolved_state"
-                unresolved += technical == "unresolved_state"
+                assignment = _frozen_mapping_assignment(
+                    votes,
+                    [float(value) for value in local_distances],
+                    probability_threshold=threshold,
+                    distance_threshold=distance_threshold,
+                )
+                unresolved += assignment["rejected"]
                 row = {
                     "cell_id": cell,
-                    "technical_state_id": technical,
-                    "mapping_probability": probability,
+                    "technical_state_id": assignment["technical_state_id"],
+                    "nearest_state_id": assignment["nearest_state_id"],
+                    "mapping_probability": assignment["mapping_probability"],
+                    "median_neighbor_distance": assignment[
+                        "median_neighbor_distance"
+                    ],
+                    "distance_threshold": distance_threshold,
+                    "rejected": assignment["rejected"],
                     "candidate_human_label": None,
                 }
                 row.update(
@@ -401,6 +495,16 @@ def run_state_reference_map(
         {
             "schema_version": "pertura-state-reference-map-v1",
             "mapping_probability_threshold": threshold,
+            "distance_threshold": distance_threshold,
+            "distance_rejection_quantile": float(
+                np.asarray(
+                    model["distance_rejection_quantile"]
+                    if "distance_rejection_quantile" in model.files
+                    else [0.99]
+                )
+                .reshape(-1)[0]
+            ),
+            "n_neighbors": n_neighbors,
             "n_cells": mapped_count,
             "excluded_cell_count": int(data.n_obs) - mapped_count,
             "unresolved_state_count": unresolved,
@@ -433,6 +537,7 @@ def run_state_reference_map(
         metadata={
             "reference_refit": False,
             "mapping_probability_threshold": threshold,
+            "distance_threshold": distance_threshold,
             "backed_selection": {
                 "block_reads": selection_stats.block_reads,
                 "source_rows_read": selection_stats.source_rows_read,
@@ -440,6 +545,39 @@ def run_state_reference_map(
             },
         },
     )
+
+
+def _frozen_mapping_assignment(
+    votes: list[str],
+    distances: list[float],
+    *,
+    probability_threshold: float,
+    distance_threshold: float,
+) -> dict[str, Any]:
+    """Apply the frozen REF-03 vote, tie-break, and dual rejection rule."""
+
+    import math
+    import statistics
+
+    if not votes or len(votes) != len(distances):
+        raise ValueError("state mapping requires aligned nonempty neighbor votes")
+    if any(not math.isfinite(value) or value < 0 for value in distances):
+        raise ValueError("state mapping neighbor distances must be finite and nonnegative")
+    counts = {label: votes.count(label) for label in set(votes)}
+    label, count = max(counts.items(), key=lambda item: (item[1], item[0]))
+    probability = count / len(votes)
+    median_distance = float(statistics.median(distances))
+    rejected = (
+        probability < probability_threshold
+        or median_distance > distance_threshold
+    )
+    return {
+        "technical_state_id": "unresolved_state" if rejected else label,
+        "nearest_state_id": label,
+        "mapping_probability": probability,
+        "median_neighbor_distance": median_distance,
+        "rejected": bool(rejected),
+    }
 
 
 def run_state_annotation_candidates(

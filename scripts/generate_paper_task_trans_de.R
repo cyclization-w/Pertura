@@ -55,11 +55,12 @@ for (target_uid in eligible_targets) {
     stop(paste("rank-deficient trans-DE design for", target_uid))
   }
   target_counts <- counts[, selected, drop = FALSE]
-  nonzero <- Matrix::rowSums(target_counts) > 0
-  if (sum(nonzero) < 2L) {
-    stop(paste("fewer than two expressed genes for", target_uid))
+  y <- DGEList(counts = target_counts, genes = genes)
+  keep <- filterByExpr(y, design = design)
+  if (sum(keep) < 2L) {
+    stop(paste("filterByExpr retained fewer than two genes for", target_uid))
   }
-  y <- DGEList(counts = target_counts[nonzero, , drop = FALSE], genes = genes[nonzero, , drop = FALSE])
+  y <- y[keep, , keep.lib.sizes = FALSE]
   y <- calcNormFactors(y)
   y <- estimateDisp(y, design, robust = TRUE)
   fit <- glmQLFit(y, design, robust = TRUE)
@@ -121,6 +122,9 @@ write_json(
     cell_is_replicate = FALSE,
     guide_is_replicate = FALSE,
     minimum_paired_replicates = 2L,
+    gene_filter = "edgeR::filterByExpr(y, design)",
+    normalization = "edgeR::calcNormFactors",
+    fit = "edgeR quasi-likelihood with robust=TRUE",
     targets = as.list(eligible_targets),
     versions = list(
       R = paste(R.version$major, R.version$minor, sep = "."),

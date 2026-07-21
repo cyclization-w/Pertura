@@ -552,6 +552,21 @@ def generate(
     design_manifest = reference_root / "reference_design_manifest.json"
     if not trans_de_reference.is_file() or not design_reference.is_file() or not design_manifest.is_file():
         raise FileNotFoundError("PAPA-06 R reference outputs are incomplete")
+    design_provenance = json.loads(design_manifest.read_text(encoding="utf-8"))
+    expected_protocol = {
+        "design": "~ replicate + condition",
+        "baseline": "NTC",
+        "minimum_paired_replicates": 2,
+        "gene_filter": "edgeR::filterByExpr(y, design)",
+        "normalization": "edgeR::calcNormFactors",
+        "fit": "edgeR quasi-likelihood with robust=TRUE",
+    }
+    for field, expected_value in expected_protocol.items():
+        if design_provenance.get(field) != expected_value:
+            raise RuntimeError(f"PAPA-06 reference protocol drift: {field}")
+    reference_versions = design_provenance.get("versions") or {}
+    if any(not reference_versions.get(name) for name in ("R", "edgeR", "Matrix")):
+        raise RuntimeError("PAPA-06 reference environment provenance is incomplete")
 
     model_path = ref03_root / "control_state_reference" / "model.npz"
     if not model_path.is_file():
@@ -574,7 +589,12 @@ def generate(
             "ref02_manifest": _sha256(retention["manifest_path"]),
             "ref02_retained_cell_truth": _sha256(retention["retained_truth_path"]),
             "ref03_model": _sha256(model_path),
+            "generator_script": _sha256(Path(__file__).resolve()),
             "r_runner": _sha256(r_runner),
+        },
+        "environment": {
+            "profile": "edger-v1",
+            "versions": reference_versions,
         },
         "output_files": {
             path.relative_to(output).as_posix(): _sha256(path) for path in files
@@ -592,7 +612,17 @@ def generate(
         "parameters": {
             "retained_cell_policy": retention["policy"],
             "retained_expected_state_counts": retention["expected_state_counts"],
-            "trans_de": {"design": "~ replicate + condition", "baseline": "NTC", "minimum_paired_replicates": 2, "minimum_cells_per_arm": MIN_PSEUDOBULK_CELLS},
+            "trans_de": {
+                **expected_protocol,
+                "robust": True,
+                "minimum_cells_per_arm": MIN_PSEUDOBULK_CELLS,
+                "full_gene_untested_encoding": {
+                    "tested": False,
+                    "logFC": 0,
+                    "PValue": 1,
+                    "FDR": 1,
+                },
+            },
             "global_effect": {"dimensions": 15, "replicates": list(E_REPLICATES), "maximum_cells_per_arm": MAX_E_CELLS, "minimum_cells_per_arm": MIN_E_CELLS, "permutations": N_PERMUTATIONS, "seed": SEED, "multiple_testing": "BH"},
         },
         "readiness": "generated", "pending_jobs": [], "problems": [], "passed": True,
@@ -640,6 +670,42 @@ def validate_task_reference_pack(root: Path) -> dict[str, Any]:
         path = root / relative
         if not path.is_file() or _sha256(path) != expected:
             problems.append(f"output hash drift: {relative}")
+    if "TASKREF-PAPA-TRANS-DE" in (manifest.get("task_reference_sets") or []):
+        input_files = manifest.get("input_files") or {}
+        expected_generator_hashes = {
+            "generator_script": _sha256(Path(__file__).resolve()),
+            "r_runner": _sha256(
+                Path(__file__).with_name("generate_paper_task_trans_de.R")
+            ),
+        }
+        for name, expected_hash in expected_generator_hashes.items():
+            if input_files.get(name) != expected_hash:
+                problems.append(f"PAPA-06 generator hash drift: {name}")
+        trans_de_protocol = (manifest.get("parameters") or {}).get("trans_de") or {}
+        expected_trans_de_protocol = {
+            "design": "~ replicate + condition",
+            "baseline": "NTC",
+            "minimum_paired_replicates": 2,
+            "gene_filter": "edgeR::filterByExpr(y, design)",
+            "normalization": "edgeR::calcNormFactors",
+            "fit": "edgeR quasi-likelihood with robust=TRUE",
+            "robust": True,
+        }
+        for field, expected_value in expected_trans_de_protocol.items():
+            if trans_de_protocol.get(field) != expected_value:
+                problems.append(f"PAPA-06 reference protocol drift: {field}")
+        reference_versions = ((manifest.get("environment") or {}).get("versions") or {})
+        if any(not reference_versions.get(name) for name in ("R", "edgeR", "Matrix")):
+            problems.append("PAPA-06 reference environment provenance is incomplete")
+        design_manifest_path = root / "PAPA-06/reference/reference_design_manifest.json"
+        if design_manifest_path.is_file():
+            design_provenance = json.loads(
+                design_manifest_path.read_text(encoding="utf-8")
+            )
+            if (design_provenance.get("versions") or {}) != reference_versions:
+                problems.append("PAPA-06 reference environment provenance disagrees")
+        else:
+            problems.append("PAPA-06 reference design manifest is missing")
     protocol_path = root / "PAPA-07" / "global_effect_protocol.json"
     evidence_path = root / "PAPA-07" / "global_effect_evidence.tsv"
     if protocol_path.is_file():

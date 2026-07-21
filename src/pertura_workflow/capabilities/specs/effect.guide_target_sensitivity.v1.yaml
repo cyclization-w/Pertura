@@ -43,6 +43,7 @@ implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
+  method_version: ref04-guide-loo-v1
   dependency_policy:
     target.guide_efficacy.v1:
       scope: exact

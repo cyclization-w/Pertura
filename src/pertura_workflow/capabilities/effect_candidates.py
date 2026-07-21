@@ -831,6 +831,8 @@ def _effect_rows(path: Path) -> list[dict[str, Any]]:
             return [
                 {"guide": guide, "target": target, "effect": float(values["effect"])}
                 for guide, values in payload["guide_effects"].items()
+                if values.get("status", "resolved") == "resolved"
+                and values.get("effect") is not None
             ]
         if payload.get("schema_version") == "pertura-target-guide-efficacy-set-v1":
             rows: list[dict[str, Any]] = []
@@ -839,6 +841,11 @@ def _effect_rows(path: Path) -> list[dict[str, Any]]:
                 target_uid = str(target_entry.get("target_uid") or "")
                 target_gene = str(target_entry.get("target_gene") or target_uid)
                 for guide, values in dict(evaluation.get("guide_effects") or {}).items():
+                    if (
+                        values.get("status", "resolved") != "resolved"
+                        or values.get("effect") is None
+                    ):
+                        continue
                     rows.append(
                         {
                             "guide": str(guide),

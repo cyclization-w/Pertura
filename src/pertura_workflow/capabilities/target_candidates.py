@@ -248,31 +248,67 @@ def run_mixscape_responder(
         random_state=1729,
     )
     if new_class_name not in data.obs.columns:
-        alternatives = [name for name in data.obs.columns if name.startswith(new_class_name)]
-        if not alternatives:
-            return blocked(spec, request, contract, "Mixscape did not produce the requested class column")
-        class_column = alternatives[0]
-    else:
-        class_column = new_class_name
-    labels = data.obs[class_column].astype(str)
+        return blocked(
+            spec,
+            request,
+            contract,
+            "Mixscape did not produce the exact requested categorical class column",
+        )
+    class_column = new_class_name
+    probability_column = f"{new_class_name}_p_ko"
+    if probability_column not in data.obs.columns:
+        return blocked(
+            spec,
+            request,
+            contract,
+            "Mixscape did not produce the exact responder posterior column: "
+            + probability_column,
+        )
+    try:
+        responder_probability = pd.to_numeric(
+            data.obs[probability_column], errors="raise"
+        ).to_numpy(dtype=float)
+    except (TypeError, ValueError) as exc:
+        return blocked(
+            spec,
+            request,
+            contract,
+            f"Mixscape responder posterior is not numeric: {exc}",
+        )
+    if (
+        not np.isfinite(responder_probability).all()
+        or np.any(responder_probability < 0)
+        or np.any(responder_probability > 1)
+    ):
+        return blocked(
+            spec,
+            request,
+            contract,
+            "Mixscape responder posterior must be finite and lie in [0, 1]",
+        )
+    try:
+        labels = data.obs[class_column].map(_canonical_mixscape_class)
+    except ValueError as exc:
+        return blocked(spec, request, contract, str(exc))
     control_mask = data.obs[pert_key].astype(str) == control
     candidate_cells = ~control_mask
     candidate_labels = labels[candidate_cells]
-    lower = candidate_labels.str.lower()
-    responder_mask = lower.str.contains("ko|responder|perturbed", regex=True)
-    escape_mask = lower.str.contains("np|escape|non.perturbed", regex=True)
+    responder_mask = candidate_labels == "responder"
+    escape_mask = candidate_labels == "escape"
     table = pd.DataFrame(
         {
             "cell_id": data.obs_names.astype(str),
             "perturbation": data.obs[pert_key].astype(str).to_numpy(),
             "mixscape_class": labels.to_numpy(),
+            "responder_probability": responder_probability,
             "is_control": control_mask.to_numpy(),
         }
     )
-    score_columns = [
-        name for name in data.obs.columns
-        if "mixscape" in name.lower() and "score" in name.lower()
-    ]
+    score_columns = sorted(
+        name
+        for name in data.obs.columns
+        if "mixscape" in str(name).lower() and "score" in str(name).lower()
+    )
     if score_columns:
         table["perturbation_score"] = data.obs[score_columns[0]].to_numpy()
     cells_path = staging / "mixscape_cells.parquet"
@@ -282,16 +318,13 @@ def run_mixscape_responder(
         target_rows = table[
             (table["perturbation"] == target_uid) & (~table["is_control"])
         ]
-        target_labels = target_rows["mixscape_class"].astype(str).str.lower()
-        target_responder = target_labels.str.contains(
-            "ko|responder|perturbed", regex=True
-        )
-        target_escape = target_labels.str.contains(
-            "np|escape|non.perturbed", regex=True
-        )
+        target_labels = target_rows["mixscape_class"].astype(str)
+        target_responder = target_labels == "responder"
+        target_escape = target_labels == "escape"
         target_summaries.append(
             {
                 "target_uid": str(target_uid),
+                "status": "available",
                 "n_candidate_cells": int(len(target_rows)),
                 "responder_fraction": float(target_responder.mean())
                 if len(target_rows)
@@ -304,6 +337,7 @@ def run_mixscape_responder(
     summary = {
         "schema_version": "pertura-mixscape-responder-v1",
         "class_column": class_column,
+        "responder_probability_column": probability_column,
         "class_counts": dict(Counter(candidate_labels)),
         "n_candidate_cells": int(candidate_cells.sum()),
         "responder_fraction": float(responder_mask.mean()) if len(responder_mask) else None,
@@ -334,6 +368,11 @@ def run_mixscape_responder(
             "pertpy": package_metadata.version("pertpy"),
             "anndata": package_metadata.version("anndata"),
         },
+        "environment": {
+            "profile": "perturbseq-python-v1",
+            "lock_hash": environment.get("lock_hash"),
+            "versions": dict(environment.get("versions") or {}),
+        },
     }
     summary_path = write_json(staging, "mixscape_summary.json", summary)
     caution = []
@@ -354,6 +393,7 @@ def run_mixscape_responder(
         outputs=(cells_path, summary_path),
         metadata={
             "method": "pertpy_mixscape",
+            "responder_probability_source": probability_column,
             "seed": 1729,
             "backed_selection": {
                 "block_reads": selection_stats.block_reads,
@@ -364,6 +404,22 @@ def run_mixscape_responder(
             "control_split_policy": split_policy,
         },
     )
+
+
+def _canonical_mixscape_class(label: Any) -> str:
+    normalized = str(label).strip().casefold()
+    terminal = normalized.rsplit(maxsplit=1)[-1] if normalized else ""
+    aliases = {
+        "control": {"control", "nt"},
+        "responder": {"responder", "ko", "perturbed"},
+        "escape": {"escape", "np", "non.perturbed", "non-perturbed"},
+    }
+    matches = [
+        canonical for canonical, values in aliases.items() if terminal in values
+    ]
+    if len(matches) != 1:
+        raise ValueError(f"unsupported Pertpy Mixscape class label: {label}")
+    return matches[0]
 
 
 def _mixscape_evaluation_rows(
@@ -750,7 +806,22 @@ def _run_single_guide_efficacy(
     ]
     target_values = [expression["rows"][cell][target_gene] for cell in target_cells]
     control_values = [expression["rows"][cell][target_gene] for cell in control_cells]
-    pooled_effect = _effect(target_values, control_values, layer_scale)
+    pooled_effect, replicate_effects = _paired_replicate_effect(
+        expression["rows"],
+        metadata,
+        target_cells,
+        control_cells,
+        target_gene,
+        replicate_column,
+        layer_scale,
+    )
+    direct_effect_se = (
+        _sample_standard_deviation(replicate_effects)
+        / math.sqrt(len(replicate_effects))
+        if len(replicate_effects) > 1
+        else None
+    )
+    resolved = pooled_effect is not None and len(replicate_effects) >= 2
     guide_groups: dict[str, list[str]] = {}
     for cell in target_cells:
         guide = metadata[cell].get(guide_column, "")
@@ -759,9 +830,23 @@ def _run_single_guide_efficacy(
     guide_results = {}
     for guide, cells in sorted(guide_groups.items()):
         values = [expression["rows"][cell][target_gene] for cell in cells]
-        effect = _effect(values, control_values, layer_scale)
+        effect, guide_replicate_effects = _paired_replicate_effect(
+            expression["rows"],
+            metadata,
+            cells,
+            control_cells,
+            target_gene,
+            replicate_column,
+            layer_scale,
+        )
         guide_results[guide] = {
             "n_cells": len(cells),
+            "n_replicates": len(guide_replicate_effects),
+            "status": (
+                "resolved"
+                if effect is not None and len(guide_replicate_effects) >= 2
+                else "unresolved"
+            ),
             "effect": effect,
             "bootstrap_ci": _bootstrap_effect(
                 values,
@@ -770,29 +855,23 @@ def _run_single_guide_efficacy(
                 int(request.parameters.get("guide_bootstrap_iterations", 250)),
                 _stable_seed(guide),
             ),
-            "direction_supported": _direction_supported(
-                effect,
-                expected,
-                profile["minimum_abs_effect"],
+            "direction_supported": (
+                _sign_supported(effect, expected) if effect is not None else False
             ),
         }
     eligible = [
         value for value in guide_results.values()
-        if value["n_cells"] >= profile["minimum_cells_per_guide"]
+        if value["status"] == "resolved" and value["effect"] is not None
     ]
     concordance = (
         sum(item["direction_supported"] for item in eligible) / len(eligible)
         if eligible
         else None
     )
-    replicate_levels = sorted(
-        {
-            metadata[cell].get(replicate_column, "")
-            for cell in target_cells + control_cells
-            if metadata[cell].get(replicate_column, "")
-        }
+    replicate_levels = _paired_replicate_levels(
+        metadata, target_cells, control_cells, replicate_column
     )
-    if len(replicate_levels) >= 3:
+    if len(replicate_levels) >= 2:
         pooled_ci = _replicate_bootstrap(
             expression["rows"],
             metadata,
@@ -813,18 +892,20 @@ def _run_single_guide_efficacy(
             seed=1729,
         )
         bootstrap_unit = "cell_within_design_caution"
-    loo = {}
-    for excluded in sorted(guide_groups):
-        cells = [
-            cell for guide, members in guide_groups.items()
-            if guide != excluded
-            for cell in members
-        ]
-        loo[excluded] = _effect(
-            [expression["rows"][cell][target_gene] for cell in cells],
-            control_values,
-            layer_scale,
-        ) if cells else None
+    resolved_guide_effects = {
+        guide: float(item["effect"])
+        for guide, item in guide_results.items()
+        if item["status"] == "resolved" and item["effect"] is not None
+    }
+    loo = {
+        excluded: (
+            sum(value for guide, value in resolved_guide_effects.items() if guide != excluded)
+            / (len(resolved_guide_effects) - 1)
+            if excluded in resolved_guide_effects and len(resolved_guide_effects) > 1
+            else None
+        )
+        for excluded in sorted(guide_groups)
+    }
     signature_genes = [
         str(item) for item in request.parameters.get("signature_genes") or []
         if str(item) in expression["genes"]
@@ -845,14 +926,10 @@ def _run_single_guide_efficacy(
     control_detection = _detection(control_values)
     blockers: list[str] = []
     cautions: list[str] = []
-    if len(target_cells) < profile["minimum_cells"] or len(control_cells) < profile["minimum_cells"]:
-        blockers.append("target or control cell coverage is below the profile minimum")
-    if control_detection < profile["minimum_control_detection"] and not signature["confirmation_allowed"]:
-        blockers.append("target gene detectability is low and no leakage-safe signature fallback is available")
-    if len(replicate_levels) < 3:
-        cautions.append("replicate-stratified bootstrap was unavailable; cell bootstrap is exploratory")
-    if not _direction_supported(pooled_effect, expected, profile["minimum_abs_effect"]):
-        cautions.append("pooled target-gene effect does not support the expected direction")
+    if not resolved:
+        cautions.append("fewer than two paired target-control replicates were available")
+    if not resolved or not _sign_supported(float(pooled_effect), expected):
+        cautions.append("replicate-equal target-gene effect does not support the expected direction")
     if concordance is None or concordance < profile["minimum_guide_concordance"]:
         cautions.append("guide direction concordance is unresolved or below the development threshold")
     if leakage:
@@ -868,8 +945,19 @@ def _run_single_guide_efficacy(
         "expected_direction": expected,
         "profile": profile_name,
         "profile_validation": "dev_unvalidated",
+        "status": "resolved" if resolved else "unresolved",
+        "n_replicates": len(replicate_effects),
+        "direct_effect": pooled_effect,
+        "direct_effect_se": direct_effect_se,
+        "direction_supported": (
+            _sign_supported(float(pooled_effect), expected)
+            if pooled_effect is not None
+            else False
+        ),
         "target_gene_efficacy": {
             "effect": pooled_effect,
+            "replicate_effects": replicate_effects,
+            "standard_error": direct_effect_se,
             "bootstrap_ci": pooled_ci,
             "bootstrap_unit": bootstrap_unit,
             "control_detection": control_detection,
@@ -970,7 +1058,18 @@ def run_target_reliability_aggregate(
                 {
                     "target_uid": str(item.get("target_uid") or ""),
                     "target_gene": str(item.get("target_gene") or ""),
-                    "status": str(item.get("status") or "unresolved"),
+                    "status": str(
+                        (item.get("evaluation") or {}).get("status")
+                        or "unresolved"
+                    ),
+                    "direct_effect": (item.get("evaluation") or {}).get(
+                        "direct_effect"
+                    ),
+                    "direction_supported": bool(
+                        (item.get("evaluation") or {}).get(
+                            "direction_supported", False
+                        )
+                    ),
                     "blockers": list(item.get("blockers") or ()),
                     "cautions": list(item.get("cautions") or ()),
                 }
@@ -981,7 +1080,11 @@ def run_target_reliability_aggregate(
                 {
                     "target_uid": str(efficacy_payload.get("target_uid") or ""),
                     "target_gene": str(efficacy_payload.get("target_gene") or ""),
-                    "status": str(efficacy_result.get("status") or "unresolved"),
+                    "status": str(efficacy_payload.get("status") or "unresolved"),
+                    "direct_effect": efficacy_payload.get("direct_effect"),
+                    "direction_supported": bool(
+                        efficacy_payload.get("direction_supported", False)
+                    ),
                     "blockers": list(efficacy_payload.get("blockers") or ()),
                     "cautions": list(efficacy_payload.get("cautions") or ()),
                 }
@@ -1004,7 +1107,17 @@ def run_target_reliability_aggregate(
         }
     for item in target_verdicts:
         responder = mixscape_targets.get(item["target_uid"])
-        if responder is None:
+        responder_available = (
+            responder is not None and responder.get("status") == "available"
+        )
+        limitations: list[str] = []
+        if item["status"] != "resolved":
+            limitations.append("target efficacy is unresolved")
+        if not item.get("direction_supported"):
+            limitations.append("expected direct-expression direction is unsupported")
+        if not responder_available:
+            limitations.append("target-specific Mixscape result is unavailable")
+        if not responder_available:
             item["responder_status"] = "unresolved"
             item["responder_fraction"] = None
             item["escape_fraction"] = None
@@ -1015,13 +1128,21 @@ def run_target_reliability_aggregate(
             item["responder_status"] = "available"
             item["responder_fraction"] = responder.get("responder_fraction")
             item["escape_fraction"] = responder.get("escape_fraction")
-    cautions.append("aggregate uses dev_unvalidated_v0 thresholds and is not a production screen certification")
+        item["target_specific_join"] = bool(responder_available)
+        item["status"] = (
+            "resolved"
+            if item["status"] == "resolved"
+            and bool(item.get("direction_supported"))
+            and responder_available
+            else "unresolved"
+        )
+        item["limitations"] = limitations
     status = DiagnosticStatus.blocked if blockers else DiagnosticStatus.caution
     payload = {
         "schema_version": "pertura-target-reliability-aggregate-v1",
         "status": status.value,
-        "profile": "dev_unvalidated_v0",
-        "validation_status": "synthetic_only",
+        "profile": "ref04-reliability-v1",
+        "validation_status": "reference_method_aligned",
         "dependency_trace": trace,
         "target_verdicts": target_verdicts,
         "blockers": blockers,
@@ -1048,8 +1169,65 @@ def run_target_reliability_aggregate(
             ),
         },
         outputs=(output,),
-        metadata={"profile": "dev_unvalidated_v0", "raw_data_recomputed": False},
+        metadata={"profile": "ref04-reliability-v1", "raw_data_recomputed": False},
     )
+
+
+def _paired_replicate_levels(
+    metadata: dict[str, dict[str, str]],
+    target_cells: list[str],
+    control_cells: list[str],
+    replicate_column: str,
+) -> list[str]:
+    target = {
+        metadata[cell].get(replicate_column, "") for cell in target_cells
+    } - {""}
+    control = {
+        metadata[cell].get(replicate_column, "") for cell in control_cells
+    } - {""}
+    return sorted(target & control)
+
+
+def _paired_replicate_effect(
+    rows: dict[str, dict[str, float]],
+    metadata: dict[str, dict[str, str]],
+    target_cells: list[str],
+    control_cells: list[str],
+    gene: str,
+    replicate_column: str,
+    scale: str,
+) -> tuple[float | None, list[float]]:
+    levels = _paired_replicate_levels(
+        metadata, target_cells, control_cells, replicate_column
+    )
+    effects = []
+    for level in levels:
+        target_values = [
+            rows[cell][gene]
+            for cell in target_cells
+            if metadata[cell].get(replicate_column, "") == level
+        ]
+        control_values = [
+            rows[cell][gene]
+            for cell in control_cells
+            if metadata[cell].get(replicate_column, "") == level
+        ]
+        if target_values and control_values:
+            effects.append(_effect(target_values, control_values, scale))
+    return (sum(effects) / len(effects) if effects else None), effects
+
+
+def _sample_standard_deviation(values: list[float]) -> float:
+    if len(values) < 2:
+        return 0.0
+    mean = sum(values) / len(values)
+    return math.sqrt(
+        sum((value - mean) ** 2 for value in values) / (len(values) - 1)
+    )
+
+
+def _sign_supported(effect: float, expected: str) -> bool:
+    return effect < 0 if expected == "down" else effect > 0
 
 
 def _replicate_bootstrap(

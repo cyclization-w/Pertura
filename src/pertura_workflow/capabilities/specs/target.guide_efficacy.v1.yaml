@@ -140,3 +140,4 @@ implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
+  method_version: ref04-replicate-equal-v1

@@ -334,8 +334,8 @@ def _recipe(
             ),
             control_column=str(control_fact["primary_h5ad_column"]),
             control_values=[str(control_fact["primary_h5ad_label"])],
-            resolutions=[0.5, 1.0, 2.0],
-            seeds=[42],
+            resolutions=[0.5, 1.0, 1.5],
+            seeds=[1729, 1730, 1731],
         )
         additional.append("retained_cell_manifest")
         return parameters, tuple(additional), blockers, overrides
@@ -350,7 +350,7 @@ def _recipe(
                 project,
                 run_id,
             ),
-            mapping_probability_threshold=0.5,
+            mapping_probability_threshold=0.60,
         )
         additional.append("retained_cell_manifest")
         return parameters, tuple(additional), blockers, overrides

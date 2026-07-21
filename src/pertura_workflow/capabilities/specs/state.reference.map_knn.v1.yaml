@@ -57,8 +57,9 @@ implemented: true
 metadata:
   validation_status: synthetic_only
   candidate: true
-  environment_profile: perturbseq-python-v1
+  environment_profile: python-science-v1
   execution_mode: isolated_python
+  method_version: ref03-knn-map-v1
   dependency_policy:
     state.reference.fit.v1:
       scope: exact
