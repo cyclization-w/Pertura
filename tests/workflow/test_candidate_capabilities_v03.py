@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import json
 from pathlib import Path
 
@@ -309,6 +310,13 @@ def test_target_guide_efficacy_and_leakage_blocking(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
+    evaluation_selection = tmp_path / "evaluation_cells.tsv.gz"
+    with gzip.open(evaluation_selection, "wt", encoding="utf-8", newline="") as handle:
+        handle.write("cell_id\n")
+        for line in metadata_lines[1:]:
+            cell = line.split(",", 1)[0]
+            if cell.startswith(("t1_", "t2_", "c1_", "c2_")):
+                handle.write(f"{cell}\n")
     batch_staging = tmp_path / "batch_efficacy"
     batch_staging.mkdir()
     retained_asset_id = "asset_retained_fixture"
@@ -341,6 +349,7 @@ def test_target_guide_efficacy_and_leakage_blocking(tmp_path: Path) -> None:
         {
             "expression_path": str(expression),
             "metadata_path": str(metadata),
+            "selection_path": str(evaluation_selection),
             "targets": [
                 {
                     "target_uid": "TARGET",
@@ -376,6 +385,10 @@ def test_target_guide_efficacy_and_leakage_blocking(tmp_path: Path) -> None:
     assert payload["schema_version"] == "pertura-target-guide-efficacy-set-v1"
     assert [item["target_gene"] for item in payload["targets"]] == ["TG", "S1"]
     assert payload["retained_manifest_applied"] is True
+    assert payload["evaluation_selection_applied"] is True
+    assert payload["targets"][0]["evaluation"]["selected_cell_count"] == 40
+    assert payload["targets"][0]["evaluation"]["analyzed_cell_count"] == 40
+    assert payload["targets"][0]["evaluation"]["n_replicates"] == 2
     assert all(
         (
             batch_staging

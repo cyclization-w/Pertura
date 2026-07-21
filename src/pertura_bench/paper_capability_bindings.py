@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import gzip
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -71,6 +72,7 @@ def build_paper_task_invocation_bindings(
             _verify_runtime_dependencies(spec)
         try:
             parameters, additional_roles, blockers, allowed_overrides = _recipe(
+                task=task,
                 task_id=task_id,
                 dataset_id=dataset_id,
                 capability_id=capability_id,
@@ -287,6 +289,7 @@ def _verify_runtime_dependencies(spec: CapabilitySpec) -> None:
 
 def _recipe(
     *,
+    task: Mapping[str, Any],
     task_id: str,
     dataset_id: str,
     capability_id: str,
@@ -360,14 +363,35 @@ def _recipe(
                 "cell-by-guide counts and a validated guide-level effect table are unavailable"
             )
             return {}, tuple(additional), blockers, overrides
+        input_semantics = dict(
+            (task.get("output_contract") or {}).get("input_semantics") or {}
+        )
+        expression_semantics = dict(input_semantics.get("target_expression") or {})
         parameters.update(
             expression_path=_asset_id(assets, "expression_table"),
             metadata_path=_asset_id(assets, "cell_metadata"),
+            selection_path=_task_alias(
+                assets,
+                "evaluation_split",
+                "cell_selection",
+                asset_registry,
+                project,
+                run_id,
+            ),
             cell_column="cell_id",
             guide_column="guide_ID",
             condition_column="gene",
             replicate_column="replicate",
-            targets=_papa_targets(assets),
+            layer_scale="log_normalized",
+            targets=_papa_targets(
+                assets,
+                gene_aliases={
+                    str(source): str(target)
+                    for source, target in dict(
+                        expression_semantics.get("gene_aliases") or {}
+                    ).items()
+                },
+            ),
         )
         additional.append("retained_cell_manifest")
         return parameters, tuple(additional), blockers, overrides
@@ -680,25 +704,106 @@ def _asset_ref(record: Mapping[str, Any], project: ProjectWorkspace) -> DataAsse
     return asset
 
 
-def _papa_targets(assets: Mapping[str, Mapping[str, Any]]) -> list[dict[str, str]]:
-    if "expression_table" not in assets:
-        raise _BindingInputUnavailable("expression_table")
-    path = Path(str(assets["expression_table"]["path"]))
-    with path.open("r", encoding="utf-8", newline="") as handle:
+def _papa_targets(
+    assets: Mapping[str, Mapping[str, Any]],
+    *,
+    gene_aliases: Mapping[str, str],
+) -> list[dict[str, str]]:
+    for role in ("expression_table", "cell_metadata", "evaluation_split"):
+        if role not in assets:
+            raise _BindingInputUnavailable(role)
+    expression_path = Path(str(assets["expression_table"]["path"]))
+    with expression_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.reader(handle, delimiter="\t")
-        header = next(reader)
-    genes = [name for name in header if name not in {"cell_id", "NT", "NTC"}]
-    if not genes:
-        raise ValueError("target expression table has no eligible target columns")
+        expression_genes = set(next(reader)) - {"cell_id"}
+    selection_rows = _read_tabular_rows(
+        Path(str(assets["evaluation_split"]["path"]))
+    )
+    if not selection_rows or "cell_id" not in selection_rows[0]:
+        raise ValueError("evaluation selection must contain cell_id")
+    selection_cell_ids = [str(row["cell_id"]).strip() for row in selection_rows]
+    if any(not cell for cell in selection_cell_ids):
+        raise ValueError("evaluation selection contains an empty cell identity")
+    if len(selection_cell_ids) != len(set(selection_cell_ids)):
+        raise ValueError("evaluation selection contains duplicate cell identities")
+    selected_cells = set(selection_cell_ids)
+    control_by_cell = {
+        str(row["cell_id"]).strip(): str(row.get("is_control") or "").lower()
+        for row in selection_rows
+    }
+    metadata_rows = _read_tabular_rows(Path(str(assets["cell_metadata"]["path"])))
+    if not metadata_rows or not {"cell_id", "gene"} <= set(metadata_rows[0]):
+        raise ValueError("cell metadata must contain cell_id and gene")
+    metadata_cell_ids = [
+        str(row.get("cell_id") or "").strip() for row in metadata_rows
+    ]
+    if len(metadata_cell_ids) != len(set(metadata_cell_ids)):
+        raise ValueError("cell metadata contains duplicate cell identities")
+    missing_metadata = sorted(selected_cells - set(metadata_cell_ids))
+    if missing_metadata:
+        raise ValueError(
+            "evaluation selection cells are absent from cell metadata: "
+            f"{len(missing_metadata)}"
+        )
+    metadata_by_cell = {
+        str(row.get("cell_id") or "").strip(): row for row in metadata_rows
+    }
+    inconsistent_controls = [
+        cell
+        for cell in sorted(selected_cells)
+        if (control_by_cell.get(cell) == "true")
+        != (str(metadata_by_cell[cell].get("gene") or "").strip() in {"NT", "NTC"})
+    ]
+    if inconsistent_controls:
+        raise ValueError(
+            "evaluation selection control flags disagree with cell metadata: "
+            f"{len(inconsistent_controls)}"
+        )
+    targets = sorted(
+        {
+            str(row["gene"]).strip()
+            for row in metadata_rows
+            if str(row.get("cell_id") or "").strip() in selected_cells
+            and control_by_cell.get(str(row.get("cell_id") or "").strip()) != "true"
+            and str(row.get("gene") or "").strip()
+            and str(row.get("gene") or "").strip() not in {"NT", "NTC"}
+        }
+    )
+    if not targets:
+        raise ValueError("evaluation selection has no eligible target identities")
+    missing_genes = sorted(
+        target
+        for target in targets
+        if gene_aliases.get(target, target) not in expression_genes
+    )
+    if missing_genes:
+        raise ValueError(
+            "eligible target genes are absent from the expression table: "
+            + ", ".join(missing_genes)
+        )
     return [
         {
-            "target_uid": gene,
+            "target_uid": target,
             "control_uid": "NT",
-            "target_gene": gene,
+            "target_gene": gene_aliases.get(target, target),
             "expected_direction": "down",
         }
-        for gene in genes
+        for target in targets
     ]
+
+
+def _read_tabular_rows(path: Path) -> list[dict[str, str]]:
+    suffixes = {suffix.lower() for suffix in path.suffixes}
+    handle = (
+        gzip.open(path, "rt", encoding="utf-8-sig", newline="")
+        if ".gz" in suffixes
+        else path.open("r", encoding="utf-8-sig", newline="")
+    )
+    with handle:
+        first_line = handle.readline()
+        handle.seek(0)
+        delimiter = "\t" if first_line.count("\t") > first_line.count(",") else ","
+        return [dict(row) for row in csv.DictReader(handle, delimiter=delimiter)]
 
 
 def _output_mapping(task_id: str, spec: CapabilitySpec) -> dict[str, str]:

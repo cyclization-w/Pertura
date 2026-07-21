@@ -114,13 +114,23 @@ def _bind_scheduler_allocation(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Slurm allocation lacks positive memory or CPU evidence")
 
     memory_gb = memory_mb / 1024.0
+    preserve_frozen_request = (
+        observed.get("requested_memory_source") == "frozen_workflow_budget"
+    )
     observed.update(
         {
             "scheduler_job_id": slurm_job_id,
-            # The Slurm allocation is authoritative.  Do not retain stale
-            # launcher-template values such as the historical 8 GB canary
-            # placeholder after a 32/48 GB workflow was actually submitted.
-            "requested_memory_gb": memory_gb,
+            # Ordinary paper jobs use the Slurm allocation as both request and
+            # actual evidence, which also replaces historical launcher
+            # placeholders.  A checkpoint qualification may share one 48 GB
+            # allocation across workflows; its runner-owned marker preserves
+            # each frozen 32/48 GB workflow budget while Slurm still supplies
+            # the actual allocation.
+            "requested_memory_gb": (
+                float(observed["requested_memory_gb"])
+                if preserve_frozen_request
+                else memory_gb
+            ),
             "actual_memory_gb": memory_gb,
             "cpu_count": cpus,
             "requested_cpus_per_task": cpus,

@@ -248,6 +248,38 @@ def test_scheduler_resource_evidence_separates_requested_and_billing_cpus(
     validate_resource_request(evidence, memory_gb=48.0, n_jobs=1)
 
 
+def test_scheduler_qualification_preserves_frozen_workflow_budget(
+    tmp_path: Path, monkeypatch
+) -> None:
+    path = tmp_path / "resource.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "pertura-resource-evidence-v1",
+                "mode": "scheduler",
+                "scheduler_job_id": "qualification-job",
+                "requested_memory_gb": 32.0,
+                "requested_memory_source": "frozen_workflow_budget",
+                "actual_memory_gb": 32.0,
+                "cpu_count": 1,
+                "n_jobs": 1,
+                "timeout_seconds": 14400,
+                "thread_environment": {"OMP_NUM_THREADS": "1"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SLURM_JOB_ID", "qualification-job")
+    monkeypatch.setenv("SLURM_MEM_PER_NODE", str(48 * 1024))
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", "1")
+
+    evidence = load_resource_evidence(path)
+
+    assert evidence["requested_memory_gb"] == 32.0
+    assert evidence["actual_memory_gb"] == 48.0
+    validate_resource_request(evidence, memory_gb=32.0, n_jobs=1)
+
+
 def test_rlimit_resource_template_is_enforced_then_observed(
     tmp_path: Path, monkeypatch
 ) -> None:

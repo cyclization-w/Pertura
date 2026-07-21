@@ -195,6 +195,18 @@ def test_method_parity_gate_has_exact_real_task_coverage() -> None:
     assert refresh.index("audit_a19_scientific_method_scope.py") < refresh.index(
         "export-server-plan"
     )
+    finalizer = (
+        ROOT / "scripts/run_a19_final_science_and_canaries.sbatch"
+    ).read_text(encoding="utf-8")
+    assert "#SBATCH --mem=48G" in finalizer
+    assert "--normalize-total 10000 --log1p" in finalizer
+    assert "PAPA target-expression transform verified" in finalizer
+    binding_qualification = (
+        ROOT / "scripts/qualify_a19_capability_bindings.py"
+    ).read_text(encoding="utf-8")
+    assert '"requested_memory_source": "frozen_workflow_budget"' in (
+        binding_qualification
+    )
 
 
 def test_papa06_independent_reference_and_skill_share_frozen_protocol() -> None:
@@ -226,7 +238,10 @@ def test_scope_audit_freezes_runtime_and_authority_surfaces() -> None:
         "src/pertura_core/receipt_verification.py",
         "src/pertura_bench/paper_agent_execution.py",
         "src/pertura_bench/task_submission.py",
-        "src/pertura_bench/resource_evidence.py",
         "src/pertura_workflow/environments",
         "benchmarks/paper_v1/task_references.v1.json",
     }.issubset(frozen)
+    assert "src/pertura_bench/resource_evidence.py" not in frozen
+    assert "src/pertura_bench/resource_evidence.py" in set(
+        scope_audit._ALLOWED_CHANGED_PATHS
+    )

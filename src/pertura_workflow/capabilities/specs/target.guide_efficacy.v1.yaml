@@ -65,6 +65,12 @@ parameters_schema:
       type: string
     replicate_column:
       type: string
+    selection_cell_column:
+      type: string
+    selection_path:
+      type: string
+      description: Optional registered cell-selection asset limiting the analysis universe.
+      x-pertura-asset-role: cell_selection
     signature_genes:
       type: array
       items:

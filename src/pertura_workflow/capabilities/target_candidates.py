@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import gzip
 import json
 import math
 import random
@@ -732,7 +734,21 @@ def run_guide_efficacy(
         "blockers": blockers,
         "cautions": cautions,
     }
+    selection_applied = any(
+        bool(item["evaluation"].get("evaluation_selection_applied"))
+        for item in evaluations
+    )
+    if selection_applied:
+        payload["evaluation_selection_applied"] = True
     output = write_json(staging, "target_guide_efficacy.json", payload)
+    result_metadata = {
+        "profile": payload["profile"],
+        "profile_validation": "dev_unvalidated",
+        "retained_manifest_applied": payload["retained_manifest_applied"],
+        "batch_mode": True,
+    }
+    if selection_applied:
+        result_metadata["evaluation_selection_applied"] = True
     return envelope(
         spec,
         request,
@@ -748,12 +764,7 @@ def run_guide_efficacy(
             "targets_blocked": blocked_count,
         },
         outputs=(output,),
-        metadata={
-            "profile": payload["profile"],
-            "profile_validation": "dev_unvalidated",
-            "retained_manifest_applied": payload["retained_manifest_applied"],
-            "batch_mode": True,
-        },
+        metadata=result_metadata,
     )
 
 
@@ -788,11 +799,24 @@ def _run_single_guide_efficacy(
     profile_name = str(request.parameters.get("profile") or "dev_unvalidated_v0")
     profile = _load_profile(profile_name)
     retained = retained_cells_for_request(staging, request, required=False)
+    selection_value = request.parameters.get("selection_path")
+    selected_cells = None
+    if selection_value:
+        selection_path = resolve_input(
+            contract,
+            selection_value,
+            label="selection_path",
+        )
+        selected_cells = _read_cell_selection(
+            selection_path,
+            str(request.parameters.get("selection_cell_column") or cell_column),
+        )
     expression = _read_expression(expression_path, cell_column)
     metadata = {
         cell: row
         for cell, row in _read_metadata(metadata_path, cell_column).items()
         if retained is None or cell in retained
+        if selected_cells is None or cell in selected_cells
     }
     if target_gene not in expression["genes"]:
         return blocked(spec, request, contract, f"target gene is absent: {target_gene}")
@@ -973,10 +997,25 @@ def _run_single_guide_efficacy(
         "blockers": blockers,
         "cautions": cautions,
     }
+    if selected_cells is not None:
+        payload.update(
+            {
+                "evaluation_selection_applied": True,
+                "selected_cell_count": len(selected_cells),
+                "analyzed_cell_count": len(metadata),
+            }
+        )
     output = write_json(staging, "target_guide_efficacy.json", payload)
     status = DiagnosticStatus.blocked if blockers else (
         DiagnosticStatus.caution if cautions else DiagnosticStatus.screen_passed
     )
+    result_metadata = {
+        "profile": profile_name,
+        "profile_validation": "dev_unvalidated",
+        "retained_manifest_applied": retained is not None,
+    }
+    if selected_cells is not None:
+        result_metadata["evaluation_selection_applied"] = True
     return envelope(
         spec,
         request,
@@ -994,12 +1033,34 @@ def _run_single_guide_efficacy(
             "signature_confirmation_allowed": signature["confirmation_allowed"],
         },
         outputs=(output,),
-        metadata={
-            "profile": profile_name,
-            "profile_validation": "dev_unvalidated",
-            "retained_manifest_applied": retained is not None,
-        },
+        metadata=result_metadata,
     )
+
+
+def _read_cell_selection(path: Path, cell_column: str) -> set[str]:
+    suffixes = {suffix.lower() for suffix in path.suffixes}
+    handle = (
+        gzip.open(path, "rt", encoding="utf-8-sig", newline="")
+        if ".gz" in suffixes
+        else path.open("r", encoding="utf-8-sig", newline="")
+    )
+    with handle:
+        first_line = handle.readline()
+        handle.seek(0)
+        delimiter = "\t" if first_line.count("\t") > first_line.count(",") else ","
+        reader = csv.DictReader(handle, delimiter=delimiter)
+        if not reader.fieldnames or cell_column not in reader.fieldnames:
+            raise ValueError(f"cell selection must contain {cell_column}")
+        cells = [
+            str(row.get(cell_column) or "").strip()
+            for row in reader
+            if str(row.get(cell_column) or "").strip()
+        ]
+    if len(cells) != len(set(cells)):
+        raise ValueError("cell selection contains duplicate cell identities")
+    if not cells:
+        raise ValueError("cell selection is empty")
+    return set(cells)
 
 
 def run_target_reliability_aggregate(

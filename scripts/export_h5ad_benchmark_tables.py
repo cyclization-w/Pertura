@@ -78,10 +78,50 @@ def export_tables(args: argparse.Namespace) -> dict[str, object]:
                     f"exceeds max_memory_gb={args.max_memory_gb}"
                 )
             matrix_source = data.X if args.layer == "X" else data.layers[args.layer]
-            selected = matrix_source[:, [positions[gene] for gene in requested]]
-            if hasattr(selected, "to_memory"):
-                selected = selected.to_memory()
-            values = selected.toarray() if sparse.issparse(selected) else np.asarray(selected)
+            selected_positions = [positions[gene] for gene in requested]
+            if args.normalize_total is not None:
+                values = np.zeros((int(data.n_obs), len(requested)), dtype=np.float64)
+                maximum_chunk_bytes = float(args.max_memory_gb) * 1024**3
+                for start in range(0, int(data.n_obs), int(args.chunk_rows)):
+                    stop = min(start + int(args.chunk_rows), int(data.n_obs))
+                    chunk = matrix_source[start:stop, :]
+                    if hasattr(chunk, "to_memory"):
+                        chunk = chunk.to_memory()
+                    if not sparse.issparse(chunk):
+                        chunk = np.asarray(chunk)
+                        if chunk.nbytes > maximum_chunk_bytes:
+                            raise MemoryError(
+                                "full-library normalization chunk exceeds "
+                                f"max_memory_gb={args.max_memory_gb}"
+                            )
+                    totals = np.asarray(chunk.sum(axis=1)).reshape(-1).astype(np.float64)
+                    chosen = chunk[:, selected_positions]
+                    chosen = (
+                        chosen.toarray()
+                        if sparse.issparse(chosen)
+                        else np.asarray(chosen)
+                    ).astype(np.float64, copy=False)
+                    scale = np.divide(
+                        float(args.normalize_total),
+                        totals,
+                        out=np.zeros_like(totals),
+                        where=totals > 0,
+                    )
+                    chosen = chosen * scale[:, None]
+                    if args.log1p:
+                        chosen = np.log1p(chosen)
+                    if chosen.size and not np.isfinite(chosen).all():
+                        raise ValueError("expression normalization produced nonfinite values")
+                    values[start:stop, :] = chosen
+            else:
+                selected = matrix_source[:, selected_positions]
+                if hasattr(selected, "to_memory"):
+                    selected = selected.to_memory()
+                values = (
+                    selected.toarray()
+                    if sparse.issparse(selected)
+                    else np.asarray(selected)
+                )
             expression = pd.DataFrame(values, columns=requested)
             expression.insert(0, args.cell_column, data.obs_names.astype(str))
             expression_path = output / "target_expression.tsv"
@@ -100,6 +140,23 @@ def export_tables(args: argparse.Namespace) -> dict[str, object]:
         "metadata_columns": list(args.obs_column),
         "expression_columns": expression_columns,
         "layer": args.layer if expression_columns else None,
+        "expression_transform": (
+            {
+                "normalization": "library_size",
+                "target_sum": float(args.normalize_total),
+                "log1p": bool(args.log1p),
+                "normalization_universe": "all_features_in_source_layer",
+                "chunk_rows": int(args.chunk_rows),
+            }
+            if expression_columns and args.normalize_total is not None
+            else {
+                "normalization": "none",
+                "log1p": False,
+                "normalization_universe": None,
+            }
+            if expression_columns
+            else None
+        ),
         "files": files,
     }
     manifest_path = output / "benchmark_tables_manifest.json"
@@ -124,12 +181,21 @@ def main() -> int:
     parser.add_argument("--gene-alias", action="append", default=[])
     parser.add_argument("--exclude-gene", action="append", default=[])
     parser.add_argument("--layer", default="X")
+    parser.add_argument("--normalize-total", type=float)
+    parser.add_argument("--log1p", action="store_true")
+    parser.add_argument("--chunk-rows", type=int, default=1024)
     parser.add_argument("--max-memory-gb", type=float, default=4.0)
     args = parser.parse_args()
     if not args.obs_column:
         parser.error("at least one --obs-column is required")
     if args.max_memory_gb <= 0:
         parser.error("--max-memory-gb must be positive")
+    if args.normalize_total is not None and args.normalize_total <= 0:
+        parser.error("--normalize-total must be positive")
+    if args.log1p and args.normalize_total is None:
+        parser.error("--log1p requires --normalize-total")
+    if args.chunk_rows <= 0:
+        parser.error("--chunk-rows must be positive")
     print(json.dumps(export_tables(args), indent=2, sort_keys=True))
     return 0
 

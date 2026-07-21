@@ -972,6 +972,7 @@ def qualify(
                         os.environ.get("SLURM_JOB_ID") or "a19-binding-qualification"
                     ),
                     "requested_memory_gb": memory_gb,
+                    "requested_memory_source": "frozen_workflow_budget",
                     "actual_memory_gb": memory_gb,
                     "cpu_count": 1,
                     "n_jobs": 1,

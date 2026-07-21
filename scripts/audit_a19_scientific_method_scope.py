@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import subprocess
 from pathlib import Path
@@ -9,7 +10,7 @@ from typing import Any
 from pertura_core.hashing import canonical_hash, file_sha256
 
 
-DEFAULT_BASELINE = "dc3eaffb15976686db9c6467e594a64a22700852"
+DEFAULT_BASELINE = "6e53adb82e91a8076373b71f39b04f0d3af14078"
 
 _EXACTLY_FROZEN_PATHS = (
     "src/pertura_runtime/product_tools",
@@ -23,7 +24,6 @@ _EXACTLY_FROZEN_PATHS = (
     "src/pertura_core/compatibility/v0.2",
     "src/pertura_bench/paper_agent_execution.py",
     "src/pertura_bench/task_submission.py",
-    "src/pertura_bench/resource_evidence.py",
     "src/pertura_bench/capability_availability.py",
     "src/pertura_workflow/environments",
     "benchmarks/paper_v1/task_references.v1.json",
@@ -33,23 +33,18 @@ _ALLOWED_CHANGED_PATHS = frozenset(
     {
         "benchmarks/paper_v1/agent_tasks.v2.json",
         "scripts/audit_a19_scientific_method_scope.py",
-        "scripts/generate_paper_task_references.py",
-        "scripts/generate_paper_task_trans_de.R",
+        "scripts/export_h5ad_benchmark_tables.py",
         "scripts/qualify_a19_capability_bindings.py",
-        "scripts/qualify_a19_scientific_methods.py",
         "scripts/refresh_sherlock_a19_checkpoint.sh",
         "scripts/run_a19_final_science_and_canaries.sbatch",
         "src/pertura_bench/paper_capability_bindings.py",
-        "src/pertura_workflow/capabilities/effect_candidates.py",
-        "src/pertura_workflow/capabilities/specs/effect.guide_target_sensitivity.v1.yaml",
-        "src/pertura_workflow/capabilities/specs/state.reference.fit.v1.yaml",
-        "src/pertura_workflow/capabilities/specs/state.reference.map_knn.v1.yaml",
+        "src/pertura_bench/resource_evidence.py",
         "src/pertura_workflow/capabilities/specs/target.guide_efficacy.v1.yaml",
-        "src/pertura_workflow/capabilities/specs/target.reliability.aggregate.v1.yaml",
-        "src/pertura_workflow/capabilities/specs/target.responder.mixscape.v1.yaml",
-        "src/pertura_workflow/capabilities/state_candidates.py",
         "src/pertura_workflow/capabilities/target_candidates.py",
         "tests/bench/test_a19_scientific_method_parity.py",
+        "tests/bench/test_a17_prebench_protocol.py",
+        "tests/bench/test_benchmark_protocol.py",
+        "tests/bench/test_paper_capability_invocation_bindings.py",
         "tests/bench/test_paper_tasks_v2.py",
         "tests/workflow/test_candidate_capabilities_v03.py",
     }
@@ -69,12 +64,14 @@ def _task_invariants(payload: dict[str, Any]) -> dict[str, Any]:
     for workflow in payload.get("workflows") or ():
         for task in workflow.get("turns") or ():
             task_id = str(task["task_id"])
+            output_contract = dict(task.get("output_contract") or {})
+            output_contract.pop("input_semantics", None)
             tasks[task_id] = {
                 "depends_on_tasks": task.get("depends_on_tasks") or [],
                 "expected_capability_dag": task.get("expected_capability_dag") or [],
                 "required_input_roles": task.get("required_input_roles") or [],
                 "required_artifact_roles": task.get("required_artifact_roles") or [],
-                "output_contract": task.get("output_contract") or {},
+                "output_contract": output_contract,
                 "resources": task.get("resources") or {},
                 "execution_mode": task.get("execution_mode"),
                 "role": task.get("role"),
@@ -89,28 +86,38 @@ def _task_invariants(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _binding_recipe_diff_is_allowed(repo: Path, baseline: str) -> bool:
-    diff = _git(
-        repo,
-        "diff",
-        "--unified=0",
-        baseline,
-        "--",
-        "src/pertura_bench/paper_capability_bindings.py",
-    )
-    changed = [
-        line
-        for line in diff.splitlines()
-        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
-    ]
-    allowed = {
-        "-            resolutions=[0.5, 1.0, 2.0],",
-        "-            seeds=[42],",
-        "+            resolutions=[0.5, 1.0, 1.5],",
-        "+            seeds=[1729, 1730, 1731],",
-        "-            mapping_probability_threshold=0.5,",
-        "+            mapping_probability_threshold=0.60,",
+    relative = "src/pertura_bench/paper_capability_bindings.py"
+    current_source = (repo / relative).read_text(encoding="utf-8")
+    baseline_source = _git(repo, "show", f"{baseline}:{relative}")
+    allowed_functions = {
+        "build_paper_task_invocation_bindings",
+        "_recipe",
+        "_papa_targets",
+        "_read_tabular_rows",
     }
-    return set(changed) == allowed
+
+    def frozen_definitions(source: str) -> dict[str, str]:
+        tree = ast.parse(source)
+        return {
+            node.name: ast.dump(node, include_attributes=False)
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            and node.name not in allowed_functions
+        }
+
+    if frozen_definitions(current_source) != frozen_definitions(baseline_source):
+        return False
+    required_markers = (
+        'resolutions=[0.5, 1.0, 1.5]',
+        'seeds=[1729, 1730, 1731]',
+        'mapping_probability_threshold=0.60',
+        'selection_path=_task_alias(',
+        'layer_scale="log_normalized"',
+        'targets=_papa_targets(',
+        '"evaluation_split"',
+        '"cell_metadata"',
+    )
+    return all(marker in current_source for marker in required_markers)
 
 
 def audit(*, repo: Path, task_catalog: Path, baseline: str) -> dict[str, Any]:
@@ -149,10 +156,34 @@ def audit(*, repo: Path, task_catalog: Path, baseline: str) -> dict[str, Any]:
         problems.append(
             "task DAG, roles, resources, execution modes, or artifact contracts changed"
         )
+    papa04 = next(
+        task
+        for workflow in current_tasks["workflows"]
+        for task in workflow["turns"]
+        if task["task_id"] == "PAPA-04"
+    )
+    expected_input_semantics = {
+        "target_expression": {
+            "source_layer": "X",
+            "normalization": "library_size",
+            "target_sum": 10000,
+            "transform": "log1p",
+            "normalization_universe": "all_features_in_source_layer",
+            "gene_aliases": {"PDL1": "CD274"},
+        },
+        "analysis_cells": {
+            "row_scope": "evaluation_selection_intersect_retained_manifest"
+        },
+    }
+    if (
+        (papa04.get("output_contract") or {}).get("input_semantics")
+        != expected_input_semantics
+    ):
+        problems.append("PAPA-04 public input semantics are missing or drifted")
     if not _binding_recipe_diff_is_allowed(repo, baseline):
         problems.append(
-            "paper capability binding compiler changed outside the three frozen "
-            "REF-03 parameter values"
+            "paper capability binding compiler changed outside the frozen "
+            "REF-03 and PAPA-04 input recipes"
         )
 
     current_p06 = next(
@@ -172,9 +203,9 @@ def audit(*, repo: Path, task_catalog: Path, baseline: str) -> dict[str, Any]:
         for key in set(current_p06) | set(baseline_p06)
         if current_p06.get(key) != baseline_p06.get(key)
     }
-    if changed_keys != {"codeact_protocol"}:
+    if changed_keys:
         problems.append(
-            f"PAPA-06 changed outside its public method contract: {sorted(changed_keys)}"
+            f"PAPA-06 changed during the PAPA-04 input repair: {sorted(changed_keys)}"
         )
 
     commit = _git(repo, "rev-parse", "HEAD").strip()
@@ -192,6 +223,10 @@ def audit(*, repo: Path, task_catalog: Path, baseline: str) -> dict[str, Any]:
             "PAPA-02.resolutions": [0.5, 1.0, 1.5],
             "PAPA-02.seeds": [1729, 1730, 1731],
             "PAPA-03.mapping_probability_threshold": 0.60,
+            "PAPA-04.expression_scale": "library_size_10000_log1p",
+            "PAPA-04.analysis_cells": (
+                "evaluation_selection_intersect_retained_manifest"
+            ),
         },
         "problems": problems,
     }

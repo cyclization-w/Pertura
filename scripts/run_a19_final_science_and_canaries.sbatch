@@ -2,7 +2,7 @@
 #SBATCH --job-name=a19-finalize
 #SBATCH --partition=normal
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=32G
+#SBATCH --mem=48G
 #SBATCH --time=08:00:00
 #SBATCH --output=/scratch/users/twang05/Project/PerturaBenchmark/paper-v1/logs/a19-finalize-%j.log
 
@@ -16,6 +16,7 @@ MANIFESTS="$PAPER_ROOT/manifests"
 MAIN_ENV="$BENCHMARK_ROOT/environments/pertura-aaai-py311-a19"
 CANARY="$BENCHMARK_ROOT/scripts/run-a19-canary.sbatch"
 REFERENCE_INDEX=${REFERENCE_INDEX:-$MANIFESTS/reference-pack-index.a19.pb064.json}
+LEGACY_ASSETS="$MANIFESTS/paper-agent-assets.a18.sherlock.bound.json"
 STEP=initialization
 NEW_REFS=
 
@@ -48,6 +49,59 @@ set +a
 test -x "$PERTURA_EDGER_ENV/bin/Rscript"
 test -f "$REFERENCE_INDEX"
 "$MAIN_ENV/bin/pertura" env doctor edger-v1
+"$MAIN_ENV/bin/pertura" env doctor python-science-v1
+
+STEP=refresh-papalexi-expression
+mapfile -t PAPA_INPUTS < <(
+  "$MAIN_ENV/bin/python" - "$LEGACY_ASSETS" "$BENCHMARK_ROOT" "$PAPER_ROOT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+catalog, benchmark_root, paper_root = map(Path, sys.argv[1:])
+payload = json.loads(catalog.read_text(encoding="utf-8"))
+records = {
+    item["role"]: item
+    for item in payload["workflows"]["WF-PAPA"]["assets"]
+}
+roots = {
+    "benchmark_root": benchmark_root,
+    "cache": benchmark_root / "cache",
+    "paper_root": paper_root,
+}
+for role in ("primary_h5ad", "guide_map", "target_expression"):
+    record = records[role]
+    print((roots[record["root"]] / record["relative_path"]).resolve())
+PY
+)
+test "${#PAPA_INPUTS[@]}" -eq 3
+PAPA_H5AD=${PAPA_INPUTS[0]}
+PAPA_GUIDE_MAP=${PAPA_INPUTS[1]}
+PAPA_EXPRESSION=${PAPA_INPUTS[2]}
+test -f "$PAPA_H5AD"
+test -f "$PAPA_GUIDE_MAP"
+mkdir -p "$(dirname "$PAPA_EXPRESSION")"
+"$PERTURA_PYTHON_SCIENCE_ENV/bin/python" \
+  "$PERTURA_REPO/scripts/export_h5ad_benchmark_tables.py" \
+  "$PAPA_H5AD" "$(dirname "$PAPA_EXPRESSION")" \
+  --obs-column gene --obs-column guide_ID --obs-column replicate \
+  --expression-genes-file "$PAPA_GUIDE_MAP" \
+  --expression-gene-column target --gene-alias PDL1=CD274 \
+  --exclude-gene eGFP --normalize-total 10000 --log1p \
+  --chunk-rows 1024 --max-memory-gb 4
+test -f "$PAPA_EXPRESSION"
+"$MAIN_ENV/bin/python" - "$(dirname "$PAPA_EXPRESSION")/benchmark_tables_manifest.json" <<'PY'
+import json
+import sys
+
+manifest = json.load(open(sys.argv[1], encoding="utf-8"))
+transform = manifest["expression_transform"]
+assert transform["normalization"] == "library_size"
+assert transform["target_sum"] == 10000.0
+assert transform["log1p"] is True
+assert transform["normalization_universe"] == "all_features_in_source_layer"
+print("PAPA target-expression transform verified")
+PY
 
 STEP=generate-task-references
 NEW_REFS=$(mktemp -d "$BENCHMARK_ROOT/tmp/taskrefs-$COMMIT.XXXXXX")

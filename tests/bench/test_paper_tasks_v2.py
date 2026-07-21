@@ -359,6 +359,20 @@ def test_scientific_categorical_semantics_are_provider_visible() -> None:
     assert papa04["target_efficacy.tsv"]["column_constraints"] == {
         "direction_supported": {"type": "boolean"}
     }
+    papa04_inputs = tasks["PAPA-04"]["output_contract"]["input_semantics"]
+    assert papa04_inputs == {
+        "target_expression": {
+            "source_layer": "X",
+            "normalization": "library_size",
+            "target_sum": 10000,
+            "transform": "log1p",
+            "normalization_universe": "all_features_in_source_layer",
+            "gene_aliases": {"PDL1": "CD274"},
+        },
+        "analysis_cells": {
+            "row_scope": "evaluation_selection_intersect_retained_manifest"
+        },
+    }
 
     papa05 = tasks["PAPA-05"]["output_contract"]["artifact_semantics"]
     assert papa05["mixscape_cells.tsv"]["mixscape_class_values"] == [

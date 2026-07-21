@@ -407,8 +407,23 @@ def test_every_advertised_paper_surface_compiles_without_parameter_guessing(
                     (path / "model.json").write_text("{}\n", encoding="utf-8")
                 else:
                     path.parent.mkdir(parents=True, exist_ok=True)
-                    if role == "target_expression":
-                        content = "cell_id\tNT\tCAV1\nc1\t1\t0\n"
+                    if task["task_id"] == "PAPA-04" and role == "target_expression":
+                        content = (
+                            "cell_id\tCAV1\tCD274\n"
+                            "c1\t1\t0\nc2\t2\t0\nc3\t0\t1\n"
+                        )
+                    elif task["task_id"] == "PAPA-04" and role == "cell_metadata":
+                        content = (
+                            "cell_id\tgene\tguide_ID\treplicate\n"
+                            "c1\tCAV1\tCAV1g1\trep2\n"
+                            "c2\tNT\tNT\trep2\n"
+                            "c3\tPDL1\tPDL1g1\trep2\n"
+                        )
+                    elif task["task_id"] == "PAPA-04" and role == "evaluation_split":
+                        content = (
+                            "cell_id\tis_control\n"
+                            "c1\tfalse\nc2\ttrue\nc3\tfalse\n"
+                        )
                     else:
                         content = "cell_id\tcondition\treplicate\nc1\tctrl\tr1\n"
                     path.write_text(content, encoding="utf-8")
@@ -471,6 +486,27 @@ def test_every_advertised_paper_surface_compiles_without_parameter_guessing(
                 assert ora.bound_parameters["gene_sets_path"]
                 assert any(
                     item.role == "gene_modules" for item in ora.input_assets
+                )
+            if task["task_id"] == "PAPA-04":
+                efficacy = by_capability["target.guide_efficacy.v1"]
+                assert efficacy.bound_parameters["layer_scale"] == "log_normalized"
+                assert efficacy.bound_parameters["selection_path"]
+                assert efficacy.bound_parameters["targets"] == [
+                    {
+                        "target_uid": "CAV1",
+                        "control_uid": "NT",
+                        "target_gene": "CAV1",
+                        "expected_direction": "down",
+                    },
+                    {
+                        "target_uid": "PDL1",
+                        "control_uid": "NT",
+                        "target_gene": "CD274",
+                        "expected_direction": "down",
+                    },
+                ]
+                assert any(
+                    item.role == "cell_selection" for item in efficacy.input_assets
                 )
             if task["task_id"] == "KANG-02":
                 propeller = by_capability["composition.propeller.v1"]

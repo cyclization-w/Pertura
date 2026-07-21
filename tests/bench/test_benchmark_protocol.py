@@ -290,6 +290,72 @@ def test_h5ad_benchmark_table_export_writes_selected_portable_tables(
     assert set(manifest["files"]) == {"cell_metadata.tsv", "target_expression.tsv"}
 
 
+def test_h5ad_benchmark_table_export_normalizes_against_full_library(
+    tmp_path: Path,
+) -> None:
+    ad = pytest.importorskip("anndata")
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    root = Path(__file__).resolve().parents[2]
+    source = tmp_path / "fixture.h5ad"
+    output = tmp_path / "normalized"
+    guide_map = tmp_path / "guide_map.tsv"
+    data = ad.AnnData(
+        X=np.asarray([[1, 1, 98], [2, 0, 0]], dtype=np.float32),
+        obs=pd.DataFrame(
+            {"gene": ["GENE1", "NT"], "guide_ID": ["g1", "NT"], "replicate": ["r1", "r1"]},
+            index=["c1", "c2"],
+        ),
+        var=pd.DataFrame(index=["GENE1", "GENE2", "BACKGROUND"]),
+    )
+    data.write_h5ad(source)
+    guide_map.write_text(
+        "guide\ttarget\nm1\tGENE1\nm2\tGENE2\n",
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "export_h5ad_benchmark_tables.py"),
+            str(source),
+            str(output),
+            "--obs-column",
+            "gene",
+            "--obs-column",
+            "guide_ID",
+            "--obs-column",
+            "replicate",
+            "--expression-genes-file",
+            str(guide_map),
+            "--normalize-total",
+            "10000",
+            "--log1p",
+            "--chunk-rows",
+            "1",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    expression = pd.read_csv(output / "target_expression.tsv", sep="\t")
+    assert expression.loc[0, "GENE1"] == pytest.approx(np.log1p(100.0))
+    assert expression.loc[0, "GENE2"] == pytest.approx(np.log1p(100.0))
+    assert expression.loc[1, "GENE1"] == pytest.approx(np.log1p(10000.0))
+    assert expression.loc[1, "GENE2"] == pytest.approx(0.0)
+    manifest = json.loads(
+        (output / "benchmark_tables_manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["expression_transform"] == {
+        "chunk_rows": 1,
+        "log1p": True,
+        "normalization": "library_size",
+        "normalization_universe": "all_features_in_source_layer",
+        "target_sum": 10000.0,
+    }
+
+
 def test_server_agent_cases_match_observed_dataset_semantics() -> None:
     root = Path(__file__).resolve().parents[2]
     catalog = json.loads(

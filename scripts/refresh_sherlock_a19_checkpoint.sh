@@ -170,10 +170,11 @@ for workflow_id, old_workflow in old["workflows"].items():
         current = new_assets[role]
         assert current["root"] == old_asset["root"], (workflow_id, role)
         assert current["relative_path"] == old_asset["relative_path"], (workflow_id, role)
-        assert current["content_sha256"] == old_asset["content_sha256"], (
-            workflow_id, role, old_asset["content_sha256"],
-            current["content_sha256"],
-        )
+        if (workflow_id, role) != ("WF-PAPA", "target_expression"):
+            assert current["content_sha256"] == old_asset["content_sha256"], (
+                workflow_id, role, old_asset["content_sha256"],
+                current["content_sha256"],
+            )
 assert all(
     item["role"] != "global_effect_reference_lock"
     for workflow in new["workflows"].values()
