@@ -357,6 +357,9 @@ def test_environment_setup_streams_micromamba_output(monkeypatch, tmp_path: Path
                 stdout=json.dumps(inventory),
                 stderr="",
             )
+        if "run" in command:
+            assert "import yaml" in command[-1]
+            return SimpleNamespace(returncode=0, stdout="smoke-ok", stderr="")
         return original_run(command, *args, **kwargs)
 
     monkeypatch.setattr(environment_module, "_ensure_micromamba", lambda: binary)
@@ -456,6 +459,22 @@ def test_sceptre_installer_avoids_github_api_and_has_source_fallbacks() -> None:
     assert "already_installed" in installer
     assert "install.packages" not in installer
     assert "install_github" not in installer
+
+
+def test_python_science_profile_declares_worker_import_dependencies() -> None:
+    profile_path = (
+        Path(environment_module.__file__).parent
+        / "environments"
+        / "python-science-v1.yml"
+    )
+    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+    dependencies = profile["dependencies"]
+
+    assert "pyyaml=6.0" in dependencies
+    assert "pyyaml" in environment_module.PYTHON_PACKAGES["python-science-v1"]
+    assert "import yaml" in environment_module.PYTHON_IMPORT_SMOKES[
+        "python-science-v1"
+    ]
 
 
 def test_composition_doctor_loads_packages_before_reporting_versions(

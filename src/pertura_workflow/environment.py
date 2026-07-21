@@ -84,7 +84,7 @@ R_IMPORT_SMOKES = {
 }
 PYTHON_PACKAGES = {
     PYTHON_PROFILE: (
-        "anndata", "scanpy", "mudata", "numpy", "pandas", "scipy",
+        "anndata", "scanpy", "mudata", "numpy", "pandas", "scipy", "pyyaml",
         "scikit-learn", "igraph", "leidenalg", "pyarrow",
     ),
     PERTURBSEQ_PYTHON_PROFILE: (
@@ -104,6 +104,11 @@ CONDA_PACKAGE_NAMES = {
     "decoupler": "decoupler-py",
 }
 PYTHON_IMPORT_SMOKES = {
+    PYTHON_PROFILE: (
+        "import yaml;"
+        "assert yaml.safe_load('dependency: declared')['dependency'] == 'declared';"
+        "print('python-science-import-smoke-ok')"
+    ),
     PERTURBSEQ_PYTHON_PROFILE: (
         "import inspect,pertpy,scanpy,skmisc,scrublet;"
         "from pertpy.tools import Mixscape;"
