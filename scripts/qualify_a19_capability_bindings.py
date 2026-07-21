@@ -58,6 +58,18 @@ _REAL_SCIENTIFIC_PARITY_TASKS = frozenset(
     {"PAPA-02", "PAPA-03", "PAPA-04", "PAPA-05", "KANG-02"}
 )
 
+_REAL_SCIENTIFIC_REQUIRED_CAPABILITIES = {
+    "PAPA-02": frozenset({"state.reference.fit.v1"}),
+    "PAPA-03": frozenset({"state.reference.map_knn.v1"}),
+    "PAPA-04": frozenset(
+        {"target.guide_efficacy.v1", "effect.guide_target_sensitivity.v1"}
+    ),
+    "PAPA-05": frozenset(
+        {"target.responder.mixscape.v1", "target.reliability.aggregate.v1"}
+    ),
+    "KANG-02": frozenset({"composition.propeller.v1"}),
+}
+
 
 def _read_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -410,10 +422,11 @@ def _materialize_submission(
     paper_root: Path,
     capability_results: Mapping[str, Any],
     workspace_root: Path,
+    scientific_materialization_error: str | None = None,
 ) -> dict[str, Any]:
     task_id = str(task["task_id"])
     actual_parity = task_id in _REAL_SCIENTIFIC_PARITY_TASKS
-    if actual_parity:
+    if actual_parity and scientific_materialization_error is None:
         _materialize_real_scientific_outputs(
             task_id=task_id,
             results=capability_results,
@@ -421,7 +434,7 @@ def _materialize_submission(
             output=output,
             paper_root=paper_root,
         )
-    else:
+    elif not actual_parity:
         evaluator_id = str(reference_binding.get("evaluator_id") or "")
         if evaluator_id == "task.trans_de_edger.v1":
             _materialize_trans_de_positive(reference_binding, output, paper_root)
@@ -469,6 +482,16 @@ def _materialize_submission(
             else "Internal execution qualification; not a scientific benchmark result."
         )
     ]
+    if scientific_materialization_error is not None:
+        # A failed binding qualification must remain a failed qualification.  Do
+        # not replace an unavailable real capability result with an evaluator
+        # positive-control fixture merely to keep the workflow running.
+        result["status"] = "blocked"
+        result["findings"] = []
+        result["limitations"] = [
+            "Internal real-output scientific parity qualification failed.",
+            scientific_materialization_error,
+        ]
     if not _artifact_paths_present(output, dict(task.get("output_contract") or {})):
         raise RuntimeError(
             f"{task['task_id']}: qualification fixture violates the public "
@@ -491,6 +514,44 @@ class _BindingQualificationExecutor:
         self.records: list[dict[str, Any]] = []
         self.scientific_artifact_hashes: dict[str, dict[str, str]] = {}
         self.scientific_result_hashes: dict[str, dict[str, str]] = {}
+        self.scientific_materialization_errors: dict[str, str | None] = {}
+
+    @staticmethod
+    def _persist_attempt(
+        *,
+        workspace_root: Path,
+        task_id: str,
+        records: list[dict[str, Any]],
+        capability_results: Mapping[str, Any],
+        stage: str,
+        scientific_materialization_error: str | None = None,
+        fatal_error: str | None = None,
+    ) -> None:
+        """Persist the primary failure before any downstream adapter can fail."""
+
+        root = workspace_root / "qualification_diagnostics"
+        root.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema_version": "pertura-binding-qualification-attempt-v1",
+            "task_id": task_id,
+            "stage": stage,
+            "records": records,
+            "capability_results": {
+                capability_id: {
+                    "result_id": str(result.result_id),
+                    "result_hash": str(result.canonical_hash),
+                    "status": str(getattr(result.status, "value", result.status)),
+                }
+                for capability_id, result in sorted(capability_results.items())
+            },
+            "scientific_materialization_error": scientific_materialization_error,
+            "fatal_error": fatal_error,
+        }
+        payload["canonical_hash"] = canonical_hash(payload)
+        (root / f"{task_id}.json").write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
 
     def __call__(self, agent, prompt: str, timeout: int):
         del timeout
@@ -510,6 +571,7 @@ class _BindingQualificationExecutor:
         result_ids: list[str] = []
         task_records: list[dict[str, Any]] = []
         capability_results: dict[str, Any] = {}
+        records_collected = False
         bindings = tuple(runtime._invocation_bindings.values())
         predecessor_binding_ids = {
             predecessor_id
@@ -710,17 +772,65 @@ class _BindingQualificationExecutor:
                     )
                     continue
 
+            # Collect and persist binding records before scientific artifact
+            # adaptation.  This prevents an adapter error from masking the
+            # original capability execution or validation failure.
+            self.records.extend(task_records)
+            records_collected = True
+            self._persist_attempt(
+                workspace_root=agent.workspace.root,
+                task_id=task_id,
+                records=task_records,
+                capability_results=capability_results,
+                stage="bindings_complete",
+            )
+
             output = agent.workspace.root / "outputs" / "tasks" / task_id
             output.mkdir(parents=True, exist_ok=True)
-            result = _materialize_submission(
-                task=task,
-                reference_binding=self.references.get(task_id, {}),
-                output=output,
-                paper_root=self.paper_root,
-                capability_results=capability_results,
-                workspace_root=agent.workspace.root,
-            )
+            scientific_materialization_error: str | None = None
             if task_id in _REAL_SCIENTIFIC_PARITY_TASKS:
+                missing = sorted(
+                    _REAL_SCIENTIFIC_REQUIRED_CAPABILITIES[task_id]
+                    - set(capability_results)
+                )
+                if missing:
+                    scientific_materialization_error = (
+                        f"{task_id}: real scientific outputs are unavailable because "
+                        f"committed capability results are missing: {missing}"
+                    )
+            if scientific_materialization_error is None:
+                try:
+                    result = _materialize_submission(
+                        task=task,
+                        reference_binding=self.references.get(task_id, {}),
+                        output=output,
+                        paper_root=self.paper_root,
+                        capability_results=capability_results,
+                        workspace_root=agent.workspace.root,
+                    )
+                except Exception as exc:
+                    if task_id not in _REAL_SCIENTIFIC_PARITY_TASKS:
+                        raise
+                    scientific_materialization_error = (
+                        f"{task_id}: real scientific output materialization failed: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+            if scientific_materialization_error is not None:
+                result = _materialize_submission(
+                    task=task,
+                    reference_binding=self.references.get(task_id, {}),
+                    output=output,
+                    paper_root=self.paper_root,
+                    capability_results=capability_results,
+                    workspace_root=agent.workspace.root,
+                    scientific_materialization_error=(
+                        scientific_materialization_error
+                    ),
+                )
+            if task_id in _REAL_SCIENTIFIC_PARITY_TASKS:
+                self.scientific_materialization_errors[task_id] = (
+                    scientific_materialization_error
+                )
                 self.scientific_artifact_hashes[task_id] = {
                     path.relative_to(output).as_posix(): path_sha256(path)
                     for path in sorted(output.rglob("*"))
@@ -767,7 +877,14 @@ class _BindingQualificationExecutor:
                 result_ids=tuple(result_ids),
                 trace={"binding_qualification": True},
             )
-            self.records.extend(task_records)
+            self._persist_attempt(
+                workspace_root=agent.workspace.root,
+                task_id=task_id,
+                records=task_records,
+                capability_results=capability_results,
+                stage="submission_complete",
+                scientific_materialization_error=scientific_materialization_error,
+            )
             agent.manifest = SimpleNamespace(
                 result_subtype="success",
                 num_turns=1,
@@ -777,7 +894,17 @@ class _BindingQualificationExecutor:
             return SimpleNamespace(
                 status="completed", error=None, result_subtype="success"
             )
-        except Exception:
+        except Exception as exc:
+            if not records_collected:
+                self.records.extend(task_records)
+            self._persist_attempt(
+                workspace_root=agent.workspace.root,
+                task_id=task_id,
+                records=task_records,
+                capability_results=capability_results,
+                stage="fatal_error",
+                fatal_error=f"{type(exc).__name__}: {exc}",
+            )
             project.store.complete_turn(
                 turn.turn_id,
                 status=TurnStatus.failed,
@@ -915,6 +1042,9 @@ def qualify(
                     "capability_result_hashes": executor.scientific_result_hashes[
                         task_id
                     ],
+                    "materialization_error": (
+                        executor.scientific_materialization_errors.get(task_id)
+                    ),
                 }
             )
         workflow_runs.append(
@@ -969,7 +1099,9 @@ def qualify(
     failed_scientific_parity = [
         item
         for item in scientific_parity_records
-        if item["status"] != "passed" or item["task_status"] != "passed"
+        if item["status"] != "passed"
+        or item["task_status"] != "passed"
+        or item["materialization_error"] is not None
     ]
     failure_summary = [
         {

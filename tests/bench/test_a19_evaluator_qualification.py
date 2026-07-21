@@ -309,6 +309,115 @@ def test_binding_qualification_collects_failures_and_continues_task(
     assert (workspace.root / "outputs/tasks/REPL-03/submission_receipt.json").is_file()
 
 
+def test_binding_qualification_preserves_real_output_failure(
+    tmp_path: Path,
+) -> None:
+    project = ProjectWorkspace.initialize(tmp_path / "project")
+    run = project.create_run(logical_name="qualification-real-output-failure")
+    conversation = project.create_conversation(run.run_id, title="qualification")
+    workspace = project.run_workspace(run.run_id)
+    binding = SimpleNamespace(
+        task_id="PAPA-02",
+        binding_id="binding-state-fit",
+        binding_hash="sha256:" + "1" * 64,
+        capability_id="state.reference.fit.v1",
+        capability_scientific_hash="sha256:" + "2" * 64,
+        tool_name="run_analysis",
+        contract_id="contract-fixture",
+        contract_hash="sha256:" + "3" * 64,
+        scope={"dataset_id": "fixture"},
+        bound_parameters={},
+        input_assets=(),
+        dependency_result_ids=(),
+        dependency_verification_states=(),
+        dependency_receipt_ids=(),
+        dependency_binding_ids=(),
+        output_mapping={"state_reference_model": "state_reference_model"},
+        readiness="ready",
+        blockers=(),
+    )
+
+    class Runtime:
+        project_workspace = project
+        _invocation_bindings = {binding.binding_id: binding}
+
+        @staticmethod
+        def run_analysis(objective, *, binding_id, **kwargs):
+            assert objective
+            assert binding_id == binding.binding_id
+            assert kwargs["capability_id"] is None
+            assert kwargs["parameters"] == {}
+            assert kwargs["dependencies"] == []
+            raise RuntimeError("state fit worker failed before commit")
+
+    agent = SimpleNamespace(
+        product_runtime=Runtime(),
+        workspace=workspace,
+        conversation_id=conversation.conversation_id,
+        manifest=None,
+    )
+    task = {
+        "task_id": "PAPA-02",
+        "dataset_id": "fixture",
+        "required_artifact_roles": [
+            "state_reference_model",
+            "reference_cell_manifest",
+            "reference_provenance",
+        ],
+        "expected_probe_capabilities": [],
+        "output_contract": {
+            "allowed_analysis_units": ["control_cell"],
+            "artifact_roles": [
+                "state_reference_model",
+                "reference_cell_manifest",
+                "reference_provenance",
+            ],
+            "artifact_paths": {
+                "state_reference_model": "state_reference_model",
+                "reference_cell_manifest": "reference_cell_manifest.tsv",
+                "reference_provenance": "reference_provenance.json",
+            },
+            "artifact_schemas": {
+                "reference_cell_manifest.tsv": [
+                    "cell_id",
+                    "technical_state_id",
+                ]
+            },
+        },
+    }
+    executor = binding_qualification._BindingQualificationExecutor(
+        tasks={"PAPA-02": task},
+        references={},
+        paper_root=tmp_path,
+    )
+
+    completed = executor(agent, "task PAPA-02 (turn 2)", 60)
+
+    assert completed.status == "completed"
+    assert len(executor.records) == 1
+    assert executor.records[0]["qualification_status"] == "failed_execution"
+    assert "state fit worker failed" in executor.records[0]["qualification_error"]
+    materialization_error = executor.scientific_materialization_errors["PAPA-02"]
+    assert materialization_error is not None
+    assert "state.reference.fit.v1" in materialization_error
+    diagnostic = json.loads(
+        (
+            workspace.root / "qualification_diagnostics/PAPA-02.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert diagnostic["stage"] == "submission_complete"
+    assert diagnostic["records"][0]["qualification_status"] == "failed_execution"
+    benchmark_result = json.loads(
+        (
+            workspace.root / "outputs/tasks/PAPA-02/benchmark_result.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert benchmark_result["status"] == "blocked"
+    assert (
+        workspace.root / "outputs/tasks/PAPA-02/submission_receipt.json"
+    ).is_file()
+
+
 def test_binding_qualification_distinguishes_terminal_and_chain_blocks(
     tmp_path: Path,
 ) -> None:

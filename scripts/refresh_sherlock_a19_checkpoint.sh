@@ -212,6 +212,9 @@ print("evaluator_qualification_hash:", qualification["canonical_hash"])
 PY
 
 CAPABILITY_BINDING_QUALIFICATION="$CHECKPOINT_ROOT/capability-binding-qualification.a19.json"
+BINDING_QUALIFICATION_WORK_ROOT="$CHECKPOINT_ROOT/capability-binding-work/${SLURM_JOB_ID:-manual-$$}"
+mkdir -p "$BINDING_QUALIFICATION_WORK_ROOT"
+echo "capability_binding_work_root=$BINDING_QUALIFICATION_WORK_ROOT"
 "$MAIN_ENV/bin/python" "$PERTURA_REPO/scripts/qualify_a19_capability_bindings.py" \
   --repo "$PERTURA_REPO" \
   --wheel "$WHEEL" \
@@ -223,6 +226,7 @@ CAPABILITY_BINDING_QUALIFICATION="$CHECKPOINT_ROOT/capability-binding-qualificat
   --paper-root "$PAPER_ROOT" \
   --cache "$BENCHMARK_ROOT/cache" \
   --resource-lock "$RESOURCE_LOCK_SET" \
+  --work-root "$BINDING_QUALIFICATION_WORK_ROOT" \
   --output "$CAPABILITY_BINDING_QUALIFICATION"
 sha256sum "$CAPABILITY_BINDING_QUALIFICATION" | \
   tee "$CHECKPOINT_ROOT/capability-binding-qualification-sha256.txt"
