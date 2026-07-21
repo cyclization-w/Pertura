@@ -28,6 +28,56 @@ _load_script("qualify_a19_evaluators")
 binding_qualification = _load_script("qualify_a19_capability_bindings")
 method_qualification = _load_script("qualify_a19_scientific_methods")
 scope_audit = _load_script("audit_a19_scientific_method_scope")
+task_reference_generator = _load_script("generate_paper_task_references")
+
+
+def test_task_reference_generator_resolves_bound_cache_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact = (
+        tmp_path
+        / "cache"
+        / "datasets"
+        / "papalexi_thp1_eccite"
+        / "converted"
+        / "artifact.h5ad"
+    )
+    artifact.parent.mkdir(parents=True)
+    artifact.write_bytes(b"frozen-papalexi")
+    monkeypatch.setenv("PERTURA_BENCH_CACHE", str(tmp_path / "cache"))
+
+    resolved = task_reference_generator._resolve_dataset_artifact(
+        {
+            "artifact_path": "/data1/legacy/artifact.h5ad",
+            "artifact_sha256": task_reference_generator._sha256(artifact),
+        }
+    )
+
+    assert resolved == artifact.resolve()
+
+
+def test_task_reference_generator_rejects_cache_hash_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact = (
+        tmp_path
+        / "cache"
+        / "datasets"
+        / "papalexi_thp1_eccite"
+        / "converted"
+        / "artifact.h5ad"
+    )
+    artifact.parent.mkdir(parents=True)
+    artifact.write_bytes(b"drifted")
+    monkeypatch.setenv("PERTURA_BENCH_CACHE", str(tmp_path / "cache"))
+
+    with pytest.raises(ValueError, match="artifact hash drift"):
+        task_reference_generator._resolve_dataset_artifact(
+            {
+                "artifact_path": "/data1/legacy/artifact.h5ad",
+                "artifact_sha256": "sha256:" + "0" * 64,
+            }
+        )
 
 
 def _result(capability_id: str, paths: list[Path]):

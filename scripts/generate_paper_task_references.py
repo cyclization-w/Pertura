@@ -29,6 +29,36 @@ def _sha256(path: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
+def _resolve_dataset_artifact(record: dict[str, Any]) -> Path:
+    declared = Path(str(record["artifact_path"])).expanduser()
+    artifact = declared
+    if not artifact.is_file():
+        cache_root = os.environ.get("PERTURA_BENCH_CACHE")
+        if cache_root:
+            candidate = (
+                Path(cache_root)
+                / "datasets"
+                / DATASET_ID
+                / "converted"
+                / "artifact.h5ad"
+            )
+            if candidate.is_file():
+                artifact = candidate
+    if not artifact.is_file():
+        raise FileNotFoundError(
+            f"Papalexi artifact is unavailable at the declared path {declared} "
+            "and no bound cache artifact was found"
+        )
+    expected = record.get("artifact_sha256")
+    observed = _sha256(artifact)
+    if expected and observed != expected:
+        raise ValueError(
+            "Papalexi artifact hash drift: "
+            f"expected {expected}, observed {observed} at {artifact}"
+        )
+    return artifact.resolve()
+
+
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -516,10 +546,7 @@ def generate(
     import anndata as ad
 
     datasets = json.loads(datasets_path.read_text(encoding="utf-8"))
-    artifact = Path(datasets["datasets"][DATASET_ID]["artifact_path"]).resolve()
-    expected = datasets["datasets"][DATASET_ID].get("artifact_sha256")
-    if not artifact.is_file() or expected and _sha256(artifact) != expected:
-        raise ValueError("Papalexi artifact hash drift")
+    artifact = _resolve_dataset_artifact(datasets["datasets"][DATASET_ID])
     selection = _selection_rows(splits_path, "evaluation")
     calibration = _selection_rows(splits_path, "calibration")
     _require_disjoint_splits(calibration, selection)
