@@ -227,6 +227,27 @@ def test_papa06_independent_reference_and_skill_share_frozen_protocol() -> None:
         assert "tested = FALSE" in source
 
 
+def test_papa06_environment_parity_allows_extra_provenance_fields() -> None:
+    required = {"R": "4.5.3", "edgeR": "4.8.2", "Matrix": "1.7-4"}
+    method_qualification._require_papa06_environment_parity(
+        {"versions": required | {"jsonlite": "2.0.0"}},
+        {"versions": required},
+    )
+
+
+@pytest.mark.parametrize("name", ["R", "edgeR", "Matrix"])
+def test_papa06_environment_parity_rejects_required_version_drift(
+    name: str,
+) -> None:
+    required = {"R": "4.5.3", "edgeR": "4.8.2", "Matrix": "1.7-4"}
+    drifted = required | {name: "0.0.0"}
+    with pytest.raises(RuntimeError, match=rf"{name} environment versions differ"):
+        method_qualification._require_papa06_environment_parity(
+            {"versions": drifted | {"jsonlite": "2.0.0"}},
+            {"versions": required},
+        )
+
+
 def test_scope_audit_freezes_runtime_and_authority_surfaces() -> None:
     frozen = set(scope_audit._EXACTLY_FROZEN_PATHS)
     assert {

@@ -35,6 +35,7 @@ _ALLOWED_CHANGED_PATHS = frozenset(
         "scripts/audit_a19_scientific_method_scope.py",
         "scripts/export_h5ad_benchmark_tables.py",
         "scripts/qualify_a19_capability_bindings.py",
+        "scripts/qualify_a19_scientific_methods.py",
         "scripts/refresh_sherlock_a19_checkpoint.sh",
         "scripts/run_a19_final_science_and_canaries.sbatch",
         "src/pertura_bench/paper_capability_bindings.py",

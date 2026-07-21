@@ -139,6 +139,23 @@ def _evaluate(
     )
 
 
+def _require_papa06_environment_parity(
+    skill_manifest: Mapping[str, Any],
+    reference_manifest: Mapping[str, Any],
+) -> None:
+    skill_versions = dict(skill_manifest.get("versions") or {})
+    reference_versions = dict(reference_manifest.get("versions") or {})
+    for name in ("R", "edgeR", "Matrix"):
+        if not skill_versions.get(name) or not reference_versions.get(name):
+            raise RuntimeError(
+                f"PAPA-06 skill/reference {name} environment version is missing"
+            )
+        if str(skill_versions[name]) != str(reference_versions[name]):
+            raise RuntimeError(
+                f"PAPA-06 skill/reference {name} environment versions differ"
+            )
+
+
 def _run_papa06(
     *,
     repo: Path,
@@ -180,10 +197,7 @@ def _run_papa06(
         paper_root
         / "task_references/PAPA-06/reference/reference_design_manifest.json"
     )
-    if dict(manifest.get("versions") or {}) != dict(
-        reference_manifest.get("versions") or {}
-    ):
-        raise RuntimeError("PAPA-06 skill/reference edgeR environment versions differ")
+    _require_papa06_environment_parity(manifest, reference_manifest)
     verdict = _evaluate(
         task=task,
         binding=binding,
