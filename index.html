@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pertura: Perturb-seq analysis in Claude Code</title>
+<meta name="description" content="Pertura is a Claude Code plugin for traceable and reliable Perturb-seq screen analysis.">
+<link rel="icon" href="assets/img/pertura_alien.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+
+<header class="wrap top">
+  <a class="brand" href="#top"><img src="assets/img/pertura_alien.svg" alt="" width="30" height="27">Pertura</a>
+  <nav aria-label="Sections">
+    <a href="#capabilities">Capabilities</a>
+    <a href="#case">Case study</a>
+    <a href="#reports">Reports</a>
+    <a href="#system">System</a>
+    <a href="#install">Installation</a>
+    <a href="https://github.com/cyclization-w/Pertura">GitHub</a>
+  </nav>
+</header>
+
+<main id="top">
+
+<section class="wrap hero">
+  <img class="hero-alien" src="assets/img/pertura_alien.svg" alt="">
+  <h1>Perturb-seq analysis in Claude Code</h1>
+  <p>An agent can analyse a Perturb-seq screen quickly. It can also compare the wrong groups of cells, attribute a
+  signal from one guide to the gene, or report numbers that no run produced.</p>
+  <p>Pertura is a Claude Code plugin for traceable and reliable Perturb-seq screen analysis. First, Pertura confirms
+  the experimental design with the user on control cells, replicates, perturbation types and conditions, which will
+  affect the downstream analysis. Then the agent analyses the screen on the user's server, and Pertura records the
+  code and output of every run. For findings about a gene, a gene set, a score or a cell state, Pertura repeats the
+  test in each guide and against groups of control guides. A separate review agent reads each result with its runs
+  and writes comments. Finally, every finding in the report links to its runs, checks and review comments, so the
+  user can trace each number back to its code.</p>
+  <div class="actions">
+    <a class="button primary" href="demo/gse267740/page.html">Explore the GSE267740 report</a>
+    <a class="button" href="https://github.com/cyclization-w/Pertura">View on GitHub</a>
+  </div>
+</section>
+
+<section class="wrap part" id="capabilities">
+  <h2>Pertura's capabilities</h2>
+  <div class="items">
+    <div>
+      <h3>Design confirmation</h3>
+      <p>A design auditor agent reads the deposited files and metadata and measures the design facts in the data.
+      Pertura then shows the proposed design to the user on a form: the control cells, the replicates, the
+      perturbation type and the conditions. The analysis tools run only after the user confirms the design.</p>
+    </div>
+    <div>
+      <h3>Checks on each finding</h3>
+      <p>The agent states each finding with its targets, its feature, its direction and its runs. The feature can be
+      a gene, a gene set, a score or a cell state. Pertura then repeats the test in each guide, with other standard
+      tests, on groups of control guides and in each half of the replicates. If a check cannot run, Pertura records
+      the reason.</p>
+    </div>
+    <div>
+      <h3>Automated review</h3>
+      <p>After each turn, a separate review agent reads the new results with their runs and checks, and it records its
+      doubts. The main agent then tests each doubt and records its answer.</p>
+    </div>
+    <div>
+      <h3>Subagents for other choices</h3>
+      <p>Some choices can change an answer, such as a threshold or a definition. For each of these choices, a subagent
+      repeats the analysis with the common alternative, and the agent compares the two results.</p>
+    </div>
+    <div>
+      <h3>A traceable report</h3>
+      <p>Pertura keeps every run, finding, check, doubt and reply in one record. The report is built from this record.
+      Each result has its figure, its statement with references to its runs, and its limits. The user decides which
+      results go into the report.</p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap part case" id="case">
+  <h2>A case study from a previous session</h2>
+  <p class="lede">Here is a case study from a development session on 14 November 2026. In that session, Pertura
+  analysed the public screen GSE267740, a knockout screen of 28 targets in mouse Th17 cells. The largest effect in the
+  screen was a knockout of Tgfbr1. The agent's first reading of this effect changed twice before it went into the
+  report.</p>
+
+  <div class="case-body">
+    <ol class="case-steps">
+      <li><time>14:29</time><strong>First reading.</strong> The agent records the Tgfbr1 signal as a clonal expansion
+      in guide 1, not a knockout effect.</li>
+      <li><time>14:32</time><strong>Review comment.</strong> The review agent writes that a dominant Trbv gene does not
+      prove a clone, because many clones share a Trbv gene and the data have no CDR3 sequences. One minute later, the
+      agent narrows the claim to a Trbv3-dominant expansion carried by one guide in one experiment. At 15:02, it
+      rewrites the finding after a check in each of the three NTN2 captures.</li>
+      <li><time>15:04</time><strong>A subagent checks each capture.</strong> It recomputes the share of Trbv3-dominant
+      cells for guide 1, the other Tgfbr1 guides and the controls in each capture, and it draws the figure. At 15:19,
+      its results change the wording again: the Tgfbr1 expression values for guides 2 to 5 differ from the earlier
+      text, and one colitis capture shows Trbv3 enrichment in the other Tgfbr1 guides.</li>
+      <li><time>15:20</time><strong>The report.</strong> Result 2 describes a Trbv3-dominant population carried mainly
+      by one guide in one experiment. In each of the three NTN2 captures, 94% to 96% of guide-1 cells with a Trbv
+      transcript are Trbv3-dominant, against 16% to 26% of control cells from the same capture. Guide 1 barely lowers
+      Tgfbr1 itself. Because the signal sits in one guide, it says little about a gene-level knockout effect.</li>
+    </ol>
+    <figure class="case-figure">
+      <a href="demo/gse267740/page.html#report-r2"><img src="assets/img/tgfbr1_result2_figure.png" alt="Figure 2 of the report. Panel a: in the three NTN2 captures, almost all guide-1 cells are Trbv3-dominant, while the other Tgfbr1 guides and the control guides are low. Panel b: the change in Tgfbr1 expression for each of the five guides against control cells."></a>
+      <figcaption>Figure 2 of the report. <b>a</b>, Share of single-guide cells with Trbv3 dominant, in each capture:
+      Tgfbr1 guide 1 (red), the other Tgfbr1 guides (blue) and the control guides (grey). <b>b</b>, Change in Tgfbr1
+      expression for each guide against control cells. <a href="demo/gse267740/page.html#report-r2">Open result 2 in
+      the report</a>.</figcaption>
+    </figure>
+  </div>
+
+  <h3 class="sub">The full session</h3>
+  <p class="lede">Each mark is an event in the record of the session, from 13:10 to 15:21. The numbers 1 to 4 are the
+  steps above. Hover over or tap a mark for a short excerpt. The complete record is in the
+  <a href="demo/gse267740/page.html#timeline">report</a>.</p>
+  <figure class="timeline">
+    <div class="scroll">
+      <svg id="timeline" role="img" aria-label="A timeline of the session from 13:10 to 15:21. The design is confirmed at 13:32. The main agent does 47 steps and 9 subagents do 75 steps. The agent records 49 findings and the review agent writes 11 comments. Steps 1 to 4 of the Tgfbr1 finding are marked."></svg>
+    </div>
+    <p class="fallback" id="fallback">The interactive timeline needs JavaScript. The complete record is in the
+    <a href="demo/gse267740/page.html#timeline">report</a>.</p>
+  </figure>
+  <div class="tip" id="tip" hidden></div>
+</section>
+
+<section class="wrap part" id="reports">
+  <h2>Example reports</h2>
+  <p class="lede">Each report shows the experimental design, the figures, the review comments and the analysis code of
+  one session.</p>
+  <div class="report">
+    <a class="shot" href="demo/gse267740/page.html#report-r1"><img src="assets/img/gse267740_result1.png" alt="Result 1 of the GSE267740 report: Rorc and Tbx21 knockouts move the Th17 genes in opposite directions in kidney inflammation and colitis." loading="lazy"></a>
+    <div>
+      <h3>GSE267740, Th17 cells in kidney inflammation and colitis</h3>
+      <p>A 28-target knockout screen in mouse Th17 cells. Result 1 finds that Rorc and Tbx21 knockouts move the Th17
+      genes in opposite directions. Result 2 is the Tgfbr1 case above.</p>
+      <a href="demo/gse267740/page.html#report-r1">View result 1</a>
+    </div>
+  </div>
+  <div class="report">
+    <a class="shot" href="demo/gse203592/page.html#report-r1"><img src="assets/img/gse203592_result1.png" alt="Result 1 of the GSE203592 report: SWI/SNF knockouts act alike, and ARID1A and ARID1B loss shifts cells out of the granzyme-high state S13." loading="lazy"></a>
+    <div>
+      <h3>GSE203592, CD8 T cells</h3>
+      <p>A nine-target knockout screen in mouse CD8 T cells. Result 1 finds that the SWI/SNF knockouts act alike, and
+      that ARID1A and ARID1B loss moves cells out of a granzyme-high state.</p>
+      <a href="demo/gse203592/page.html#report-r1">View result 1</a>
+    </div>
+  </div>
+  <p class="small">These reports come from development sessions on public datasets. They include automated review
+  comments. No human expert has reviewed their findings.</p>
+</section>
+
+<section class="wrap part" id="system">
+  <h2>The Pertura system</h2>
+  <div class="items">
+    <div>
+      <h3>A persistent workspace for Claude Code</h3>
+      <p>The MCP server runs on the analysis server, and the plugin connects to it over SSH. It keeps a Python notebook
+      open on the screen data, so variables and loaded data stay in memory between calls. The agent reaches the eleven
+      analysis tools, R and other programs from this notebook.</p>
+    </div>
+    <div>
+      <h3>A record of the analysis</h3>
+      <p>The record is an event log on the analysis server. It keeps the design, every run with its code and output,
+      every finding with its checks and earlier versions, every doubt with its answer, and the user's replies. A
+      recorder writes the record from the conversation after each turn, so the agent does not spend its time on
+      bookkeeping.</p>
+    </div>
+    <div>
+      <h3>Knowledge from published screens</h3>
+      <p>A knowledge base gives the agent cards on analysis choices, common pitfalls and follow-up analyses, with
+      examples from published papers. The agent can also look up published Perturb-seq screens, protein complexes and
+      gene sets, and search PubMed and bioRxiv. A second plugin reads published papers into the knowledge base.</p>
+    </div>
+    <div>
+      <h3>A page on the user's computer</h3>
+      <p>After each Pertura tool call, the plugin saves the figures and writes a page on the user's computer. The page
+      shows the results with their figures, the findings with their checks and doubts, the design, the methods and
+      every step of the session. It needs nothing installed.</p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap part" id="install">
+  <h2>Installation</h2>
+  <p class="lede">The Claude Code plugin connects over SSH to an MCP server on the Linux machine that holds the screen
+  data.</p>
+  <ol class="steps">
+    <li>On the analysis server, create the Conda environments from the files in <code>envs/specs/</code>. Set
+    <code>PERTURA_BASE</code> to the folder that contains the environments.</li>
+    <li>Prepare the reference data that the README lists.</li>
+    <li>Generate the workspace configuration on the analysis server:
+    <pre><code>python -m pertura.mcp_server make-workspace-config &lt;workspace folder&gt; &gt; workspace.json</code></pre></li>
+    <li>In Claude Code, install the plugin from <code>plugin/</code>. In the plugin settings, enter the analysis host,
+    the Python of the server, the path of the repository on the server and the workspace configuration.</li>
+    <li>To start a session, type <code>/pertura</code>.</li>
+  </ol>
+  <p><a href="https://github.com/cyclization-w/Pertura#installation">Read the installation guide</a></p>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <p>An early version of Pertura was presented at the ICML 2026 GenBio Workshop.</p>
+  <p>MIT license. <a href="https://github.com/cyclization-w/Pertura">Source on GitHub</a>.</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="assets/js/session_gse267740.js"></script>
+<script src="assets/js/timeline.js"></script>
+<script>
+(function () {
+  if (!window.d3 || !window.PerturaTimeline || !window.SESSION) return;  // the steps above stay readable without it
+  var tipEl = document.getElementById("tip");
+  var tip = {
+    show: function (e, html) { tipEl.innerHTML = html; tipEl.hidden = false; this.move(e); },
+    move: function (e) {
+      var pad = 14, w = tipEl.offsetWidth, h = tipEl.offsetHeight, x = e.clientX + pad, y = e.clientY + pad;
+      if (x + w > innerWidth - 8) x = e.clientX - w - pad;
+      if (y + h > innerHeight - 8) y = e.clientY - h - pad;
+      tipEl.style.left = Math.max(8, x) + "px"; tipEl.style.top = Math.max(8, y) + "px";
+    },
+    hide: function () { tipEl.hidden = true; }
+  };
+  PerturaTimeline.draw(document.getElementById("timeline"), window.SESSION, { palette: "site", tooltip: tip });
+  document.getElementById("fallback").hidden = true;
+  document.addEventListener("click", function () { tip.hide(); });
+})();
+</script>
+</body>
+</html>
