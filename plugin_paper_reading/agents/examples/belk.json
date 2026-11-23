@@ -1,0 +1,86 @@
+{
+  "paper": "PMID35750052 Belk 2022",
+  "design": {
+    "modality": "CRISPR knockout",
+    "system": "in vivo",
+    "readout": "transcriptome"
+  },
+  "results": [
+    {
+      "step": 1,
+      "question": "Do the perturbations broadly change the proportions of the T-cell states?",
+      "raised_by": [],
+      "result": "Cells carrying each perturbation occupied all six clusters with similar proportions; the authors suggested that effects could instead reflect gene-expression modulation within existing clusters.",
+      "result_quote": "All perturbations contained cells from each cluster with similar proportions, suggesting that depletion of each target gene may not impact wholescale changes in cell type composition, but rather modulates gene expression in one or more clusters.",
+      "checks_reported": [],
+      "evidence": [
+        {
+          "panels": "Fig. 6g",
+          "evidence": "states or composition",
+          "analysis": ["states"],
+          "method": "Descriptive comparison of the percentages of cells in each of six clusters, displayed by sgRNA.",
+          "method_place": "Fig. 6g legend",
+          "compared_with": "Cluster composition across perturbation and control sgRNAs",
+          "unit": "cells",
+          "chart": "bar of shares",
+          "colour": "groups",
+          "colour_named_by": "a key",
+          "targets_shown": "a group of targets",
+          "image": "nihms-1816251-f0006.jpg"
+        }
+      ]
+    },
+    {
+      "step": 2,
+      "question": "Which shared transcriptional changes follow cBAF-subunit perturbation despite broadly similar cell-state proportions?",
+      "raised_by": [1],
+      "result": "Perturbing Arid1a, Smarcd2 or Smarcc1 induced shared transcriptional changes in T cells, including increased expression of effector-associated genes.",
+      "result_quote": "Targeting cBAF subunits Arid1a, Smarcd2, or Smarcc1 induced shared global changes in the transcriptional program of T cells, including the upregulation of effector molecules, Gzmb and Ifng, cell surface receptors, Cxcr6 and Il7r, and transcription factors, Irf4 and Batf.",
+      "checks_reported": [],
+      "evidence": [
+        {
+          "panels": "Fig. 7a",
+          "evidence": "one target's effect on genes",
+          "analysis": ["genes"],
+          "method": "Seurat FindMarkers Wilcoxon test comparing cells pooled by target with CTRL1 cells; volcano significance threshold FDR < 0.05.",
+          "method_place": "Methods: Direct-capture Perturb-seq analysis",
+          "compared_with": "CTRL1 cells",
+          "unit": "cells",
+          "chart": "volcano",
+          "colour": "groups",
+          "colour_named_by": "nowhere",
+          "targets_shown": "one or a few targets",
+          "image": "nihms-1816251-f0007.jpg"
+        },
+        {
+          "panels": "Fig. 7c",
+          "evidence": "one target's effect on genes",
+          "analysis": ["genes"],
+          "method": "Seurat FindMarkers differential expression against CTRL1; display log2 fold changes for genes significant in at least one perturbation, grouped by the perturbation with the strongest expression effect.",
+          "method_place": "Fig. 7c legend",
+          "compared_with": "CTRL1 cells; expression-change patterns across perturbations",
+          "unit": "cells",
+          "chart": "heatmap centred on zero",
+          "colour": "signed values on a diverging scale",
+          "colour_named_by": "a colour bar",
+          "targets_shown": "a group of targets",
+          "image": "nihms-1816251-f0007.jpg"
+        },
+        {
+          "panels": "Fig. 7d",
+          "evidence": "similar targets",
+          "analysis": ["similarity"],
+          "method": "Form the union of significantly differential genes within the complex, define up and down sets for each subunit by log-fold-change sign, and compare their intersections.",
+          "method_place": "Methods: Direct-capture Perturb-seq analysis",
+          "compared_with": "Upregulated and downregulated gene sets from Arid1a, Smarcd2 and Smarcc1 perturbations",
+          "unit": "genes",
+          "chart": "overlap diagram",
+          "colour": "groups",
+          "colour_named_by": "a key",
+          "targets_shown": "one or a few targets",
+          "image": "nihms-1816251-f0007.jpg"
+        }
+      ]
+    }
+  ]
+}

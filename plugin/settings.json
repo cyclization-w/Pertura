@@ -1,0 +1,6 @@
+{
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "python -S \"$HOME/.claude/pertura/subagent_rows.py\""
+  }
+}

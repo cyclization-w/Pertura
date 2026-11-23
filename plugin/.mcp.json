@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "pertura": {
+      "command": "ssh",
+      "args": [
+        "-o",
+        "BatchMode=yes",
+        "${user_config.analysis_host}",
+        "cd ${user_config.remote_code} && PERTURA_HOST=${user_config.analysis_host} PYTHONPATH=src OMP_NUM_THREADS=1 nice -n 10 ${user_config.remote_python} -m pertura.mcp_server serve-analysis ${user_config.workspace_config}"
+      ]
+    }
+  }
+}

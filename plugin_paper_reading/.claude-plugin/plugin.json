@@ -1,0 +1,8 @@
+{
+  "name": "pertura-reader",
+  "version": "0.3.0",
+  "description": "Read published single-cell CRISPR screen papers into Pertura's knowledge base: their follow-up moves, analysis chains, methods and parameters, deposited code, and figures, each by a reader with a fixed brief; every follow-up move mapped to a module and checked by a second agent; every row checked against the paper in code; entries drafted with the source of every sentence, for a person to review.",
+  "author": {
+    "name": "Pertura"
+  }
+}

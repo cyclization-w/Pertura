@@ -1,0 +1,519 @@
+schema: pertura.design/v1
+units:
+  independent_unit:
+    value: none
+    status: proposed
+    source: GSE220974 file names and cell metadata (orig.ident D1, D2, D3, S1Sa, S2Sp, S3SaSp); K562 is one cell line, all
+      six captures read as female
+    note: The files do not show separate mice, donors or cultures. The six captures are read as separate captures, which may
+      be lanes, wells or separate experiments. The captures were run on two days, but which capture ran on which day is unknown,
+      so no day is encoded here.
+  unit_identification:
+    value: cell_table_column
+    status: proposed
+    source: cell metadata column orig.ident (one value per capture)
+  unit_column:
+    value: orig.ident
+    status: observed
+    source: GSE220974_K562_cell_metadata.csv.gz
+perturbation:
+  modality:
+    value: mixed
+    status: reported
+    source: user's answer on the confirmation form; guide names (-a, -i, -e) and the feature reference's two scaffold patterns
+      (TGTTTCCAGAGTACTATAAC for -a, TTCCAGCATAGCTCTTAAAC for -i)
+    note: 'Both CRISPRa and CRISPRi are in every cell. A guide''s scaffold decides its mode: -a guides carry the Sa scaffold
+      and activate, -i guides carry the Sp scaffold and interfere.'
+  guides:
+    value:
+      ARID1A-a1:
+        mode: CRISPRa
+        gene: ARID1A
+      ARID1A-a2:
+        mode: CRISPRa
+        gene: ARID1A
+      ARID1A-i1:
+        mode: CRISPRi
+        gene: ARID1A
+      ARID1A-i2:
+        mode: CRISPRi
+        gene: ARID1A
+      ATF5-a1:
+        mode: CRISPRa
+        gene: ATF5
+      ATF5-a2:
+        mode: CRISPRa
+        gene: ATF5
+      ATF5-i1:
+        mode: CRISPRi
+        gene: ATF5
+      ATF5-i2:
+        mode: CRISPRi
+        gene: ATF5
+      BTF3-a1:
+        mode: CRISPRa
+        gene: BTF3
+      BTF3-a2:
+        mode: CRISPRa
+        gene: BTF3
+      BTF3-i1:
+        mode: CRISPRi
+        gene: BTF3
+      BTF3-i2:
+        mode: CRISPRi
+        gene: BTF3
+      CEBPA-a1:
+        mode: CRISPRa
+        gene: CEBPA
+      CEBPA-a2:
+        mode: CRISPRa
+        gene: CEBPA
+      CEBPA-i1:
+        mode: CRISPRi
+        gene: CEBPA
+      CEBPA-i2:
+        mode: CRISPRi
+        gene: CEBPA
+      CEBPB-a1:
+        mode: CRISPRa
+        gene: CEBPB
+      CEBPB-a2:
+        mode: CRISPRa
+        gene: CEBPB
+      CEBPB-i1:
+        mode: CRISPRi
+        gene: CEBPB
+      CEBPB-i2:
+        mode: CRISPRi
+        gene: CEBPB
+      ETS2-a1:
+        mode: CRISPRa
+        gene: ETS2
+      ETS2-a2:
+        mode: CRISPRa
+        gene: ETS2
+      ETS2-i1:
+        mode: CRISPRi
+        gene: ETS2
+      ETS2-i2:
+        mode: CRISPRi
+        gene: ETS2
+      FAM83A-a1:
+        mode: CRISPRa
+        gene: FAM83A
+      FAM83A-a2:
+        mode: CRISPRa
+        gene: FAM83A
+      FAM83A-i1:
+        mode: CRISPRi
+        gene: FAM83A
+      FAM83A-i2:
+        mode: CRISPRi
+        gene: FAM83A
+      FOSL1-a1:
+        mode: CRISPRa
+        gene: FOSL1
+      FOSL1-a2:
+        mode: CRISPRa
+        gene: FOSL1
+      FOSL1-i1:
+        mode: CRISPRi
+        gene: FOSL1
+      FOSL1-i2:
+        mode: CRISPRi
+        gene: FOSL1
+      GATA1-a1:
+        mode: CRISPRa
+        gene: GATA1
+      GATA1-a2:
+        mode: CRISPRa
+        gene: GATA1
+      GATA1-i1:
+        mode: CRISPRi
+        gene: GATA1
+      GATA1-i2:
+        mode: CRISPRi
+        gene: GATA1
+      GATA1-e1-a1:
+        mode: CRISPRa
+        gene: GATA1
+        element: enhancer e1
+      GATA1-e1-a2:
+        mode: CRISPRa
+        gene: GATA1
+        element: enhancer e1
+      GATA1-e-i1:
+        mode: CRISPRi
+        gene: GATA1
+        element: enhancer
+      GATA1-e-i2:
+        mode: CRISPRi
+        gene: GATA1
+        element: enhancer
+      HBE1-a1:
+        mode: CRISPRa
+        gene: HBE1
+      HBE1-a2:
+        mode: CRISPRa
+        gene: HBE1
+      HBE1-i1:
+        mode: CRISPRi
+        gene: HBE1
+      HBE1-i2:
+        mode: CRISPRi
+        gene: HBE1
+      IRF1-a1:
+        mode: CRISPRa
+        gene: IRF1
+      IRF1-a2:
+        mode: CRISPRa
+        gene: IRF1
+      IRF1-i1:
+        mode: CRISPRi
+        gene: IRF1
+      IRF1-i2:
+        mode: CRISPRi
+        gene: IRF1
+      JUN-a1:
+        mode: CRISPRa
+        gene: JUN
+      JUN-a2:
+        mode: CRISPRa
+        gene: JUN
+      JUN-i1:
+        mode: CRISPRi
+        gene: JUN
+      JUN-i2:
+        mode: CRISPRi
+        gene: JUN
+      KLF1-a1:
+        mode: CRISPRa
+        gene: KLF1
+      KLF1-a2:
+        mode: CRISPRa
+        gene: KLF1
+      KLF1-i1:
+        mode: CRISPRi
+        gene: KLF1
+      KLF1-i2:
+        mode: CRISPRi
+        gene: KLF1
+      LYL1-a1:
+        mode: CRISPRa
+        gene: LYL1
+      LYL1-a2:
+        mode: CRISPRa
+        gene: LYL1
+      LYL1-i1:
+        mode: CRISPRi
+        gene: LYL1
+      LYL1-i2:
+        mode: CRISPRi
+        gene: LYL1
+      MAP2K3-a1:
+        mode: CRISPRa
+        gene: MAP2K3
+      MAP2K3-a2:
+        mode: CRISPRa
+        gene: MAP2K3
+      MAP2K3-i1:
+        mode: CRISPRi
+        gene: MAP2K3
+      MAP2K3-i2:
+        mode: CRISPRi
+        gene: MAP2K3
+      MYC-a1:
+        mode: CRISPRa
+        gene: MYC
+      MYC-a2:
+        mode: CRISPRa
+        gene: MYC
+      MYC-i1:
+        mode: CRISPRi
+        gene: MYC
+      MYC-i2:
+        mode: CRISPRi
+        gene: MYC
+      MYC-e1-a1:
+        mode: CRISPRa
+        gene: MYC
+        element: enhancer e1
+      MYC-e1-a2:
+        mode: CRISPRa
+        gene: MYC
+        element: enhancer e1
+      MYC-e-i1:
+        mode: CRISPRi
+        gene: MYC
+        element: enhancer
+      MYC-e-i2:
+        mode: CRISPRi
+        gene: MYC
+        element: enhancer
+      RIPK2-a1:
+        mode: CRISPRa
+        gene: RIPK2
+      RIPK2-a2:
+        mode: CRISPRa
+        gene: RIPK2
+      RIPK2-i1:
+        mode: CRISPRi
+        gene: RIPK2
+      RIPK2-i2:
+        mode: CRISPRi
+        gene: RIPK2
+      SPI1-a1:
+        mode: CRISPRa
+        gene: SPI1
+      SPI1-a2:
+        mode: CRISPRa
+        gene: SPI1
+      SPI1-i1:
+        mode: CRISPRi
+        gene: SPI1
+      SPI1-i2:
+        mode: CRISPRi
+        gene: SPI1
+      YY1-a1:
+        mode: CRISPRa
+        gene: YY1
+      YY1-a2:
+        mode: CRISPRa
+        gene: YY1
+      NTC-1-i:
+        mode: CRISPRi
+        gene: non-targeting
+      NTC-2-i:
+        mode: CRISPRi
+        gene: non-targeting
+      NTC-3-i:
+        mode: CRISPRi
+        gene: non-targeting
+      NTC-4-i:
+        mode: CRISPRi
+        gene: non-targeting
+      NTC-5-i:
+        mode: CRISPRi
+        gene: non-targeting
+      NTC-6-i:
+        mode: CRISPRi
+        gene: non-targeting
+      NTC-7-a:
+        mode: CRISPRa
+        gene: non-targeting
+      NTC-8-a:
+        mode: CRISPRa
+        gene: non-targeting
+      NTC-9-a:
+        mode: CRISPRa
+        gene: non-targeting
+      NTC-10-a:
+        mode: CRISPRa
+        gene: non-targeting
+      NTC-11-a:
+        mode: CRISPRa
+        gene: non-targeting
+      NTC-12-a:
+        mode: CRISPRa
+        gene: non-targeting
+    status: inferred
+    source: 'feature reference GSE220974_features.csv.gz (target_gene_name, element names in the guide names, two scaffold
+      patterns: -a guides TGTTTCCAGAGTACTATAAC, -i guides TTCCAGCATAGCTCTTAAAC)'
+    note: Mode follows the -a/-i suffix, which matches the scaffold pattern in the feature reference. The -e guides are read
+      as enhancer guides by their name. The user confirmed the arm reading on the form.
+  target_map:
+    value:
+      ARID1A-CRISPRa:
+      - ARID1A-a1
+      - ARID1A-a2
+      ARID1A-CRISPRi:
+      - ARID1A-i1
+      - ARID1A-i2
+      ATF5-CRISPRa:
+      - ATF5-a1
+      - ATF5-a2
+      ATF5-CRISPRi:
+      - ATF5-i1
+      - ATF5-i2
+      BTF3-CRISPRa:
+      - BTF3-a1
+      - BTF3-a2
+      BTF3-CRISPRi:
+      - BTF3-i1
+      - BTF3-i2
+      CEBPA-CRISPRa:
+      - CEBPA-a1
+      - CEBPA-a2
+      CEBPA-CRISPRi:
+      - CEBPA-i1
+      - CEBPA-i2
+      CEBPB-CRISPRa:
+      - CEBPB-a1
+      - CEBPB-a2
+      CEBPB-CRISPRi:
+      - CEBPB-i1
+      - CEBPB-i2
+      ETS2-CRISPRa:
+      - ETS2-a1
+      - ETS2-a2
+      ETS2-CRISPRi:
+      - ETS2-i1
+      - ETS2-i2
+      FAM83A-CRISPRa:
+      - FAM83A-a1
+      - FAM83A-a2
+      FAM83A-CRISPRi:
+      - FAM83A-i1
+      - FAM83A-i2
+      FOSL1-CRISPRa:
+      - FOSL1-a1
+      - FOSL1-a2
+      FOSL1-CRISPRi:
+      - FOSL1-i1
+      - FOSL1-i2
+      GATA1-CRISPRa:
+      - GATA1-a1
+      - GATA1-a2
+      GATA1-CRISPRi:
+      - GATA1-i1
+      - GATA1-i2
+      GATA1-enhancer-CRISPRa:
+      - GATA1-e1-a1
+      - GATA1-e1-a2
+      GATA1-enhancer-CRISPRi:
+      - GATA1-e-i1
+      - GATA1-e-i2
+      HBE1-CRISPRa:
+      - HBE1-a1
+      - HBE1-a2
+      HBE1-CRISPRi:
+      - HBE1-i1
+      - HBE1-i2
+      IRF1-CRISPRa:
+      - IRF1-a1
+      - IRF1-a2
+      IRF1-CRISPRi:
+      - IRF1-i1
+      - IRF1-i2
+      JUN-CRISPRa:
+      - JUN-a1
+      - JUN-a2
+      JUN-CRISPRi:
+      - JUN-i1
+      - JUN-i2
+      KLF1-CRISPRa:
+      - KLF1-a1
+      - KLF1-a2
+      KLF1-CRISPRi:
+      - KLF1-i1
+      - KLF1-i2
+      LYL1-CRISPRa:
+      - LYL1-a1
+      - LYL1-a2
+      LYL1-CRISPRi:
+      - LYL1-i1
+      - LYL1-i2
+      MAP2K3-CRISPRa:
+      - MAP2K3-a1
+      - MAP2K3-a2
+      MAP2K3-CRISPRi:
+      - MAP2K3-i1
+      - MAP2K3-i2
+      MYC-CRISPRa:
+      - MYC-a1
+      - MYC-a2
+      MYC-CRISPRi:
+      - MYC-i1
+      - MYC-i2
+      MYC-enhancer-CRISPRa:
+      - MYC-e1-a1
+      - MYC-e1-a2
+      MYC-enhancer-CRISPRi:
+      - MYC-e-i1
+      - MYC-e-i2
+      RIPK2-CRISPRa:
+      - RIPK2-a1
+      - RIPK2-a2
+      RIPK2-CRISPRi:
+      - RIPK2-i1
+      - RIPK2-i2
+      SPI1-CRISPRa:
+      - SPI1-a1
+      - SPI1-a2
+      SPI1-CRISPRi:
+      - SPI1-i1
+      - SPI1-i2
+      YY1-CRISPRa:
+      - YY1-a1
+      - YY1-a2
+    status: proposed
+    source: feature reference target_gene_name for the promoter targets; the -e guide names for the enhancer targets (GATA1-enhancer,
+      MYC-enhancer), each a separate perturbation per the user's answer on the form
+    note: Each arm has its own target label, so every target holds guides of one mode. The enhancer targets are not merged
+      with GATA1 or MYC.
+  controls:
+    value:
+    - name: non_targeting_CRISPRi
+      kind: non_targeting
+      guides:
+      - NTC-1-i
+      - NTC-2-i
+      - NTC-3-i
+      - NTC-4-i
+      - NTC-5-i
+      - NTC-6-i
+      mode: CRISPRi
+    - name: non_targeting_CRISPRa
+      kind: non_targeting
+      guides:
+      - NTC-7-a
+      - NTC-8-a
+      - NTC-9-a
+      - NTC-10-a
+      - NTC-11-a
+      - NTC-12-a
+      mode: CRISPRa
+    status: reported
+    source: feature reference target_gene_name 'Non-Targeting' (12 guides), split by arm suffix
+    note: No safe-targeting or intergenic guide is labelled. Kind non_targeting is the feature reference's label; the user
+      confirms that none is a cutting control.
+  reference_matches:
+    value:
+    - mode
+    status: inferred
+    source: 'guide names and scaffold patterns: each arm has its own non-targeting guides (NTC-1..6-i and NTC-7..12-a)'
+    note: 'Each target is compared with the controls of its own arm: CRISPRa targets with NTC-7..12-a, CRISPRi targets with
+      NTC-1..6-i.'
+  delivery:
+    value:
+      by_unit:
+        D1: pairs
+        D2: pairs
+        D3: pairs
+        S1Sa: singles
+        S2Sp: singles
+        S3SaSp: singles
+    status: observed
+    source: 'guide calls per capture: D captures have about 84% of cells with two targets (one -a and one -i guide); S captures
+      have none'
+    note: Pairs are a -a guide and an -i guide in the same cell; the D captures show both arms in one cell.
+  assignment:
+    value:
+      rule: deposit
+    status: observed
+    source: call files GSE220974_*_protospacer_calls_per_cell.csv.gz (Cell Ranger style calls, by barcode)
+experiment:
+  conditions:
+    value: []
+    status: reported
+    source: 'user''s answer on the confirmation form: there are no conditions; every cell was treated the same way'
+    note: The captures were run on two days, but which capture ran on which day is unknown, so no day or expression group
+      is encoded as a condition.
+  context:
+    value: cell_line
+    status: reported
+    source: user's note (K562) and the K562 cell metadata table
+  organism:
+    value: human
+    status: observed
+    source: ENSG gene IDs in the feature reference; K562 is a human line

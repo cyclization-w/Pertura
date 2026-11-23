@@ -1,0 +1,58 @@
+{
+  "paper": "PMID31395745 Norman 2019",
+  "design": {
+    "modality": "CRISPRa",
+    "system": "cell line",
+    "readout": "transcriptome"
+  },
+  "results": [
+    {
+      "step": 1,
+      "question": "Which genetic interactions does the fitness map reveal, and what can their growth scores explain?",
+      "raised_by": [],
+      "result": "The fitness GI map identified many strong genetic interactions, but their mechanisms were difficult to deduce from a single growth-based score.",
+      "result_quote": "However, though the GI map robustly identified many strong GIs, the origins of specific interactions were difficult to deduce as each GI was characterized only by a single scalar value (i.e. deviation from expected growth rate).",
+      "checks_reported": ["guides agree", "replicates or donors agree", "against control guides"],
+      "evidence": [
+        {
+          "panels": "Fig. 1b",
+          "evidence": "similar targets",
+          "analysis": ["combinations", "similarity"],
+          "method": "Fitness GI scores measure deviation of observed double-activation fitness from the expectation based on single activations; guide scores are averaged to gene pairs, and gene-level GI profiles are clustered by average linkage using Pearson correlation.",
+          "method_place": "Fig. 1b legend; Results: An overexpression strategy identifies strong genetic interactions",
+          "compared_with": "Observed double-activation fitness versus the single-activation-based expectation; gene-level interaction profiles compared with one another",
+          "unit": "targets",
+          "chart": "heatmap centred on zero",
+          "colour": "signed values on a diverging scale",
+          "colour_named_by": "a colour bar",
+          "targets_shown": "every target tested",
+          "image": "nihms-1045467-f0001.jpg"
+        }
+      ]
+    },
+    {
+      "step": 2,
+      "question": "How do the transcriptional effects of KLF1 and CEBPA combine under joint activation?",
+      "raised_by": [1],
+      "result": "The GI between KLF1 and CEBPA resulted from genetic epistasis, with one single overexpression phenotype masking the other.",
+      "result_quote": "Analysis by Perturb-seq revealed that the GI between KLF1 and CEBPA resulted from genetic epistasis (i.e. one single overexpression phenotype masking the other), resulting in smaller, asymmetrical coefficients (c1 = 0.19, c2 = 0.72, Fig. 4D and fig. S11A).",
+      "checks_reported": [],
+      "evidence": [
+        {
+          "panels": "Fig. 4d",
+          "evidence": "a pair against its singles",
+          "analysis": ["combinations", "a model of the screen"],
+          "method": "Linear regression of double-perturbation expression changes on the two single-perturbation profiles; fitted coefficients c1 = 0.19 and c2 = 0.72.",
+          "method_place": "Results: Quantitative modeling of GIs defines mechanisms of interaction",
+          "compared_with": "KLF1 alone, CEBPA alone, their double overexpression and the fitted profile; expression changes relative to unperturbed cells",
+          "unit": "genes",
+          "chart": "heatmap centred on zero",
+          "colour": "signed values on a diverging scale",
+          "colour_named_by": "a colour bar",
+          "targets_shown": "one or a few targets",
+          "image": "nihms-1045467-f0004.jpg"
+        }
+      ]
+    }
+  ]
+}

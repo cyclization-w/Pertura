@@ -1,0 +1,117 @@
+{
+  "description": "Keep the local status file current for Pertura's status line, subagent rows and views, and send the agent back once when it would stop with nothing waiting on the user; and ask the agent for the digest first when the user comes back; and launch each of Pertura's agents on the model the user chose for it; and record each turn (the recorder, docs/adr/0051)",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__plugin_pertura_pertura__wait_for_runs",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -S \"${CLAUDE_PLUGIN_ROOT}/status/hooks.py\" before-wait",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -S \"${CLAUDE_PLUGIN_ROOT}/status/hooks.py\" agent-model",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__plugin_pertura_pertura__write_report",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -S \"${CLAUDE_PLUGIN_ROOT}/status/hooks.py\" before-report",
+            "timeout": 300
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -S \"${CLAUDE_PLUGIN_ROOT}/status/hooks.py\" stop",
+            "timeout": 300
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__plugin_pertura_pertura__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -S \"${CLAUDE_PLUGIN_ROOT}/status/hooks.py\" after-tool-call",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -S \"${CLAUDE_PLUGIN_ROOT}/status/hooks.py\" session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -S \"${CLAUDE_PLUGIN_ROOT}/status/hooks.py\" session-end"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -S \"${CLAUDE_PLUGIN_ROOT}/status/hooks.py\" user-prompt",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Elicitation": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -S \"${CLAUDE_PLUGIN_ROOT}/status/forms_on_the_page.py\"",
+            "timeout": 340
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -S \"${CLAUDE_PLUGIN_ROOT}/status/hooks.py\" subagent-stop",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "modules": [
+    "./page_and_session.ts"
+  ]
+}

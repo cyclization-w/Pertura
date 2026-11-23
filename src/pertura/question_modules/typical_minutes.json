@@ -1,0 +1,173 @@
+{
+ "records": 53,
+ "modules": {
+  "A.screen_overview": {
+   "median_minutes": 1.0,
+   "runs": 16,
+   "longest_minutes": 27.7,
+   "stopped_or_failed": 2
+  },
+  "A.what_was_done": {
+   "median_minutes": 0.6,
+   "runs": 33,
+   "longest_minutes": 12.2,
+   "stopped_or_failed": 0
+  },
+  "B.abundance": {
+   "median_minutes": 0.6,
+   "runs": 35,
+   "longest_minutes": 12.1,
+   "stopped_or_failed": 0
+  },
+  "B.clonality": {
+   "median_minutes": 0.6,
+   "runs": 7,
+   "longest_minutes": 9.6,
+   "stopped_or_failed": 0
+  },
+  "B.dose": {
+   "median_minutes": 3.7,
+   "runs": 8,
+   "longest_minutes": 5.1,
+   "stopped_or_failed": 0
+  },
+  "B.efficacy": {
+   "median_minutes": 3.4,
+   "runs": 36,
+   "longest_minutes": 22.6,
+   "stopped_or_failed": 1
+  },
+  "B.escape": {
+   "median_minutes": 31.8,
+   "runs": 12,
+   "longest_minutes": 64.4,
+   "stopped_or_failed": 1
+  },
+  "B.guide_calls_and_their_evidence": {
+   "median_minutes": 0.6,
+   "runs": 31,
+   "longest_minutes": 12.0,
+   "stopped_or_failed": 0
+  },
+  "B.vector_structure": {
+   "median_minutes": 0.2,
+   "runs": 5,
+   "longest_minutes": 3.7,
+   "stopped_or_failed": 0
+  },
+  "C.any_effect": {
+   "median_minutes": 5.1,
+   "runs": 19,
+   "longest_minutes": 27.8,
+   "stopped_or_failed": 1
+  },
+  "C.cell_cycle": {
+   "median_minutes": 3.2,
+   "runs": 9,
+   "longest_minutes": 15.9,
+   "stopped_or_failed": 0
+  },
+  "C.genes": {
+   "median_minutes": 1.2,
+   "runs": 81,
+   "longest_minutes": 94.1,
+   "stopped_or_failed": 4
+  },
+  "C.programmes": {
+   "median_minutes": 0.5,
+   "runs": 3,
+   "longest_minutes": 4.5,
+   "stopped_or_failed": 0
+  },
+  "C.programs": {
+   "median_minutes": 18.3,
+   "runs": 27,
+   "longest_minutes": 128.7,
+   "stopped_or_failed": 0
+  },
+  "C.states_and_composition": {
+   "median_minutes": 18.1,
+   "runs": 33,
+   "longest_minutes": 124.4,
+   "stopped_or_failed": 1
+  },
+  "C.within_states": {
+   "median_minutes": 3.1,
+   "runs": 10,
+   "longest_minutes": 24.9,
+   "stopped_or_failed": 6
+  },
+  "D.common_response": {
+   "median_minutes": 8.7,
+   "runs": 4,
+   "longest_minutes": 16.2,
+   "stopped_or_failed": 6
+  },
+  "D.shared_response": {
+   "median_minutes": 0.1,
+   "runs": 2,
+   "longest_minutes": 0.1,
+   "stopped_or_failed": 0
+  },
+  "E.co_functional_sets": {
+   "median_minutes": 0.3,
+   "runs": 11,
+   "longest_minutes": 1.0,
+   "stopped_or_failed": 1
+  },
+  "E.combinations": {
+   "median_minutes": 0.1,
+   "runs": 41,
+   "longest_minutes": 7.5,
+   "stopped_or_failed": 0
+  },
+  "E.condition_x_perturbation": {
+   "median_minutes": 3.8,
+   "runs": 25,
+   "longest_minutes": 41.2,
+   "stopped_or_failed": 0
+  },
+  "E.opposite_modes": {
+   "median_minutes": 1.3,
+   "runs": 5,
+   "longest_minutes": 11.5,
+   "stopped_or_failed": 0
+  },
+  "E.program_axis": {
+   "median_minutes": 0.2,
+   "runs": 8,
+   "longest_minutes": 1.1,
+   "stopped_or_failed": 0
+  },
+  "E.similar_targets": {
+   "median_minutes": 1.1,
+   "runs": 36,
+   "longest_minutes": 50.7,
+   "stopped_or_failed": 0
+  },
+  "F.guides_agree": {
+   "median_minutes": 1.6,
+   "runs": 29,
+   "longest_minutes": 32.8,
+   "stopped_or_failed": 0
+  },
+  "F.replicates_agree": {
+   "median_minutes": 2.7,
+   "runs": 15,
+   "longest_minutes": 25.3,
+   "stopped_or_failed": 0
+  },
+  "G.meaning": {
+   "median_minutes": 1.4,
+   "runs": 87,
+   "longest_minutes": 196.7,
+   "stopped_or_failed": 11
+  },
+  "H.what_next": {
+   "median_minutes": 0.1,
+   "runs": 4,
+   "longest_minutes": 1.1,
+   "stopped_or_failed": 0
+  }
+ }
+}

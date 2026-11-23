@@ -1,86 +1,23 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pertura"
-version = "0.2.0a15"
-description = "Execution-grounded evidence runtime for Perturb-seq CodeAct agents."
-readme = "README.md"
+version = "0.3.0"
+description = "A Claude Code plugin and MCP server for analysing Perturb-seq screens"
 requires-python = ">=3.10"
-authors = [{ name = "Pertura Team" }]
-dependencies = [
-  "pydantic>=2",
-  "PyYAML>=6",
-  "cryptography>=42",
-  "jsonschema>=4.19",
-]
-
-[project.scripts]
-pertura = "pertura_runtime.product_cli:main"
-pertura-claude = "pertura_runtime.claude.cli:main"
+dependencies = ["numpy", "pandas", "scipy"]
 
 [project.optional-dependencies]
-execution = [
-  "jupyter_client>=8",
-  "ipykernel>=6",
-  "IPython>=8",
-]
-omics = [
-  "anndata>=0.10",
-  "scanpy>=1.10",
-  "pandas>=2",
-  "numpy>=1.24",
-  "matplotlib>=3.8",
-  "mudata>=0.3",
-  "scipy>=1.11",
-  "scikit-learn>=1.4",
-  "python-igraph>=0.11",
-  "leidenalg>=0.10",
-  "pyarrow>=15",
-  "zarr>=3",
-]
-perturbseq = [
-  "pertpy==1.1.1",
-  "decoupler>=2",
-  "gseapy>=1.1",
-  "gprofiler-official>=1.0",
-  "mygene>=3.2",
-  "celltypist>=1.6",
-]
-advanced = [
-  "scvi-tools>=1.1",
-]
-llm = [
-  "openai>=1",
-  "anthropic>=0.34",
-  "claude-agent-sdk>=0.1.62,<0.3",
-]
-dev = [
-  "pytest>=8",
-]
-dashboard = [
-  "fastapi>=0.115",
-  "uvicorn>=0.30",
-]
+single-cell = ["anndata", "scanpy"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-exclude = ["pertura_gate", "pertura_gate.*"]
 
 [tool.setuptools.package-data]
-"pertura_workflow.capabilities" = ["specs/*.yaml", "profiles/*.yaml", "runners/*.R", "runners/*.py", "planner_routes.json"]
-"pertura_workflow" = ["environments/*.yml", "environments/*.R", "knowledge_resource_profiles/*.json"]
-"pertura_runtime" = ["dashboard_static/**/*", "agent_bundle/bundle.json", "agent_bundle/.claude-plugin/plugin.json", "agent_bundle/skills/*/SKILL.md", "agent_bundle/skills/*/agents/*.yaml", "agent_bundle/skills/*/references/*.md"]
-"pertura_bench" = ["runners/*.R", "schemas/*.json", "cases/*.json"]
-"pertura_core" = ["compatibility/v0.2/*.json"]
+pertura = ["r/*.R", "recipes/*/*.py", "recipes/*/*.json", "recipes/*/*.md"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
-testpaths = ["tests"]
-markers = [
-  "legacy: read-only compatibility, stage, registrar, and classic workflow regression",
-]
-
-
-
+# `python -m pytest tests` runs every test; `-m "not slow"` leaves out the slow ones, which tests/conftest.py lists.
+markers = ["slow: left out by -m 'not slow'; tests/conftest.py lists which"]

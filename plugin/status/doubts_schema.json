@@ -1,0 +1,50 @@
+{
+ "$defs": {
+  "Doubt": {
+   "additionalProperties": false,
+   "properties": {
+    "finding_id": {
+     "description": "the recorded finding it questions",
+     "title": "Finding Id",
+     "type": "string"
+    },
+    "text": {
+     "description": "what may be wrong, in a sentence",
+     "title": "Text",
+     "type": "string"
+    },
+    "would_change": {
+     "description": "the result that would change the judgement",
+     "title": "Would Change",
+     "type": "string"
+    }
+   },
+   "required": [
+    "finding_id",
+    "text",
+    "would_change"
+   ],
+   "title": "Doubt",
+   "type": "object"
+  }
+ },
+ "additionalProperties": false,
+ "properties": {
+  "doubts": {
+   "description": "at most 3, each one that would change how the result reads, the weightiest first",
+   "items": {
+    "$ref": "#/$defs/Doubt"
+   },
+   "title": "Doubts",
+   "type": "array"
+  },
+  "the_question_lacks": {
+   "default": "",
+   "description": "in one sentence, what the user's question still lacks after this result; empty if nothing",
+   "title": "The Question Lacks",
+   "type": "string"
+  }
+ },
+ "title": "Doubts",
+ "type": "object"
+}

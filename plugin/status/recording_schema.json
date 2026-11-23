@@ -1,0 +1,550 @@
+{
+ "$defs": {
+  "Claim": {
+   "additionalProperties": false,
+   "properties": {
+    "statement": {
+     "description": "the claim in the agent's own words, with its numbers",
+     "title": "Statement",
+     "type": "string"
+    },
+    "targets": {
+     "description": "the perturbed targets the claim is about",
+     "items": {
+      "type": "string"
+     },
+     "minItems": 1,
+     "title": "Targets",
+     "type": "array"
+    },
+    "feature": {
+     "$ref": "#/$defs/Feature"
+    },
+    "direction": {
+     "description": "the feature higher (up) or lower (down) in the targets' cells than in the controls",
+     "enum": [
+      "up",
+      "down"
+     ],
+     "title": "Direction",
+     "type": "string"
+    },
+    "run_ids": {
+     "description": "the run IDs the claim rests on, as the tool replies name them (run0083-e96c5f)",
+     "items": {
+      "type": "string"
+     },
+     "title": "Run Ids",
+     "type": "array"
+    },
+    "figure": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "the figure ID it is shown in, where the agent named one",
+     "title": "Figure"
+    },
+    "replaces": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "a recorded finding's ID, where the agent corrected it",
+     "title": "Replaces"
+    },
+    "cells": {
+     "anyOf": [
+      {
+       "additionalProperties": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "items": {
+           "type": "string"
+          },
+          "type": "array"
+         }
+        ]
+       },
+       "type": "object"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "the cells the claim holds in, as {column: value or values} with RECORD's cell_columns (for example one sample or condition); none where it holds in all cells",
+     "title": "Cells"
+    },
+    "population": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "the cells the claim holds in, in the agent's words, where it names them (one model, one state, one condition)",
+     "title": "Population"
+    },
+    "reference": {
+     "anyOf": [
+      {
+       "enum": [
+        "control_guides",
+        "other_targets"
+       ],
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "what the targets' cells were compared against, where the agent's words say: the control guides' cells, or every other target's cells",
+     "title": "Reference"
+    }
+   },
+   "required": [
+    "statement",
+    "targets",
+    "feature",
+    "direction"
+   ],
+   "title": "Claim",
+   "type": "object"
+  },
+  "DoubtAnswer": {
+   "additionalProperties": false,
+   "properties": {
+    "doubt_id": {
+     "title": "Doubt Id",
+     "type": "string"
+    },
+    "outcome": {
+     "enum": [
+      "holds",
+      "holds, narrowed",
+      "weakens",
+      "overturns",
+      "still open",
+      "reworded, not tested",
+      "stated as a limit"
+     ],
+     "title": "Outcome",
+     "type": "string"
+    },
+    "reason": {
+     "title": "Reason",
+     "type": "string"
+    },
+    "run_ids": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Run Ids",
+     "type": "array"
+    }
+   },
+   "required": [
+    "doubt_id",
+    "outcome",
+    "reason"
+   ],
+   "title": "DoubtAnswer",
+   "type": "object"
+  },
+  "Feature": {
+   "additionalProperties": false,
+   "properties": {
+    "kind": {
+     "description": "gene: one gene's expression; gene_set: a named gene set's score; score: a per-cell score the notebook saved; state: a cell state's share",
+     "enum": [
+      "gene",
+      "gene_set",
+      "score",
+      "state"
+     ],
+     "title": "Kind",
+     "type": "string"
+    },
+    "name": {
+     "description": "the gene, the gene set's name, the saved score's name, or the state's name",
+     "title": "Name",
+     "type": "string"
+    },
+    "labelling": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "for a state: the run ID of the states run that labelled it",
+     "title": "Labelling"
+    },
+    "genes": {
+     "anyOf": [
+      {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "for a gene_set the agent defined: its genes, as the turn's text or code lists them",
+     "title": "Genes"
+    }
+   },
+   "required": [
+    "kind",
+    "name"
+   ],
+   "title": "Feature",
+   "type": "object"
+  },
+  "NextStep": {
+   "additionalProperties": false,
+   "properties": {
+    "question": {
+     "title": "Question",
+     "type": "string"
+    },
+    "move": {
+     "enum": [
+      "guides",
+      "impact",
+      "genes",
+      "scores",
+      "states",
+      "programs",
+      "similarity",
+      "conditions",
+      "combinations",
+      "enrichment",
+      "reproducibility",
+      "an independent experiment",
+      "outside data",
+      "a phenotype",
+      "a model of the screen",
+      "other"
+     ],
+     "title": "Move",
+     "type": "string"
+    },
+    "why": {
+     "title": "Why",
+     "type": "string"
+    },
+    "recommended": {
+     "anyOf": [
+      {
+       "type": "boolean"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Recommended"
+    }
+   },
+   "required": [
+    "question",
+    "move",
+    "why"
+   ],
+   "title": "NextStep",
+   "type": "object"
+  },
+  "Result": {
+   "additionalProperties": false,
+   "properties": {
+    "result_id": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "the result's ID where the agent revises one already proposed (r1); none for a new result",
+     "title": "Result Id"
+    },
+    "title": {
+     "description": "its conclusion, in one sentence",
+     "title": "Title",
+     "type": "string"
+    },
+    "text": {
+     "description": "the agent's paragraph for it",
+     "title": "Text",
+     "type": "string"
+    },
+    "claims": {
+     "description": "positions (from 0) of this recording's claims it rests on",
+     "items": {
+      "type": "integer"
+     },
+     "title": "Claims",
+     "type": "array"
+    },
+    "finding_ids": {
+     "description": "IDs of findings already recorded it rests on",
+     "items": {
+      "type": "string"
+     },
+     "title": "Finding Ids",
+     "type": "array"
+    },
+    "figure": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Figure"
+    },
+    "next_steps": {
+     "items": {
+      "$ref": "#/$defs/NextStep"
+     },
+     "maxItems": 3,
+     "title": "Next Steps",
+     "type": "array"
+    },
+    "raised_by": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "the earlier result (r1) or finding whose reading raised the question this result answers, as the agent's 'From <id>:' line or its words name it; none for a question of the user's",
+     "title": "Raised By"
+    },
+    "answers": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "the question it answers, as that line or the agent's words give it",
+     "title": "Answers"
+    }
+   },
+   "required": [
+    "title",
+    "text"
+   ],
+   "title": "Result",
+   "type": "object"
+  },
+  "Thread": {
+   "additionalProperties": false,
+   "properties": {
+    "about": {
+     "description": "what it would test, in a sentence with its numbers",
+     "title": "About",
+     "type": "string"
+    },
+    "raised_by": {
+     "enum": [
+      "a worker",
+      "the user",
+      "the main agent"
+     ],
+     "title": "Raised By",
+     "type": "string"
+    },
+    "scope": {
+     "anyOf": [
+      {
+       "enum": [
+        "one question",
+        "the whole screen"
+       ],
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "for the user's question: what they hand over, one question or the whole screen",
+     "title": "Scope"
+    }
+   },
+   "required": [
+    "about",
+    "raised_by"
+   ],
+   "title": "Thread",
+   "type": "object"
+  },
+  "ThreadUpdate": {
+   "additionalProperties": false,
+   "properties": {
+    "thread_id": {
+     "title": "Thread Id",
+     "type": "string"
+    },
+    "status": {
+     "description": "followed: the agent takes it; the others end it",
+     "enum": [
+      "followed",
+      "explained",
+      "contradicted",
+      "out of data",
+      "set aside"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "reason": {
+     "title": "Reason",
+     "type": "string"
+    }
+   },
+   "required": [
+    "thread_id",
+    "status",
+    "reason"
+   ],
+   "title": "ThreadUpdate",
+   "type": "object"
+  },
+  "UserDecision": {
+   "additionalProperties": false,
+   "properties": {
+    "kind": {
+     "enum": [
+      "keep",
+      "drop",
+      "next_step",
+      "enough",
+      "knowledge",
+      "doubt",
+      "deepen",
+      "reread"
+     ],
+     "title": "Kind",
+     "type": "string"
+    },
+    "words": {
+     "description": "the user's words, exactly as they wrote them",
+     "title": "Words",
+     "type": "string"
+    },
+    "message_uuid": {
+     "description": "the uuid of the user's message that holds the words",
+     "title": "Message Uuid",
+     "type": "string"
+    },
+    "refers_to": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "the result or finding ID, or the next step's rank",
+     "title": "Refers To"
+    }
+   },
+   "required": [
+    "kind",
+    "words",
+    "message_uuid"
+   ],
+   "title": "UserDecision",
+   "type": "object"
+  }
+ },
+ "additionalProperties": false,
+ "description": "One turn's recording: only what the text states. An empty list where the turn holds none.",
+ "properties": {
+  "claims": {
+   "items": {
+    "$ref": "#/$defs/Claim"
+   },
+   "title": "Claims",
+   "type": "array"
+  },
+  "results": {
+   "items": {
+    "$ref": "#/$defs/Result"
+   },
+   "title": "Results",
+   "type": "array"
+  },
+  "user_decisions": {
+   "items": {
+    "$ref": "#/$defs/UserDecision"
+   },
+   "title": "User Decisions",
+   "type": "array"
+  },
+  "threads": {
+   "items": {
+    "$ref": "#/$defs/Thread"
+   },
+   "title": "Threads",
+   "type": "array"
+  },
+  "thread_updates": {
+   "items": {
+    "$ref": "#/$defs/ThreadUpdate"
+   },
+   "title": "Thread Updates",
+   "type": "array"
+  },
+  "doubt_answers": {
+   "items": {
+    "$ref": "#/$defs/DoubtAnswer"
+   },
+   "title": "Doubt Answers",
+   "type": "array"
+  }
+ },
+ "title": "Recording",
+ "type": "object"
+}

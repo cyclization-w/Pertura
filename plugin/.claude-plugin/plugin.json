@@ -1,0 +1,80 @@
+{
+  "name": "pertura",
+  "version": "0.6.0",
+  "description": "Analyse a Perturb-seq screen as a computational biologist would: settle the experiment's design with the user, look at the whole screen, follow what the data and the question raise, try the alternatives at the choices that matter, and keep every run, finding, check and doubt in a shared record.",
+  "author": {
+    "name": "Pertura"
+  },
+  "userConfig": {
+    "analysis_host": {
+      "type": "string",
+      "title": "Analysis server",
+      "description": "ssh host that holds the screen and Pertura (key login, no password prompt)",
+      "required": true
+    },
+    "remote_python": {
+      "type": "string",
+      "title": "Python on the analysis server",
+      "description": "the interpreter of the environment Pertura runs in",
+      "required": true
+    },
+    "remote_code": {
+      "type": "string",
+      "title": "Pertura code on the analysis server",
+      "description": "the pertura-core folder on the server (the one that contains src/)",
+      "required": true
+    },
+    "workspace_config": {
+      "type": "string",
+      "title": "Pertura workspace on the analysis server",
+      "description": "the JSON written once by: python -m pertura.mcp_server make-workspace-config <workspace folder> [--cores 60-71] [--thread-limit 12]. Projects, designs and sessions are kept there, and the server pins its jobs to the cores it names; you then only say where each screen's data is.",
+      "required": true
+    },
+    "open_page": {
+      "type": "boolean",
+      "title": "Open the page in the browser",
+      "description": "open the project's page of the design, findings and figures in the browser once, when a session opens a project",
+      "required": false,
+      "default": true
+    },
+    "worker_model": {
+      "type": "string",
+      "title": "Model of the workers",
+      "description": "the model the workers runs on; default keeps its own (the main conversation's model)",
+      "options": [
+        "default",
+        "opus",
+        "sonnet",
+        "haiku",
+        "fable"
+      ],
+      "default": "default"
+    },
+    "design_auditor_model": {
+      "type": "string",
+      "title": "Model of the design auditor",
+      "description": "the model the design auditor runs on; default keeps its own (the main conversation's model)",
+      "options": [
+        "default",
+        "opus",
+        "sonnet",
+        "haiku",
+        "fable"
+      ],
+      "default": "default"
+    },
+    "skeptic_model": {
+      "type": "string",
+      "title": "Model of the skeptic",
+      "description": "the model the skeptic runs on; default keeps its own (the main conversation's model)",
+      "options": [
+        "default",
+        "opus",
+        "sonnet",
+        "haiku",
+        "fable"
+      ],
+      "default": "default"
+    }
+  }
+}

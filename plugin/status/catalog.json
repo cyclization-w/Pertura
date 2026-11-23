@@ -1,0 +1,815 @@
+{
+ "made_by": "scripts/build_the_catalog_of_analyses.py",
+ "measured_on": "the module tests' synthetic screens (tests/)",
+ "tools": [
+  {
+   "tool": "guides",
+   "answers": "Guide calls and their evidence, cells per target, each target's own gene, escape (Mixscape or Mixscale), dose, clones, the vectors' structure, and the controls that cut against those that do not",
+   "views": [
+    {
+     "view": "calls",
+     "module": "B.guide_calls_and_their_evidence"
+    },
+    {
+     "view": "cells",
+     "module": "B.abundance"
+    },
+    {
+     "view": "own_gene",
+     "module": "B.efficacy"
+    },
+    {
+     "view": "escape",
+     "module": "B.escape"
+    },
+    {
+     "view": "dose",
+     "module": "B.dose"
+    },
+    {
+     "view": "clones",
+     "module": "B.clonality"
+    },
+    {
+     "view": "vectors",
+     "module": "B.vector_structure"
+    },
+    {
+     "view": "cutting",
+     "module": "D.cutting_response"
+    }
+   ]
+  },
+  {
+   "tool": "impact",
+   "answers": "Which targets change the cells, and how much, against the controls; the response many targets share",
+   "views": [
+    {
+     "view": "distance",
+     "module": "C.any_effect"
+    },
+    {
+     "view": "shared",
+     "module": "D.common_response"
+    }
+   ]
+  },
+  {
+   "tool": "genes",
+   "answers": "The genes each target changes; named genes read across the targets (genes); the targets' network (genes targets_own)",
+   "views": [
+    {
+     "view": "genes",
+     "module": "C.genes"
+    }
+   ]
+  },
+  {
+   "tool": "scores",
+   "answers": "Each target's effect on per-cell scores: an MSigDB collection (gene_sets, select), lists of your own (gene_lists), the control cells' contrast between two levels (contrast), the proteins (gene_sets proteins), or any per-cell value (cell_values)",
+   "views": [
+    {
+     "view": "scores",
+     "module": "C.programs"
+    }
+   ]
+  },
+  {
+   "tool": "states",
+   "answers": "Cell states with their naming evidence and each target's shares of them; changes within a state; the cell cycle; a trajectory (trajectory_root)",
+   "views": [
+    {
+     "view": "states",
+     "module": "C.states_and_composition"
+    },
+    {
+     "view": "within",
+     "module": "C.within_states"
+    },
+    {
+     "view": "cell_cycle",
+     "module": "C.cell_cycle"
+    }
+   ]
+  },
+  {
+   "tool": "programs",
+   "answers": "Gene programmes found in the cells (cNMF, unless choices gene_sets names another method), with each target's usage",
+   "views": [
+    {
+     "view": "programs",
+     "module": "C.programs",
+     "preset": {
+      "choices": {
+       "gene_sets": "cnmf"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "tool": "similarity",
+   "answers": "Targets alike or opposite, the genes they share and their complexes; sets of targets that act together; the regulators along a programme's axis",
+   "views": [
+    {
+     "view": "alike",
+     "module": "E.similar_targets"
+    },
+    {
+     "view": "sets",
+     "module": "E.co_functional_sets"
+    },
+    {
+     "view": "axis",
+     "module": "E.program_axis"
+    }
+   ]
+  },
+  {
+   "tool": "conditions",
+   "answers": "Effects across conditions, time points, cell types or modes (what: the controls' own response, genes, scores or shares; pair: the two conditions)",
+   "views": [
+    {
+     "view": "conditions",
+     "module": "E.condition_x_perturbation"
+    },
+    {
+     "view": "modes",
+     "module": "E.opposite_modes"
+    }
+   ]
+  },
+  {
+   "tool": "combinations",
+   "answers": "Pairs of perturbations against their singles",
+   "views": [
+    {
+     "view": "pairs",
+     "module": "E.combinations"
+    }
+   ]
+  },
+  {
+   "tool": "enrichment",
+   "answers": "What changed genes mean: gene sets in each target's changed genes from a genes run (de; up and down apart, or method gsea on its ranking) or in a list; the activity of factors and pathways (method ulm with collection collectri or progeny, on a genes run: de); a factor's direct targets",
+   "views": [
+    {
+     "view": "meaning",
+     "module": "G.meaning"
+    },
+    {
+     "view": "direct_targets",
+     "module": "G.direct_targets"
+    }
+   ]
+  },
+  {
+   "tool": "reproducibility",
+   "answers": "Whether a result holds: the guides of a target agree, the replicates agree, the calls hold with fewer cells",
+   "views": [
+    {
+     "view": "guides",
+     "module": "F.guides_agree"
+    },
+    {
+     "view": "replicates",
+     "module": "F.replicates_agree"
+    },
+    {
+     "view": "fewer_cells",
+     "module": "C.any_effect",
+     "preset": {
+      "inputs": {
+       "fewer_cells": [
+        25,
+        50,
+        100,
+        200
+       ]
+      }
+     }
+    }
+   ]
+  }
+ ],
+ "first_look": [
+  "A.screen_overview",
+  "A.what_was_done"
+ ],
+ "modules": {
+  "A.screen_overview": {
+   "title": "The screen at a glance",
+   "biology": "Every target side by side, before any one is followed.",
+   "applies_when": "after the first look: every target by every kind of evidence its runs measured",
+   "needs": "the screen object, and the first look's runs as inputs (each optional): B.abundance, B.efficacy, C.states_and_composition, E.similar_targets, F.guides_agree, F.replicates_agree; C.genes and D.common_response when they have run",
+   "choices": {},
+   "calls": [
+    "pertpy: tl.Distance",
+    "scanpy: pp.highly_variable_genes, pp.pca"
+   ],
+   "figure": "screen_overview.png",
+   "status_in_the_tests": "measured",
+   "contract": "c25cb2df3aafe380"
+  },
+  "A.what_was_done": {
+   "title": "The cells the experiment holds, by unit and kind",
+   "biology": "This module counts the cells of the experiment per unit (capture, mouse, donor): cells with one target, with two or more, with a control guide, with an ambiguous call, and with no call.",
+   "applies_when": "always",
+   "needs": "the screen object (cells, labels, units, conditions) and the confirmed design",
+   "choices": {},
+   "calls": [],
+   "figure": "what_was_done.png",
+   "status_in_the_tests": "detected",
+   "contract": "c015c181d3e0ca71"
+  },
+  "B.abundance": {
+   "title": "Each target's cells against the control guides'",
+   "biology": "Each target's cell count against the control guides'.",
+   "applies_when": "always (read against the library's representation when there is one)",
+   "needs": "labels, each cell's strongest guide, the library's guides with their kinds, samples",
+   "choices": {},
+   "calls": [
+    "MAGeCK: test"
+   ],
+   "figure": "abundance.png",
+   "status_in_the_tests": "measured",
+   "contract": "37b70a45d3d512d0"
+  },
+  "B.clonality": {
+   "title": "Expanded clones among a guide's cells",
+   "biology": "A guide's cells can descend from a few transduced cells that expanded.",
+   "applies_when": "in vivo",
+   "needs": "each cell's guides, labels, control groups and units",
+   "choices": {},
+   "calls": [],
+   "figure": "clonality.png",
+   "status_in_the_tests": "measured",
+   "contract": "b46999a2705baa64"
+  },
+  "B.dose": {
+   "title": "How much a target's guides differ in efficacy",
+   "biology": "A target's guides can differ in efficacy, so pooling them averages over their efficacies (G4, PF8).",
+   "applies_when": "CRISPRi or CRISPRa",
+   "needs": "the own-gene effect of every guide (B.efficacy's measurement)",
+   "choices": {},
+   "calls": [],
+   "figure": "dose.png",
+   "status_in_the_tests": "measured",
+   "contract": "c5dc3ac9f17d75e0"
+  },
+  "B.efficacy": {
+   "title": "Each guide's change of its own target gene",
+   "biology": "Each guide's change of its own target gene, described against a line.",
+   "applies_when": "a modality acting on the target gene (CRISPRi, CRISPRa, knockout)",
+   "needs": "each cell's guides, each guide's target and mode (perturbation.guide_modes where modes are mixed), the reference cells, units",
+   "choices": {
+    "threshold": [
+     0.515,
+     1.0
+    ],
+    "reference": [
+     "control_guides",
+     "other_targets"
+    ]
+   },
+   "calls": [],
+   "figure": "efficacy.png",
+   "status_in_the_tests": "measured",
+   "contract": "8fda72417f221c5c"
+  },
+  "B.escape": {
+   "title": "Perturbed and non-perturbed cells within a target's cells",
+   "biology": "Within a target's cells, some cells were changed by the perturbation and some were not (mosaic editing, in-frame edits, weak knockdown in some cells).",
+   "applies_when": "CRISPRi or knockout",
+   "needs": "labels, units, the reference cells, each target's target gene",
+   "choices": {
+    "method": [
+     "mixscape",
+     "mixscale",
+     "own_gene",
+     "perturbation_driven_clusters"
+    ],
+    "rule": [
+     "chi2",
+     "band",
+     "enriched"
+    ],
+    "factor": [
+     2.0,
+     1.5,
+     3.0
+    ],
+    "resolution": [
+     0.8,
+     0.4,
+     1.2
+    ]
+   },
+   "calls": [
+    "pertpy: tl.Mixscape.perturbation_signature, tl.Mixscape.mixscape",
+    "scanpy: pp.highly_variable_genes, pp.pca"
+   ],
+   "figure": "escape.png",
+   "status_in_the_tests": "measured",
+   "contract": "6116aa6b589507af"
+  },
+  "B.guide_calls_and_their_evidence": {
+   "title": "The evidence behind each cell's guide call",
+   "biology": "The evidence for each cell's guide call.",
+   "applies_when": "always",
+   "needs": "the screen object's labels, units and each cell's guides with their UMIs",
+   "choices": {},
+   "calls": [],
+   "figure": "guide_calls_and_their_evidence.png",
+   "status_in_the_tests": "detected",
+   "contract": "ee44d1dbddda85cb"
+  },
+  "B.vector_structure": {
+   "title": "Guides that travel on one vector",
+   "biology": "Some libraries put a target's guides on one vector (dual-guide vectors, arrays).",
+   "applies_when": "vectors of two or more guides, or two guides per cell by design",
+   "needs": "each cell's guides, and each guide's target (guides.tsv)",
+   "choices": {},
+   "calls": [],
+   "figure": "vector_structure.png",
+   "status_in_the_tests": "measured",
+   "contract": "ac7be6ac0d08b1b5"
+  },
+  "C.any_effect": {
+   "title": "Each target's effect on the whole profile",
+   "biology": "A target's effect on the cells' whole profile.",
+   "applies_when": "always",
+   "needs": "log-normalised expression, labels and the control cells",
+   "choices": {
+    "control_cells": [
+     "same_samples",
+     "all"
+    ],
+    "reference": [
+     "control_guides",
+     "other_targets"
+    ],
+    "n_pcs": [
+     50,
+     20
+    ]
+   },
+   "calls": [
+    "pertpy: tl.DistanceTest",
+    "scanpy: pp.highly_variable_genes, pp.pca",
+    "statsmodels: stats.multitest.multipletests"
+   ],
+   "figure": "any_effect.png",
+   "status_in_the_tests": "detected",
+   "contract": "b9444b5b2bb97031"
+  },
+  "C.cell_cycle": {
+   "title": "Each target's cell-cycle phases",
+   "biology": "Each cell's phase from the S and G2/M genes (Tirosh et al.",
+   "applies_when": "human or mouse (experiment.organism)",
+   "needs": "log-normalised expression (or raw counts for Seurat's), labels, samples, the control cells; the organism",
+   "choices": {
+    "method": [
+     "scanpy",
+     "seurat"
+    ],
+    "reference": [
+     "control_guides",
+     "other_targets"
+    ],
+    "test": [
+     "auto",
+     "fisher",
+     "cmh",
+     "propeller",
+     "sccoda"
+    ]
+   },
+   "calls": [
+    "scanpy: tl.score_genes_cell_cycle",
+    "scipy: stats.fisher_exact",
+    "statsmodels: stats.multitest.multipletests"
+   ],
+   "figure": "cell_cycle.png",
+   "status_in_the_tests": "detected",
+   "contract": "6fccfa4b4cbefbbc"
+  },
+  "C.genes": {
+   "title": "The genes each target changes",
+   "biology": "Most published screens test a target's cells against the control cells, most often with a Wilcoxon test; fewer sum the cells by replicate (pseudobulk).",
+   "applies_when": "always",
+   "needs": "raw counts, labels, samples, the control cells; for edgeR-QL, 3 or more samples or lanes that hold the target and the control cells",
+   "choices": {
+    "method": [
+     "auto",
+     "wilcoxon_same_samples",
+     "wilcoxon",
+     "edger_ql",
+     "seurat_lr",
+     "field",
+     "rank_test",
+     "seurat3_lr",
+     "deseq2",
+     "glmgampoi",
+     "limma_voom",
+     "mast",
+     "pydeseq2",
+     "sceptre",
+     "ttest"
+    ],
+    "reference": [
+     "control_guides",
+     "other_targets"
+    ]
+   },
+   "calls": [
+    "Seurat: FindMarkers",
+    "edgeR: glmQLFit, glmQLFTest",
+    "pertura: a rank test within each sample (its own code, until the module is converted)",
+    "scanpy: tl.rank_genes_groups"
+   ],
+   "figure": "genes.png",
+   "status_in_the_tests": "detected",
+   "contract": "c377e2a76f205a5c"
+  },
+  "C.programs": {
+   "title": "The gene programs each target moves",
+   "biology": "Coordinated gene programs, and each target's effect on each.",
+   "applies_when": "always",
+   "needs": "log-normalised expression, labels, samples, the control cells; the organism (experiment.organism: human or mouse) for an MSigDB collection (hallmark, immunologic, cell_types and the others the gene_sets tool names), its sets chosen with select where it holds more than 200; or gene lists given by the agent, written down before looking at any result; or a contrast between two levels of a cell column in the control cells (contrast); or the antibody counts (proteins); or per-cell values (cell_values); for programs found in the cells, raw counts (and samples for genenmf_meta)",
+   "choices": {
+    "gene_sets": [
+     "hallmark",
+     "go_bp",
+     "go_cc",
+     "go_mf",
+     "reactome",
+     "wikipathways",
+     "kegg",
+     "canonical_pathways",
+     "tf_targets",
+     "immunologic",
+     "immunesigdb",
+     "cell_types",
+     "oncogenic",
+     "given",
+     "contrast",
+     "proteins",
+     "cell_values",
+     "cnmf",
+     "sklearn_nmf",
+     "genenmf",
+     "genenmf_meta",
+     "consensus_nmf"
+    ],
+    "reference": [
+     "control_guides",
+     "other_targets"
+    ],
+    "fit_on": [
+     "all",
+     "controls"
+    ],
+    "test": [
+     "auto",
+     "linear_model",
+     "wilcoxon"
+    ]
+   },
+   "calls": [
+    "cnmf: cNMF prepare, factorize, combine, consensus",
+    "scanpy: tl.rank_genes_groups",
+    "scanpy: tl.score_genes",
+    "scikit-learn: decomposition.NMF",
+    "scipy: stats.ranksums",
+    "statsmodels: OLS",
+    "statsmodels: stats.multitest.multipletests"
+   ],
+   "figure": "programs.png",
+   "status_in_the_tests": "detected",
+   "contract": "8880cf8275211210"
+  },
+  "C.states_and_composition": {
+   "title": "Cell states, and each target's share of them",
+   "biology": "Cell states found without the perturbation labels (Leiden clusters named by their markers), and each target's share of cells in each state against the control cells.",
+   "applies_when": "always",
+   "needs": "counts, labels, units and the reference cells",
+   "choices": {
+    "control_cells": [
+     "same_samples",
+     "all"
+    ],
+    "resolution": [
+     1.0,
+     0.5
+    ],
+    "reference": [
+     "control_guides",
+     "other_targets"
+    ],
+    "group_by": [
+     "target",
+     "vector"
+    ],
+    "per_target": [
+     "each",
+     "best",
+     "other"
+    ],
+    "test": [
+     "auto",
+     "fisher",
+     "cmh",
+     "propeller",
+     "sccoda"
+    ]
+   },
+   "calls": [
+    "scanpy: pp.normalize_total, pp.log1p, pp.highly_variable_genes, pp.scale, tl.pca, pp.neighbors, tl.leiden, tl.umap, tl.rank_genes_groups",
+    "scipy: stats.fisher_exact",
+    "speckle: getTransformedProps, propeller.ttest",
+    "statsmodels: stats.multitest.multipletests"
+   ],
+   "figure": "states_and_composition.png",
+   "status_in_the_tests": "detected",
+   "contract": "082edfb888f97d23"
+  },
+  "C.within_states": {
+   "title": "Changes within a state, beside shifts between states",
+   "biology": "It tells a target that moves cells between states from one that changes cells within a state.",
+   "applies_when": "a target whose share of a state shifted (C.states_and_composition)",
+   "needs": "each cell's state (C.states_and_composition's cell_states table), raw counts, samples, the control cells",
+   "choices": {
+    "min_cells": [
+     10,
+     20
+    ]
+   },
+   "calls": [
+    "scanpy: tl.rank_genes_groups"
+   ],
+   "figure": "within_states.png",
+   "status_in_the_tests": "detected",
+   "contract": "0266578efb88c259"
+  },
+  "D.common_response": {
+   "title": "A target's effect beyond the response all perturbations share",
+   "biology": "The part of a target's effect that remains once the response every perturbation shares is set aside.",
+   "applies_when": "3 or more targets",
+   "needs": "labels, units, the control cells",
+   "choices": {
+    "permutations": [
+     1000,
+     200
+    ],
+    "reference_cells": [
+     "drawn",
+     "all"
+    ]
+   },
+   "calls": [
+    "pertpy: tl.DistanceTest",
+    "scanpy: pp.highly_variable_genes, pp.pca",
+    "statsmodels: stats.multitest.multipletests"
+   ],
+   "figure": "common_response.png",
+   "status_in_the_tests": "detected",
+   "contract": "e15c9c18386bcc1b"
+  },
+  "D.cutting_response": {
+   "title": "The response to cutting DNA",
+   "biology": "The response to cutting itself: the cells of control guides that cut where no gene is (intergenic, safe-targeting) against the non-targeting ones.",
+   "applies_when": "control guides that target DNA where no gene is (intergenic, safe-targeting) beside non-targeting ones, under any modality",
+   "needs": "counts, labels, units, and control guides that target DNA where no gene is (intergenic, safe-targeting) beside non-targeting ones",
+   "choices": {},
+   "calls": [],
+   "figure": null,
+   "status_in_the_tests": "not_enough_data",
+   "contract": "2e9e4b97a807d6eb"
+  },
+  "E.co_functional_sets": {
+   "title": "Regulators of one program that act together",
+   "biology": "The regulators of one program, clustered by what else they move into sets that act together.",
+   "applies_when": "the regulators of one program (C.programs), and their effects on the others",
+   "needs": "C.programs' result table (target, score, effect), the program and the direction",
+   "choices": {
+    "top": [
+     100,
+     50
+    ],
+    "method": [
+     "hierarchical",
+     "hdbscan",
+     "leiden"
+    ]
+   },
+   "calls": [],
+   "figure": "co_functional_sets.png",
+   "status_in_the_tests": "measured",
+   "contract": "cb482a3695de600b"
+  },
+  "E.combinations": {
+   "title": "Each pair against its singles",
+   "biology": "Two perturbations together against each alone.",
+   "applies_when": "pairs or sets",
+   "needs": "labels of pairs ('a|b') or sets ('a+b') and of their singles, the control cells; replicate units for the added agreement check",
+   "choices": {
+    "min_cells": [
+     20,
+     30
+    ],
+    "gene_sets": [
+     "hallmark",
+     "given"
+    ],
+    "model": [
+     "fitted_weights",
+     "plain_sum",
+     "regulatory_modes"
+    ]
+   },
+   "calls": [
+    "numpy: linalg.lstsq (Norman et al. 2019's fit of a pair on its singles)"
+   ],
+   "figure": "combinations.png",
+   "status_in_the_tests": "measured",
+   "contract": "5df6c4d6ddc3f782"
+  },
+  "E.condition_x_perturbation": {
+   "title": "Effects that differ between conditions",
+   "biology": "A perturbation's effect compared between conditions (a stimulus, a time point, a tissue, a cell type).",
+   "applies_when": "2 or more conditions",
+   "needs": "each cell's condition (experiment.conditions, by sample or unit), units, the control cells; the organism for the hallmark sets, or gene lists",
+   "choices": {
+    "what": [
+     "scores",
+     "genes",
+     "controls",
+     "shares"
+    ],
+    "gene_sets": [
+     "hallmark",
+     "given"
+    ],
+    "test": [
+     "auto",
+     "cells",
+     "units"
+    ]
+   },
+   "calls": [],
+   "figure": "condition_x_perturbation.png",
+   "status_in_the_tests": "detected",
+   "contract": "1d00099817265071"
+  },
+  "E.opposite_modes": {
+   "title": "Activation against inhibition of one gene",
+   "biology": "CRISPRa and CRISPRi of one gene in one library.",
+   "applies_when": "CRISPRa and CRISPRi of the same genes in one library",
+   "needs": "labels, each guide's mode (perturbation.guide_modes), units, the control cells",
+   "choices": {
+    "top": [
+     200,
+     500
+    ]
+   },
+   "calls": [],
+   "figure": "opposite_modes.png",
+   "status_in_the_tests": "detected",
+   "contract": "7bde39a0471c2ad2"
+  },
+  "E.program_axis": {
+   "title": "Two programs the regulators move together or apart",
+   "biology": "Two programs that the regulators move in opposite (or the same) directions: an axis of the cell's regulation.",
+   "applies_when": "each target's effect on several programs (C.programs)",
+   "needs": "C.programs' result table (target, score, effect), labels and each guide's mode",
+   "choices": {
+    "method": [
+     "pearson",
+     "spearman"
+    ]
+   },
+   "calls": [],
+   "figure": "program_axis.png",
+   "status_in_the_tests": "detected",
+   "contract": "4f545fbaf1d4444b"
+  },
+  "E.similar_targets": {
+   "title": "Targets with similar profiles",
+   "biology": "Perturbations of one complex or pathway look alike, so an unknown gene can be placed by the known ones it resembles.",
+   "applies_when": "3 or more targets",
+   "needs": "counts, labels, units, the control cells",
+   "choices": {
+    "min_cells": [
+     30,
+     10
+    ],
+    "profile": [
+     "pooled",
+     "by_sample"
+    ]
+   },
+   "calls": [
+    "numpy: profiles compared (pearson), each cell against its sample's control cells"
+   ],
+   "figure": "similar_targets.png",
+   "status_in_the_tests": "measured",
+   "contract": "109f1035e1a1547a"
+  },
+  "F.guides_agree": {
+   "title": "Agreement between a target's guides",
+   "biology": "The agreement of a target's guides, beyond what two control guides share.",
+   "applies_when": "2 or more guides per target",
+   "needs": "counts, labels, each cell's strongest guide, units and the control cells",
+   "choices": {
+    "min_cells": [
+     10,
+     30
+    ]
+   },
+   "calls": [
+    "numpy: profiles compared (pearson), each cell against its sample's control cells"
+   ],
+   "figure": "guides_agree.png",
+   "status_in_the_tests": "measured",
+   "contract": "a59f55a2d15b3ff2"
+  },
+  "F.replicates_agree": {
+   "title": "Agreement between samples",
+   "biology": "The agreement of the units (mice, donors, captures) on the targets' profiles.",
+   "applies_when": "2 or more samples or lanes",
+   "needs": "labels and samples (mice, donors, lanes or captures), with control cells in each",
+   "choices": {
+    "genes": [
+     "well_expressed",
+     "detected",
+     "all"
+    ]
+   },
+   "calls": [
+    "numpy: corrcoef (Pearson) of profiles, replicate against replicate"
+   ],
+   "figure": "replicates_agree.png",
+   "status_in_the_tests": "measured",
+   "contract": "2c2229143415f88f"
+  },
+  "G.direct_targets": {
+   "title": "A factor's known targets, as its perturbation moves them",
+   "biology": "For a perturbed transcription factor, the way its known targets (CollecTRI's regulons) move, against what its regulon and the perturbation predict.",
+   "applies_when": "a perturbed regulator (a transcription factor) whose changed genes were measured",
+   "needs": "a genes run's table (target, gene, effect, q; C.genes), the organism (human or mouse), CollecTRI's regulons (kept offline, gene_sets.collectri) or a regulon table given",
+   "choices": {
+    "tmin": [
+     5,
+     10
+    ]
+   },
+   "calls": [
+    "decoupler: mt.ulm"
+   ],
+   "figure": "direct_targets.png",
+   "status_in_the_tests": "detected",
+   "contract": "7a960987f50de50b"
+  },
+  "G.meaning": {
+   "title": "The gene sets a finding's genes fall in",
+   "biology": "The meaning of a finding's changed genes: the gene sets they over-represent (up and down apart, against the genes the screen detects), or where a ranking enriches (GSEA).",
+   "applies_when": "always",
+   "needs": "the up and down genes of a finding (or one list) for the over-representation test, or a ranking of genes (a target's effects) for GSEA, or a genes run for each target's own genes; the organism (experiment.organism) for the collection; the screen's detected genes as the background",
+   "choices": {
+    "collection": [
+     "hallmark",
+     "go_bp",
+     "go_cc",
+     "go_mf",
+     "reactome",
+     "wikipathways",
+     "kegg",
+     "canonical_pathways",
+     "tf_targets",
+     "immunologic",
+     "immunesigdb",
+     "cell_types",
+     "oncogenic",
+     "collectri",
+     "progeny"
+    ],
+    "method": [
+     "ora",
+     "gsea",
+     "ulm"
+    ],
+    "backend": [
+     "gseapy",
+     "clusterprofiler"
+    ]
+   },
+   "calls": [
+    "gseapy: enrich"
+   ],
+   "figure": "meaning.png",
+   "status_in_the_tests": "detected",
+   "contract": "9ef9bb37f62c2460"
+  }
+ }
+}
